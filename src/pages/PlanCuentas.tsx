@@ -1,64 +1,103 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const PlanCuentas = () => {
-  // Plan de cuentas actualizado
-  const cuentas = [
-    // ACTIVO CIRCULANTE
-    { codigo: "1001", nombre: "Efectivo", agrupador: "Activo Circulante" },
-    { codigo: "1002", nombre: "Bancos", agrupador: "Activo Circulante" },
-    { codigo: "1003", nombre: "Cuentas por cobrar", agrupador: "Activo Circulante" },
-    { codigo: "1004", nombre: "Inventarios", agrupador: "Activo Circulante" },
-    { codigo: "1005", nombre: "Otras cuentas por cobrar", agrupador: "Activo Circulante" },
-    
-    // ACTIVO FIJO
-    { codigo: "1007", nombre: "Activo Fijo Bruto", agrupador: "Activo Fijo" },
-    { codigo: "1008", nombre: "Depreciación Acumulada", agrupador: "Activo Fijo" },
-    
-    // ACTIVO DIFERIDO
-    { codigo: "1009", nombre: "Activo Diferido Bruto", agrupador: "Activo Diferido" },
-    { codigo: "1010", nombre: "Amortización Acumulada", agrupador: "Activo Diferido" },
-    { codigo: "1011", nombre: "Otros Activos Largo Plazo", agrupador: "Activo Diferido" },
-    
-    // PASIVO CIRCULANTE
-    { codigo: "2001", nombre: "Proveedores", agrupador: "Pasivo Circulante" },
-    { codigo: "2002", nombre: "Pasivos Bancarios", agrupador: "Pasivo Circulante" },
-    { codigo: "2003", nombre: "Otros Pasivos", agrupador: "Pasivo Circulante" },
-    { codigo: "2004", nombre: "Otros Pasivos Largo Plazo", agrupador: "Pasivo Largo Plazo" },
-    
-    // CAPITAL CONTABLE
-    { codigo: "3001", nombre: "Capital Social", agrupador: "Capital Contable" },
-    { codigo: "3002", nombre: "Aportaciones de Capital", agrupador: "Capital Contable" },
-    { codigo: "3005", nombre: "Utilidad de Ejercicios Anteriores", agrupador: "Capital Contable" },
-    { codigo: "3006", nombre: "Dividendos Decretados", agrupador: "Capital Contable" },
-    { codigo: "3007", nombre: "Utilidad del Ejercicio", agrupador: "Resultados" },
-    
-    // RESULTADOS - INGRESOS
-    { codigo: "4001", nombre: "Ventas", agrupador: "Resultados" },
-    { codigo: "4002", nombre: "Otros Ingresos", agrupador: "Resultados" },
-    
-    // RESULTADOS - COSTOS Y GASTOS
-    { codigo: "5001", nombre: "Costo de Ventas", agrupador: "Resultados" },
-    { codigo: "5002", nombre: "Otros Gastos", agrupador: "Resultados" },
-    { codigo: "5003", nombre: "Gastos Generales", agrupador: "Resultados" },
-    { codigo: "5005", nombre: "Depreciación y Amortización", agrupador: "Resultados" },
-    
-    // RESULTADOS - FINANCIEROS
-    { codigo: "6001", nombre: "Costo Financiero", agrupador: "Resultados" },
-    
-    // IMPUESTOS
-    { codigo: "8001", nombre: "Impuestos", agrupador: "Resultados" },
-  ];
+  // Tipos para la estructura de datos
+  type Cuenta = {
+    codigo: string;
+    nombre: string;
+  };
 
-  const getAgrupadorBadgeColor = (agrupador: string) => {
-    switch (agrupador) {
-      case 'Activo Circulante': return 'bg-blue-500';
-      case 'Activo Fijo': return 'bg-green-500';
-      case 'Activo Diferido': return 'bg-purple-500';
-      case 'Pasivo Circulante': return 'bg-red-500';
-      case 'Pasivo Largo Plazo': return 'bg-red-600';
+  type Subgrupo = {
+    [key: string]: Cuenta[];
+  };
+
+  type Grupo = {
+    [key: string]: Subgrupo;
+  };
+
+  type EstadosFinancieros = {
+    [key: string]: Grupo;
+  };
+
+  // Plan de cuentas actualizado con estructura jerárquica
+  const estadosFinancieros: EstadosFinancieros = {
+    "Balance General": {
+      "Activos": {
+        "Activo Circulante": [
+          { codigo: "1001", nombre: "Efectivo" },
+          { codigo: "1002", nombre: "Bancos" },
+          { codigo: "1003", nombre: "Cuentas por cobrar" },
+          { codigo: "1004", nombre: "Inventarios" },
+          { codigo: "1005", nombre: "Otras cuentas por cobrar" },
+        ],
+        "Activo Fijo": [
+          { codigo: "1007", nombre: "Activo Fijo Bruto" },
+          { codigo: "1008", nombre: "Depreciación Acumulada" },
+        ],
+        "Activo Diferido": [
+          { codigo: "1009", nombre: "Activo Diferido Bruto" },
+          { codigo: "1010", nombre: "Amortización Acumulada" },
+          { codigo: "1011", nombre: "Otros Activos Largo Plazo" },
+        ]
+      },
+      "Pasivos": {
+        "Pasivo Circulante": [
+          { codigo: "2001", nombre: "Proveedores" },
+          { codigo: "2002", nombre: "Pasivos Bancarios" },
+          { codigo: "2003", nombre: "Otros Pasivos" },
+        ],
+        "Pasivo Largo Plazo": [
+          { codigo: "2004", nombre: "Otros Pasivos Largo Plazo" },
+        ]
+      },
+      "Capital Contable": {
+        "Capital": [
+          { codigo: "3001", nombre: "Capital Social" },
+          { codigo: "3002", nombre: "Aportaciones de Capital" },
+          { codigo: "3005", nombre: "Utilidad de Ejercicios Anteriores" },
+          { codigo: "3006", nombre: "Dividendos Decretados" },
+        ]
+      }
+    },
+    "Estado de Resultados": {
+      "Ingresos": {
+        "Ingresos Operacionales": [
+          { codigo: "4001", nombre: "Ventas" },
+          { codigo: "4002", nombre: "Otros Ingresos" },
+        ]
+      },
+      "Costos y Gastos": {
+        "Costos": [
+          { codigo: "5001", nombre: "Costo de Ventas" },
+        ],
+        "Gastos Operacionales": [
+          { codigo: "5002", nombre: "Otros Gastos" },
+          { codigo: "5003", nombre: "Gastos Generales" },
+          { codigo: "5005", nombre: "Depreciación y Amortización" },
+        ],
+        "Gastos Financieros": [
+          { codigo: "6001", nombre: "Costo Financiero" },
+        ]
+      },
+      "Otros": {
+        "Impuestos y Utilidades": [
+          { codigo: "8001", nombre: "Impuestos" },
+          { codigo: "3007", nombre: "Utilidad del Ejercicio" },
+        ]
+      }
+    }
+  };
+
+  const getGrupoBadgeColor = (grupo: string) => {
+    switch (grupo) {
+      case 'Activos': return 'bg-blue-500';
+      case 'Pasivos': return 'bg-red-500';
       case 'Capital Contable': return 'bg-yellow-500';
-      case 'Resultados': return 'bg-orange-500';
+      case 'Ingresos': return 'bg-green-500';
+      case 'Costos y Gastos': return 'bg-orange-500';
+      case 'Otros': return 'bg-purple-500';
       default: return 'bg-gray-500';
     }
   };
@@ -82,29 +121,64 @@ const PlanCuentas = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {cuentas.map((cuenta) => (
-                <div
-                  key={cuenta.codigo}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50"
-                >
-                  <div className="flex items-center space-x-3">
-                    <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
-                      {cuenta.codigo}
-                    </code>
-                    <span className="font-medium text-sm">
-                      {cuenta.nombre}
-                    </span>
-                  </div>
-                  <Badge 
-                    className={`${getAgrupadorBadgeColor(cuenta.agrupador)} text-white`}
-                    variant="secondary"
-                  >
-                    {cuenta.agrupador}
-                  </Badge>
-                </div>
+            <Accordion type="multiple" className="w-full">
+              {Object.entries(estadosFinancieros).map(([estadoFinanciero, grupos]) => (
+                <AccordionItem key={estadoFinanciero} value={estadoFinanciero}>
+                  <AccordionTrigger className="text-lg font-semibold">
+                    {estadoFinanciero}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <Accordion type="multiple" className="w-full pl-4">
+                      {Object.entries(grupos).map(([grupo, subgrupos]) => (
+                        <AccordionItem key={grupo} value={grupo}>
+                          <AccordionTrigger className="text-base font-medium">
+                            <div className="flex items-center space-x-2">
+                              <span>{grupo}</span>
+                              <Badge 
+                                className={`${getGrupoBadgeColor(grupo)} text-white text-xs`}
+                                variant="secondary"
+                              >
+                                {grupo}
+                              </Badge>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <Accordion type="multiple" className="w-full pl-4">
+                              {Object.entries(subgrupos).map(([subgrupo, cuentas]) => (
+                                <AccordionItem key={subgrupo} value={subgrupo}>
+                                  <AccordionTrigger className="text-sm font-medium text-muted-foreground">
+                                    {subgrupo}
+                                  </AccordionTrigger>
+                                  <AccordionContent>
+                                    <div className="space-y-2 pl-4">
+                                      {cuentas.map((cuenta) => (
+                                        <div
+                                          key={cuenta.codigo}
+                                          className="flex items-center justify-between p-2 rounded-lg border bg-muted/30 hover:bg-muted/50"
+                                        >
+                                          <div className="flex items-center space-x-3">
+                                            <code className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-mono">
+                                              {cuenta.codigo}
+                                            </code>
+                                            <span className="text-sm">
+                                              {cuenta.nombre}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </AccordionContent>
+                                </AccordionItem>
+                              ))}
+                            </Accordion>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </div>
+            </Accordion>
           </CardContent>
         </Card>
       </div>
