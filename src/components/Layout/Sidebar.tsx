@@ -6,6 +6,10 @@ const Sidebar = () => {
     { name: "Dashboard", active: true },
   ];
 
+  const accountItems = [
+    { name: "Plan de Cuentas", active: false },
+  ];
+
   return (
     <div className="bg-sidebar h-screen w-64 flex flex-col">
       {/* Logo Section */}
@@ -36,6 +40,26 @@ const Sidebar = () => {
       </div>
 
       <Separator className="mx-6 bg-sidebar-border" />
+
+      {/* Cuentas Contables Section */}
+      <div className="px-3 py-4 flex-1">
+        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
+          Contabilidad
+        </h2>
+        <nav className="space-y-1">
+          {accountItems.map((item) => (
+            <Button
+              key={item.name}
+              variant="ghost"
+              className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+              }`}
+            >
+              {item.name}
+            </Button>
+          ))}
+        </nav>
+      </div>
 
       {/* Bottom Section */}
       <div className="p-6 border-t border-sidebar-border">
