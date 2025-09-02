@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2 } from "lucide-react";
@@ -318,11 +318,35 @@ const PlanCuentas = () => {
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona una cuenta madre" />
                       </SelectTrigger>
-                      <SelectContent>
-                        {todasLasCuentas.map((cuenta) => (
-                          <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
-                            {cuenta.codigo} - {cuenta.nombre}
-                          </SelectItem>
+                      <SelectContent className="max-h-80">
+                        {Object.entries(estadosFinancieros).map(([estadoFinanciero, grupos]) => (
+                          <SelectGroup key={estadoFinanciero}>
+                            <SelectLabel className="font-semibold text-primary">
+                              {estadoFinanciero}
+                            </SelectLabel>
+                            {Object.entries(grupos).map(([grupo, subgrupos]) => (
+                              <SelectGroup key={grupo}>
+                                <SelectLabel className="pl-4 text-muted-foreground font-medium">
+                                  {grupo}
+                                </SelectLabel>
+                                {Object.entries(subgrupos).map(([subgrupo, cuentas]) => (
+                                  <div key={subgrupo}>
+                                    <SelectLabel className="pl-8 text-sm text-muted-foreground/80">
+                                      {subgrupo}
+                                    </SelectLabel>
+                                    {cuentas.map((cuenta) => (
+                                      <SelectItem key={cuenta.codigo} value={cuenta.codigo} className="pl-12">
+                                        <span className="font-mono text-xs text-primary mr-2">
+                                          {cuenta.codigo}
+                                        </span>
+                                        {cuenta.nombre}
+                                      </SelectItem>
+                                    ))}
+                                  </div>
+                                ))}
+                              </SelectGroup>
+                            ))}
+                          </SelectGroup>
                         ))}
                       </SelectContent>
                     </Select>
