@@ -4,15 +4,6 @@ import { Separator } from "@/components/ui/separator";
 const Sidebar = () => {
   const mainMenuItems = [
     { name: "Dashboard", active: true },
-    { name: "Transacciones", active: false },
-    { name: "Reportes", active: false },
-    { name: "Facturas", active: false },
-  ];
-
-  const libraryItems = [
-    { name: "Clientes", active: false },
-    { name: "Proveedores", active: false },
-    { name: "Categorías", active: false },
   ];
 
   return (
@@ -45,26 +36,6 @@ const Sidebar = () => {
       </div>
 
       <Separator className="mx-6 bg-sidebar-border" />
-
-      {/* Library Section */}
-      <div className="px-3 py-4 flex-1">
-        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
-          Gestión
-        </h2>
-        <nav className="space-y-1">
-          {libraryItems.map((item) => (
-            <Button
-              key={item.name}
-              variant="ghost"
-              className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
-              }`}
-            >
-              {item.name}
-            </Button>
-          ))}
-        </nav>
-      </div>
 
       {/* Bottom Section */}
       <div className="p-6 border-t border-sidebar-border">
