@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 
 const PlanCuentas = () => {
+  // Plan de cuentas actualizado
   const cuentas = [
     // ACTIVO CIRCULANTE
     { codigo: "1001", nombre: "Efectivo", agrupador: "Activo Circulante" },
