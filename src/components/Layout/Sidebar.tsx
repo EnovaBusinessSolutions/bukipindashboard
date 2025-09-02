@@ -1,13 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Link, useLocation } from "react-router-dom";
 
 const Sidebar = () => {
+  const location = useLocation();
+  
   const mainMenuItems = [
-    { name: "Dashboard", active: true },
+    { name: "Dashboard", path: "/", active: location.pathname === "/" },
   ];
 
   const accountItems = [
-    { name: "Plan de Cuentas", active: false },
+    { name: "Plan de Cuentas", path: "/plan-cuentas", active: location.pathname === "/plan-cuentas" },
   ];
 
   return (
@@ -26,15 +29,16 @@ const Sidebar = () => {
       <div className="px-3 pb-4">
         <nav className="space-y-1">
           {mainMenuItems.map((item) => (
-            <Button
-              key={item.name}
-              variant="ghost"
-              className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
-              }`}
-            >
-              {item.name}
-            </Button>
+            <Link key={item.name} to={item.path}>
+              <Button
+                variant="ghost"
+                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+                }`}
+              >
+                {item.name}
+              </Button>
+            </Link>
           ))}
         </nav>
       </div>
@@ -48,15 +52,16 @@ const Sidebar = () => {
         </h2>
         <nav className="space-y-1">
           {accountItems.map((item) => (
-            <Button
-              key={item.name}
-              variant="ghost"
-              className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
-              }`}
-            >
-              {item.name}
-            </Button>
+            <Link key={item.name} to={item.path}>
+              <Button
+                variant="ghost"
+                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+                }`}
+              >
+                {item.name}
+              </Button>
+            </Link>
           ))}
         </nav>
       </div>
