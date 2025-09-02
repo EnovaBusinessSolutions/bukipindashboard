@@ -65,47 +65,49 @@ const PlanCuentas = () => {
 
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
+    <div className="h-full overflow-hidden flex flex-col">
+      <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Plan de Cuentas</h1>
         <p className="text-muted-foreground mt-2">
           Sistema de clasificación y codificación de cuentas contables
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Catálogo de Cuentas</CardTitle>
-          <CardDescription>
-            Estructura jerárquica del plan contable de la empresa
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {cuentas.map((cuenta) => (
-              <div
-                key={cuenta.codigo}
-                className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50"
-              >
-                <div className="flex items-center space-x-3">
-                  <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
-                    {cuenta.codigo}
-                  </code>
-                  <span className="font-medium text-sm">
-                    {cuenta.nombre}
-                  </span>
-                </div>
-                <Badge 
-                  className={`${getAgrupadorBadgeColor(cuenta.agrupador)} text-white`}
-                  variant="secondary"
+      <div className="flex-1 overflow-auto p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Catálogo de Cuentas</CardTitle>
+            <CardDescription>
+              Estructura jerárquica del plan contable de la empresa
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {cuentas.map((cuenta) => (
+                <div
+                  key={cuenta.codigo}
+                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50"
                 >
-                  {cuenta.agrupador}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                  <div className="flex items-center space-x-3">
+                    <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
+                      {cuenta.codigo}
+                    </code>
+                    <span className="font-medium text-sm">
+                      {cuenta.nombre}
+                    </span>
+                  </div>
+                  <Badge 
+                    className={`${getAgrupadorBadgeColor(cuenta.agrupador)} text-white`}
+                    variant="secondary"
+                  >
+                    {cuenta.agrupador}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
