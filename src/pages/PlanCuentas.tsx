@@ -21,70 +21,117 @@ const PlanCuentas = () => {
     [key: string]: Grupo;
   };
 
-  // Plan de cuentas actualizado con estructura jerárquica
+  // Plan de cuentas con estructura contable correcta
+  // Ecuación fundamental: ACTIVOS = PASIVOS + CAPITAL
+  // Resultado del Ejercicio = INGRESOS - EGRESOS (incluido en Capital)
   const estadosFinancieros: EstadosFinancieros = {
     "Balance General": {
       "Activos": {
         "Activo Circulante": [
-          { codigo: "1001", nombre: "Efectivo" },
+          { codigo: "1001", nombre: "Caja" },
           { codigo: "1002", nombre: "Bancos" },
-          { codigo: "1003", nombre: "Cuentas por cobrar" },
-          { codigo: "1004", nombre: "Inventarios" },
-          { codigo: "1005", nombre: "Otras cuentas por cobrar" },
+          { codigo: "1003", nombre: "Cuentas por Cobrar Clientes" },
+          { codigo: "1004", nombre: "Documentos por Cobrar" },
+          { codigo: "1005", nombre: "Inventario de Mercancías" },
+          { codigo: "1006", nombre: "Inventario de Materias Primas" },
+          { codigo: "1007", nombre: "IVA Acreditable" },
+          { codigo: "1008", nombre: "Gastos Pagados por Anticipado" },
         ],
-        "Activo Fijo": [
-          { codigo: "1007", nombre: "Activo Fijo Bruto" },
-          { codigo: "1008", nombre: "Depreciación Acumulada" },
+        "Activo No Circulante": [
+          { codigo: "1201", nombre: "Terrenos" },
+          { codigo: "1202", nombre: "Edificios" },
+          { codigo: "1203", nombre: "Maquinaria y Equipo" },
+          { codigo: "1204", nombre: "Mobiliario y Equipo de Oficina" },
+          { codigo: "1205", nombre: "Equipo de Transporte" },
+          { codigo: "1206", nombre: "Equipo de Cómputo" },
+          { codigo: "1207", nombre: "Depreciación Acumulada Edificios" },
+          { codigo: "1208", nombre: "Depreciación Acumulada Maquinaria" },
+          { codigo: "1209", nombre: "Depreciación Acumulada Mobiliario" },
+          { codigo: "1210", nombre: "Depreciación Acumulada Transporte" },
+          { codigo: "1211", nombre: "Depreciación Acumulada Equipo Cómputo" },
         ],
         "Activo Diferido": [
-          { codigo: "1009", nombre: "Activo Diferido Bruto" },
-          { codigo: "1010", nombre: "Amortización Acumulada" },
-          { codigo: "1011", nombre: "Otros Activos Largo Plazo" },
+          { codigo: "1301", nombre: "Gastos de Instalación" },
+          { codigo: "1302", nombre: "Gastos de Organización" },
+          { codigo: "1303", nombre: "Marcas y Patentes" },
+          { codigo: "1304", nombre: "Amortización Acumulada" },
         ]
       },
       "Pasivos": {
         "Pasivo Circulante": [
           { codigo: "2001", nombre: "Proveedores" },
-          { codigo: "2002", nombre: "Pasivos Bancarios" },
-          { codigo: "2003", nombre: "Otros Pasivos" },
+          { codigo: "2002", nombre: "Documentos por Pagar" },
+          { codigo: "2003", nombre: "Acreedores Diversos" },
+          { codigo: "2004", nombre: "IVA por Pagar" },
+          { codigo: "2005", nombre: "Impuestos por Pagar" },
+          { codigo: "2006", nombre: "Sueldos por Pagar" },
+          { codigo: "2007", nombre: "Préstamos Bancarios Corto Plazo" },
         ],
-        "Pasivo Largo Plazo": [
-          { codigo: "2004", nombre: "Otros Pasivos Largo Plazo" },
+        "Pasivo No Circulante": [
+          { codigo: "2101", nombre: "Préstamos Bancarios Largo Plazo" },
+          { codigo: "2102", nombre: "Hipotecas por Pagar" },
+          { codigo: "2103", nombre: "Documentos por Pagar Largo Plazo" },
         ]
       },
       "Capital Contable": {
-        "Capital": [
+        "Capital Contribuido": [
           { codigo: "3001", nombre: "Capital Social" },
-          { codigo: "3002", nombre: "Aportaciones de Capital" },
-          { codigo: "3005", nombre: "Utilidad de Ejercicios Anteriores" },
-          { codigo: "3006", nombre: "Dividendos Decretados" },
+          { codigo: "3002", nombre: "Aportaciones para Futuros Aumentos" },
+          { codigo: "3003", nombre: "Prima en Venta de Acciones" },
+        ],
+        "Capital Ganado": [
+          { codigo: "3101", nombre: "Reserva Legal" },
+          { codigo: "3102", nombre: "Utilidades Retenidas" },
+          { codigo: "3103", nombre: "Utilidad del Ejercicio" },
+          { codigo: "3104", nombre: "Pérdidas Acumuladas" },
+        ],
+        "Capital Reembolsado": [
+          { codigo: "3201", nombre: "Dividendos Decretados" },
         ]
       }
     },
     "Estado de Resultados": {
       "Ingresos": {
-        "Ingresos Operacionales": [
+        "Ingresos por Ventas": [
           { codigo: "4001", nombre: "Ventas" },
-          { codigo: "4002", nombre: "Otros Ingresos" },
+          { codigo: "4002", nombre: "Devoluciones sobre Ventas" },
+          { codigo: "4003", nombre: "Descuentos sobre Ventas" },
+        ],
+        "Otros Ingresos": [
+          { codigo: "4101", nombre: "Productos Financieros" },
+          { codigo: "4102", nombre: "Otros Productos" },
+          { codigo: "4103", nombre: "Ganancia en Venta de Activos" },
         ]
       },
-      "Costos y Gastos": {
-        "Costos": [
-          { codigo: "5001", nombre: "Costo de Ventas" },
+      "Egresos": {
+        "Costo de Ventas": [
+          { codigo: "5001", nombre: "Compras" },
+          { codigo: "5002", nombre: "Gastos sobre Compras" },
+          { codigo: "5003", nombre: "Devoluciones sobre Compras" },
+          { codigo: "5004", nombre: "Descuentos sobre Compras" },
         ],
-        "Gastos Operacionales": [
-          { codigo: "5002", nombre: "Otros Gastos" },
-          { codigo: "5003", nombre: "Gastos Generales" },
-          { codigo: "5005", nombre: "Depreciación y Amortización" },
+        "Gastos de Operación": [
+          { codigo: "5101", nombre: "Gastos de Venta" },
+          { codigo: "5102", nombre: "Sueldos y Salarios Ventas" },
+          { codigo: "5103", nombre: "Comisiones sobre Ventas" },
+          { codigo: "5104", nombre: "Publicidad" },
+          { codigo: "5105", nombre: "Gastos de Administración" },
+          { codigo: "5106", nombre: "Sueldos y Salarios Administración" },
+          { codigo: "5107", nombre: "Renta de Oficinas" },
+          { codigo: "5108", nombre: "Servicios Públicos" },
+          { codigo: "5109", nombre: "Depreciaciones" },
+          { codigo: "5110", nombre: "Amortizaciones" },
         ],
         "Gastos Financieros": [
-          { codigo: "6001", nombre: "Costo Financiero" },
+          { codigo: "5201", nombre: "Intereses Pagados" },
+          { codigo: "5202", nombre: "Comisiones Bancarias" },
+          { codigo: "5203", nombre: "Pérdida en Venta de Activos" },
         ]
       },
-      "Otros": {
-        "Impuestos y Utilidades": [
-          { codigo: "8001", nombre: "Impuestos" },
-          { codigo: "3007", nombre: "Utilidad del Ejercicio" },
+      "Impuestos": {
+        "Provisiones": [
+          { codigo: "6001", nombre: "Impuesto sobre la Renta" },
+          { codigo: "6002", nombre: "Participación de Utilidades a Trabajadores" },
         ]
       }
     }
@@ -96,8 +143,8 @@ const PlanCuentas = () => {
       case 'Pasivos': return 'bg-red-500';
       case 'Capital Contable': return 'bg-yellow-500';
       case 'Ingresos': return 'bg-green-500';
-      case 'Costos y Gastos': return 'bg-orange-500';
-      case 'Otros': return 'bg-purple-500';
+      case 'Egresos': return 'bg-orange-500';
+      case 'Impuestos': return 'bg-purple-500';
       default: return 'bg-gray-500';
     }
   };
