@@ -8,50 +8,50 @@ All colors MUST be HSL.
 
 @layer base {
 :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
+    --background: 40 20% 98%;
+    --foreground: 0 0% 15%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card: 40 15% 96%;
+    --card-foreground: 0 0% 15%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover: 40 15% 96%;
+    --popover-foreground: 0 0% 15%;
 
-    --primary: 210 100% 50%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 210 100% 45%;
+    --primary: 180 25% 50%;
+    --primary-foreground: 40 20% 98%;
+    --primary-hover: 180 30% 45%;
     
-    --finance-blue: 210 100% 50%;
-    --finance-blue-light: 210 100% 60%;
-    --finance-success: 210 100% 50%;
-    --finance-warning: 210 100% 50%;
+    --finance-blue: 180 25% 50%;
+    --finance-blue-light: 180 20% 60%;
+    --finance-success: 180 25% 50%;
+    --finance-warning: 180 25% 50%;
 
-    --secondary: 210 20% 95%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 180 10% 92%;
+    --secondary-foreground: 0 0% 15%;
 
-    --muted: 210 20% 95%;
+    --muted: 180 8% 90%;
     --muted-foreground: 0 0% 45%;
 
-    --accent: 210 20% 95%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 180 15% 88%;
+    --accent-foreground: 0 0% 15%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 40 20% 98%;
 
-    --border: 210 20% 90%;
-    --input: 210 20% 90%;
-    --ring: 210 100% 50%;
+    --border: 180 10% 85%;
+    --input: 180 10% 85%;
+    --ring: 180 25% 50%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 210 100% 50%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 210 100% 50%;
-    --sidebar-accent: 210 100% 45%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 100% 45%;
-    --sidebar-ring: 0 0% 100%;
+    --sidebar-background: 180 25% 50%;
+    --sidebar-foreground: 40 20% 98%;
+    --sidebar-primary: 40 15% 96%;
+    --sidebar-primary-foreground: 180 25% 50%;
+    --sidebar-accent: 180 30% 45%;
+    --sidebar-accent-foreground: 40 20% 98%;
+    --sidebar-border: 180 20% 40%;
+    --sidebar-ring: 40 20% 98%;
   }
 
   .dark {
