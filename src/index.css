@@ -8,57 +8,50 @@ All colors MUST be HSL.
 
 @layer base {
 :root {
-    --background: 15 23 42;
-    --foreground: 248 250 252;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
 
-    --card: 30 41 59;
-    --card-foreground: 248 250 252;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
 
-    --popover: 30 41 59;
-    --popover-foreground: 248 250 252;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
 
-    --primary: 51 65 85;
-    --primary-foreground: 203 213 225;
-    --primary-hover: 71 85 105;
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 210 100% 45%;
     
-    --finance-blue: 59 130 246;
-    --finance-blue-light: 100 116 139;
-    --finance-success: 34 197 94;
-    --finance-warning: 251 191 36;
+    --finance-blue: 210 100% 50%;
+    --finance-blue-light: 210 100% 60%;
+    --finance-success: 210 100% 50%;
+    --finance-warning: 210 100% 50%;
 
-    --secondary: 51 65 85;
-    --secondary-foreground: 203 213 225;
+    --secondary: 210 20% 95%;
+    --secondary-foreground: 0 0% 9%;
 
-    --muted: 51 65 85;
-    --muted-foreground: 148 163 184;
+    --muted: 210 20% 95%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 51 65 85;
-    --accent-foreground: 203 213 225;
+    --accent: 210 20% 95%;
+    --accent-foreground: 0 0% 9%;
 
-    --destructive: 239 68 68;
-    --destructive-foreground: 248 250 252;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 51 65 85;
-    --input: 51 65 85;
-    --ring: 100 116 139;
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: 210 100% 50%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 210 100% 50%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 210 100% 50%;
+    --sidebar-accent: 210 100% 45%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 210 100% 45%;
+    --sidebar-ring: 0 0% 100%;
   }
 
   .dark {

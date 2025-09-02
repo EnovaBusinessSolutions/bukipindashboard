@@ -4,7 +4,7 @@ import IncomeChart from "@/components/Dashboard/IncomeChart";
 
 const Index = () => {
   return (
-    <main className="max-w-7xl mx-auto px-6 py-8">
+    <div className="p-8">
       <div className="space-y-8">
         {/* Header */}
         <div>
@@ -59,7 +59,7 @@ const Index = () => {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 };
 
