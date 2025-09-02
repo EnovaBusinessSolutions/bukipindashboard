@@ -8,39 +8,39 @@ All colors MUST be HSL.
 
 @layer base {
 :root {
-    --background: 249 250 251;
-    --foreground: 15 23 42;
+    --background: 15 23 42;
+    --foreground: 248 250 252;
 
-    --card: 255 255 255;
-    --card-foreground: 15 23 42;
+    --card: 30 41 59;
+    --card-foreground: 248 250 252;
 
-    --popover: 255 255 255;
-    --popover-foreground: 15 23 42;
+    --popover: 30 41 59;
+    --popover-foreground: 248 250 252;
 
-    --primary: 219 234 254;
-    --primary-foreground: 29 78 216;
-    --primary-hover: 191 219 254;
+    --primary: 51 65 85;
+    --primary-foreground: 203 213 225;
+    --primary-hover: 71 85 105;
     
     --finance-blue: 59 130 246;
-    --finance-blue-light: 147 197 253;
+    --finance-blue-light: 100 116 139;
     --finance-success: 34 197 94;
     --finance-warning: 251 191 36;
 
-    --secondary: 248 250 252;
-    --secondary-foreground: 71 85 105;
+    --secondary: 51 65 85;
+    --secondary-foreground: 203 213 225;
 
-    --muted: 241 245 249;
-    --muted-foreground: 100 116 139;
+    --muted: 51 65 85;
+    --muted-foreground: 148 163 184;
 
-    --accent: 241 245 249;
-    --accent-foreground: 51 65 85;
+    --accent: 51 65 85;
+    --accent-foreground: 203 213 225;
 
     --destructive: 239 68 68;
     --destructive-foreground: 248 250 252;
 
-    --border: 226 232 240;
-    --input: 226 232 240;
-    --ring: 59 130 246;
+    --border: 51 65 85;
+    --input: 51 65 85;
+    --ring: 100 116 139;
 
     --radius: 0.5rem;
 
