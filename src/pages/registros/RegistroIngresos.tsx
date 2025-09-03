@@ -103,10 +103,9 @@ const RegistroIngresos = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="4001">4001 - Ventas</SelectItem>
+                    <SelectItem value="4002">4002 - Devoluciones sobre Ventas</SelectItem>
+                    <SelectItem value="4003">4003 - Descuentos sobre Ventas</SelectItem>
                     <SelectItem value="4004">4004 - Ventas inventarios</SelectItem>
-                    <SelectItem value="4101">4101 - Productos Financieros</SelectItem>
-                    <SelectItem value="4102">4102 - Otros Productos</SelectItem>
-                    <SelectItem value="4103">4103 - Ganancia en Venta de Activos</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
