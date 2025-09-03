@@ -13,6 +13,12 @@ const Sidebar = () => {
     { name: "Plan de Cuentas", path: "/plan-cuentas", active: location.pathname === "/plan-cuentas" },
   ];
 
+  const registrosItems = [
+    { name: "Registro de Ingresos", path: "/registros/ingresos", active: location.pathname === "/registros/ingresos" },
+    { name: "Registro de Egresos", path: "/registros/egresos", active: location.pathname === "/registros/egresos" },
+    { name: "Registro de Asientos", path: "/registros/asientos", active: location.pathname === "/registros/asientos" },
+  ];
+
   return (
     <div className="bg-sidebar h-screen w-64 flex flex-col">
       {/* Logo Section */}
@@ -46,12 +52,35 @@ const Sidebar = () => {
       <Separator className="mx-6 bg-sidebar-border" />
 
       {/* Cuentas Contables Section */}
-      <div className="px-3 py-4 flex-1">
+      <div className="px-3 py-4">
         <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
           Contabilidad
         </h2>
         <nav className="space-y-1">
           {accountItems.map((item) => (
+            <Link key={item.name} to={item.path}>
+              <Button
+                variant="ghost"
+                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+                }`}
+              >
+                {item.name}
+              </Button>
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      <Separator className="mx-6 bg-sidebar-border" />
+
+      {/* Registros Section */}
+      <div className="px-3 py-4 flex-1">
+        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
+          Registros
+        </h2>
+        <nav className="space-y-1">
+          {registrosItems.map((item) => (
             <Link key={item.name} to={item.path}>
               <Button
                 variant="ghost"
