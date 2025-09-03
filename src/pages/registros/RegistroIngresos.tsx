@@ -97,15 +97,12 @@ const RegistroIngresos = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cuenta-contable">Cuenta Contable</Label>
-                <Select>
+                <Select defaultValue="4001">
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar cuenta" />
+                    <SelectValue placeholder="4001 - Ventas" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="4001">4001 - Ventas</SelectItem>
-                    <SelectItem value="4002">4002 - Devoluciones sobre Ventas</SelectItem>
-                    <SelectItem value="4003">4003 - Descuentos sobre Ventas</SelectItem>
-                    <SelectItem value="4004">4004 - Ventas inventarios</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
