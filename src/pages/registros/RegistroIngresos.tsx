@@ -344,6 +344,14 @@ const RegistroIngresos = () => {
                               </AlertDescription>
                             </Alert>
                           </div>
+                          <div className="mt-4 p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
+                            <div className="text-center">
+                              <p className="text-sm font-medium text-muted-foreground mb-1">Total a cobrar al cliente</p>
+                              <p className="text-2xl font-bold text-primary">
+                                ${((parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
