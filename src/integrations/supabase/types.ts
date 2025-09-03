@@ -14,7 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cuentas: {
+        Row: {
+          codigo: string
+          created_at: string
+          estado_financiero: string
+          grupo: string
+          id: string
+          nombre: string
+          subgrupo: string
+          updated_at: string
+        }
+        Insert: {
+          codigo: string
+          created_at?: string
+          estado_financiero: string
+          grupo: string
+          id?: string
+          nombre: string
+          subgrupo: string
+          updated_at?: string
+        }
+        Update: {
+          codigo?: string
+          created_at?: string
+          estado_financiero?: string
+          grupo?: string
+          id?: string
+          nombre?: string
+          subgrupo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subcuentas: {
+        Row: {
+          created_at: string
+          cuenta_madre_codigo: string
+          id: string
+          nombre: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          cuenta_madre_codigo: string
+          id?: string
+          nombre: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          cuenta_madre_codigo?: string
+          id?: string
+          nombre?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcuentas_cuenta_madre_codigo_fkey"
+            columns: ["cuenta_madre_codigo"]
+            isOneToOne: false
+            referencedRelation: "cuentas"
+            referencedColumns: ["codigo"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
