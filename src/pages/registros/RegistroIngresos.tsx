@@ -103,7 +103,10 @@ const RegistroIngresos = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="4001">4001 - Ventas</SelectItem>
-                    <SelectItem value="4002">4002 - Servicios</SelectItem>
+                    <SelectItem value="4004">4004 - Ventas inventarios</SelectItem>
+                    <SelectItem value="4101">4101 - Productos Financieros</SelectItem>
+                    <SelectItem value="4102">4102 - Otros Productos</SelectItem>
+                    <SelectItem value="4103">4103 - Ganancia en Venta de Activos</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -132,7 +135,7 @@ const RegistroIngresos = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Este ingreso se ligará a la cuenta de productos inventariados.
+                Este ingreso se ligará a la cuenta 4004 - Ventas inventarios.
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
@@ -437,7 +440,7 @@ const RegistroIngresos = () => {
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     <strong>Recomendación:</strong> Asignar subcuentas a cada producto ayuda a llevar un mejor control contable. 
-                    La cuenta predeterminada es "Ventas".
+                    La cuenta predeterminada es "4001 - Ventas".
                   </AlertDescription>
                 </Alert>
                 
