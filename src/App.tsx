@@ -8,57 +8,13 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import PlanCuentas from "./pages/PlanCuentas";
 import Sidebar from "./components/Layout/Sidebar";
+import RegistroIngresos from "./pages/registros/RegistroIngresos";
+import RegistroEgresos from "./pages/registros/RegistroEgresos";
+import RegistroAsientos from "./pages/registros/RegistroAsientos";
 
 const queryClient = new QueryClient();
 
-// Componentes temporales para registros
-const RegistroIngresos = () => (
-  <div className="h-full overflow-hidden flex flex-col">
-    <div className="p-6 border-b bg-background">
-      <h1 className="text-3xl font-bold text-foreground">Registro de Ingresos</h1>
-      <p className="text-muted-foreground mt-2">
-        Registra y gestiona todos los ingresos de la empresa
-      </p>
-    </div>
-    <div className="flex-1 overflow-auto p-6">
-      <div className="text-center py-8 text-muted-foreground">
-        Formulario de registro de ingresos próximamente...
-      </div>
-    </div>
-  </div>
-);
-
-const RegistroEgresos = () => (
-  <div className="h-full overflow-hidden flex flex-col">
-    <div className="p-6 border-b bg-background">
-      <h1 className="text-3xl font-bold text-foreground">Registro de Egresos</h1>
-      <p className="text-muted-foreground mt-2">
-        Registra y gestiona todos los gastos y egresos de la empresa
-      </p>
-    </div>
-    <div className="flex-1 overflow-auto p-6">
-      <div className="text-center py-8 text-muted-foreground">
-        Formulario de registro de egresos próximamente...
-      </div>
-    </div>
-  </div>
-);
-
-const RegistroAsientos = () => (
-  <div className="h-full overflow-hidden flex flex-col">
-    <div className="p-6 border-b bg-background">
-      <h1 className="text-3xl font-bold text-foreground">Registro de Asientos Contables</h1>
-      <p className="text-muted-foreground mt-2">
-        Crea y gestiona asientos contables de partida doble
-      </p>
-    </div>
-    <div className="flex-1 overflow-auto p-6">
-      <div className="text-center py-8 text-muted-foreground">
-        Formulario de asientos contables próximamente...
-      </div>
-    </div>
-  </div>
-);
+// Componente temporal para inventario
 
 const RegistroInventario = () => (
   <div className="h-full overflow-hidden flex flex-col">
