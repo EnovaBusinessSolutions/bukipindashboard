@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      asientos_contables: {
+        Row: {
+          created_at: string
+          descripcion: string
+          fecha: string
+          id: string
+          numero_asiento: string
+          transaccion_ingreso_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descripcion: string
+          fecha?: string
+          id?: string
+          numero_asiento: string
+          transaccion_ingreso_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string
+          fecha?: string
+          id?: string
+          numero_asiento?: string
+          transaccion_ingreso_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asientos_contables_transaccion_ingreso_id_fkey"
+            columns: ["transaccion_ingreso_id"]
+            isOneToOne: false
+            referencedRelation: "transacciones_ingresos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cuentas: {
         Row: {
           codigo: string
@@ -46,6 +84,61 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      detalle_asientos: {
+        Row: {
+          asiento_id: string
+          created_at: string
+          cuenta_codigo: string
+          debe: number | null
+          descripcion: string | null
+          haber: number | null
+          id: string
+          subcuenta_id: string | null
+        }
+        Insert: {
+          asiento_id: string
+          created_at?: string
+          cuenta_codigo: string
+          debe?: number | null
+          descripcion?: string | null
+          haber?: number | null
+          id?: string
+          subcuenta_id?: string | null
+        }
+        Update: {
+          asiento_id?: string
+          created_at?: string
+          cuenta_codigo?: string
+          debe?: number | null
+          descripcion?: string | null
+          haber?: number | null
+          id?: string
+          subcuenta_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "detalle_asientos_asiento_id_fkey"
+            columns: ["asiento_id"]
+            isOneToOne: false
+            referencedRelation: "asientos_contables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "detalle_asientos_cuenta_codigo_fkey"
+            columns: ["cuenta_codigo"]
+            isOneToOne: false
+            referencedRelation: "cuentas"
+            referencedColumns: ["codigo"]
+          },
+          {
+            foreignKeyName: "detalle_asientos_subcuenta_id_fkey"
+            columns: ["subcuenta_id"]
+            isOneToOne: false
+            referencedRelation: "subcuentas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subcuentas: {
         Row: {
@@ -82,12 +175,78 @@ export type Database = {
           },
         ]
       }
+      transacciones_ingresos: {
+        Row: {
+          cliente_contacto: string | null
+          cliente_nombre: string | null
+          created_at: string
+          cuenta_principal_codigo: string
+          descripcion: string
+          fecha_vencimiento: string | null
+          id: string
+          metodo_pago: string
+          monto_descuento: number | null
+          monto_neto: number
+          monto_pagado: number
+          monto_pendiente: number | null
+          monto_total: number
+          subcuenta_id: string | null
+          tipo_ingreso: string
+          tipo_pago: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cliente_contacto?: string | null
+          cliente_nombre?: string | null
+          created_at?: string
+          cuenta_principal_codigo: string
+          descripcion: string
+          fecha_vencimiento?: string | null
+          id?: string
+          metodo_pago: string
+          monto_descuento?: number | null
+          monto_neto: number
+          monto_pagado: number
+          monto_pendiente?: number | null
+          monto_total: number
+          subcuenta_id?: string | null
+          tipo_ingreso: string
+          tipo_pago: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cliente_contacto?: string | null
+          cliente_nombre?: string | null
+          created_at?: string
+          cuenta_principal_codigo?: string
+          descripcion?: string
+          fecha_vencimiento?: string | null
+          id?: string
+          metodo_pago?: string
+          monto_descuento?: number | null
+          monto_neto?: number
+          monto_pagado?: number
+          monto_pendiente?: number | null
+          monto_total?: number
+          subcuenta_id?: string | null
+          tipo_ingreso?: string
+          tipo_pago?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_asiento_number: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
