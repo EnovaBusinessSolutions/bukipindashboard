@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 const RegistroIngresos = () => {
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
