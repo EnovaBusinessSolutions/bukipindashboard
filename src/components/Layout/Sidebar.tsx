@@ -19,6 +19,9 @@ const Sidebar = () => {
     { name: "Registro de Asientos", path: "/registros/asientos", active: location.pathname === "/registros/asientos" },
   ];
 
+  // Debug log
+  console.log("Registros items:", registrosItems);
+
   return (
     <div className="bg-sidebar h-screen w-64 flex flex-col">
       {/* Logo Section */}
@@ -75,20 +78,20 @@ const Sidebar = () => {
       <Separator className="mx-6 bg-sidebar-border" />
 
       {/* Registros Section */}
-      <div className="px-3 py-4 flex-1">
-        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
-          Registros
+      <div className="px-3 py-4 flex-1 border-2 border-red-500">
+        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3 bg-yellow-200 text-black">
+          Registros ({registrosItems.length} items)
         </h2>
         <nav className="space-y-1">
-          {registrosItems.map((item) => (
+          {registrosItems.map((item, index) => (
             <Link key={item.name} to={item.path}>
               <Button
                 variant="ghost"
-                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-green-500 ${
                   item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
                 }`}
               >
-                {item.name}
+                {index + 1}. {item.name}
               </Button>
             </Link>
           ))}
