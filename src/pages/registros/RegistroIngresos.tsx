@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 const RegistroIngresos = () => {
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
@@ -18,8 +20,65 @@ const RegistroIngresos = () => {
   const [discountAmount, setDiscountAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [montoTotal, setMontoTotal] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Función helper para renderizar formularios específicos por tipo
+  // Función para registrar el ingreso
+  const handleSubmitIngreso = async () => {
+    if (!selectedIncomeType || !descripcion || !montoTotal || !paymentMethod || !paymentStatus) {
+      toast({
+        title: "Error",
+        description: "Por favor completa todos los campos requeridos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('registrar-ingreso', {
+        body: {
+          tipoIngreso: selectedIncomeType,
+          descripcion: descripcion,
+          montoTotal: parseFloat(montoTotal),
+          montoDescuento: hasDiscount ? parseFloat(discountAmount || '0') : 0,
+          cuentaPrincipalCodigo: selectedIncomeType === 'otros' ? '4004' : '4001',
+          metodoPago: paymentMethod,
+          tipoPago: paymentStatus,
+          montoPagado: paymentStatus === 'contado' ? parseFloat(montoTotal) - (hasDiscount ? parseFloat(discountAmount || '0') : 0) : 0
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Ingreso registrado",
+        description: `Asiento ${data.numeroAsiento} creado correctamente`
+      });
+
+      // Limpiar formulario
+      setSelectedIncomeType("");
+      setDescripcion("");
+      setMontoTotal("");
+      setDiscountAmount("");
+      setHasDiscount(false);
+      setPaymentMethod("");
+      setPaymentStatus("");
+
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.message || "Error al registrar el ingreso",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   const renderIncomeTypeForm = (type: string) => {
     switch (type) {
       case "precargados":
@@ -92,7 +151,12 @@ const RegistroIngresos = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="descripcion-general">Descripción del Ingreso</Label>
-              <Input id="descripcion-general" placeholder="Ej: Servicio de consultoría" />
+              <Input 
+                id="descripcion-general" 
+                placeholder="Ej: Servicio de consultoría"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+              />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -120,7 +184,13 @@ const RegistroIngresos = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="monto-general">Monto</Label>
-              <Input id="monto-general" type="number" placeholder="0.00" />
+              <Input 
+                id="monto-general" 
+                type="number" 
+                placeholder="0.00"
+                value={montoTotal}
+                onChange={(e) => setMontoTotal(e.target.value)}
+              />
             </div>
           </div>
         );
@@ -264,10 +334,13 @@ const RegistroIngresos = () => {
                             />
                           </div>
                           <div className="flex items-end">
-                            <Alert>
+                            <Alert className="mt-4">
                               <AlertCircle className="h-4 w-4" />
-                              <AlertDescription className="text-xs">
-                                Se registrará en "Descuento sobre ventas"
+                              <AlertDescription>
+                                <strong>Contabilización automática:</strong><br />
+                                • Ventas: +${montoTotal || '0'}<br />
+                                {hasDiscount && discountAmount && <span>• Descuento sobre ventas: +${discountAmount}<br /></span>}
+                                • {paymentMethod === 'efectivo' ? 'Caja' : 'Bancos'}: +${((parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))).toFixed(2)}
                               </AlertDescription>
                             </Alert>
                           </div>
@@ -356,9 +429,14 @@ const RegistroIngresos = () => {
                     </div>
 
                     <div className="flex justify-end pt-4">
-                      <Button size="lg" className="px-8">
+                      <Button 
+                        size="lg" 
+                        className="px-8"
+                        onClick={handleSubmitIngreso}
+                        disabled={isSubmitting}
+                      >
                         <Calculator className="mr-2 h-4 w-4" />
-                        Registrar Ingreso
+                        {isSubmitting ? "Registrando..." : "Registrar Ingreso"}
                       </Button>
                     </div>
                   </div>
