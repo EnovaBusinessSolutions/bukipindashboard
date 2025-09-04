@@ -465,52 +465,89 @@ const RegistroIngresos = () => {
 
           {/* TAB 2: RESUMEN DE VENTAS */}
           <TabsContent value="resumen" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            {/* Resumen de Ventas, Descuentos e Ingreso Neto */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              {/* Día */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Ventas del Día</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelDia.toFixed(2)}`}
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                    <span className="font-semibold">
+                      {loadingVentas ? "..." : `$${ventasResumen.ventasDelDia.toLocaleString()}`}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Total de hoy</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelMes.toFixed(2)}`}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-destructive">Descuentos:</span>
+                    <span className="font-semibold text-destructive">
+                      {loadingVentas ? "..." : `$${ventasResumen.descuentosDelDia.toLocaleString()}`}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Acumulado mensual</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Ventas del Año</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelAno.toFixed(2)}`}
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
+                    <span className="text-lg font-bold text-chart-2">
+                      {loadingVentas ? "..." : `$${ventasResumen.ingresoNetoDelDia.toLocaleString()}`}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Acumulado anual</p>
                 </CardContent>
               </Card>
 
+              {/* Mes */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Descuentos</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-600">
-                    {loadingVentas ? "Cargando..." : `$${ventasResumen.descuentosDelMes.toFixed(2)}`}
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                    <span className="font-semibold">
+                      {loadingVentas ? "..." : `$${ventasResumen.ventasDelMes.toLocaleString()}`}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Este mes</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-destructive">Descuentos:</span>
+                    <span className="font-semibold text-destructive">
+                      {loadingVentas ? "..." : `$${ventasResumen.descuentosDelMes.toLocaleString()}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
+                    <span className="text-lg font-bold text-chart-2">
+                      {loadingVentas ? "..." : `$${ventasResumen.ingresoNetoDelMes.toLocaleString()}`}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Año */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                    <span className="font-semibold">
+                      {loadingVentas ? "..." : `$${ventasResumen.ventasDelAno.toLocaleString()}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-destructive">Descuentos:</span>
+                    <span className="font-semibold text-destructive">
+                      {loadingVentas ? "..." : `$${ventasResumen.descuentosDelAno.toLocaleString()}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
+                    <span className="text-lg font-bold text-chart-2">
+                      {loadingVentas ? "..." : `$${ventasResumen.ingresoNetoDelAno.toLocaleString()}`}
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
             </div>
