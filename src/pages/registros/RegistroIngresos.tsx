@@ -84,6 +84,12 @@ const RegistroIngresos = () => {
       case "precargados":
         return (
           <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Recordatorio:</strong> Para registrar ventas de productos precargados, primero debes agregar los productos al catálogo desde la pestaña "Catálogo de Productos".
+              </AlertDescription>
+            </Alert>
             <div className="space-y-2">
               <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
               <Select>
