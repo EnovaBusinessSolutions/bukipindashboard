@@ -22,41 +22,46 @@ export const useVentasResumen = () => {
       setLoading(true);
       setError(null);
 
+      // Simplificar: obtener todas las transacciones sin filtros de fecha primero para debug
+      const { data: todasLasVentas, error: errorTodasVentas } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_total, created_at');
+
+      if (errorTodasVentas) {
+        console.error('Error fetching todas las ventas:', errorTodasVentas);
+        throw errorTodasVentas;
+      }
+
+      console.log('Todas las ventas encontradas:', todasLasVentas);
+
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const startOfYear = new Date(today.getFullYear(), 0, 1);
 
-      // Ventas del día
-      const { data: ventasDia, error: errorDia } = await supabase
-        .from('transacciones_ingresos')
-        .select('monto_total')
-        .gte('created_at', startOfDay.toISOString())
-        .lt('created_at', new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000).toISOString());
+      console.log('Fechas de filtro:', {
+        startOfDay: startOfDay.toISOString(),
+        startOfMonth: startOfMonth.toISOString(),
+        startOfYear: startOfYear.toISOString()
+      });
 
-      if (errorDia) throw errorDia;
+      // Calcular totales usando las ventas obtenidas
+      const ventasDelDia = todasLasVentas?.filter(venta => {
+        const fechaVenta = new Date(venta.created_at);
+        return fechaVenta >= startOfDay;
+      }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
 
-      // Ventas del mes
-      const { data: ventasMes, error: errorMes } = await supabase
-        .from('transacciones_ingresos')
-        .select('monto_total')
-        .gte('created_at', startOfMonth.toISOString())
-        .lt('created_at', new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString());
+      const ventasDelMes = todasLasVentas?.filter(venta => {
+        const fechaVenta = new Date(venta.created_at);
+        return fechaVenta >= startOfMonth;
+      }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
 
-      if (errorMes) throw errorMes;
+      const ventasDelAno = todasLasVentas?.filter(venta => {
+        const fechaVenta = new Date(venta.created_at);
+        return fechaVenta >= startOfYear;
+      }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
 
-      // Ventas del año
-      const { data: ventasAno, error: errorAno } = await supabase
-        .from('transacciones_ingresos')
-        .select('monto_total')
-        .gte('created_at', startOfYear.toISOString())
-        .lt('created_at', new Date(today.getFullYear() + 1, 0, 1).toISOString());
-
-      if (errorAno) throw errorAno;
-
-      const ventasDelDia = ventasDia?.reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
-      const ventasDelMes = ventasMes?.reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
-      const ventasDelAno = ventasAno?.reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
+      console.log('Resumen calculado:', { ventasDelDia, ventasDelMes, ventasDelAno });
 
       setVentasResumen({
         ventasDelDia,

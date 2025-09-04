@@ -474,6 +474,7 @@ const RegistroIngresos = () => {
                     {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelDia.toFixed(2)}`}
                   </div>
                   <p className="text-xs text-muted-foreground">Total de hoy</p>
+                  <p className="text-xs text-blue-600 mt-1">Debug: Revisa consola</p>
                 </CardContent>
               </Card>
               
