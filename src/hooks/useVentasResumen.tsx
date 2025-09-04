@@ -8,6 +8,9 @@ interface VentasResumen {
   descuentosDelDia: number;
   descuentosDelMes: number;
   descuentosDelAno: number;
+  ingresoNetoDelDia: number;
+  ingresoNetoDelMes: number;
+  ingresoNetoDelAno: number;
 }
 
 export const useVentasResumen = () => {
@@ -18,6 +21,9 @@ export const useVentasResumen = () => {
     descuentosDelDia: 0,
     descuentosDelMes: 0,
     descuentosDelAno: 0,
+    ingresoNetoDelDia: 0,
+    ingresoNetoDelMes: 0,
+    ingresoNetoDelAno: 0,
   });
   
   const [loading, setLoading] = useState(true);
@@ -83,9 +89,15 @@ export const useVentasResumen = () => {
         return fechaVenta >= startOfYear;
       }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
 
+      // Calcular ingresos netos (ventas - descuentos)
+      const ingresoNetoDelDia = ventasDelDia - descuentosDelDia;
+      const ingresoNetoDelMes = ventasDelMes - descuentosDelMes;
+      const ingresoNetoDelAno = ventasDelAno - descuentosDelAno;
+
       console.log('Resumen calculado:', { 
         ventasDelDia, ventasDelMes, ventasDelAno,
-        descuentosDelDia, descuentosDelMes, descuentosDelAno 
+        descuentosDelDia, descuentosDelMes, descuentosDelAno,
+        ingresoNetoDelDia, ingresoNetoDelMes, ingresoNetoDelAno
       });
 
       setVentasResumen({
@@ -95,6 +107,9 @@ export const useVentasResumen = () => {
         descuentosDelDia,
         descuentosDelMes,
         descuentosDelAno,
+        ingresoNetoDelDia,
+        ingresoNetoDelMes,
+        ingresoNetoDelAno,
       });
     } catch (err) {
       console.error('Error fetching ventas resumen:', err);

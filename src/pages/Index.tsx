@@ -1,8 +1,20 @@
 import MetricCard from "@/components/Dashboard/MetricCard";
 import ProgressCard from "@/components/Dashboard/ProgressCard";
 import IncomeChart from "@/components/Dashboard/IncomeChart";
+import VentasAnalytics from "@/components/Dashboard/VentasAnalytics";
+import { useVentasResumen } from "@/hooks/useVentasResumen";
 
 const Index = () => {
+  const { ventasResumen, loading } = useVentasResumen();
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+    }).format(value);
+  };
+
   return (
     <div className="p-8">
       <div className="space-y-8">
@@ -15,46 +27,49 @@ const Index = () => {
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
-            title="Resumen Mensual"
-            value="$15,000"
-            change="+5% del mes anterior"
-            changeType="positive"
+            title="Ventas del Mes"
+            value={loading ? "Cargando..." : formatCurrency(ventasResumen.ventasDelMes)}
+            change={loading ? "" : `Descuentos: ${formatCurrency(ventasResumen.descuentosDelMes)}`}
+            changeType="neutral"
+            subtitle={loading ? "" : `Neto: ${formatCurrency(ventasResumen.ingresoNetoDelMes)}`}
           />
           <MetricCard
-            title="Resumen Anual"
-            value="$120,000"
-            change="+15% del año anterior"
-            changeType="positive"
+            title="Ventas del Año"
+            value={loading ? "Cargando..." : formatCurrency(ventasResumen.ventasDelAno)}
+            change={loading ? "" : `Descuentos: ${formatCurrency(ventasResumen.descuentosDelAno)}`}
+            changeType="neutral"
+            subtitle={loading ? "" : `Neto: ${formatCurrency(ventasResumen.ingresoNetoDelAno)}`}
           />
-          <ProgressCard
-            title="Meta Financiera"
-            current={120000}
-            target={160000}
-            percentage={75}
+          <MetricCard
+            title="Ventas del Día"
+            value={loading ? "Cargando..." : formatCurrency(ventasResumen.ventasDelDia)}
+            change={loading ? "" : `Descuentos: ${formatCurrency(ventasResumen.descuentosDelDia)}`}
+            changeType="neutral"
+            subtitle={loading ? "" : `Neto: ${formatCurrency(ventasResumen.ingresoNetoDelDia)}`}
           />
           <MetricCard
             title="Balance Actual"
-            value="$45,250"
-            change="Actualizado hoy"
-            changeType="neutral"
+            value={loading ? "Cargando..." : formatCurrency(ventasResumen.ingresoNetoDelMes)}
+            change="Ingreso neto del mes"
+            changeType="positive"
           />
         </div>
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <IncomeChart />
+          <VentasAnalytics />
           <div className="space-y-6">
             <MetricCard
-              title="Gastos del Mes"
-              value="$8,500"
-              change="-3% vs mes anterior"
-              changeType="positive"
+              title="Descuentos del Mes"
+              value={loading ? "Cargando..." : formatCurrency(ventasResumen.descuentosDelMes)}
+              change={`${((ventasResumen.descuentosDelMes / ventasResumen.ventasDelMes) * 100).toFixed(1)}% de las ventas`}
+              changeType="warning"
             />
             <MetricCard
-              title="Facturas Pendientes"
-              value="$2,300"
-              change="5 facturas"
-              changeType="warning"
+              title="Margen del Mes"
+              value={loading ? "Cargando..." : `${((ventasResumen.ingresoNetoDelMes / ventasResumen.ventasDelMes) * 100).toFixed(1)}%`}
+              change="Ingreso neto vs ventas brutas"
+              changeType="positive"
             />
           </div>
         </div>
