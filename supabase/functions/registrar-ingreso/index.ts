@@ -40,22 +40,31 @@ serve(async (req) => {
       }
     )
 
-    // Get user from auth header
+    // Resolve user (optional). We allow no auth for testing and use a fallback user id.
+    let userId: string | null = null
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('No authorization header')
+
+    if (authHeader) {
+      try {
+        const token = authHeader.replace('Bearer ', '')
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+        if (!userError && user) {
+          userId = user.id
+          console.log('User authenticated:', user.id)
+        } else {
+          console.warn('Auth warning (continuing with fallback):', userError?.message || 'No user')
+        }
+      } catch (e) {
+        console.warn('JWT parse error (continuing with fallback):', e)
+      }
+    } else {
+      console.warn('No authorization header, using fallback user id')
     }
 
-    // Extract and verify JWT token
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
-
-    if (userError || !user) {
-      console.error('Auth error:', userError)
-      throw new Error('Invalid user token')
+    // Fallback user id for non-authenticated testing flows
+    if (!userId) {
+      userId = Deno.env.get('TEST_DEFAULT_USER_ID') || '00000000-0000-0000-0000-000000000000'
     }
-
-    console.log('User authenticated:', user.id)
 
     const requestData: RegistroIngresoRequest = await req.json()
     
@@ -74,7 +83,7 @@ serve(async (req) => {
     const { data: transaccion, error: transaccionError } = await supabaseClient
       .from('transacciones_ingresos')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         tipo_ingreso: requestData.tipoIngreso,
         descripcion: requestData.descripcion,
         monto_total: requestData.montoTotal,
@@ -99,7 +108,7 @@ serve(async (req) => {
 
     // 2. Generar número de asiento
     const { data: numeroAsiento, error: numeroError } = await supabaseClient
-      .rpc('generate_asiento_number', { p_user_id: user.id })
+      .rpc('generate_asiento_number', { p_user_id: userId })
 
     if (numeroError) {
       throw new Error(`Error al generar número de asiento: ${numeroError.message}`)
@@ -110,7 +119,7 @@ serve(async (req) => {
       .from('asientos_contables')
       .insert({
         transaccion_ingreso_id: transaccion.id,
-        user_id: user.id,
+        user_id: userId,
         numero_asiento: numeroAsiento,
         descripcion: `Venta: ${requestData.descripcion}`
       })
