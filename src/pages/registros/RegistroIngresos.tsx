@@ -649,6 +649,204 @@ const RegistroIngresos = () => {
               </Card>
             </div>
 
+            {/* Analytics adicionales */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+              {/* Número de ventas por tipo */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Transacciones por Tipo</CardTitle>
+                  <CardDescription>Cantidad y monto promedio por categoría</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="space-y-3">
+                      <div className="h-4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No hay datos disponibles</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {Object.entries(
+                        transacciones.reduce((acc, t) => {
+                          if (!acc[t.tipo_ingreso]) {
+                            acc[t.tipo_ingreso] = { count: 0, total: 0 };
+                          }
+                          acc[t.tipo_ingreso].count += 1;
+                          acc[t.tipo_ingreso].total += t.monto_total;
+                          return acc;
+                        }, {} as Record<string, { count: number; total: number }>)
+                      ).map(([tipo, stats]) => (
+                        <div key={tipo} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium capitalize">{tipo}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold">{stats.count} ventas</div>
+                              <div className="text-xs text-muted-foreground">
+                                Promedio: ${(stats.total / stats.count).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div 
+                              className="bg-primary h-2 rounded-full" 
+                              style={{ 
+                                width: `${(stats.count / transacciones.length) * 100}%` 
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Análisis por cuenta */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Por Cuenta Principal</CardTitle>
+                  <CardDescription>Distribución de ingresos por cuenta contable</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="space-y-3">
+                      <div className="h-4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No hay datos disponibles</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {Object.entries(
+                        transacciones.reduce((acc, t) => {
+                          if (!acc[t.cuenta_principal_codigo]) {
+                            acc[t.cuenta_principal_codigo] = { count: 0, total: 0 };
+                          }
+                          acc[t.cuenta_principal_codigo].count += 1;
+                          acc[t.cuenta_principal_codigo].total += t.monto_total;
+                          return acc;
+                        }, {} as Record<string, { count: number; total: number }>)
+                      ).slice(0, 5).map(([cuenta, stats]) => (
+                        <div key={cuenta} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium">{cuenta}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold">${stats.total.toLocaleString()}</div>
+                              <div className="text-xs text-muted-foreground">{stats.count} trans.</div>
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div 
+                              className="bg-chart-2 h-2 rounded-full" 
+                              style={{ 
+                                width: `${(stats.total / transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100}%` 
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Métricas de rendimiento */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Métricas Clave</CardTitle>
+                  <CardDescription>Indicadores de rendimiento</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="space-y-4">
+                      <div className="h-8 bg-muted rounded animate-pulse"></div>
+                      <div className="h-8 bg-muted rounded animate-pulse"></div>
+                      <div className="h-8 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No hay datos disponibles</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="text-center p-3 bg-primary/5 rounded-lg">
+                        <div className="text-2xl font-bold text-primary">
+                          {transacciones.length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Total Transacciones</div>
+                      </div>
+                      
+                      <div className="text-center p-3 bg-chart-2/5 rounded-lg">
+                        <div className="text-2xl font-bold text-chart-2">
+                          ${(transacciones.reduce((sum, t) => sum + t.monto_total, 0) / transacciones.length).toLocaleString()}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Ticket Promedio</div>
+                      </div>
+                      
+                      <div className="text-center p-3 bg-destructive/5 rounded-lg">
+                        <div className="text-2xl font-bold text-destructive">
+                          {((transacciones.reduce((sum, t) => sum + (t.monto_descuento || 0), 0) / 
+                            transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100).toFixed(1)}%
+                        </div>
+                        <div className="text-sm text-muted-foreground">% Descuento Promedio</div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Gráfico de tendencia temporal */}
+            <div className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Tendencia de Ventas</CardTitle>
+                  <CardDescription>Evolución de ventas en los últimos registros</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <div className="text-muted-foreground">Cargando tendencia...</div>
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <div className="text-muted-foreground">No hay datos para mostrar</div>
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={
+                          transacciones
+                            .slice(0, 10)
+                            .reverse()
+                            .map((t, index) => ({
+                              registro: `#${index + 1}`,
+                              monto: t.monto_total,
+                              descuento: t.monto_descuento || 0,
+                              neto: t.monto_neto,
+                              tipo: t.tipo_ingreso,
+                              fecha: new Date(t.created_at).toLocaleDateString()
+                            }))
+                        }>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="registro" />
+                          <YAxis />
+                          <Tooltip 
+                            formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]}
+                            labelFormatter={(label) => `Registro ${label}`}
+                          />
+                          <Bar dataKey="monto" fill="hsl(var(--primary))" name="Monto Total" />
+                          <Bar dataKey="descuento" fill="hsl(var(--destructive))" name="Descuento" />
+                          <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Monto Neto" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Lista de transacciones detallada */}
             <Card className="mt-6">
               <CardHeader>

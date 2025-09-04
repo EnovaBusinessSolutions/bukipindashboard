@@ -10,6 +10,7 @@ interface TransaccionIngreso {
   tipo_ingreso: string;
   metodo_pago: string;
   tipo_pago: string;
+  cuenta_principal_codigo: string;
   created_at: string;
 }
 
