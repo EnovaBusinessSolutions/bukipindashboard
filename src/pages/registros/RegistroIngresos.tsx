@@ -797,48 +797,153 @@ const RegistroIngresos = () => {
               </Card>
             </div>
 
-            {/* Gráfico de tendencia temporal */}
-            <div className="mt-6">
+            {/* Gráficos de ventas históricas */}
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Ventas diarias por día */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Tendencia de Ventas</CardTitle>
-                  <CardDescription>Evolución de ventas en los últimos registros</CardDescription>
+                  <CardTitle className="text-lg">Ventas Diarias</CardTitle>
+                  <CardDescription>Evolución de ventas día a día</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center">
-                      <div className="text-muted-foreground">Cargando tendencia...</div>
+                    <div className="h-80 flex items-center justify-center">
+                      <div className="text-muted-foreground">Cargando datos diarios...</div>
                     </div>
                   ) : transacciones.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center">
+                    <div className="h-80 flex items-center justify-center">
                       <div className="text-muted-foreground">No hay datos para mostrar</div>
                     </div>
                   ) : (
-                    <div className="h-64">
+                    <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={
-                          transacciones
-                            .slice(0, 10)
-                            .reverse()
-                            .map((t, index) => ({
-                              registro: `#${index + 1}`,
-                              monto: t.monto_total,
-                              descuento: t.monto_descuento || 0,
-                              neto: t.monto_neto,
-                              tipo: t.tipo_ingreso,
-                              fecha: new Date(t.created_at).toLocaleDateString()
-                            }))
+                          Object.entries(
+                            transacciones.reduce((acc, t) => {
+                              const fecha = new Date(t.created_at).toLocaleDateString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit'
+                              });
+                              if (!acc[fecha]) {
+                                acc[fecha] = { 
+                                  ventas: 0, 
+                                  descuentos: 0, 
+                                  neto: 0, 
+                                  transacciones: 0 
+                                };
+                              }
+                              acc[fecha].ventas += t.monto_total;
+                              acc[fecha].descuentos += t.monto_descuento || 0;
+                              acc[fecha].neto += t.monto_neto;
+                              acc[fecha].transacciones += 1;
+                              return acc;
+                            }, {} as Record<string, { ventas: number; descuentos: number; neto: number; transacciones: number }>)
+                          )
+                          .map(([fecha, data]) => ({
+                            fecha,
+                            ventas: data.ventas,
+                            descuentos: data.descuentos,
+                            neto: data.neto,
+                            transacciones: data.transacciones
+                          }))
+                          .sort((a, b) => {
+                            const [diaA, mesA] = a.fecha.split('/').map(Number);
+                            const [diaB, mesB] = b.fecha.split('/').map(Number);
+                            return mesA !== mesB ? mesA - mesB : diaA - diaB;
+                          })
+                          .slice(-15) // Últimos 15 días con datos
                         }>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="registro" />
+                          <XAxis 
+                            dataKey="fecha" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            fontSize={12}
+                          />
                           <YAxis />
                           <Tooltip 
                             formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]}
-                            labelFormatter={(label) => `Registro ${label}`}
+                            labelFormatter={(label) => `Fecha: ${label}`}
                           />
-                          <Bar dataKey="monto" fill="hsl(var(--primary))" name="Monto Total" />
-                          <Bar dataKey="descuento" fill="hsl(var(--destructive))" name="Descuento" />
-                          <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Monto Neto" />
+                          <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
+                          <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
+                          <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Ventas Netas" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Ventas mensuales por mes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Ventas Mensuales</CardTitle>
+                  <CardDescription>Evolución de ventas mes a mes</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-80 flex items-center justify-center">
+                      <div className="text-muted-foreground">Cargando datos mensuales...</div>
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-80 flex items-center justify-center">
+                      <div className="text-muted-foreground">No hay datos para mostrar</div>
+                    </div>
+                  ) : (
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={
+                          Object.entries(
+                            transacciones.reduce((acc, t) => {
+                              const fecha = new Date(t.created_at);
+                              const mesAno = `${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`;
+                              if (!acc[mesAno]) {
+                                acc[mesAno] = { 
+                                  ventas: 0, 
+                                  descuentos: 0, 
+                                  neto: 0, 
+                                  transacciones: 0 
+                                };
+                              }
+                              acc[mesAno].ventas += t.monto_total;
+                              acc[mesAno].descuentos += t.monto_descuento || 0;
+                              acc[mesAno].neto += t.monto_neto;
+                              acc[mesAno].transacciones += 1;
+                              return acc;
+                            }, {} as Record<string, { ventas: number; descuentos: number; neto: number; transacciones: number }>)
+                          )
+                          .map(([mesAno, data]) => ({
+                            mes: mesAno,
+                            ventas: data.ventas,
+                            descuentos: data.descuentos,
+                            neto: data.neto,
+                            transacciones: data.transacciones
+                          }))
+                          .sort((a, b) => {
+                            const [mesA, anoA] = a.mes.split('/').map(Number);
+                            const [mesB, anoB] = b.mes.split('/').map(Number);
+                            return anoA !== anoB ? anoA - anoB : mesA - mesB;
+                          })
+                          .slice(-12) // Últimos 12 meses con datos
+                        }>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="mes" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            fontSize={12}
+                          />
+                          <YAxis />
+                          <Tooltip 
+                            formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]}
+                            labelFormatter={(label) => `Mes: ${label}`}
+                          />
+                          <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
+                          <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
+                          <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Ventas Netas" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
