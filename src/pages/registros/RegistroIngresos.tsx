@@ -13,8 +13,10 @@ import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, W
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useVentasResumen } from "@/hooks/useVentasResumen";
 
 const RegistroIngresos = () => {
+  const { ventasResumen, loading: loadingVentas } = useVentasResumen();
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
@@ -466,7 +468,9 @@ const RegistroIngresos = () => {
                   <CardTitle className="text-sm font-medium">Ventas del Día</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">$0.00</div>
+                  <div className="text-2xl font-bold">
+                    {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelDia.toFixed(2)}`}
+                  </div>
                   <p className="text-xs text-muted-foreground">Total de hoy</p>
                 </CardContent>
               </Card>
@@ -476,7 +480,9 @@ const RegistroIngresos = () => {
                   <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">$0.00</div>
+                  <div className="text-2xl font-bold">
+                    {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelMes.toFixed(2)}`}
+                  </div>
                   <p className="text-xs text-muted-foreground">Acumulado mensual</p>
                 </CardContent>
               </Card>
@@ -486,7 +492,9 @@ const RegistroIngresos = () => {
                   <CardTitle className="text-sm font-medium">Ventas del Año</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">$0.00</div>
+                  <div className="text-2xl font-bold">
+                    {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelAno.toFixed(2)}`}
+                  </div>
                   <p className="text-xs text-muted-foreground">Acumulado anual</p>
                 </CardContent>
               </Card>
