@@ -14,9 +14,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
+import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 
 const RegistroIngresos = () => {
   const { ventasResumen, loading: loadingVentas } = useVentasResumen();
+  const { transacciones, loading: loadingTransacciones } = useTransaccionesRecientes(10);
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
@@ -504,13 +506,65 @@ const RegistroIngresos = () => {
               <CardHeader>
                 <CardTitle>Análitica de Ventas</CardTitle>
                 <CardDescription>
-                  Métricas por tipo de producto y categoría
+                  Registro de ventas realizadas
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  Análitica de ventas próximamente...
-                </div>
+                {loadingTransacciones ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Cargando transacciones...
+                  </div>
+                ) : transacciones.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No hay ventas registradas aún
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-sm font-medium text-muted-foreground mb-4">
+                      Últimas {transacciones.length} transacciones
+                    </div>
+                    <div className="space-y-3">
+                      {transacciones.map((transaccion) => (
+                        <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <p className="font-medium">{transaccion.descripcion}</p>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                <span className="capitalize">{transaccion.tipo_ingreso}</span>
+                                <span>•</span>
+                                <span className="capitalize">{transaccion.metodo_pago}</span>
+                                <span>•</span>
+                                <span className="capitalize">{transaccion.tipo_pago}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
+                              {transaccion.monto_descuento > 0 && (
+                                <p className="text-sm text-red-600">
+                                  -${transaccion.monto_descuento.toFixed(2)} desc.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center text-xs text-muted-foreground">
+                            <span>
+                              {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            <span className="font-medium text-green-600">
+                              Neto: ${transaccion.monto_neto.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
