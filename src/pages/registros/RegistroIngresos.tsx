@@ -261,7 +261,6 @@ const RegistroIngresos = () => {
                           <ShoppingCart className="h-5 w-5 text-primary" />
                           <Label htmlFor="precargados" className="cursor-pointer flex-1">
                             <div className="font-medium">Productos Precargados</div>
-                            <div className="text-sm text-muted-foreground">Catálogo plantilla 3</div>
                           </Label>
                         </div>
                       </div>
