@@ -5,6 +5,9 @@ interface VentasResumen {
   ventasDelDia: number;
   ventasDelMes: number;
   ventasDelAno: number;
+  descuentosDelDia: number;
+  descuentosDelMes: number;
+  descuentosDelAno: number;
 }
 
 export const useVentasResumen = () => {
@@ -12,6 +15,9 @@ export const useVentasResumen = () => {
     ventasDelDia: 0,
     ventasDelMes: 0,
     ventasDelAno: 0,
+    descuentosDelDia: 0,
+    descuentosDelMes: 0,
+    descuentosDelAno: 0,
   });
   
   const [loading, setLoading] = useState(true);
@@ -25,7 +31,7 @@ export const useVentasResumen = () => {
       // Simplificar: obtener todas las transacciones sin filtros de fecha primero para debug
       const { data: todasLasVentas, error: errorTodasVentas } = await supabase
         .from('transacciones_ingresos')
-        .select('monto_total, created_at');
+        .select('monto_total, monto_descuento, created_at');
 
       if (errorTodasVentas) {
         console.error('Error fetching todas las ventas:', errorTodasVentas);
@@ -61,12 +67,34 @@ export const useVentasResumen = () => {
         return fechaVenta >= startOfYear;
       }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
 
-      console.log('Resumen calculado:', { ventasDelDia, ventasDelMes, ventasDelAno });
+      // Calcular descuentos
+      const descuentosDelDia = todasLasVentas?.filter(venta => {
+        const fechaVenta = new Date(venta.created_at);
+        return fechaVenta >= startOfDay;
+      }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
+
+      const descuentosDelMes = todasLasVentas?.filter(venta => {
+        const fechaVenta = new Date(venta.created_at);
+        return fechaVenta >= startOfMonth;
+      }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
+
+      const descuentosDelAno = todasLasVentas?.filter(venta => {
+        const fechaVenta = new Date(venta.created_at);
+        return fechaVenta >= startOfYear;
+      }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
+
+      console.log('Resumen calculado:', { 
+        ventasDelDia, ventasDelMes, ventasDelAno,
+        descuentosDelDia, descuentosDelMes, descuentosDelAno 
+      });
 
       setVentasResumen({
         ventasDelDia,
         ventasDelMes,
         ventasDelAno,
+        descuentosDelDia,
+        descuentosDelMes,
+        descuentosDelAno,
       });
     } catch (err) {
       console.error('Error fetching ventas resumen:', err);

@@ -13,6 +13,7 @@ import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, W
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 
@@ -464,7 +465,7 @@ const RegistroIngresos = () => {
 
           {/* TAB 2: RESUMEN DE VENTAS */}
           <TabsContent value="resumen" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium">Ventas del Día</CardTitle>
@@ -474,7 +475,6 @@ const RegistroIngresos = () => {
                     {loadingVentas ? "Cargando..." : `$${ventasResumen.ventasDelDia.toFixed(2)}`}
                   </div>
                   <p className="text-xs text-muted-foreground">Total de hoy</p>
-                  <p className="text-xs text-blue-600 mt-1">Debug: Revisa consola</p>
                 </CardContent>
               </Card>
               
@@ -501,13 +501,123 @@ const RegistroIngresos = () => {
                   <p className="text-xs text-muted-foreground">Acumulado anual</p>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Descuentos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">
+                    {loadingVentas ? "Cargando..." : `$${ventasResumen.descuentosDelMes.toFixed(2)}`}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Este mes</p>
+                </CardContent>
+              </Card>
             </div>
 
-            <Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico de barras - Ventas por día */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Ventas por Tipo</CardTitle>
+                  <CardDescription>Distribución de ingresos por categoría</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      Cargando gráfico...
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={
+                          Object.entries(
+                            transacciones.reduce((acc, t) => {
+                              acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
+                              return acc;
+                            }, {} as Record<string, number>)
+                          ).map(([tipo, monto]) => ({ tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1), monto }))
+                        }>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="tipo" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Bar dataKey="monto" fill="hsl(var(--primary))" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Gráfico circular - Métodos de pago */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Métodos de Pago</CardTitle>
+                  <CardDescription>Distribución por forma de pago</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      Cargando gráfico...
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={
+                              Object.entries(
+                                transacciones.reduce((acc, t) => {
+                                  acc[t.metodo_pago] = (acc[t.metodo_pago] || 0) + t.monto_total;
+                                  return acc;
+                                }, {} as Record<string, number>)
+                              ).map(([metodo, monto]) => ({ 
+                                metodo: metodo.charAt(0).toUpperCase() + metodo.slice(1), 
+                                monto,
+                                porcentaje: ((monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100).toFixed(1)
+                              }))
+                            }
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ metodo, porcentaje }) => `${metodo} ${porcentaje}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="monto"
+                          >
+                            {Object.entries(
+                              transacciones.reduce((acc, t) => {
+                                acc[t.metodo_pago] = (acc[t.metodo_pago] || 0) + t.monto_total;
+                                return acc;
+                              }, {} as Record<string, number>)
+                            ).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={index === 0 ? "hsl(var(--primary))" : "hsl(var(--secondary))"} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Lista de transacciones detallada */}
+            <Card className="mt-6">
               <CardHeader>
-                <CardTitle>Análitica de Ventas</CardTitle>
+                <CardTitle>Registro Detallado de Ventas</CardTitle>
                 <CardDescription>
-                  Registro de ventas realizadas
+                  Historial completo de transacciones
                 </CardDescription>
               </CardHeader>
               <CardContent>
