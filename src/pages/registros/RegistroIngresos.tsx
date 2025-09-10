@@ -36,6 +36,10 @@ const RegistroIngresos = () => {
   const [descripcion, setDescripcion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Estados para productos precargados
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [productUnitPrice, setProductUnitPrice] = useState("");
+  
   // Estados para el catálogo de productos
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [productName, setProductName] = useState("");
@@ -45,6 +49,15 @@ const RegistroIngresos = () => {
   const [productSubcuenta, setProductSubcuenta] = useState(""); // Nueva subcuenta
   const [productImage, setProductImage] = useState<File | null>(null);
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
+  // Función para manejar selección de producto precargado
+  const handleProductSelection = (productId: string) => {
+    setSelectedProductId(productId);
+    const selectedProduct = productos.find(p => p.id === productId);
+    if (selectedProduct) {
+      setProductUnitPrice(selectedProduct.precio.toString());
+    }
+  };
 
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
@@ -114,7 +127,7 @@ const RegistroIngresos = () => {
             </Alert>
             <div className="space-y-2">
               <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
-              <Select>
+              <Select value={selectedProductId} onValueChange={handleProductSelection}>
                 <SelectTrigger>
                   <SelectValue placeholder={loadingProductos ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
@@ -140,7 +153,14 @@ const RegistroIngresos = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="precio-unitario">Precio Unitario</Label>
-                <Input id="precio-unitario" type="number" placeholder="0.00" disabled />
+                <Input 
+                  id="precio-unitario" 
+                  type="number" 
+                  placeholder="0.00" 
+                  value={productUnitPrice}
+                  readOnly
+                  className="bg-muted"
+                />
               </div>
             </div>
           </div>
