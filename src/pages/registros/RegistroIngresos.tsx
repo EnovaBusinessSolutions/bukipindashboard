@@ -88,7 +88,7 @@ const RegistroIngresos = () => {
       if (!descripcion.trim()) errors.push('Descripción');
     }
     
-    if (!montoTotal || parseFloat(montoTotal) <= 0) errors.push('Monto Total');
+    if (selectedIncomeType !== 'precargados' && (!montoTotal || parseFloat(montoTotal) <= 0)) errors.push('Monto Total');
     if (!paymentMethod) errors.push('Método de Pago');
     if (!paymentStatus) errors.push('Tipo de Pago');
     
@@ -117,16 +117,38 @@ const RegistroIngresos = () => {
     setIsSubmitting(true);
 
     try {
+      // Derivar valores por seguridad
+      const selectedProduct = productos.find(p => p.id === selectedProductId);
+      const descripcionToSend = descripcion || (selectedIncomeType === 'precargados' ? (selectedProduct?.nombre || '') : descripcion);
+      const montoTotalDerived = selectedIncomeType === 'precargados' && selectedProduct
+        ? Number((Number(selectedProduct.precio) * Number(productQuantity || '1')).toFixed(2))
+        : Number(montoTotal || '0');
+      const descuento = hasDiscount ? Number(discountAmount || '0') : 0;
+      const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
+      const montoPagado = paymentStatus === 'contado' ? neto : 0;
+      const subcuentaToSend = selectedIncomeType === 'precargados' ? (selectedProduct?.subcuenta_id || null) : null;
+
+      if (!descripcionToSend || montoTotalDerived <= 0) {
+        toast({
+          title: "⚠️ Datos incompletos",
+          description: "Selecciona un producto válido o ingresa una descripción y monto.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('registrar-ingreso', {
         body: {
           tipoIngreso: selectedIncomeType,
-          descripcion: descripcion,
-          montoTotal: parseFloat(montoTotal),
-          montoDescuento: hasDiscount ? parseFloat(discountAmount || '0') : 0,
+          descripcion: descripcionToSend,
+          montoTotal: montoTotalDerived,
+          montoDescuento: descuento,
           cuentaPrincipalCodigo: selectedIncomeType === 'otros' ? '4004' : '4001',
+          subcuentaId: subcuentaToSend || undefined,
           metodoPago: paymentMethod,
           tipoPago: paymentStatus,
-          montoPagado: paymentStatus === 'contado' ? parseFloat(montoTotal) - (hasDiscount ? parseFloat(discountAmount || '0') : 0) : 0
+          montoPagado: montoPagado,
         }
       });
 
