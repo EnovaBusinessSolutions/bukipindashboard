@@ -72,12 +72,41 @@ const RegistroIngresos = () => {
     }
   };
 
+  // Función para validar campos requeridos y mostrar alertas visuales
+  const getValidationErrors = () => {
+    const errors = [];
+    
+    if (!selectedIncomeType) errors.push('Tipo de Ingreso');
+    
+    // Validación específica por tipo de ingreso
+    if (selectedIncomeType === 'precargados') {
+      if (!selectedProductId) errors.push('Producto Precargado');
+      if (!productQuantity || parseFloat(productQuantity) <= 0) errors.push('Cantidad');
+    } else if (selectedIncomeType === 'general' || selectedIncomeType === 'otros') {
+      if (!descripcion.trim()) errors.push('Descripción');
+    }
+    
+    if (!montoTotal || parseFloat(montoTotal) <= 0) errors.push('Monto Total');
+    if (!paymentMethod) errors.push('Método de Pago');
+    if (!paymentStatus) errors.push('Tipo de Pago');
+    
+    return errors;
+  };
+
+  // Función para verificar si un campo tiene error
+  const hasFieldError = (fieldName: string) => {
+    const errors = getValidationErrors();
+    return errors.includes(fieldName);
+  };
+
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
-    if (!selectedIncomeType || !descripcion || !montoTotal || !paymentMethod || !paymentStatus) {
+    const validationErrors = getValidationErrors();
+    
+    if (validationErrors.length > 0) {
       toast({
-        title: "Error",
-        description: "Por favor completa todos los campos requeridos",
+        title: "⚠️ Campos requeridos faltantes",
+        description: `Debes completar: ${validationErrors.join(', ')}`,
         variant: "destructive"
       });
       return;
@@ -116,6 +145,9 @@ const RegistroIngresos = () => {
       setHasDiscount(false);
       setPaymentMethod("");
       setPaymentStatus("");
+      setSelectedProductId("");
+      setProductUnitPrice("");
+      setProductQuantity("1");
 
     } catch (error) {
       toast({
@@ -139,9 +171,20 @@ const RegistroIngresos = () => {
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
-              <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
-              <Select value={selectedProductId} onValueChange={handleProductSelection}>
-                <SelectTrigger>
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
+                {hasFieldError('Producto Precargado') && (
+                  <div className="flex items-center text-destructive">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Requerido</span>
+                  </div>
+                )}
+              </div>
+              <Select 
+                value={selectedProductId} 
+                onValueChange={handleProductSelection}
+              >
+                <SelectTrigger className={hasFieldError('Producto Precargado') ? 'border-destructive' : ''}>
                   <SelectValue placeholder={loadingProductos ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -161,13 +204,22 @@ const RegistroIngresos = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cantidad">Cantidad</Label>
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="cantidad">Cantidad</Label>
+                  {hasFieldError('Cantidad') && (
+                    <div className="flex items-center text-destructive">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      <span className="text-xs">Requerido</span>
+                    </div>
+                  )}
+                </div>
                 <Input 
                   id="cantidad" 
                   type="number" 
                   placeholder="1" 
                   value={productQuantity}
                   onChange={(e) => handleQuantityChange(e.target.value)}
+                  className={hasFieldError('Cantidad') ? 'border-destructive' : ''}
                 />
               </div>
               <div className="space-y-2">
@@ -226,12 +278,21 @@ const RegistroIngresos = () => {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="descripcion-general">Descripción del Ingreso</Label>
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="descripcion-general">Descripción del Ingreso</Label>
+                {hasFieldError('Descripción') && (
+                  <div className="flex items-center text-destructive">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Requerido</span>
+                  </div>
+                )}
+              </div>
               <Input 
                 id="descripcion-general" 
                 placeholder="Ej: Servicio de consultoría"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
+                className={hasFieldError('Descripción') ? 'border-destructive' : ''}
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -259,13 +320,22 @@ const RegistroIngresos = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="monto-general">Monto</Label>
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="monto-general">Monto</Label>
+                {hasFieldError('Monto Total') && (
+                  <div className="flex items-center text-destructive">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Requerido</span>
+                  </div>
+                )}
+              </div>
               <Input 
                 id="monto-general" 
                 type="number" 
                 placeholder="0.00"
                 value={montoTotal}
                 onChange={(e) => setMontoTotal(e.target.value)}
+                className={hasFieldError('Monto Total') ? 'border-destructive' : ''}
               />
             </div>
           </div>
@@ -492,8 +562,20 @@ const RegistroIngresos = () => {
 
                     {/* Método de pago */}
                     <div className="space-y-4">
-                      <Label className="font-medium">Método de Pago</Label>
-                      <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <div className="flex items-center space-x-2">
+                        <Label className="font-medium">Método de Pago</Label>
+                        {hasFieldError('Método de Pago') && (
+                          <div className="flex items-center text-destructive">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Requerido</span>
+                          </div>
+                        )}
+                      </div>
+                      <RadioGroup 
+                        value={paymentMethod} 
+                        onValueChange={setPaymentMethod}
+                        className={hasFieldError('Método de Pago') ? 'border border-destructive rounded-lg p-2' : ''}
+                      >
                         <div className="flex items-center space-x-3">
                           <RadioGroupItem value="efectivo" id="efectivo" />
                           <div className="flex items-center space-x-2">
@@ -519,8 +601,20 @@ const RegistroIngresos = () => {
 
                     {/* Estado del pago */}
                     <div className="space-y-4">
-                      <Label className="font-medium">Estado del Pago</Label>
-                      <RadioGroup value={paymentStatus} onValueChange={setPaymentStatus}>
+                      <div className="flex items-center space-x-2">
+                        <Label className="font-medium">Estado del Pago</Label>
+                        {hasFieldError('Tipo de Pago') && (
+                          <div className="flex items-center text-destructive">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            <span className="text-xs">Requerido</span>
+                          </div>
+                        )}
+                      </div>
+                      <RadioGroup 
+                        value={paymentStatus} 
+                        onValueChange={setPaymentStatus}
+                        className={hasFieldError('Tipo de Pago') ? 'border border-destructive rounded-lg p-2' : ''}
+                      >
                         <div className="flex items-center space-x-3">
                           <RadioGroupItem value="contado" id="contado" />
                           <Label htmlFor="contado" className="cursor-pointer">Pago de contado</Label>
