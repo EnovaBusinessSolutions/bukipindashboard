@@ -11,7 +11,14 @@ interface TransaccionIngreso {
   metodo_pago: string;
   tipo_pago: string;
   cuenta_principal_codigo: string;
+  subcuenta_id: string | null;
   created_at: string;
+  subcuentas?: {
+    nombre: string;
+  } | null;
+  cuentas?: {
+    nombre: string;
+  } | null;
 }
 
 export const useTransaccionesRecientes = (limit: number = 10) => {
@@ -26,13 +33,16 @@ export const useTransaccionesRecientes = (limit: number = 10) => {
 
       const { data, error: fetchError } = await supabase
         .from('transacciones_ingresos')
-        .select('*')
+        .select(`
+          *,
+          subcuentas(nombre)
+        `)
         .order('created_at', { ascending: false })
         .limit(limit);
 
       if (fetchError) throw fetchError;
 
-      setTransacciones(data || []);
+      setTransacciones((data as any) || []);
     } catch (err) {
       console.error('Error fetching transacciones:', err);
       setError(err instanceof Error ? err.message : 'Error desconocido');

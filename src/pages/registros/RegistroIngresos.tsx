@@ -1266,6 +1266,22 @@ const RegistroIngresos = () => {
                                   <span>•</span>
                                   <span className="capitalize">{transaccion.tipo_pago}</span>
                                 </div>
+                                {/* Información contable */}
+                                <div className="mt-2 p-2 bg-muted/30 rounded-md">
+                                  <div className="text-xs font-medium text-muted-foreground mb-1">Información Contable:</div>
+                                  <div className="text-xs space-y-1">
+                                    <div>
+                                      <span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo}
+                                      {transaccion.cuenta_principal_codigo === '4001' ? ' - Ventas' : 
+                                       transaccion.cuenta_principal_codigo === '4004' ? ' - Otros Ingresos' : ''}
+                                    </div>
+                                    {transaccion.subcuentas && (
+                                      <div>
+                                        <span className="font-medium">Subcuenta:</span> {transaccion.subcuentas.nombre}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                               <div className="text-right ml-4">
                                 <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
