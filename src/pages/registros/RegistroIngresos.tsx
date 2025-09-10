@@ -39,6 +39,7 @@ const RegistroIngresos = () => {
   // Estados para productos precargados
   const [selectedProductId, setSelectedProductId] = useState("");
   const [productUnitPrice, setProductUnitPrice] = useState("");
+  const [productQuantity, setProductQuantity] = useState("1");
   
   // Estados para el catálogo de productos
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -56,6 +57,18 @@ const RegistroIngresos = () => {
     const selectedProduct = productos.find(p => p.id === productId);
     if (selectedProduct) {
       setProductUnitPrice(selectedProduct.precio.toString());
+      // Calcular monto total automáticamente
+      const total = (selectedProduct.precio * parseFloat(productQuantity)).toFixed(2);
+      setMontoTotal(total);
+    }
+  };
+
+  // Función para manejar cambio de cantidad
+  const handleQuantityChange = (quantity: string) => {
+    setProductQuantity(quantity);
+    if (selectedProductId && productUnitPrice) {
+      const total = (parseFloat(productUnitPrice) * parseFloat(quantity || '1')).toFixed(2);
+      setMontoTotal(total);
     }
   };
 
@@ -149,7 +162,13 @@ const RegistroIngresos = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cantidad">Cantidad</Label>
-                <Input id="cantidad" type="number" placeholder="1" />
+                <Input 
+                  id="cantidad" 
+                  type="number" 
+                  placeholder="1" 
+                  value={productQuantity}
+                  onChange={(e) => handleQuantityChange(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="precio-unitario">Precio Unitario</Label>
@@ -401,9 +420,31 @@ const RegistroIngresos = () => {
                     
                     <Separator />
                     
-                    {/* Sección de descuentos */}
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-2">
+                     {/* Sección de cálculos y descuentos */}
+                     <div className="space-y-4">
+                       {/* Mostrar total calculado para productos precargados */}
+                       {selectedIncomeType === "precargados" && selectedProductId && (
+                         <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                           <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Cálculo Automático</h4>
+                           <div className="space-y-1 text-sm">
+                             <div className="flex justify-between">
+                               <span>Cantidad:</span>
+                               <span>{productQuantity}</span>
+                             </div>
+                             <div className="flex justify-between">
+                               <span>Precio Unitario:</span>
+                               <span>${productUnitPrice}</span>
+                             </div>
+                             <Separator />
+                             <div className="flex justify-between font-medium">
+                               <span>Subtotal:</span>
+                               <span>${montoTotal}</span>
+                             </div>
+                           </div>
+                         </div>
+                       )}
+
+                       <div className="flex items-center space-x-2">
                         <Checkbox 
                           id="discount" 
                           checked={hasDiscount} 
