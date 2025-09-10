@@ -6,7 +6,7 @@ export type Subcuenta = {
   id: string;
   nombre: string;
   cuenta_madre_codigo: string;
-  user_id: string;
+  user_id: string | null; // Nullable para prototipo
   created_at: string;
   updated_at: string;
 };
@@ -46,15 +46,13 @@ export const useCreateSubcuenta = () => {
 
   return useMutation({
     mutationFn: async ({ nombre, cuentaMadreCodigo }: { nombre: string; cuentaMadreCodigo: string }) => {
-      // Para prototipo - usar user_id por defecto
-      const defaultUserId = "00000000-0000-0000-0000-000000000000";
-
+      // Para prototipo - no enviar user_id ya que es nullable
       const { data, error } = await supabase
         .from("subcuentas")
         .insert({
           nombre,
           cuenta_madre_codigo: cuentaMadreCodigo,
-          user_id: defaultUserId
+          // user_id se queda como null para prototipo
         })
         .select()
         .single();
