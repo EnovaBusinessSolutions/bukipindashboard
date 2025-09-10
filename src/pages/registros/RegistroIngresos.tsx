@@ -116,11 +116,20 @@ const RegistroIngresos = () => {
               <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
               <Select>
                 <SelectTrigger>
-                  <SelectValue placeholder="Buscar en catálogo plantilla 3" />
+                  <SelectValue placeholder={loadingProductos ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="producto1">Producto Ejemplo 1</SelectItem>
-                  <SelectItem value="producto2">Producto Ejemplo 2</SelectItem>
+                  {loadingProductos ? (
+                    <SelectItem value="loading" disabled>Cargando productos...</SelectItem>
+                  ) : productos.length === 0 ? (
+                    <SelectItem value="empty" disabled>No hay productos registrados</SelectItem>
+                  ) : (
+                    productos.map((producto) => (
+                      <SelectItem key={producto.id} value={producto.id}>
+                        {producto.nombre} - ${producto.precio}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
