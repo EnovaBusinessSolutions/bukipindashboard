@@ -21,8 +21,8 @@ import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useProductos, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
 
 const RegistroIngresos = () => {
-  const { ventasResumen, loading: loadingVentas } = useVentasResumen();
-  const { transacciones, loading: loadingTransacciones } = useTransaccionesRecientes(10);
+  const { ventasResumen, loading: loadingVentas, refetch: refetchVentas } = useVentasResumen();
+  const { transacciones, loading: loadingTransacciones, refetch: refetchTransacciones } = useTransaccionesRecientes(10);
   const { data: subcuentas = [] } = useSubcuentas();
   const { data: productos = [], isLoading: loadingProductos } = useProductos();
   const createProducto = useCreateProducto();
@@ -160,6 +160,12 @@ const RegistroIngresos = () => {
         title: "Ingreso registrado",
         description: `Asiento ${data.numeroAsiento} creado correctamente`
       });
+
+      // Refrescar datos para mostrar la nueva venta
+      await Promise.all([
+        refetchVentas(),
+        refetchTransacciones()
+      ]);
 
       // Limpiar formulario
       setSelectedIncomeType("");
