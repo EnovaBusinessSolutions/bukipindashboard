@@ -57,6 +57,8 @@ const RegistroIngresos = () => {
     const selectedProduct = productos.find(p => p.id === productId);
     if (selectedProduct) {
       setProductUnitPrice(selectedProduct.precio.toString());
+      // Autocompletar descripción requerida por el backend
+      setDescripcion(selectedProduct.nombre);
       // Calcular monto total automáticamente
       const total = (selectedProduct.precio * parseFloat(productQuantity)).toFixed(2);
       setMontoTotal(total);
