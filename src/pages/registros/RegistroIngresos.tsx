@@ -222,38 +222,6 @@ const RegistroIngresos = () => {
                   )}
                 </SelectContent>
               </Select>
-              {/* Mostrar producto seleccionado con imagen */}
-              {selectedProductId && (
-                <div className="mt-3 p-3 border rounded-lg bg-background">
-                  {(() => {
-                    const selectedProduct = productos.find(p => p.id === selectedProductId);
-                    return selectedProduct ? (
-                      <div className="flex items-center space-x-3">
-                        <div className="w-16 h-16 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                          {selectedProduct.imagen_url ? (
-                            <img 
-                              src={selectedProduct.imagen_url} 
-                              alt={selectedProduct.nombre}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-muted flex items-center justify-center">
-                              <Package className="w-8 h-8 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-foreground">{selectedProduct.nombre}</h4>
-                          <p className="text-sm text-muted-foreground">${selectedProduct.precio}</p>
-                          {selectedProduct.descripcion && (
-                            <p className="text-xs text-muted-foreground mt-1">{selectedProduct.descripcion}</p>
-                          )}
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
