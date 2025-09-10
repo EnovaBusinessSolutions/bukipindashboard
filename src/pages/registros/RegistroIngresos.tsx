@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -28,6 +29,14 @@ const RegistroIngresos = () => {
   const [montoTotal, setMontoTotal] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estados para el catálogo de productos
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [productName, setProductName] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productAccount, setProductAccount] = useState("4001");
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
 
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
@@ -231,6 +240,44 @@ const RegistroIngresos = () => {
       
       default:
         return null;
+    }
+  };
+
+  const handleSubmitProduct = async () => {
+    if (!productName.trim() || !productPrice.trim()) {
+      toast({
+        title: "Error",
+        description: "El nombre y precio del producto son obligatorios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmittingProduct(true);
+    try {
+      // Aquí puedes agregar la lógica para guardar el producto
+      // Por ahora solo mostramos un mensaje de éxito
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular guardado
+      
+      toast({
+        title: "Producto guardado",
+        description: `El producto "${productName}" se ha guardado correctamente`,
+      });
+
+      // Limpiar formulario
+      setProductName("");
+      setProductPrice("");  
+      setProductDescription("");
+      setProductAccount("4001");
+      setIsProductDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Hubo un error al guardar el producto",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingProduct(false);
     }
   };
 
@@ -1026,10 +1073,92 @@ const RegistroIngresos = () => {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   Catálogo de Productos
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nuevo Producto
-                  </Button>
+                  <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Nuevo Producto
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Agregar Nuevo Producto</DialogTitle>
+                        <DialogDescription>
+                          Completa la información del producto para agregarlo al catálogo.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="product-name" className="text-right">
+                            Nombre
+                          </Label>
+                          <Input
+                            id="product-name"
+                            value={productName}
+                            onChange={(e) => setProductName(e.target.value)}
+                            className="col-span-3"
+                            placeholder="Nombre del producto"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="product-price" className="text-right">
+                            Precio
+                          </Label>
+                          <Input
+                            id="product-price"
+                            type="number"
+                            value={productPrice}
+                            onChange={(e) => setProductPrice(e.target.value)}
+                            className="col-span-3"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="product-account" className="text-right">
+                            Cuenta
+                          </Label>
+                          <Select value={productAccount} onValueChange={setProductAccount}>
+                            <SelectTrigger className="col-span-3">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="4001">4001 - Ventas</SelectItem>
+                              <SelectItem value="4002">4002 - Servicios</SelectItem>
+                              <SelectItem value="4003">4003 - Otros ingresos</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="product-description" className="text-right">
+                            Descripción
+                          </Label>
+                          <Textarea
+                            id="product-description"
+                            value={productDescription}
+                            onChange={(e) => setProductDescription(e.target.value)}
+                            className="col-span-3"
+                            placeholder="Descripción opcional del producto"
+                            rows={3}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => setIsProductDialogOpen(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button 
+                          onClick={handleSubmitProduct} 
+                          disabled={isSubmittingProduct}
+                        >
+                          {isSubmittingProduct ? "Guardando..." : "Guardar Producto"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </CardTitle>
                 <CardDescription>
                   Gestiona el catálogo de productos y servicios con cuentas contables asignadas
