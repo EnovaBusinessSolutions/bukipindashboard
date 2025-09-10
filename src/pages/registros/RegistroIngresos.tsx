@@ -187,16 +187,16 @@ const RegistroIngresos = () => {
                 <SelectTrigger className={hasFieldError('Producto Precargado') ? 'border-destructive' : ''}>
                   <SelectValue placeholder={loadingProductos ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
-                <SelectContent className="max-h-80 z-50 bg-background border border-border">
+                <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
                   {loadingProductos ? (
                     <SelectItem value="loading" disabled>Cargando productos...</SelectItem>
                   ) : productos.length === 0 ? (
                     <SelectItem value="empty" disabled>No hay productos registrados</SelectItem>
                   ) : (
                     productos.map((producto) => (
-                      <SelectItem key={producto.id} value={producto.id} className="py-3">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                      <SelectItem key={producto.id} value={producto.id} className="py-2 px-2 h-auto">
+                        <div className="flex items-center space-x-2 w-full">
+                          <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0">
                             {producto.imagen_url ? (
                               <img 
                                 src={producto.imagen_url} 
@@ -205,16 +205,13 @@ const RegistroIngresos = () => {
                               />
                             ) : (
                               <div className="w-full h-full bg-muted flex items-center justify-center">
-                                <Package className="w-6 h-6 text-muted-foreground" />
+                                <Package className="w-4 h-4 text-muted-foreground" />
                               </div>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{producto.nombre}</p>
-                            <p className="text-sm text-muted-foreground">${producto.precio}</p>
-                            {producto.descripcion && (
-                              <p className="text-xs text-muted-foreground truncate">{producto.descripcion}</p>
-                            )}
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className="font-medium text-sm truncate leading-tight">{producto.nombre}</p>
+                            <p className="text-xs text-muted-foreground">${producto.precio}</p>
                           </div>
                         </div>
                       </SelectItem>
