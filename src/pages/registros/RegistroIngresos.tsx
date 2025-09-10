@@ -1132,12 +1132,12 @@ const RegistroIngresos = () => {
                           <Label htmlFor="product-subcuenta" className="text-right">
                             Subcuenta
                           </Label>
-                          <Select value={productSubcuenta} onValueChange={setProductSubcuenta}>
+                          <Select value={productSubcuenta} onValueChange={(v) => setProductSubcuenta(v === "none" ? "" : v)}>
                             <SelectTrigger className="col-span-3">
                               <SelectValue placeholder="Sin subcuenta (usar cuenta principal)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Sin subcuenta (usar cuenta principal)</SelectItem>
+                              <SelectItem value="none">Sin subcuenta (usar cuenta principal)</SelectItem>
                               {subcuentas
                                 .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
                                 .map((subcuenta) => (
