@@ -636,7 +636,7 @@ const RegistroIngresos = () => {
                         <div className="flex items-center space-x-3">
                           <RadioGroupItem value="tarjeta" id="tarjeta" />
                           <div className="flex items-center space-x-2">
-                            <CreditCard className="h-4 w-4 text-blue-600" />
+                            <CreditCard className="h-4 w-4 text-blue-800" />
                             <Label htmlFor="tarjeta" className="cursor-pointer">
                               Tarjeta <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
                             </Label>
