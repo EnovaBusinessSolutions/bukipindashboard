@@ -18,11 +18,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
+import { useProductos, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
 
 const RegistroIngresos = () => {
   const { ventasResumen, loading: loadingVentas } = useVentasResumen();
   const { transacciones, loading: loadingTransacciones } = useTransaccionesRecientes(10);
   const { data: subcuentas = [] } = useSubcuentas();
+  const { data: productos = [], isLoading: loadingProductos } = useProductos();
+  const createProducto = useCreateProducto();
+  const deleteProducto = useDeleteProducto();
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
@@ -39,6 +43,7 @@ const RegistroIngresos = () => {
   const [productDescription, setProductDescription] = useState("");
   const [productAccount, setProductAccount] = useState("4001"); // Fijo en ventas
   const [productSubcuenta, setProductSubcuenta] = useState(""); // Nueva subcuenta
+  const [productImage, setProductImage] = useState<File | null>(null);
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
 
   // Función para registrar el ingreso
@@ -258,13 +263,12 @@ const RegistroIngresos = () => {
 
     setIsSubmittingProduct(true);
     try {
-      // Aquí puedes agregar la lógica para guardar el producto
-      // Por ahora solo mostramos un mensaje de éxito
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular guardado
-      
-      toast({
-        title: "Producto guardado",
-        description: `El producto "${productName}" se ha guardado correctamente`,
+      await createProducto.mutateAsync({
+        nombre: productName.trim(),
+        precio: parseFloat(productPrice),
+        descripcion: productDescription.trim() || undefined,
+        subcuentaId: productSubcuenta || undefined,
+        imagen: productImage || undefined,
       });
 
       // Limpiar formulario
@@ -273,13 +277,10 @@ const RegistroIngresos = () => {
       setProductDescription("");
       setProductAccount("4001");
       setProductSubcuenta("");
+      setProductImage(null);
       setIsProductDialogOpen(false);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Hubo un error al guardar el producto",
-        variant: "destructive",
-      });
+      // Error manejado por el hook
     } finally {
       setIsSubmittingProduct(false);
     }
@@ -1104,6 +1105,19 @@ const RegistroIngresos = () => {
                             placeholder="Nombre del producto"
                           />
                         </div>
+                        
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="product-image" className="text-right">
+                            Imagen
+                          </Label>
+                          <Input
+                            id="product-image"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setProductImage(e.target.files?.[0] || null)}
+                            className="col-span-3"
+                          />
+                        </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="product-price" className="text-right">
                             Precio
@@ -1193,8 +1207,124 @@ const RegistroIngresos = () => {
                   </AlertDescription>
                 </Alert>
                 
-                <div className="text-center py-8 text-muted-foreground">
-                  Catálogo de productos próximamente...
+                <div className="space-y-6">
+                  {loadingProductos ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  ) : productos.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No hay productos registrados aún
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Productos con subcuentas */}
+                      {subcuentas
+                        .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
+                        .map(subcuenta => {
+                          const productosSubcuenta = productos.filter(p => p.subcuenta_id === subcuenta.id);
+                          if (productosSubcuenta.length === 0) return null;
+                          
+                          return (
+                            <Card key={subcuenta.id}>
+                              <CardHeader>
+                                <CardTitle className="text-lg flex items-center">
+                                  <Package className="mr-2 h-5 w-5" />
+                                  Subcuenta: {subcuenta.nombre}
+                                </CardTitle>
+                                <CardDescription>
+                                  {productosSubcuenta.length} producto{productosSubcuenta.length !== 1 ? 's' : ''}
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {productosSubcuenta.map(producto => (
+                                    <div key={producto.id} className="border rounded-lg p-4 space-y-3">
+                                      {producto.imagen_url && (
+                                        <div className="aspect-square w-full max-w-24 mx-auto">
+                                          <img 
+                                            src={producto.imagen_url} 
+                                            alt={producto.nombre}
+                                            className="w-full h-full object-cover rounded-md"
+                                          />
+                                        </div>
+                                      )}
+                                      <div>
+                                        <h4 className="font-semibold">{producto.nombre}</h4>
+                                        {producto.descripcion && (
+                                          <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
+                                        )}
+                                        <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
+                                      </div>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => deleteProducto.mutate(producto.id)}
+                                        className="w-full text-destructive hover:text-destructive"
+                                      >
+                                        Eliminar
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      
+                      {/* Productos sin subcuenta (cuenta general) */}
+                      {(() => {
+                        const productosSinSubcuenta = productos.filter(p => !p.subcuenta_id);
+                        if (productosSinSubcuenta.length === 0) return null;
+                        
+                        return (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-lg flex items-center">
+                                <ShoppingCart className="mr-2 h-5 w-5" />
+                                Cuenta General: 4001 - Ventas
+                              </CardTitle>
+                              <CardDescription>
+                                {productosSinSubcuenta.length} producto{productosSinSubcuenta.length !== 1 ? 's' : ''} sin subcuenta específica
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {productosSinSubcuenta.map(producto => (
+                                  <div key={producto.id} className="border rounded-lg p-4 space-y-3">
+                                    {producto.imagen_url && (
+                                      <div className="aspect-square w-full max-w-24 mx-auto">
+                                        <img 
+                                          src={producto.imagen_url} 
+                                          alt={producto.nombre}
+                                          className="w-full h-full object-cover rounded-md"
+                                        />
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="font-semibold">{producto.nombre}</h4>
+                                      {producto.descripcion && (
+                                        <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
+                                      )}
+                                      <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => deleteProducto.mutate(producto.id)}
+                                      className="w-full text-destructive hover:text-destructive"
+                                    >
+                                      Eliminar
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

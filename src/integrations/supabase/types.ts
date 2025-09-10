@@ -140,6 +140,56 @@ export type Database = {
           },
         ]
       }
+      productos: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          cuenta_codigo: string
+          descripcion: string | null
+          id: string
+          imagen_url: string | null
+          nombre: string
+          precio: number
+          subcuenta_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          cuenta_codigo?: string
+          descripcion?: string | null
+          id?: string
+          imagen_url?: string | null
+          nombre: string
+          precio: number
+          subcuenta_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          cuenta_codigo?: string
+          descripcion?: string | null
+          id?: string
+          imagen_url?: string | null
+          nombre?: string
+          precio?: number
+          subcuenta_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "productos_subcuenta_id_fkey"
+            columns: ["subcuenta_id"]
+            isOneToOne: false
+            referencedRelation: "subcuentas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subcuentas: {
         Row: {
           created_at: string
