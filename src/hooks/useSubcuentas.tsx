@@ -46,18 +46,15 @@ export const useCreateSubcuenta = () => {
 
   return useMutation({
     mutationFn: async ({ nombre, cuentaMadreCodigo }: { nombre: string; cuentaMadreCodigo: string }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        throw new Error("No estás autenticado");
-      }
+      // Para prototipo - usar user_id por defecto
+      const defaultUserId = "00000000-0000-0000-0000-000000000000";
 
       const { data, error } = await supabase
         .from("subcuentas")
         .insert({
           nombre,
           cuenta_madre_codigo: cuentaMadreCodigo,
-          user_id: user.id
+          user_id: defaultUserId
         })
         .select()
         .single();
@@ -75,9 +72,7 @@ export const useCreateSubcuenta = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message === "No estás autenticado" 
-          ? "Debes iniciar sesión para crear subcuentas" 
-          : "Error al crear la subcuenta",
+        description: "Error al crear la subcuenta: " + (error.message || "Error desconocido"),
         variant: "destructive",
       });
     },
