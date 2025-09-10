@@ -187,20 +187,73 @@ const RegistroIngresos = () => {
                 <SelectTrigger className={hasFieldError('Producto Precargado') ? 'border-destructive' : ''}>
                   <SelectValue placeholder={loadingProductos ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-80 z-50 bg-background border border-border">
                   {loadingProductos ? (
                     <SelectItem value="loading" disabled>Cargando productos...</SelectItem>
                   ) : productos.length === 0 ? (
                     <SelectItem value="empty" disabled>No hay productos registrados</SelectItem>
                   ) : (
                     productos.map((producto) => (
-                      <SelectItem key={producto.id} value={producto.id}>
-                        {producto.nombre} - ${producto.precio}
+                      <SelectItem key={producto.id} value={producto.id} className="py-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                            {producto.imagen_url ? (
+                              <img 
+                                src={producto.imagen_url} 
+                                alt={producto.nombre}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-muted flex items-center justify-center">
+                                <Package className="w-6 h-6 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{producto.nombre}</p>
+                            <p className="text-sm text-muted-foreground">${producto.precio}</p>
+                            {producto.descripcion && (
+                              <p className="text-xs text-muted-foreground truncate">{producto.descripcion}</p>
+                            )}
+                          </div>
+                        </div>
                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
               </Select>
+              {/* Mostrar producto seleccionado con imagen */}
+              {selectedProductId && (
+                <div className="mt-3 p-3 border rounded-lg bg-background">
+                  {(() => {
+                    const selectedProduct = productos.find(p => p.id === selectedProductId);
+                    return selectedProduct ? (
+                      <div className="flex items-center space-x-3">
+                        <div className="w-16 h-16 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                          {selectedProduct.imagen_url ? (
+                            <img 
+                              src={selectedProduct.imagen_url} 
+                              alt={selectedProduct.nombre}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-muted flex items-center justify-center">
+                              <Package className="w-8 h-8 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-foreground">{selectedProduct.nombre}</h4>
+                          <p className="text-sm text-muted-foreground">${selectedProduct.precio}</p>
+                          {selectedProduct.descripcion && (
+                            <p className="text-xs text-muted-foreground mt-1">{selectedProduct.descripcion}</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
