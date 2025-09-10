@@ -17,10 +17,12 @@ import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
+import { useSubcuentas } from "@/hooks/useSubcuentas";
 
 const RegistroIngresos = () => {
   const { ventasResumen, loading: loadingVentas } = useVentasResumen();
   const { transacciones, loading: loadingTransacciones } = useTransaccionesRecientes(10);
+  const { data: subcuentas = [] } = useSubcuentas();
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
@@ -35,7 +37,8 @@ const RegistroIngresos = () => {
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
   const [productDescription, setProductDescription] = useState("");
-  const [productAccount, setProductAccount] = useState("4001");
+  const [productAccount, setProductAccount] = useState("4001"); // Fijo en ventas
+  const [productSubcuenta, setProductSubcuenta] = useState(""); // Nueva subcuenta
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
 
   // Función para registrar el ingreso
@@ -269,6 +272,7 @@ const RegistroIngresos = () => {
       setProductPrice("");  
       setProductDescription("");
       setProductAccount("4001");
+      setProductSubcuenta("");
       setIsProductDialogOpen(false);
     } catch (error) {
       toast({
@@ -1117,14 +1121,30 @@ const RegistroIngresos = () => {
                           <Label htmlFor="product-account" className="text-right">
                             Cuenta
                           </Label>
-                          <Select value={productAccount} onValueChange={setProductAccount}>
+                          <div className="col-span-3 flex items-center p-2 border rounded-md bg-muted/50">
+                            <span className="text-sm font-medium">4001 - Ventas</span>
+                            <span className="text-xs text-muted-foreground ml-2">(cuenta fija)</span>
+                          </div>
+                        </div>
+                        
+                        {/* Selector de Subcuenta */}
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="product-subcuenta" className="text-right">
+                            Subcuenta
+                          </Label>
+                          <Select value={productSubcuenta} onValueChange={setProductSubcuenta}>
                             <SelectTrigger className="col-span-3">
-                              <SelectValue />
+                              <SelectValue placeholder="Sin subcuenta (usar cuenta principal)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="4001">4001 - Ventas</SelectItem>
-                              <SelectItem value="4002">4002 - Servicios</SelectItem>
-                              <SelectItem value="4003">4003 - Otros ingresos</SelectItem>
+                              <SelectItem value="">Sin subcuenta (usar cuenta principal)</SelectItem>
+                              {subcuentas
+                                .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
+                                .map((subcuenta) => (
+                                  <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                                    {subcuenta.nombre}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </div>
