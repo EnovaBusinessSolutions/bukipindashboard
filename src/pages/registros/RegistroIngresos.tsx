@@ -1275,9 +1275,19 @@ const RegistroIngresos = () => {
                                       {transaccion.cuenta_principal_codigo === '4001' ? ' - Ventas' : 
                                        transaccion.cuenta_principal_codigo === '4004' ? ' - Otros Ingresos' : ''}
                                     </div>
-                                    {transaccion.subcuentas && (
+                                    {transaccion.subcuenta_id ? (
                                       <div>
-                                        <span className="font-medium">Subcuenta:</span> {transaccion.subcuentas.nombre}
+                                        <span className="font-medium">Subcuenta:</span> {
+                                          transaccion.subcuentas?.nombre || 
+                                          (() => {
+                                            const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
+                                            return subcuenta?.nombre || 'Subcuenta no encontrada';
+                                          })()
+                                        }
+                                      </div>
+                                    ) : (
+                                      <div className="text-muted-foreground">
+                                        <span className="font-medium">Subcuenta:</span> Sin subcuenta asignada
                                       </div>
                                     )}
                                   </div>
