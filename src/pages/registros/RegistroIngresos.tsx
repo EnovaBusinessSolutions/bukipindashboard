@@ -1241,24 +1241,40 @@ const RegistroIngresos = () => {
                     <div className="space-y-3">
                       {transacciones.map((transaccion) => (
                         <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex-1">
-                              <p className="font-medium">{transaccion.descripcion}</p>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                                <span className="capitalize">{transaccion.tipo_ingreso}</span>
-                                <span>•</span>
-                                <span className="capitalize">{transaccion.metodo_pago}</span>
-                                <span>•</span>
-                                <span className="capitalize">{transaccion.tipo_pago}</span>
+                          <div className="flex items-start gap-3 mb-2">
+                            {/* Imagen del producto si es precargado */}
+                            {transaccion.tipo_ingreso === 'precargados' && (() => {
+                              const producto = productos.find(p => p.nombre === transaccion.descripcion);
+                              return producto?.imagen_url ? (
+                                <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                                  <img 
+                                    src={producto.imagen_url} 
+                                    alt={producto.nombre}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : null;
+                            })()}
+                            
+                            <div className="flex justify-between items-start flex-1">
+                              <div className="flex-1">
+                                <p className="font-medium">{transaccion.descripcion}</p>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                  <span className="capitalize">{transaccion.tipo_ingreso}</span>
+                                  <span>•</span>
+                                  <span className="capitalize">{transaccion.metodo_pago}</span>
+                                  <span>•</span>
+                                  <span className="capitalize">{transaccion.tipo_pago}</span>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
-                              {transaccion.monto_descuento > 0 && (
-                                <p className="text-sm text-red-600">
-                                  -${transaccion.monto_descuento.toFixed(2)} desc.
-                                </p>
-                              )}
+                              <div className="text-right ml-4">
+                                <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
+                                {transaccion.monto_descuento > 0 && (
+                                  <p className="text-sm text-red-600">
+                                    -${transaccion.monto_descuento.toFixed(2)} desc.
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="flex justify-between items-center text-xs text-muted-foreground">
