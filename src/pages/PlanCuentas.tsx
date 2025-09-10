@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas, useCreateSubcuenta, useDeleteSubcuenta } from "@/hooks/useSubcuentas";
 
@@ -21,6 +21,7 @@ const PlanCuentas = () => {
   // Estado para el formulario
   const [nombreSubcuenta, setNombreSubcuenta] = useState("");
   const [cuentaMadreSeleccionada, setCuentaMadreSeleccionada] = useState("");
+  const [cuentasExpandidas, setCuentasExpandidas] = useState<Set<string>>(new Set());
 
   // Extraer datos
   const estadosFinancieros = cuentasData?.estadosFinancieros || {};
@@ -42,6 +43,16 @@ const PlanCuentas = () => {
 
   const eliminarSubcuenta = (id: string) => {
     deleteSubcuenta.mutate(id);
+  };
+
+  const toggleCuentaExpansion = (codigoCuenta: string) => {
+    const nuevasCuentasExpandidas = new Set(cuentasExpandidas);
+    if (nuevasCuentasExpandidas.has(codigoCuenta)) {
+      nuevasCuentasExpandidas.delete(codigoCuenta);
+    } else {
+      nuevasCuentasExpandidas.add(codigoCuenta);
+    }
+    setCuentasExpandidas(nuevasCuentasExpandidas);
   };
 
   if (cuentasLoading) {
@@ -130,30 +141,77 @@ const PlanCuentas = () => {
                                         {subgrupo}
                                       </AccordionTrigger>
                                       <AccordionContent>
-                                        <div className="space-y-2 pl-4">
-                                          {cuentas.map((cuenta) => (
-                                            <div
-                                              key={cuenta.codigo}
-                                              className="flex items-center justify-between p-2 rounded-lg border bg-muted/30 hover:bg-muted/50"
-                                            >
-                                              <div className="flex items-center space-x-3">
-                                                <code className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-mono">
-                                                  {cuenta.codigo}
-                                                </code>
-                                                <span className="text-sm">
-                                                  {cuenta.nombre}
-                                                </span>
-                                              </div>
-                                               <div className="text-xs text-muted-foreground">
-                                                 {subcuentas.filter(s => s.cuenta_madre_codigo === cuenta.codigo).length > 0 && (
-                                                   <Badge variant="outline" className="text-xs">
-                                                     {subcuentas.filter(s => s.cuenta_madre_codigo === cuenta.codigo).length} subcuentas
-                                                   </Badge>
+                                         <div className="space-y-2 pl-4">
+                                           {cuentas.map((cuenta) => {
+                                             const subcuentasDeLaCuenta = subcuentas.filter(s => s.cuenta_madre_codigo === cuenta.codigo);
+                                             const tieneSubcuentas = subcuentasDeLaCuenta.length > 0;
+                                             const estaExpandida = cuentasExpandidas.has(cuenta.codigo);
+                                             
+                                             return (
+                                               <div key={cuenta.codigo} className="space-y-2">
+                                                 <div
+                                                   className={`flex items-center justify-between p-2 rounded-lg border bg-muted/30 hover:bg-muted/50 ${tieneSubcuentas ? 'cursor-pointer' : ''}`}
+                                                   onClick={() => tieneSubcuentas && toggleCuentaExpansion(cuenta.codigo)}
+                                                 >
+                                                   <div className="flex items-center space-x-3">
+                                                     {tieneSubcuentas && (
+                                                       <div className="flex-shrink-0">
+                                                         {estaExpandida ? (
+                                                           <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                         ) : (
+                                                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                         )}
+                                                       </div>
+                                                     )}
+                                                     <code className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-mono">
+                                                       {cuenta.codigo}
+                                                     </code>
+                                                     <span className="text-sm">
+                                                       {cuenta.nombre}
+                                                     </span>
+                                                   </div>
+                                                   <div className="text-xs text-muted-foreground">
+                                                     {tieneSubcuentas && (
+                                                       <Badge variant="outline" className="text-xs">
+                                                         {subcuentasDeLaCuenta.length} subcuentas
+                                                       </Badge>
+                                                     )}
+                                                   </div>
+                                                 </div>
+                                                 
+                                                 {/* Subcuentas expandidas */}
+                                                 {tieneSubcuentas && estaExpandida && (
+                                                   <div className="ml-8 space-y-1 border-l-2 border-primary/20 pl-4">
+                                                     {subcuentasDeLaCuenta.map((subcuenta) => (
+                                                       <div
+                                                         key={subcuenta.id}
+                                                         className="flex items-center justify-between p-2 rounded border bg-muted/20 hover:bg-muted/40"
+                                                       >
+                                                         <div className="flex items-center space-x-2">
+                                                           <div className="w-2 h-2 bg-primary/60 rounded-full"></div>
+                                                           <span className="text-sm text-muted-foreground">
+                                                             {subcuenta.nombre}
+                                                           </span>
+                                                         </div>
+                                                         <Button
+                                                           variant="ghost"
+                                                           size="sm"
+                                                           onClick={(e) => {
+                                                             e.stopPropagation();
+                                                             eliminarSubcuenta(subcuenta.id);
+                                                           }}
+                                                           className="h-6 w-6 p-0 text-destructive hover:text-destructive opacity-70 hover:opacity-100"
+                                                         >
+                                                           <Trash2 className="h-3 w-3" />
+                                                         </Button>
+                                                       </div>
+                                                     ))}
+                                                   </div>
                                                  )}
                                                </div>
-                                            </div>
-                                          ))}
-                                        </div>
+                                             );
+                                           })}
+                                         </div>
                                       </AccordionContent>
                                     </AccordionItem>
                                   ))}
