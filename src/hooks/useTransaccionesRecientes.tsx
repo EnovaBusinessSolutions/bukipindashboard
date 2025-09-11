@@ -33,10 +33,7 @@ export const useTransaccionesRecientes = (limit: number = 10) => {
 
       const { data, error: fetchError } = await supabase
         .from('transacciones_ingresos')
-        .select(`
-          *,
-          subcuentas(nombre)
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
 
