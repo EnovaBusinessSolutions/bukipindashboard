@@ -13,12 +13,16 @@ interface RegistroIngresoRequest {
   montoDescuento?: number
   cuentaPrincipalCodigo: string
   subcuentaId?: string
-  metodoPago: 'efectivo' | 'tarjeta'
+  metodoPago: 'efectivo' | 'bancos'
   tipoPago: 'contado' | 'parcial' | 'credito'
   montoPagado: number
   clienteNombre?: string
   clienteContacto?: string
   fechaVencimiento?: string
+  // Nuevos campos para inventario
+  productoId?: string
+  cantidadVendida?: number
+  precioVenta?: number
 }
 
 serve(async (req) => {
@@ -79,6 +83,56 @@ serve(async (req) => {
     const montoNeto = requestData.montoTotal - montoDescuento
     const montoPendiente = montoNeto - requestData.montoPagado
 
+    // Manejo especial para ventas de inventario
+    if (requestData.tipoIngreso === 'inventariados' && requestData.productoId && requestData.cantidadVendida) {
+      // Verificar y actualizar stock del producto
+      const { data: producto, error: productoError } = await supabaseClient
+        .from('productos')
+        .select('cantidad_stock, costo_unitario, nombre')
+        .eq('id', requestData.productoId)
+        .single()
+
+      if (productoError || !producto) {
+        throw new Error('Producto no encontrado en inventario')
+      }
+
+      const stockActual = producto.cantidad_stock || 0
+      if (stockActual < requestData.cantidadVendida) {
+        throw new Error(`Stock insuficiente. Disponible: ${stockActual}, Solicitado: ${requestData.cantidadVendida}`)
+      }
+
+      // Actualizar stock del producto
+      const nuevoStock = stockActual - requestData.cantidadVendida
+      const { error: updateStockError } = await supabaseClient
+        .from('productos')
+        .update({ cantidad_stock: nuevoStock })
+        .eq('id', requestData.productoId)
+
+      if (updateStockError) {
+        throw new Error(`Error al actualizar stock: ${updateStockError.message}`)
+      }
+
+      // Registrar movimiento de inventario
+      const { error: movimientoError } = await supabaseClient
+        .from('movimientos_inventario')
+        .insert({
+          producto_id: requestData.productoId,
+          tipo_movimiento: 'venta',
+          cantidad: -requestData.cantidadVendida, // Negativo porque es salida
+          costo_unitario: producto.costo_unitario || 0,
+          costo_total: (producto.costo_unitario || 0) * requestData.cantidadVendida,
+          descripcion: `Venta de ${producto.nombre} - Stock anterior: ${stockActual}, Stock actual: ${nuevoStock}`,
+          user_id: userId
+        })
+
+      if (movimientoError) {
+        console.warn('Error al registrar movimiento de inventario:', movimientoError.message)
+        // No fallar la transacción por esto, pero logear el error
+      }
+
+      console.log(`Stock actualizado para producto ${requestData.productoId}: ${stockActual} -> ${nuevoStock}`)
+    }
+
     // 1. Crear la transacción de ingreso
     const { data: transaccion, error: transaccionError } = await supabaseClient
       .from('transacciones_ingresos')
@@ -134,7 +188,7 @@ serve(async (req) => {
     const detallesAsiento = []
 
     // Débito a Caja o Bancos (lo que efectivamente recibimos)
-    const cuentaCajaBancos = requestData.metodoPago === 'efectivo' ? '1101' : '1102'
+    const cuentaCajaBancos = requestData.metodoPago === 'efectivo' ? '1001' : '1002'
     detallesAsiento.push({
       asiento_id: asiento.id,
       cuenta_codigo: cuentaCajaBancos,

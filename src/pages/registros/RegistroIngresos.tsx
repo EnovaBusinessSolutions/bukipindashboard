@@ -36,6 +36,12 @@ const RegistroIngresos = () => {
   const [descripcion, setDescripcion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Estados para productos de inventario
+  const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
+  const [inventoryProductPrice, setInventoryProductPrice] = useState("");
+  const [inventoryQuantity, setInventoryQuantity] = useState("1");
+  const [availableStock, setAvailableStock] = useState(0);
+  
   // Estados para productos precargados
   const [selectedProductId, setSelectedProductId] = useState("");
   const [productUnitPrice, setProductUnitPrice] = useState("");
@@ -50,6 +56,46 @@ const RegistroIngresos = () => {
   const [productSubcuenta, setProductSubcuenta] = useState(""); // Nueva subcuenta
   const [productImage, setProductImage] = useState<File | null>(null);
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
+  // Filtrar productos con stock disponible para inventario
+  const productosInventario = productos.filter(producto => 
+    (producto.cantidad_stock && producto.cantidad_stock > 0) ||
+    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
+  );
+
+  // Función para manejar selección de producto de inventario
+  const handleInventoryProductSelection = (productId: string) => {
+    setSelectedInventoryProductId(productId);
+    const selectedProduct = productosInventario.find(p => p.id === productId);
+    if (selectedProduct) {
+      // Usar el costo unitario del inventario como precio base, pero permitir modificación
+      setInventoryProductPrice(selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
+      setAvailableStock(selectedProduct.cantidad_stock || 0);
+      // Autocompletar descripción
+      setDescripcion(`Venta de ${selectedProduct.nombre}`);
+      // Calcular monto total
+      const total = ((selectedProduct.costo_unitario || selectedProduct.precio) * parseFloat(inventoryQuantity)).toFixed(2);
+      setMontoTotal(total);
+    }
+  };
+
+  // Función para manejar cambio de cantidad del inventario
+  const handleInventoryQuantityChange = (quantity: string) => {
+    setInventoryQuantity(quantity);
+    if (selectedInventoryProductId && inventoryProductPrice) {
+      const total = (parseFloat(inventoryProductPrice) * parseFloat(quantity || '1')).toFixed(2);
+      setMontoTotal(total);
+    }
+  };
+
+  // Función para manejar cambio de precio de inventario
+  const handleInventoryPriceChange = (price: string) => {
+    setInventoryProductPrice(price);
+    if (selectedInventoryProductId && price) {
+      const total = (parseFloat(price) * parseFloat(inventoryQuantity || '1')).toFixed(2);
+      setMontoTotal(total);
+    }
+  };
 
   // Función para manejar selección de producto precargado
   const handleProductSelection = (productId: string) => {
@@ -84,11 +130,15 @@ const RegistroIngresos = () => {
     if (selectedIncomeType === 'precargados') {
       if (!selectedProductId) errors.push('Producto Precargado');
       if (!productQuantity || parseFloat(productQuantity) <= 0) errors.push('Cantidad');
+    } else if (selectedIncomeType === 'inventariados') {
+      if (!selectedInventoryProductId) errors.push('Producto de Inventario');
+      if (!inventoryQuantity || parseFloat(inventoryQuantity) <= 0) errors.push('Cantidad');
+      if (parseFloat(inventoryQuantity) > availableStock) errors.push('Cantidad excede stock disponible');
     } else if (selectedIncomeType === 'general' || selectedIncomeType === 'otros') {
       if (!descripcion.trim()) errors.push('Descripción');
     }
     
-    if (selectedIncomeType !== 'precargados' && (!montoTotal || parseFloat(montoTotal) <= 0)) errors.push('Monto Total');
+    if (selectedIncomeType !== 'precargados' && selectedIncomeType !== 'inventariados' && (!montoTotal || parseFloat(montoTotal) <= 0)) errors.push('Monto Total');
     if (!paymentMethod) errors.push('Método de Pago');
     if (!paymentStatus) errors.push('Tipo de Pago');
     
@@ -119,14 +169,25 @@ const RegistroIngresos = () => {
     try {
       // Derivar valores por seguridad
       const selectedProduct = productos.find(p => p.id === selectedProductId);
-      const descripcionToSend = descripcion || (selectedIncomeType === 'precargados' ? (selectedProduct?.nombre || '') : descripcion);
-      const montoTotalDerived = selectedIncomeType === 'precargados' && selectedProduct
-        ? Number((Number(selectedProduct.precio) * Number(productQuantity || '1')).toFixed(2))
-        : Number(montoTotal || '0');
+      const selectedInventoryProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
+      
+      let descripcionToSend = descripcion;
+      let montoTotalDerived = Number(montoTotal || '0');
+      let subcuentaToSend = null;
+
+      if (selectedIncomeType === 'precargados' && selectedProduct) {
+        descripcionToSend = selectedProduct.nombre;
+        montoTotalDerived = Number((Number(selectedProduct.precio) * Number(productQuantity || '1')).toFixed(2));
+        subcuentaToSend = selectedProduct.subcuenta_id || null;
+      } else if (selectedIncomeType === 'inventariados' && selectedInventoryProduct) {
+        descripcionToSend = `Venta de ${selectedInventoryProduct.nombre}`;
+        montoTotalDerived = Number((Number(inventoryProductPrice || '0') * Number(inventoryQuantity || '1')).toFixed(2));
+        subcuentaToSend = selectedInventoryProduct.subcuenta_id || null;
+      }
+
       const descuento = hasDiscount ? Number(discountAmount || '0') : 0;
       const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
       const montoPagado = paymentStatus === 'contado' ? neto : 0;
-      const subcuentaToSend = selectedIncomeType === 'precargados' ? (selectedProduct?.subcuenta_id || null) : null;
 
       if (!descripcionToSend || montoTotalDerived <= 0) {
         toast({
@@ -149,6 +210,12 @@ const RegistroIngresos = () => {
           metodoPago: paymentMethod,
           tipoPago: paymentStatus,
           montoPagado: montoPagado,
+          // Datos adicionales para inventario
+          ...(selectedIncomeType === 'inventariados' && selectedInventoryProduct && {
+            productoId: selectedInventoryProduct.id,
+            cantidadVendida: Number(inventoryQuantity || '1'),
+            precioVenta: Number(inventoryProductPrice || '0')
+          })
         }
       });
 
@@ -166,6 +233,12 @@ const RegistroIngresos = () => {
         refetchVentas(),
         refetchTransacciones()
       ]);
+      
+      // Si fue una venta de inventario, refrescar también los productos
+      if (selectedIncomeType === 'inventariados') {
+        // Forzar actualización de productos para mostrar nuevo stock
+        window.location.reload();
+      }
 
       // Limpiar formulario
       setSelectedIncomeType("");
@@ -178,6 +251,10 @@ const RegistroIngresos = () => {
       setSelectedProductId("");
       setProductUnitPrice("");
       setProductQuantity("1");
+      setSelectedInventoryProductId("");
+      setInventoryProductPrice("");
+      setInventoryQuantity("1");
+      setAvailableStock(0);
 
     } catch (error) {
       toast({
@@ -291,34 +368,139 @@ const RegistroIngresos = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Solo se mostrarán productos previamente cargados en el inventario.
+                <strong>Ventas desde Inventario:</strong> Solo se muestran productos con stock disponible. El stock se actualizará automáticamente al registrar la venta.
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
-              <Label htmlFor="producto-inventario">Seleccionar Producto del Inventario</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar producto inventariado" />
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="producto-inventario">Seleccionar Producto del Inventario</Label>
+                {hasFieldError('Producto de Inventario') && (
+                  <div className="flex items-center text-destructive">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Requerido</span>
+                  </div>
+                )}
+              </div>
+              <Select 
+                value={selectedInventoryProductId} 
+                onValueChange={handleInventoryProductSelection}
+              >
+                <SelectTrigger className={hasFieldError('Producto de Inventario') ? 'border-destructive' : ''}>
+                  <SelectValue placeholder={loadingProductos ? "Cargando inventario..." : "Seleccionar producto del inventario"} />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inv1">Sin productos en inventario</SelectItem>
+                <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
+                  {loadingProductos ? (
+                    <SelectItem value="loading" disabled>Cargando inventario...</SelectItem>
+                  ) : productosInventario.length === 0 ? (
+                    <SelectItem value="empty" disabled>No hay productos con stock disponible</SelectItem>
+                  ) : (
+                    productosInventario.map((producto) => (
+                      <SelectItem key={producto.id} value={producto.id} className="py-2 px-2 h-auto">
+                        <div className="flex items-center space-x-2 w-full">
+                          <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0">
+                            {producto.imagen_url ? (
+                              <img 
+                                src={producto.imagen_url} 
+                                alt={producto.nombre}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-muted flex items-center justify-center">
+                                <Package className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className="font-medium text-sm truncate leading-tight">{producto.nombre}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground">Costo: ${producto.costo_unitario || producto.precio}</p>
+                              <p className="text-xs text-primary font-medium">Stock: {producto.cantidad_stock || 0}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cantidad-inv">Cantidad</Label>
-                <Input id="cantidad-inv" type="number" placeholder="1" />
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="cantidad-inv">Cantidad a Vender</Label>
+                  {hasFieldError('Cantidad') && (
+                    <div className="flex items-center text-destructive">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      <span className="text-xs">Requerido</span>
+                    </div>
+                  )}
+                  {hasFieldError('Cantidad excede stock disponible') && (
+                    <div className="flex items-center text-destructive">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      <span className="text-xs">Excede stock</span>
+                    </div>
+                  )}
+                </div>
+                <Input 
+                  id="cantidad-inv" 
+                  type="number" 
+                  placeholder="1"
+                  min="1"
+                  max={availableStock}
+                  value={inventoryQuantity}
+                  onChange={(e) => handleInventoryQuantityChange(e.target.value)}
+                  className={hasFieldError('Cantidad') || hasFieldError('Cantidad excede stock disponible') ? 'border-destructive' : ''}
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="precio-inv">Precio Unitario</Label>
-                <Input id="precio-inv" type="number" placeholder="0.00" />
+                <Label htmlFor="precio-inv">Precio de Venta</Label>
+                <Input 
+                  id="precio-inv" 
+                  type="number" 
+                  placeholder="0.00" 
+                  step="0.01"
+                  value={inventoryProductPrice}
+                  onChange={(e) => handleInventoryPriceChange(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="stock-disponible">Stock Disponible</Label>
-                <Input id="stock-disponible" type="number" disabled placeholder="0" />
+                <Input 
+                  id="stock-disponible" 
+                  type="number" 
+                  disabled 
+                  value={availableStock}
+                  className="bg-muted"
+                />
               </div>
             </div>
+            {selectedInventoryProductId && (
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <h4 className="font-medium text-primary mb-2">Información del Producto</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Costo de inventario:</span>
+                    <span className="ml-2 font-medium">${productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Precio de venta:</span>
+                    <span className="ml-2 font-medium">${inventoryProductPrice}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ganancia por unidad:</span>
+                    <span className="ml-2 font-medium text-green-600">
+                      ${(parseFloat(inventoryProductPrice || '0') - (productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ganancia total:</span>
+                    <span className="ml-2 font-medium text-green-600">
+                      ${((parseFloat(inventoryProductPrice || '0') - (productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0)) * parseFloat(inventoryQuantity)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       
@@ -540,27 +722,28 @@ const RegistroIngresos = () => {
                     
                      {/* Sección de cálculos y descuentos */}
                      <div className="space-y-4">
-                       {/* Mostrar total calculado para productos precargados */}
-                       {selectedIncomeType === "precargados" && selectedProductId && (
-                         <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                           <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Cálculo Automático</h4>
-                           <div className="space-y-1 text-sm">
-                             <div className="flex justify-between">
-                               <span>Cantidad:</span>
-                               <span>{productQuantity}</span>
-                             </div>
-                             <div className="flex justify-between">
-                               <span>Precio Unitario:</span>
-                               <span>${productUnitPrice}</span>
-                             </div>
-                             <Separator />
-                             <div className="flex justify-between font-medium">
-                               <span>Subtotal:</span>
-                               <span>${montoTotal}</span>
-                             </div>
-                           </div>
-                         </div>
-                       )}
+                        {/* Mostrar total calculado para productos precargados e inventariados */}
+                        {((selectedIncomeType === "precargados" && selectedProductId) || 
+                          (selectedIncomeType === "inventariados" && selectedInventoryProductId)) && (
+                          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Cálculo Automático</h4>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span>Cantidad:</span>
+                                <span>{selectedIncomeType === "precargados" ? productQuantity : inventoryQuantity}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Precio Unitario:</span>
+                                <span>${selectedIncomeType === "precargados" ? productUnitPrice : inventoryProductPrice}</span>
+                              </div>
+                              <Separator />
+                              <div className="flex justify-between font-medium">
+                                <span>Subtotal:</span>
+                                <span>${montoTotal}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                        <div className="flex items-center space-x-2">
                         <Checkbox 
