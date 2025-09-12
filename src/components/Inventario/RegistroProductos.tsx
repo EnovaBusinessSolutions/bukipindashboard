@@ -488,7 +488,7 @@ const RegistroProductos = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <RadioGroupItem value="contado" id="contado-inv" />
-                      <Label htmlFor="contado-inv" className="cursor-pointer">Pago de contado</Label>
+                      <Label htmlFor="contado-inv" className="cursor-pointer">Pago total</Label>
                     </div>
                     <div className="flex items-center space-x-3">
                       <RadioGroupItem value="parcial" id="parcial-inv" />
