@@ -309,27 +309,27 @@ const RegistroIngresos = () => {
                     <SelectItem value="empty" disabled>No hay productos registrados</SelectItem>
                   ) : (
                     productos.map((producto) => (
-                      <SelectItem key={producto.id} value={producto.id} className="py-2 px-2 h-auto">
-                        <div className="flex items-center space-x-2 w-full">
-                          <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0">
-                            {producto.imagen_url ? (
-                              <img 
-                                src={producto.imagen_url} 
-                                alt={producto.nombre}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-muted flex items-center justify-center">
-                                <Package className="w-4 h-4 text-muted-foreground" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <p className="font-medium text-sm truncate leading-tight">{producto.nombre}</p>
-                            <p className="text-xs text-muted-foreground">${producto.precio}</p>
-                          </div>
-                        </div>
-                      </SelectItem>
+                       <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
+                         <div className="flex items-center space-x-3 w-full">
+                           <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                             {producto.imagen_url ? (
+                               <img 
+                                 src={producto.imagen_url} 
+                                 alt={producto.nombre}
+                                 className="w-full h-full object-cover"
+                               />
+                             ) : (
+                               <div className="w-full h-full bg-muted flex items-center justify-center">
+                                 <Package className="w-5 h-5 text-muted-foreground" />
+                               </div>
+                             )}
+                           </div>
+                           <div className="flex-1 min-w-0">
+                             <p className="font-medium text-sm truncate mb-1">{producto.nombre}</p>
+                             <p className="text-xs text-muted-foreground">${producto.precio}</p>
+                           </div>
+                         </div>
+                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
@@ -403,37 +403,43 @@ const RegistroIngresos = () => {
                     <SelectItem value="empty" disabled>No hay productos con stock disponible</SelectItem>
                   ) : (
                     productosInventario.map((producto) => (
-                      <SelectItem key={producto.id} value={producto.id} className="py-2 px-2 h-auto">
-                        <div className="flex items-center space-x-2 w-full">
-                          <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0">
-                            {producto.imagen_url ? (
-                              <img 
-                                src={producto.imagen_url} 
-                                alt={producto.nombre}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-muted flex items-center justify-center">
-                                <Package className="w-4 h-4 text-muted-foreground" />
-                              </div>
-                            )}
-                          </div>
-                           <div className="flex-1 min-w-0 overflow-hidden">
-                             <p className="font-medium text-sm truncate leading-tight">{producto.nombre}</p>
-                             <div className="flex items-center justify-between">
-                               <p className="text-xs text-muted-foreground">Costo: ${producto.costo_unitario || producto.precio}</p>
-                               <p className="text-xs text-primary font-medium">Stock: {producto.cantidad_stock || 0}</p>
+                       <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
+                         <div className="flex items-center space-x-3 w-full">
+                           <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                             {producto.imagen_url ? (
+                               <img 
+                                 src={producto.imagen_url} 
+                                 alt={producto.nombre}
+                                 className="w-full h-full object-cover"
+                               />
+                             ) : (
+                               <div className="w-full h-full bg-muted flex items-center justify-center">
+                                 <Package className="w-5 h-5 text-muted-foreground" />
+                               </div>
+                             )}
+                           </div>
+                           <div className="flex-1 min-w-0">
+                             <div className="flex items-center justify-between mb-1">
+                               <p className="font-medium text-sm truncate">{producto.nombre}</p>
+                               <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex-shrink-0 ml-2">
+                                 Stock: {producto.cantidad_stock || 0}
+                               </span>
                              </div>
-                             <div className="flex items-center justify-between mt-1">
+                             <div className="flex items-center justify-between">
+                               <span className="text-xs text-muted-foreground">
+                                 Costo: ${producto.costo_unitario || producto.precio}
+                               </span>
                                {(producto as any).precio_venta && (producto as any).precio_venta > 0 ? (
-                                 <p className="text-xs text-green-600 font-medium">Precio venta: ${(producto as any).precio_venta}</p>
+                                 <span className="text-xs text-green-600 font-medium">
+                                   Venta: ${(producto as any).precio_venta}
+                                 </span>
                                ) : (
-                                 <p className="text-xs text-orange-600 font-medium">⚠️ Sin precio de venta</p>
+                                 <span className="text-xs text-orange-600 font-medium">⚠️ Sin precio</span>
                                )}
                              </div>
                            </div>
-                        </div>
-                      </SelectItem>
+                         </div>
+                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
