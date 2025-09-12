@@ -7,6 +7,7 @@ export type Producto = {
   nombre: string;
   descripcion: string | null;
   precio: number;
+  precio_venta?: number;
   imagen_url: string | null;
   cuenta_codigo: string;
   subcuenta_id: string | null;
