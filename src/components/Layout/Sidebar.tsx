@@ -13,6 +13,11 @@ const Sidebar = () => {
     { name: "Plan de Cuentas", path: "/plan-cuentas", active: location.pathname === "/plan-cuentas" },
   ];
 
+  const estadosFinancierosItems = [
+    { name: "Estado de Resultados", path: "/estados-financieros/resultados", active: location.pathname === "/estados-financieros/resultados" },
+    { name: "Balance General", path: "/estados-financieros/balance", active: location.pathname === "/estados-financieros/balance" },
+  ];
+
   const registrosItems = [
     { name: "Registro de Ingresos", path: "/registros/ingresos", active: location.pathname === "/registros/ingresos" },
     { name: "Registro de Egresos", path: "/registros/egresos", active: location.pathname === "/registros/egresos" },
@@ -60,6 +65,30 @@ const Sidebar = () => {
         </h2>
         <nav className="space-y-1">
           {accountItems.map((item) => (
+            <Link key={item.name} to={item.path}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
+                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
+                }`}
+              >
+                {item.name}
+              </Button>
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      <Separator className="mx-6 bg-sidebar-border" />
+
+      {/* Estados Financieros Section */}
+      <div className="px-3 py-4">
+        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
+          Estados Financieros
+        </h2>
+        <nav className="space-y-1">
+          {estadosFinancierosItems.map((item) => (
             <Link key={item.name} to={item.path}>
               <Button
                 variant="ghost"
