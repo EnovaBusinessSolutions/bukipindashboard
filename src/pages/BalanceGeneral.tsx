@@ -55,6 +55,14 @@ const BalanceGeneral = () => {
         else if (codigo.startsWith("3")) {
           cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
         }
+        // Ingresos (4000-4999): Haber - Debe (para utilidad del ejercicio)
+        else if (codigo.startsWith("4")) {
+          cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
+        }
+        // Gastos (5000-5999): Debe - Haber (para utilidad del ejercicio)
+        else if (codigo.startsWith("5")) {
+          cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
+        }
       });
 
       return saldosPorCuenta;
@@ -105,9 +113,30 @@ const BalanceGeneral = () => {
     }, 0);
   };
 
+  // Calcular utilidad del ejercicio (resultado del estado de resultados)
+  const calcularUtilidadEjercicio = () => {
+    // Filtrar cuentas de ingresos y gastos
+    const cuentasIngresos = cuentasFlat.filter(cuenta => cuenta.codigo.startsWith("4"));
+    const cuentasGastos = cuentasFlat.filter(cuenta => cuenta.codigo.startsWith("5"));
+    
+    const totalIngresos = cuentasIngresos.reduce((total, cuenta) => {
+      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+      return total + saldo;
+    }, 0);
+    
+    const totalGastos = cuentasGastos.reduce((total, cuenta) => {
+      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+      return total + saldo;
+    }, 0);
+    
+    return totalIngresos - totalGastos;
+  };
+
   const totalActivos = calcularTotalActivos();
   const totalPasivos = calcularTotalPasivos();
   const totalPatrimonio = calcularTotalPatrimonio();
+  const utilidadEjercicio = calcularUtilidadEjercicio();
+  const totalPatrimonioConUtilidad = totalPatrimonio + utilidadEjercicio;
 
   return (
     <div className="container mx-auto p-6">
@@ -201,10 +230,19 @@ const BalanceGeneral = () => {
                     </div>
                   );
                 })}
+                {/* Utilidad del Ejercicio */}
+                <div className="border-t pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Utilidad del Ejercicio</span>
+                    <span className={`font-medium ${utilidadEjercicio >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ${utilidadEjercicio.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
                 <div className="border-t pt-2 mt-4">
                   <div className="flex justify-between items-center font-bold text-green-600">
                     <span>Total Patrimonio</span>
-                    <span>${totalPatrimonio.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                    <span>${totalPatrimonioConUtilidad.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </div>
@@ -219,13 +257,13 @@ const BalanceGeneral = () => {
             <CardContent>
               <div className="flex justify-between items-center font-bold text-lg">
                 <span>Total</span>
-                <span>${(totalPasivos + totalPatrimonio).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span>${(totalPasivos + totalPatrimonioConUtilidad).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="mt-2 text-sm text-muted-foreground">
-                {totalActivos === (totalPasivos + totalPatrimonio) ? (
+                {totalActivos === (totalPasivos + totalPatrimonioConUtilidad) ? (
                   <span className="text-green-600">✓ Balance cuadrado</span>
                 ) : (
-                  <span className="text-red-600">⚠ Balance no cuadra (diferencia: ${(totalActivos - (totalPasivos + totalPatrimonio)).toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                  <span className="text-red-600">⚠ Balance no cuadra (diferencia: ${(totalActivos - (totalPasivos + totalPatrimonioConUtilidad)).toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
                 )}
               </div>
             </CardContent>
