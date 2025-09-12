@@ -1182,7 +1182,19 @@ const RegistroIngresos = () => {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ metodo, porcentaje }) => `${metodo} ${porcentaje}%`}
+                            label={({ metodo, porcentaje, x, y }) => (
+                              <text 
+                                x={x} 
+                                y={y} 
+                                fill="hsl(var(--foreground))" 
+                                textAnchor={x > 150 ? 'start' : 'end'} 
+                                dominantBaseline="central"
+                                className="font-bold text-sm"
+                                style={{ fontWeight: '700', fontSize: '14px' }}
+                              >
+                                {`${metodo} ${porcentaje}%`}
+                              </text>
+                            )}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="monto"
