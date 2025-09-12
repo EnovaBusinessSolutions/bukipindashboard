@@ -14,6 +14,9 @@ export type Producto = {
   user_id: string | null;
   created_at: string;
   updated_at: string;
+  cantidad?: number;
+  costo_promedio?: number;
+  costo_total?: number;
 };
 
 export type ProductoConSubcuenta = Producto & {
