@@ -10,6 +10,7 @@ const Sidebar = () => {
   const [openSections, setOpenSections] = useState({
     contabilidad: false,
     registros: false,
+    cobrosPagos: false,
     estadosFinancieros: false,
   });
 
@@ -38,6 +39,11 @@ const Sidebar = () => {
     { name: "Registro de Egresos", path: "/registros/egresos", active: location.pathname === "/registros/egresos" },
     { name: "Registro de Asientos", path: "/registros/asientos", active: location.pathname === "/registros/asientos" },
     { name: "Registro de Inventario", path: "/registros/inventario", active: location.pathname === "/registros/inventario" },
+  ];
+
+  const cobrosPagosItems = [
+    { name: "Cuentas por Cobrar", path: "/cobros-pagos/cuentas-por-cobrar", active: location.pathname === "/cobros-pagos/cuentas-por-cobrar" },
+    { name: "Cuentas por Pagar", path: "/cobros-pagos/cuentas-por-pagar", active: location.pathname === "/cobros-pagos/cuentas-por-pagar" },
   ];
 
   return (
@@ -131,6 +137,44 @@ const Sidebar = () => {
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-1 mt-2">
             {registrosItems.map((item) => (
+              <Link key={item.name} to={item.path}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`w-full justify-start ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
+                    item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
+                  }`}
+                >
+                  {item.name}
+                </Button>
+              </Link>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      <Separator className="mx-6 bg-sidebar-border" />
+
+      {/* Cobros y Pagos Section */}
+      <div className="px-3 py-4">
+        <Collapsible 
+          open={openSections.cobrosPagos} 
+          onOpenChange={() => toggleSection('cobrosPagos')}
+        >
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <span className="font-semibold text-sm">Cobros y Pagos</span>
+              {openSections.cobrosPagos ? 
+                <ChevronDown className="h-4 w-4" /> : 
+                <ChevronRight className="h-4 w-4" />
+              }
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 mt-2">
+            {cobrosPagosItems.map((item) => (
               <Link key={item.name} to={item.path}>
                 <Button
                   variant="ghost"
