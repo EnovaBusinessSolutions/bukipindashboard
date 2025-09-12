@@ -27,6 +27,11 @@ type ProductoForm = {
   proveedor?: string;
   ubicacion?: string;
   subcuentaId?: string;
+  metodoPago: string;
+  tipoPago: string;
+  montoPagado: number;
+  montoPendiente?: number;
+  fechaVencimiento?: string;
 };
 
 const RegistroProductos = () => {
@@ -37,7 +42,20 @@ const RegistroProductos = () => {
   const { data: subcuentas } = useSubcuentas();
   const createProducto = useCreateProducto();
 
-  const { register, handleSubmit, reset, setValue, watch } = useForm<ProductoForm>();
+  const { register, handleSubmit, reset, setValue, watch } = useForm<ProductoForm>({
+    defaultValues: {
+      tipoPago: "contado",
+      metodoPago: "efectivo"
+    }
+  });
+
+  const tipoPago = watch("tipoPago");
+  const precio = watch("precio") || 0;
+  const cantidad = watch("cantidad") || 0;
+  const montoPagado = watch("montoPagado") || 0;
+  
+  const montoTotal = precio * cantidad;
+  const montoPendiente = montoTotal - montoPagado;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,9 +109,11 @@ const RegistroProductos = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Información básica */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Información del producto */}
               <div className="space-y-4">
+                <h3 className="text-lg font-medium text-foreground border-b pb-2">Información del Producto</h3>
+                
                 <div>
                   <Label htmlFor="nombre">Nombre del Producto *</Label>
                   <Input
@@ -103,27 +123,35 @@ const RegistroProductos = () => {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="precio">Precio de Compra *</Label>
-                  <Input
-                    id="precio"
-                    type="number"
-                    step="0.01"
-                    {...register("precio", { required: true, valueAsNumber: true })}
-                    placeholder="0.00"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="precio">Precio Unitario *</Label>
+                    <Input
+                      id="precio"
+                      type="number"
+                      step="0.01"
+                      {...register("precio", { required: true, valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="cantidad">Cantidad *</Label>
+                    <Input
+                      id="cantidad"
+                      type="number"
+                      min="1"
+                      {...register("cantidad", { required: true, valueAsNumber: true })}
+                      placeholder="1"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="cantidad">Cantidad Comprada *</Label>
-                  <Input
-                    id="cantidad"
-                    type="number"
-                    min="1"
-                    {...register("cantidad", { required: true, valueAsNumber: true })}
-                    placeholder="1"
-                  />
-                </div>
+                {montoTotal > 0 && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-medium">Monto Total: {formatPrice(montoTotal)}</p>
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="proveedor">Proveedor</Label>
@@ -151,57 +179,70 @@ const RegistroProductos = () => {
                 </div>
               </div>
 
-              {/* Imagen y descripción */}
+              {/* Información de pago */}
               <div className="space-y-4">
+                <h3 className="text-lg font-medium text-foreground border-b pb-2">Información de Pago</h3>
+                
                 <div>
-                  <Label htmlFor="imagen">Imagen del Producto</Label>
-                  <div className="mt-2">
-                    {imagePreview ? (
-                      <div className="relative">
-                        <img
-                          src={imagePreview}
-                          alt="Preview"
-                          className="w-full h-40 object-cover rounded-md border"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute top-2 right-2"
-                          onClick={clearImage}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-muted-foreground/50">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <Image className="h-8 w-8 mb-4 text-muted-foreground" />
-                          <p className="mb-2 text-sm text-muted-foreground">
-                            <span className="font-semibold">Click para subir</span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">PNG, JPG (MAX. 800x400px)</p>
-                        </div>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                        />
-                      </label>
-                    )}
-                  </div>
+                  <Label htmlFor="tipoPago">Tipo de Pago *</Label>
+                  <Select onValueChange={(value) => setValue("tipoPago", value)} defaultValue="contado">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo de pago" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contado">Pago de Contado</SelectItem>
+                      <SelectItem value="credito">Pago a Crédito</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
-                  <Label htmlFor="descripcion">Descripción del Producto</Label>
-                  <Textarea
-                    id="descripcion"
-                    {...register("descripcion")}
-                    placeholder="Descripción, características, marca, modelo..."
-                    className="min-h-16"
+                  <Label htmlFor="metodoPago">Método de Pago *</Label>
+                  <Select onValueChange={(value) => setValue("metodoPago", value)} defaultValue="efectivo">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar método" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="efectivo">Efectivo</SelectItem>
+                      <SelectItem value="tarjeta_debito">Tarjeta de Débito</SelectItem>
+                      <SelectItem value="tarjeta_credito">Tarjeta de Crédito</SelectItem>
+                      <SelectItem value="transferencia">Transferencia</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="montoPagado">Monto Pagado *</Label>
+                  <Input
+                    id="montoPagado"
+                    type="number"
+                    step="0.01"
+                    {...register("montoPagado", { required: true, valueAsNumber: true })}
+                    placeholder="0.00"
                   />
                 </div>
+
+                {tipoPago === "credito" && (
+                  <>
+                    {montoPendiente > 0 && (
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm font-medium text-yellow-800">
+                          Monto Pendiente: {formatPrice(montoPendiente)}
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
+                      <Input
+                        id="fechaVencimiento"
+                        type="date"
+                        {...register("fechaVencimiento")}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <Label htmlFor="ubicacion">Ubicación en Almacén</Label>
@@ -214,14 +255,65 @@ const RegistroProductos = () => {
               </div>
             </div>
 
-            <div className="flex justify-end pt-4">
+            {/* Descripción completa */}
+            <div className="mt-6">
+              <Label htmlFor="descripcion">Descripción del Producto</Label>
+              <Textarea
+                id="descripcion"
+                {...register("descripcion")}
+                placeholder="Descripción, características, marca, modelo..."
+                className="min-h-16"
+              />
+            </div>
+
+            {/* Sección de imagen */}
+            <div className="mt-6">
+              <Label htmlFor="imagen">Imagen del Producto (Opcional)</Label>
+              <div className="mt-2">
+                {imagePreview ? (
+                  <div className="relative w-full max-w-xs">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full h-32 object-cover rounded-md border"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={clearImage}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full max-w-xs h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-muted-foreground/50">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <Image className="h-6 w-6 mb-2 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-semibold">Click para subir</span>
+                      </p>
+                    </div>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-6">
               <Button
                 type="submit"
                 disabled={createProducto.isPending}
                 className="flex items-center gap-2"
               >
                 <Plus className="h-4 w-4" />
-                {createProducto.isPending ? "Registrando..." : "Registrar Producto"}
+                {createProducto.isPending ? "Registrando..." : "Registrar Compra"}
               </Button>
             </div>
           </form>
