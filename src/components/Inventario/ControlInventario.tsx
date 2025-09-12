@@ -15,11 +15,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type InventoryStatus = "disponible" | "agotado" | "bajo_stock";
+type InventoryStatus = "disponible" | "agotado";
+type StockLevel = "alto" | "medio" | "bajo";
 
 const ControlInventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<InventoryStatus | "todos">("todos");
+  const [statusFilter, setStatusFilter] = useState<InventoryStatus | StockLevel | "todos">("todos");
   
   const { data: productos, isLoading } = useProductos();
 
@@ -41,36 +42,52 @@ const ControlInventario = () => {
     salidas_mes: Math.max(0, (producto.cantidad_comprada || 0) - (producto.cantidad_stock || 0)), // Vendido/usado
   }));
 
-  const getStockStatus = (actual: number, minimo: number): InventoryStatus => {
-    if (actual === 0) return "agotado";
-    if (actual <= minimo) return "bajo_stock";
-    return "disponible";
+  const getAvailabilityStatus = (actual: number): InventoryStatus => {
+    return actual > 0 ? "disponible" : "agotado";
   };
 
-  const getStatusBadge = (status: InventoryStatus) => {
+  const getStockLevel = (actual: number, minimo: number, maximo: number): StockLevel => {
+    if (actual <= minimo) return "bajo";
+    if (actual >= maximo * 0.7) return "alto";
+    return "medio";
+  };
+
+  const getAvailabilityBadge = (status: InventoryStatus) => {
     switch (status) {
       case "disponible":
         return <Badge className="bg-green-100 text-green-800">Disponible</Badge>;
-      case "bajo_stock":
-        return <Badge className="bg-yellow-100 text-yellow-800">Bajo Stock</Badge>;
       case "agotado":
         return <Badge className="bg-red-100 text-red-800">Agotado</Badge>;
     }
   };
 
+  const getStockLevelBadge = (level: StockLevel) => {
+    switch (level) {
+      case "alto":
+        return <Badge className="bg-blue-100 text-blue-800">Alto Stock</Badge>;
+      case "medio":
+        return <Badge className="bg-yellow-100 text-yellow-800">Medio Stock</Badge>;
+      case "bajo":
+        return <Badge className="bg-orange-100 text-orange-800">Bajo Stock</Badge>;
+    }
+  };
+
   const filteredProducts = inventoryData.filter(producto => {
     const matchesSearch = producto.nombre.toLowerCase().includes(searchTerm.toLowerCase());
-    const status = getStockStatus(producto.stock_actual, producto.stock_minimo);
-    const matchesStatus = statusFilter === "todos" || status === statusFilter;
+    const availability = getAvailabilityStatus(producto.stock_actual);
+    const stockLevel = getStockLevel(producto.stock_actual, producto.stock_minimo, producto.stock_maximo);
+    const matchesStatus = statusFilter === "todos" || availability === statusFilter || stockLevel === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
     total: inventoryData.length,
-    disponible: inventoryData.filter(p => getStockStatus(p.stock_actual, p.stock_minimo) === "disponible").length,
-    bajo_stock: inventoryData.filter(p => getStockStatus(p.stock_actual, p.stock_minimo) === "bajo_stock").length,
-    agotado: inventoryData.filter(p => getStockStatus(p.stock_actual, p.stock_minimo) === "agotado").length,
+    disponible: inventoryData.filter(p => getAvailabilityStatus(p.stock_actual) === "disponible").length,
+    agotado: inventoryData.filter(p => getAvailabilityStatus(p.stock_actual) === "agotado").length,
+    bajo_stock: inventoryData.filter(p => getStockLevel(p.stock_actual, p.stock_minimo, p.stock_maximo) === "bajo").length,
+    medio_stock: inventoryData.filter(p => getStockLevel(p.stock_actual, p.stock_minimo, p.stock_maximo) === "medio").length,
+    alto_stock: inventoryData.filter(p => getStockLevel(p.stock_actual, p.stock_minimo, p.stock_maximo) === "alto").length,
   };
 
   if (isLoading) {
@@ -84,7 +101,7 @@ const ControlInventario = () => {
   return (
     <div className="space-y-6">
       {/* Estadísticas de inventario */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -113,10 +130,22 @@ const ControlInventario = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Bajo Stock</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.bajo_stock}</p>
+                <p className="text-sm font-medium text-muted-foreground">Alto Stock</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.alto_stock}</p>
               </div>
-              <AlertTriangle className="h-8 w-8 text-yellow-600" />
+              <TrendingUp className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Bajo Stock</p>
+                <p className="text-2xl font-bold text-orange-600">{stats.bajo_stock}</p>
+              </div>
+              <AlertTriangle className="h-8 w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
@@ -160,8 +189,10 @@ const ControlInventario = () => {
               <SelectContent>
                 <SelectItem value="todos">Todos los estados</SelectItem>
                 <SelectItem value="disponible">Disponible</SelectItem>
-                <SelectItem value="bajo_stock">Bajo Stock</SelectItem>
                 <SelectItem value="agotado">Agotado</SelectItem>
+                <SelectItem value="alto">Alto Stock</SelectItem>
+                <SelectItem value="medio">Medio Stock</SelectItem>
+                <SelectItem value="bajo">Bajo Stock</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -173,7 +204,8 @@ const ControlInventario = () => {
                   <TableHead>Producto</TableHead>
                   <TableHead>Stock Actual</TableHead>
                   <TableHead>Stock Mínimo</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead>Disponibilidad</TableHead>
+                  <TableHead>Nivel de Stock</TableHead>
                   <TableHead>Costo Unitario</TableHead>
                   <TableHead>Valor Total</TableHead>
                   <TableHead>Total Comprado</TableHead>
@@ -182,7 +214,8 @@ const ControlInventario = () => {
               </TableHeader>
               <TableBody>
                 {filteredProducts.map((producto) => {
-                  const status = getStockStatus(producto.stock_actual, producto.stock_minimo);
+                  const availability = getAvailabilityStatus(producto.stock_actual);
+                  const stockLevel = getStockLevel(producto.stock_actual, producto.stock_minimo, producto.stock_maximo);
                   return (
                     <TableRow key={producto.id}>
                       <TableCell>
@@ -208,15 +241,19 @@ const ControlInventario = () => {
                       </TableCell>
                       <TableCell>
                         <span className={`font-semibold ${
-                          status === "agotado" ? "text-red-600" : 
-                          status === "bajo_stock" ? "text-yellow-600" : "text-green-600"
+                          availability === "agotado" ? "text-red-600" : 
+                          stockLevel === "bajo" ? "text-orange-600" : 
+                          stockLevel === "medio" ? "text-yellow-600" : "text-green-600"
                         }`}>
                           {producto.stock_actual}
                         </span>
                       </TableCell>
                       <TableCell>{producto.stock_minimo}</TableCell>
                       <TableCell>
-                        {getStatusBadge(status)}
+                        {getAvailabilityBadge(availability)}
+                      </TableCell>
+                      <TableCell>
+                        {getStockLevelBadge(stockLevel)}
                       </TableCell>
                       <TableCell className="font-semibold">
                         {new Intl.NumberFormat('es-CO', {
