@@ -1170,11 +1170,16 @@ const RegistroIngresos = () => {
                             data={
                               Object.entries(
                                 transacciones.reduce((acc, t) => {
-                                  acc[t.metodo_pago] = (acc[t.metodo_pago] || 0) + t.monto_total;
+                                  // Manejar métodos de pago vacíos o nulos
+                                  const metodo = t.metodo_pago || 'Sin método definido';
+                                  acc[metodo] = (acc[metodo] || 0) + t.monto_total;
                                   return acc;
                                 }, {} as Record<string, number>)
                               ).map(([metodo, monto]) => ({ 
-                                metodo: metodo.charAt(0).toUpperCase() + metodo.slice(1), 
+                                metodo: metodo === 'efectivo' ? 'Efectivo' : 
+                                        metodo === 'tarjeta' ? 'Tarjeta' : 
+                                        metodo === 'Sin método definido' ? 'A Crédito' : 
+                                        metodo.charAt(0).toUpperCase() + metodo.slice(1), 
                                 monto,
                                 porcentaje: ((monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100).toFixed(1)
                               }))
