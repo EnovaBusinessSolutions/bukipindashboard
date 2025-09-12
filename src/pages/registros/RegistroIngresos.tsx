@@ -68,13 +68,21 @@ const RegistroIngresos = () => {
     setSelectedInventoryProductId(productId);
     const selectedProduct = productosInventario.find(p => p.id === productId);
     if (selectedProduct) {
-      // Usar el costo unitario del inventario como precio base, pero permitir modificación
-      setInventoryProductPrice(selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
+      // Usar precio de venta si está disponible, si no, usar costo unitario
+      const precioVenta = (selectedProduct as any).precio_venta;
+      const precioAUsar = precioVenta && precioVenta > 0 
+        ? precioVenta.toString() 
+        : (selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
+      
+      setInventoryProductPrice(precioAUsar);
       setAvailableStock(selectedProduct.cantidad_stock || 0);
       // Autocompletar descripción
       setDescripcion(`Venta de ${selectedProduct.nombre}`);
       // Calcular monto total
-      const total = ((selectedProduct.costo_unitario || selectedProduct.precio) * parseFloat(inventoryQuantity)).toFixed(2);
+      const precioNumerico = precioVenta && precioVenta > 0 
+        ? precioVenta 
+        : (selectedProduct.costo_unitario || selectedProduct.precio);
+      const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
       setMontoTotal(total);
     }
   };
@@ -410,13 +418,20 @@ const RegistroIngresos = () => {
                               </div>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <p className="font-medium text-sm truncate leading-tight">{producto.nombre}</p>
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs text-muted-foreground">Costo: ${producto.costo_unitario || producto.precio}</p>
-                              <p className="text-xs text-primary font-medium">Stock: {producto.cantidad_stock || 0}</p>
-                            </div>
-                          </div>
+                           <div className="flex-1 min-w-0 overflow-hidden">
+                             <p className="font-medium text-sm truncate leading-tight">{producto.nombre}</p>
+                             <div className="flex items-center justify-between">
+                               <p className="text-xs text-muted-foreground">Costo: ${producto.costo_unitario || producto.precio}</p>
+                               <p className="text-xs text-primary font-medium">Stock: {producto.cantidad_stock || 0}</p>
+                             </div>
+                             <div className="flex items-center justify-between mt-1">
+                               {(producto as any).precio_venta && (producto as any).precio_venta > 0 ? (
+                                 <p className="text-xs text-green-600 font-medium">Precio venta: ${(producto as any).precio_venta}</p>
+                               ) : (
+                                 <p className="text-xs text-orange-600 font-medium">⚠️ Sin precio de venta</p>
+                               )}
+                             </div>
+                           </div>
                         </div>
                       </SelectItem>
                     ))
@@ -453,7 +468,24 @@ const RegistroIngresos = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="precio-inv">Precio de Venta</Label>
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="precio-inv">Precio de Venta</Label>
+                  {selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
+                    <div className="flex items-center text-orange-600">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      <span className="text-xs">Sin precio configurado</span>
+                    </div>
+                  )}
+                </div>
+                {selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
+                  <Alert className="border-orange-200 bg-orange-50">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800">
+                      <strong>Advertencia:</strong> Este producto no tiene un precio de venta configurado. 
+                      Puedes establecerlo desde Control de Inventario o ingresarlo manualmente aquí.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <Input 
                   id="precio-inv" 
                   type="number" 
@@ -461,6 +493,7 @@ const RegistroIngresos = () => {
                   step="0.01"
                   value={inventoryProductPrice}
                   onChange={(e) => handleInventoryPriceChange(e.target.value)}
+                  className={selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta ? 'border-orange-300 bg-orange-50' : ''}
                 />
               </div>
               <div className="space-y-2">
