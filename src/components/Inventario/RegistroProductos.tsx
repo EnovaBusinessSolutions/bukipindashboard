@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Upload, Image, Trash2, Package, CreditCard, Wallet, FileText, AlertCircle } from "lucide-react";
+import { Plus, Upload, Image, Trash2, Package, CreditCard, Wallet, FileText, AlertCircle, ArrowLeft, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useProductos, useCreateProducto } from "@/hooks/useProductos";
 import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
@@ -37,13 +37,28 @@ type ProductoForm = {
   fechaVencimiento?: string;
 };
 
+type FlowStep = "select_type" | "select_existing" | "form";
+
 const RegistroProductos = () => {
+  const [flowStep, setFlowStep] = useState<FlowStep>("select_type");
+  const [selectedProducto, setSelectedProducto] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   const { data: productos, isLoading: loadingProductos } = useProductos();
   const { data: subcuentasInventario } = useSubcuentasInventario();
   const createProducto = useCreateProducto();
+
+  // Filtrar productos existentes de inventario
+  const productosExistentes = productos?.filter(producto => 
+    (producto.cantidad_stock && producto.cantidad_stock >= 0) || 
+    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
+  ) || [];
+
+  const filteredProductos = productosExistentes.filter(producto =>
+    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<ProductoForm>({
     defaultValues: {
@@ -87,6 +102,39 @@ const RegistroProductos = () => {
     setImagePreview(null);
   };
 
+  const handleSelectExisting = (producto: any) => {
+    setSelectedProducto(producto);
+    setValue("nombre", producto.nombre);
+    setValue("descripcion", producto.descripcion || "");
+    setValue("subcuentaId", producto.subcuenta_id || "");
+    
+    // Pre-cargar imagen existente si la tiene
+    if (producto.imagen_url) {
+      setImagePreview(producto.imagen_url);
+    }
+    
+    setFlowStep("form");
+  };
+
+  const handleNewProduct = () => {
+    setSelectedProducto(null);
+    reset();
+    clearImage();
+    setFlowStep("form");
+  };
+
+  const handleBackToSelection = () => {
+    if (flowStep === "form") {
+      setFlowStep(selectedProducto ? "select_existing" : "select_type");
+    } else if (flowStep === "select_existing") {
+      setFlowStep("select_type");
+    }
+    
+    if (flowStep === "select_existing") {
+      setSearchTerm("");
+    }
+  };
+
   const onSubmit = async (data: ProductoForm) => {
     await createProducto.mutateAsync({
       nombre: data.nombre,
@@ -96,8 +144,12 @@ const RegistroProductos = () => {
       subcuentaId: data.subcuentaId,
       imagen: selectedImage || undefined,
     });
+    
+    // Reset del formulario y volver al inicio
     reset();
     clearImage();
+    setSelectedProducto(null);
+    setFlowStep("select_type");
   };
 
   const formatPrice = (precio: number) => {
@@ -108,46 +160,214 @@ const RegistroProductos = () => {
     }).format(precio);
   };
 
+  // Paso 1: Seleccionar tipo de registro
+  if (flowStep === "select_type") {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              Tipo de Registro de Compra
+            </CardTitle>
+            <CardDescription>
+              Selecciona si vas a registrar un producto nuevo o una compra adicional de un producto existente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-primary/20"
+                    onClick={() => setFlowStep("select_existing")}>
+                <CardContent className="p-6 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Search className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Producto Existente</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Compra adicional de un producto que ya tienes en inventario. 
+                    Se calculará automáticamente el costo promedio ponderado.
+                  </p>
+                  <div className="mt-4">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+                      Recomendado para restock
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-primary/20"
+                    onClick={handleNewProduct}>
+                <CardContent className="p-6 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Plus className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Producto Nuevo</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Registrar un producto completamente nuevo en tu inventario. 
+                    Necesitarás proporcionar toda la información del producto.
+                  </p>
+                  <div className="mt-4">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+                      Primera vez
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Paso 2: Seleccionar producto existente
+  if (flowStep === "select_existing") {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleBackToSelection}
+                className="mr-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5 text-primary" />
+                  Seleccionar Producto Existente
+                </CardTitle>
+                <CardDescription>
+                  Busca y selecciona el producto al que quieres agregar stock
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar productos en inventario..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {loadingProductos ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Cargando productos...
+                </div>
+              ) : filteredProductos.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredProductos.map((producto) => (
+                    <Card key={producto.id} 
+                          className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-primary/20"
+                          onClick={() => handleSelectExisting(producto)}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          {producto.imagen_url ? (
+                            <img
+                              src={producto.imagen_url}
+                              alt={producto.nombre}
+                              className="w-16 h-16 object-cover rounded"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-muted rounded flex items-center justify-center">
+                              <Package className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm mb-1 truncate">{producto.nombre}</h3>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                              {producto.descripcion || "Sin descripción"}
+                            </p>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">
+                                Stock: {producto.cantidad_stock || 0}
+                              </span>
+                              <span className="font-medium text-primary">
+                                {formatPrice(producto.costo_unitario || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground mb-2">
+                    {searchTerm ? "No se encontraron productos" : "No hay productos en inventario"}
+                  </p>
+                  <Button variant="outline" onClick={handleNewProduct}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Registrar Producto Nuevo
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Paso 3: Formulario (mantener funcionalidad exacta)
   return (
     <div className="space-y-6">
-      {/* Formulario de registro de compras */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5 text-blue-600" />
-            Registrar Compra de Inventario
-          </CardTitle>
-          <CardDescription>
-            Registra productos comprados para control de inventario. Si el producto ya existe, se actualizará el stock y costo promedio ponderado.
-          </CardDescription>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleBackToSelection}
+              className="mr-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" />
+                {selectedProducto ? `Agregar Stock: ${selectedProducto.nombre}` : 'Registrar Producto Nuevo'}
+              </CardTitle>
+              <CardDescription>
+                {selectedProducto 
+                  ? 'Registra la compra adicional de este producto. Se calculará automáticamente el costo promedio ponderado.'
+                  : 'Registra un producto completamente nuevo para control de inventario'
+                }
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-            {/* Alerta informativa sobre agrupación de productos */}
-            <Alert className="mb-4">
-              <Package className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Control de Inventario Inteligente:</strong> Si el producto ya existe, se actualizará automáticamente 
-                la cantidad y se calculará el costo promedio ponderado para un mejor control financiero.
-              </AlertDescription>
-            </Alert>
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Información del producto */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-foreground border-b pb-2">Información del Producto</h3>
                 
-                <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-start gap-2">
-                    <Package className="h-4 w-4 text-blue-600 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-blue-800 dark:text-blue-200">Control Inteligente de Inventario</p>
-                      <p className="text-blue-700 dark:text-blue-300 mt-1">
-                        Si el producto ya existe, se actualizará automáticamente el stock y se calculará el costo promedio ponderado para un mejor control de costos.
-                      </p>
+                {selectedProducto && (
+                  <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                    <div className="flex items-start gap-2">
+                      <Package className="h-4 w-4 text-primary mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-primary">Producto Existente</p>
+                        <p className="text-muted-foreground mt-1">
+                          Stock actual: {selectedProducto.cantidad_stock || 0} unidades | 
+                          Costo actual: {formatPrice(selectedProducto.costo_unitario || 0)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
                 
                 <div>
                   <Label htmlFor="nombre">Nombre del Producto *</Label>
@@ -155,12 +375,14 @@ const RegistroProductos = () => {
                     id="nombre"
                     {...register("nombre", { required: true })}
                     placeholder="Ej: Camiseta para inventario"
+                    readOnly={!!selectedProducto}
+                    className={selectedProducto ? "bg-muted" : ""}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="precio">Precio Unitario *</Label>
+                    <Label htmlFor="precio">Precio Unitario de Compra *</Label>
                     <Input
                       id="precio"
                       type="number"
@@ -171,7 +393,7 @@ const RegistroProductos = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="cantidad">Cantidad *</Label>
+                    <Label htmlFor="cantidad">Cantidad a Comprar *</Label>
                     <Input
                       id="cantidad"
                       type="number"
@@ -199,7 +421,7 @@ const RegistroProductos = () => {
 
                 <div>
                   <Label htmlFor="subcuenta">Subcuenta de Inventario (Opcional)</Label>
-                  <Select onValueChange={(value) => setValue("subcuentaId", value)}>
+                  <Select onValueChange={(value) => setValue("subcuentaId", value)} defaultValue={selectedProducto?.subcuenta_id}>
                     <SelectTrigger>
                       <SelectValue placeholder={
                         subcuentasInventario && subcuentasInventario.length > 0 
@@ -236,7 +458,7 @@ const RegistroProductos = () => {
                     <div className="flex items-center space-x-3">
                       <RadioGroupItem value="efectivo" id="efectivo-inv" />
                       <div className="flex items-center space-x-2">
-                        <Wallet className="h-4 w-4 text-green-600" />
+                        <Wallet className="h-4 w-4 text-primary" />
                         <Label htmlFor="efectivo-inv" className="cursor-pointer">
                           Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
                         </Label>
@@ -245,7 +467,7 @@ const RegistroProductos = () => {
                     <div className="flex items-center space-x-3">
                       <RadioGroupItem value="bancos" id="bancos-inv" />
                       <div className="flex items-center space-x-2">
-                        <CreditCard className="h-4 w-4 text-blue-800" />
+                        <CreditCard className="h-4 w-4 text-primary" />
                         <Label htmlFor="bancos-inv" className="cursor-pointer">
                           Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
                         </Label>
@@ -307,7 +529,7 @@ const RegistroProductos = () => {
                   </div>
 
                   {(tipoPago === "parcial" || tipoPago === "pendiente") && (
-                    <div className="space-y-4 ml-6 p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                    <div className="space-y-4 ml-6 p-4 border rounded-lg bg-muted/50">
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
@@ -316,8 +538,8 @@ const RegistroProductos = () => {
                       </Alert>
                       
                       {montoPendiente > 0 && (
-                        <div className="p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
-                          <p className="text-sm font-medium text-yellow-800">
+                        <div className="p-3 bg-muted border rounded-lg">
+                          <p className="text-sm font-medium">
                             Monto Pendiente: {formatPrice(montoPendiente)}
                           </p>
                         </div>
@@ -366,6 +588,7 @@ const RegistroProductos = () => {
                 {...register("descripcion")}
                 placeholder="Descripción, características, marca, modelo..."
                 className="min-h-16"
+                readOnly={!!selectedProducto}
               />
             </div>
 
@@ -380,15 +603,17 @@ const RegistroProductos = () => {
                       alt="Preview"
                       className="w-full h-32 object-cover rounded-md border"
                     />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      className="absolute top-2 right-2"
-                      onClick={clearImage}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {!selectedProducto && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={clearImage}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <label className="flex flex-col items-center justify-center w-full max-w-xs h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-muted-foreground/50">
@@ -416,65 +641,11 @@ const RegistroProductos = () => {
                 className="flex items-center gap-2"
               >
                 <Plus className="h-4 w-4" />
-                {createProducto.isPending ? "Registrando..." : "Registrar Compra"}
+                {createProducto.isPending ? "Registrando..." : 
+                 selectedProducto ? "Agregar Stock" : "Registrar Producto"}
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-
-      {/* Información sobre el proceso */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Proceso de Control de Inventario</CardTitle>
-          <CardDescription>
-            Cómo funciona el sistema de inventario
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 border rounded-lg">
-              <div className="w-12 h-12 mx-auto mb-3 bg-blue-100 rounded-full flex items-center justify-center">
-                <Plus className="h-6 w-6 text-blue-600" />
-              </div>
-              <h3 className="font-semibold mb-2">1. Registrar Compra</h3>
-              <p className="text-sm text-muted-foreground">
-                Registra productos comprados. Si ya existe, se agrupa automáticamente y calcula el costo promedio ponderado.
-              </p>
-            </div>
-            
-            <div className="text-center p-4 border rounded-lg">
-              <div className="w-12 h-12 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
-                <Package className="h-6 w-6 text-green-600" />
-              </div>
-              <h3 className="font-semibold mb-2">2. Control Automático</h3>
-              <p className="text-sm text-muted-foreground">
-                Sistema inteligente que agrupa productos por nombre y mantiene historial de movimientos y costos.
-              </p>
-            </div>
-            
-            <div className="text-center p-4 border rounded-lg">
-              <div className="w-12 h-12 mx-auto mb-3 bg-purple-100 rounded-full flex items-center justify-center">
-                <Upload className="h-6 w-6 text-purple-600" />
-              </div>
-              <h3 className="font-semibold mb-2">3. Venta (Próximo)</h3>
-              <p className="text-sm text-muted-foreground">
-                En la segunda etapa podrás registrar ventas y calcular ganancias automáticamente
-              </p>
-            </div>
-          </div>
-          
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-900 mb-2">🔄 Control Inteligente de Inventario:</h4>
-            <p className="text-blue-800 text-sm mb-2">
-              El sistema detecta automáticamente si ya tienes este producto en inventario:
-            </p>
-            <ul className="text-blue-700 text-sm space-y-1 ml-4">
-              <li>• <strong>Producto nuevo:</strong> Se crea el registro inicial</li>
-              <li>• <strong>Producto existente:</strong> Se actualiza el stock y calcula el costo promedio ponderado</li>
-              <li>• <strong>Historial completo:</strong> Cada compra queda registrada para análisis detallado</li>
-            </ul>
-          </div>
         </CardContent>
       </Card>
     </div>
