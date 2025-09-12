@@ -63,6 +63,19 @@ const AnalyticaInventario = () => {
   const rotacionInventario = productosInventario.length > 0 
     ? (productosConMovimiento / productosInventario.length) * 100 : 0;
 
+  // Colores armónicos del sistema de diseño
+  const chartColors = {
+    primary: 'hsl(180, 25%, 50%)',        // Color principal del sistema
+    primaryLight: 'hsl(180, 30%, 60%)',   // Variación más clara
+    primaryDark: 'hsl(180, 35%, 40%)',    // Variación más oscura
+    secondary: 'hsl(200, 25%, 55%)',      // Azul complementario
+    accent: 'hsl(160, 25%, 50%)',         // Verde complementario
+    warning: 'hsl(40, 70%, 60%)',         // Amarillo armónico
+    success: 'hsl(140, 40%, 50%)',        // Verde éxito
+    destructive: 'hsl(0, 70%, 55%)',      // Rojo del sistema
+    muted: 'hsl(180, 15%, 70%)',          // Gris armónico
+  };
+
   // Datos para gráficos
   const datosValorPorProducto = productosInventario
     .sort((a, b) => (b.valor_total_inventario || 0) - (a.valor_total_inventario || 0))
@@ -78,17 +91,17 @@ const AnalyticaInventario = () => {
     const stockMinimo = 10; // Configurable en el futuro
     
     let nivel = 'Alto';
-    let color = '#22c55e';
+    let color = chartColors.success;
     
     if (stockActual === 0) {
       nivel = 'Agotado';
-      color = '#ef4444';
+      color = chartColors.destructive;
     } else if (stockActual <= stockMinimo) {
       nivel = 'Bajo';
-      color = '#f97316';
+      color = chartColors.warning;
     } else if (stockActual <= stockMinimo * 2) {
       nivel = 'Medio';
-      color = '#eab308';
+      color = chartColors.secondary;
     }
     
     return {
@@ -126,9 +139,9 @@ const AnalyticaInventario = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Valor Total Inventario</p>
-                <p className="text-2xl font-bold text-green-600">{formatPrice(valorTotalInventario)}</p>
+                <p className="text-2xl font-bold text-primary">{formatPrice(valorTotalInventario)}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <DollarSign className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
@@ -138,9 +151,9 @@ const AnalyticaInventario = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Unidades</p>
-                <p className="text-2xl font-bold text-blue-600">{totalUnidades.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">{totalUnidades.toLocaleString()}</p>
               </div>
-              <Package className="h-8 w-8 text-blue-600" />
+              <Package className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
@@ -150,9 +163,9 @@ const AnalyticaInventario = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Costo Promedio</p>
-                <p className="text-2xl font-bold text-purple-600">{formatPrice(costoPromedioGeneral)}</p>
+                <p className="text-2xl font-bold text-primary">{formatPrice(costoPromedioGeneral)}</p>
               </div>
-              <Target className="h-8 w-8 text-purple-600" />
+              <Target className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
@@ -162,9 +175,9 @@ const AnalyticaInventario = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Rotación</p>
-                <p className="text-2xl font-bold text-orange-600">{rotacionInventario.toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-primary">{rotacionInventario.toFixed(1)}%</p>
               </div>
-              <Activity className="h-8 w-8 text-orange-600" />
+              <Activity className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
@@ -195,7 +208,7 @@ const AnalyticaInventario = () => {
                   />
                   <YAxis tickFormatter={(value) => formatPrice(value)} />
                   <Tooltip formatter={(value) => [formatPrice(Number(value)), "Valor"]} />
-                  <Bar dataKey="valor" fill="#3b82f6" />
+                  <Bar dataKey="valor" fill={chartColors.primary} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -253,7 +266,7 @@ const AnalyticaInventario = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-600">
+            <CardTitle className="flex items-center gap-2 text-muted-foreground">
               <AlertCircle className="h-5 w-5" />
               Alertas de Inventario
             </CardTitle>
@@ -261,15 +274,15 @@ const AnalyticaInventario = () => {
           <CardContent className="space-y-4">
             {productosInventario.filter(p => (p.cantidad_stock || 0) <= 10).length > 0 ? (
               <div>
-                <h4 className="font-medium text-orange-800 mb-2">Productos con Stock Bajo:</h4>
+                <h4 className="font-medium text-muted-foreground mb-2">Productos con Stock Bajo:</h4>
                 <div className="space-y-2">
                   {productosInventario
                     .filter(p => (p.cantidad_stock || 0) <= 10 && (p.cantidad_stock || 0) > 0)
                     .slice(0, 5)
                     .map(producto => (
-                      <div key={producto.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
+                      <div key={producto.id} className="flex items-center justify-between p-2 bg-muted/50 rounded border">
                         <span className="text-sm">{producto.nombre}</span>
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                        <Badge variant="secondary" className="bg-muted text-muted-foreground">
                           {producto.cantidad_stock} unidades
                         </Badge>
                       </div>
@@ -280,13 +293,13 @@ const AnalyticaInventario = () => {
 
             {productosInventario.filter(p => (p.cantidad_stock || 0) === 0).length > 0 ? (
               <div>
-                <h4 className="font-medium text-red-800 mb-2">Productos Agotados:</h4>
+                <h4 className="font-medium text-muted-foreground mb-2">Productos Agotados:</h4>
                 <div className="space-y-2">
                   {productosInventario
                     .filter(p => (p.cantidad_stock || 0) === 0)
                     .slice(0, 3)
                     .map(producto => (
-                      <div key={producto.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
+                      <div key={producto.id} className="flex items-center justify-between p-2 bg-muted/50 rounded border">
                         <span className="text-sm">{producto.nombre}</span>
                         <Badge variant="destructive">
                           Agotado
@@ -298,10 +311,10 @@ const AnalyticaInventario = () => {
             ) : null}
 
             {productosInventario.filter(p => (p.cantidad_stock || 0) <= 10 || (p.cantidad_stock || 0) === 0).length === 0 && (
-              <div className="text-center py-4 text-green-600">
+              <div className="text-center py-4 text-primary">
                 <Zap className="h-8 w-8 mx-auto mb-2" />
                 <p className="font-medium">¡Todo está bien!</p>
-                <p className="text-sm">No hay alertas de inventario en este momento.</p>
+                <p className="text-sm text-muted-foreground">No hay alertas de inventario en este momento.</p>
               </div>
             )}
           </CardContent>
@@ -309,30 +322,30 @@ const AnalyticaInventario = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-blue-600">
+            <CardTitle className="flex items-center gap-2 text-primary">
               <TrendingUp className="h-5 w-5" />
               Recomendaciones
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-1">Control de Costos</h4>
-                <p className="text-sm text-blue-700">
+              <div className="p-3 bg-card rounded-lg border">
+                <h4 className="font-medium text-primary mb-1">Control de Costos</h4>
+                <p className="text-sm text-muted-foreground">
                   El sistema calcula automáticamente el costo promedio ponderado para optimizar tu control de inventario.
                 </p>
               </div>
 
-              <div className="p-3 bg-green-50 rounded-lg">
-                <h4 className="font-medium text-green-800 mb-1">Productos Rentables</h4>
-                <p className="text-sm text-green-700">
+              <div className="p-3 bg-card rounded-lg border">
+                <h4 className="font-medium text-primary mb-1">Productos Rentables</h4>
+                <p className="text-sm text-muted-foreground">
                   Los productos con mayor valor representan {((datosValorPorProducto.length / productosInventario.length) * 100).toFixed(0)}% del inventario total.
                 </p>
               </div>
 
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <h4 className="font-medium text-purple-800 mb-1">Rotación de Inventario</h4>
-                <p className="text-sm text-purple-700">
+              <div className="p-3 bg-card rounded-lg border">
+                <h4 className="font-medium text-primary mb-1">Rotación de Inventario</h4>
+                <p className="text-sm text-muted-foreground">
                   Tu rotación actual es {rotacionInventario.toFixed(1)}%. Una rotación alta indica buena gestión de inventario.
                 </p>
               </div>
