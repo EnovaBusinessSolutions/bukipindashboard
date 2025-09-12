@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Upload, Image, Trash2 } from "lucide-react";
+import { Plus, Upload, Image, Trash2, Package } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useProductos, useCreateProducto } from "@/hooks/useProductos";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
@@ -23,6 +23,9 @@ type ProductoForm = {
   nombre: string;
   descripcion: string;
   precio: number;
+  cantidad: number;
+  proveedor?: string;
+  ubicacion?: string;
   subcuentaId?: string;
 };
 
@@ -75,15 +78,15 @@ const RegistroProductos = () => {
 
   return (
     <div className="space-y-6">
-      {/* Formulario de registro */}
+      {/* Formulario de registro de compras */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5 text-green-600" />
-            Registrar Nuevo Producto
+            <Plus className="h-5 w-5 text-blue-600" />
+            Registrar Compra de Inventario
           </CardTitle>
           <CardDescription>
-            Agrega productos para la venta con toda su información
+            Registra productos comprados para control de inventario y posterior venta
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -96,18 +99,38 @@ const RegistroProductos = () => {
                   <Input
                     id="nombre"
                     {...register("nombre", { required: true })}
-                    placeholder="Ej: Camiseta básica"
+                    placeholder="Ej: Camiseta para inventario"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="precio">Precio de Venta *</Label>
+                  <Label htmlFor="precio">Precio de Compra *</Label>
                   <Input
                     id="precio"
                     type="number"
                     step="0.01"
                     {...register("precio", { required: true, valueAsNumber: true })}
                     placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="cantidad">Cantidad Comprada *</Label>
+                  <Input
+                    id="cantidad"
+                    type="number"
+                    min="1"
+                    {...register("cantidad", { required: true, valueAsNumber: true })}
+                    placeholder="1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="proveedor">Proveedor</Label>
+                  <Input
+                    id="proveedor"
+                    {...register("proveedor")}
+                    placeholder="Nombre del proveedor"
                   />
                 </div>
 
@@ -171,12 +194,21 @@ const RegistroProductos = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="descripcion">Descripción</Label>
+                  <Label htmlFor="descripcion">Descripción del Producto</Label>
                   <Textarea
                     id="descripcion"
                     {...register("descripcion")}
-                    placeholder="Descripción detallada del producto..."
-                    className="min-h-20"
+                    placeholder="Descripción, características, marca, modelo..."
+                    className="min-h-16"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="ubicacion">Ubicación en Almacén</Label>
+                  <Input
+                    id="ubicacion"
+                    {...register("ubicacion")}
+                    placeholder="Ej: Estante A-1, Pasillo 2"
                   />
                 </div>
               </div>
@@ -196,80 +228,55 @@ const RegistroProductos = () => {
         </CardContent>
       </Card>
 
-      {/* Lista de productos registrados */}
+      {/* Información sobre el proceso */}
       <Card>
         <CardHeader>
-          <CardTitle>Productos Registrados</CardTitle>
+          <CardTitle>Proceso de Control de Inventario</CardTitle>
           <CardDescription>
-            Lista de todos los productos disponibles para la venta
+            Cómo funciona el sistema de inventario
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loadingProductos ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Cargando productos...
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 border rounded-lg">
+              <div className="w-12 h-12 mx-auto mb-3 bg-blue-100 rounded-full flex items-center justify-center">
+                <Plus className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="font-semibold mb-2">1. Registrar Compra</h3>
+              <p className="text-sm text-muted-foreground">
+                Registra los productos que compras para tu inventario con precio de compra y cantidad
+              </p>
             </div>
-          ) : productos && productos.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Imagen</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Precio</TableHead>
-                  <TableHead>Subcuenta</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {productos.map((producto) => (
-                  <TableRow key={producto.id}>
-                    <TableCell>
-                      {producto.imagen_url ? (
-                        <img
-                          src={producto.imagen_url}
-                          alt={producto.nombre}
-                          className="w-12 h-12 object-cover rounded"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
-                          <Image className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{producto.nombre}</p>
-                        {producto.descripcion && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {producto.descripcion}
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {formatPrice(producto.precio)}
-                    </TableCell>
-                    <TableCell>
-                      {producto.subcuenta_nombre ? (
-                        <Badge variant="outline">{producto.subcuenta_nombre}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Sin asignar</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={producto.activo ? "default" : "secondary"}>
-                        {producto.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay productos registrados aún
+            
+            <div className="text-center p-4 border rounded-lg">
+              <div className="w-12 h-12 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
+                <Package className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold mb-2">2. Control Stock</h3>
+              <p className="text-sm text-muted-foreground">
+                Monitorea el stock disponible y recibe alertas cuando se agote el inventario
+              </p>
             </div>
-          )}
+            
+            <div className="text-center p-4 border rounded-lg">
+              <div className="w-12 h-12 mx-auto mb-3 bg-purple-100 rounded-full flex items-center justify-center">
+                <Upload className="h-6 w-6 text-purple-600" />
+              </div>
+              <h3 className="font-semibold mb-2">3. Venta (Próximo)</h3>
+              <p className="text-sm text-muted-foreground">
+                En la segunda etapa podrás registrar ventas y calcular ganancias automáticamente
+              </p>
+            </div>
+          </div>
+          
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2">Nota Importante:</h4>
+            <p className="text-blue-800 text-sm">
+              Este sistema está diseñado para el control de inventario de compras. Los productos que registres aquí 
+              son independientes del sistema de ventas (que está en la sección de ingresos). Aquí puedes llevar 
+              control de qué compras para revender.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
