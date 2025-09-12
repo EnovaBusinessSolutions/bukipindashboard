@@ -244,7 +244,7 @@ serve(async (req) => {
         // Débito a Costo de Ventas
         detallesAsiento.push({
           asiento_id: asiento.id,
-          cuenta_codigo: '6001', // Costo de Ventas
+          cuenta_codigo: '5001', // Compras (Costo de Ventas)
           debe: costoVenta,
           haber: 0,
           descripcion: `Costo de venta - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
