@@ -16,7 +16,6 @@ import RegistroEgresos from "./pages/registros/RegistroEgresos";
 import RegistroAsientos from "./pages/registros/RegistroAsientos";
 import CuentasPorCobrar from "./pages/cobros-pagos/CuentasPorCobrar";
 import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
-import AnalyticasCuentasPorCobrar from "./pages/cobros-pagos/AnalyticasCuentasPorCobrar";
 
 const queryClient = new QueryClient();
 
@@ -41,7 +40,6 @@ const App = () => (
               <Route path="/registros/inventario" element={<Inventario />} />
               <Route path="/cobros-pagos/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
               <Route path="/cobros-pagos/cuentas-por-pagar" element={<CuentasPorPagar />} />
-              <Route path="/cobros-pagos/analiticas" element={<AnalyticasCuentasPorCobrar />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
