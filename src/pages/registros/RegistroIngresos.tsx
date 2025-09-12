@@ -153,7 +153,8 @@ const RegistroIngresos = () => {
     }
     
     if (selectedIncomeType !== 'precargados' && selectedIncomeType !== 'inventariados' && (!montoTotal || parseFloat(montoTotal) <= 0)) errors.push('Monto Total');
-    if (!paymentMethod) errors.push('Método de Pago');
+    // Solo requerir método de pago cuando hay pago efectivo (contado o parcial)
+    if ((paymentStatus === 'contado' || paymentStatus === 'parcial') && !paymentMethod) errors.push('Método de Pago');
     if (!paymentStatus) errors.push('Tipo de Pago');
     
     return errors;
