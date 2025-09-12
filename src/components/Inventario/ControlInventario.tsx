@@ -23,15 +23,23 @@ const ControlInventario = () => {
   
   const { data: productos, isLoading } = useProductos();
 
-  // Simulamos datos de inventario - en el futuro esto vendría de la base de datos
-  const inventoryData = productos?.map(producto => ({
+  // Filtrar solo productos de inventario (que tienen cantidad_stock > 0 o cantidad_comprada > 0)
+  const productosInventario = productos?.filter(producto => 
+    (producto.cantidad_stock && producto.cantidad_stock > 0) || 
+    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
+  ) || [];
+
+  // Usar datos reales de inventario
+  const inventoryData = productosInventario.map(producto => ({
     ...producto,
-    stock_actual: Math.floor(Math.random() * 100) + 1, // Simular stock
-    stock_minimo: 10,
-    stock_maximo: 100,
-    entradas_mes: Math.floor(Math.random() * 20),
-    salidas_mes: Math.floor(Math.random() * 15),
-  })) || [];
+    stock_actual: producto.cantidad_stock || 0,
+    stock_minimo: 10, // Puede ser configurable en el futuro
+    stock_maximo: 100, // Puede ser configurable en el futuro
+    costo_promedio: producto.costo_unitario || 0,
+    valor_total: producto.valor_total_inventario || 0,
+    entradas_mes: producto.cantidad_comprada || 0, // Total comprado
+    salidas_mes: Math.max(0, (producto.cantidad_comprada || 0) - (producto.cantidad_stock || 0)), // Vendido/usado
+  }));
 
   const getStockStatus = (actual: number, minimo: number): InventoryStatus => {
     if (actual === 0) return "agotado";
@@ -158,7 +166,7 @@ const ControlInventario = () => {
             </Select>
           </div>
 
-          {filteredProducts.length > 0 ? (
+          {inventoryData.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -166,9 +174,10 @@ const ControlInventario = () => {
                   <TableHead>Stock Actual</TableHead>
                   <TableHead>Stock Mínimo</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Entradas (Mes)</TableHead>
-                  <TableHead>Salidas (Mes)</TableHead>
-                  <TableHead>Precio</TableHead>
+                  <TableHead>Costo Unitario</TableHead>
+                  <TableHead>Valor Total</TableHead>
+                  <TableHead>Total Comprado</TableHead>
+                  <TableHead>Total Usado/Vendido</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -209,18 +218,25 @@ const ControlInventario = () => {
                       <TableCell>
                         {getStatusBadge(status)}
                       </TableCell>
-                      <TableCell>
-                        <span className="text-green-600 font-medium">+{producto.entradas_mes}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-red-600 font-medium">-{producto.salidas_mes}</span>
+                      <TableCell className="font-semibold">
+                        {new Intl.NumberFormat('es-CO', {
+                          style: 'currency',
+                          currency: 'COP',
+                          minimumFractionDigits: 0,
+                        }).format(producto.costo_promedio)}
                       </TableCell>
                       <TableCell className="font-semibold">
                         {new Intl.NumberFormat('es-CO', {
                           style: 'currency',
                           currency: 'COP',
                           minimumFractionDigits: 0,
-                        }).format(producto.precio)}
+                        }).format(producto.valor_total)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-blue-600 font-medium">{producto.entradas_mes}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-orange-600 font-medium">{producto.salidas_mes}</span>
                       </TableCell>
                     </TableRow>
                   );
@@ -229,7 +245,10 @@ const ControlInventario = () => {
             </Table>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              No se encontraron productos con los filtros seleccionados
+              {productosInventario.length === 0 
+                ? "No hay productos de inventario registrados. Registra tu primera compra en la pestaña 'Registro de Productos'."
+                : "No se encontraron productos con los filtros seleccionados"
+              }
             </div>
           )}
         </CardContent>
