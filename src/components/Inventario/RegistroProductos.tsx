@@ -108,7 +108,7 @@ const RegistroProductos = () => {
             Registrar Compra de Inventario
           </CardTitle>
           <CardDescription>
-            Registra productos comprados para control de inventario y posterior venta
+            Registra productos comprados para control de inventario. Si el producto ya existe, se actualizará el stock y costo promedio ponderado.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -126,6 +126,18 @@ const RegistroProductos = () => {
               {/* Información del producto */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-foreground border-b pb-2">Información del Producto</h3>
+                
+                <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-start gap-2">
+                    <Package className="h-4 w-4 text-blue-600 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-blue-800 dark:text-blue-200">Control Inteligente de Inventario</p>
+                      <p className="text-blue-700 dark:text-blue-300 mt-1">
+                        Si el producto ya existe, se actualizará automáticamente el stock y se calculará el costo promedio ponderado para un mejor control de costos.
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 
                 <div>
                   <Label htmlFor="nombre">Nombre del Producto *</Label>
@@ -400,7 +412,7 @@ const RegistroProductos = () => {
               </div>
               <h3 className="font-semibold mb-2">1. Registrar Compra</h3>
               <p className="text-sm text-muted-foreground">
-                Registra los productos que compras para tu inventario con precio de compra y cantidad
+                Registra productos comprados. Si ya existe, se agrupa automáticamente y calcula el costo promedio ponderado.
               </p>
             </div>
             
@@ -408,9 +420,9 @@ const RegistroProductos = () => {
               <div className="w-12 h-12 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
                 <Package className="h-6 w-6 text-green-600" />
               </div>
-              <h3 className="font-semibold mb-2">2. Control Stock</h3>
+              <h3 className="font-semibold mb-2">2. Control Automático</h3>
               <p className="text-sm text-muted-foreground">
-                Monitorea el stock disponible y recibe alertas cuando se agote el inventario
+                Sistema inteligente que agrupa productos por nombre y mantiene historial de movimientos y costos.
               </p>
             </div>
             
