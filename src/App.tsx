@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import PlanCuentas from "./pages/PlanCuentas";
+import Inventario from "./pages/Inventario";
 import Sidebar from "./components/Layout/Sidebar";
 import RegistroIngresos from "./pages/registros/RegistroIngresos";
 import RegistroEgresos from "./pages/registros/RegistroEgresos";
@@ -14,23 +15,6 @@ import RegistroAsientos from "./pages/registros/RegistroAsientos";
 
 const queryClient = new QueryClient();
 
-// Componente temporal para inventario
-
-const RegistroInventario = () => (
-  <div className="h-full overflow-hidden flex flex-col">
-    <div className="p-6 border-b bg-background">
-      <h1 className="text-3xl font-bold text-foreground">Registro de Inventario</h1>
-      <p className="text-muted-foreground mt-2">
-        Controla y gestiona el inventario de productos y materiales
-      </p>
-    </div>
-    <div className="flex-1 overflow-auto p-6">
-      <div className="text-center py-8 text-muted-foreground">
-        Formulario de control de inventario próximamente...
-      </div>
-    </div>
-  </div>
-);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -47,7 +31,7 @@ const App = () => (
               <Route path="/registros/ingresos" element={<RegistroIngresos />} />
               <Route path="/registros/egresos" element={<RegistroEgresos />} />
               <Route path="/registros/asientos" element={<RegistroAsientos />} />
-              <Route path="/registros/inventario" element={<RegistroInventario />} />
+              <Route path="/registros/inventario" element={<Inventario />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
