@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import { useProductos } from "@/hooks/useProductos";
+import { Search, Package, TrendingUp, TrendingDown, AlertTriangle, Edit, Check, X } from "lucide-react";
+import { useProductos, useUpdateProducto } from "@/hooks/useProductos";
 import {
   Table,
   TableBody,
@@ -21,8 +21,11 @@ type StockLevel = "alto" | "medio" | "bajo";
 const ControlInventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<InventoryStatus | StockLevel | "todos">("todos");
+  const [editingPrice, setEditingPrice] = useState<string | null>(null);
+  const [tempPrice, setTempPrice] = useState<number>(0);
   
   const { data: productos, isLoading } = useProductos();
+  const updateProducto = useUpdateProducto();
 
   // Filtrar solo productos de inventario (que tienen cantidad_stock > 0 o cantidad_comprada > 0)
   const productosInventario = productos?.filter(producto => 
@@ -40,6 +43,7 @@ const ControlInventario = () => {
     valor_total: producto.valor_total_inventario || 0,
     entradas_mes: producto.cantidad_comprada || 0, // Total comprado
     salidas_mes: Math.max(0, (producto.cantidad_comprada || 0) - (producto.cantidad_stock || 0)), // Vendido/usado
+    precio_venta: (producto as any).precio_venta || 0
   }));
 
   const getAvailabilityStatus = (actual: number): InventoryStatus => {
@@ -88,6 +92,37 @@ const ControlInventario = () => {
     bajo_stock: inventoryData.filter(p => getStockLevel(p.stock_actual, p.stock_minimo, p.stock_maximo) === "bajo").length,
     medio_stock: inventoryData.filter(p => getStockLevel(p.stock_actual, p.stock_minimo, p.stock_maximo) === "medio").length,
     alto_stock: inventoryData.filter(p => getStockLevel(p.stock_actual, p.stock_minimo, p.stock_maximo) === "alto").length,
+  };
+
+  const handleEditPrice = (productId: string, currentPrice: number) => {
+    setEditingPrice(productId);
+    setTempPrice(currentPrice);
+  };
+
+  const handleSavePrice = async (productId: string) => {
+    try {
+      await updateProducto.mutateAsync({
+        id: productId,
+        precio_venta: tempPrice
+      });
+      setEditingPrice(null);
+      setTempPrice(0);
+    } catch (error) {
+      console.error("Error updating price:", error);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPrice(null);
+    setTempPrice(0);
+  };
+
+  const formatPrice = (precio: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+    }).format(precio);
   };
 
   if (isLoading) {
@@ -207,6 +242,7 @@ const ControlInventario = () => {
                   <TableHead>Disponibilidad</TableHead>
                   <TableHead>Nivel de Stock</TableHead>
                   <TableHead>Costo Unitario</TableHead>
+                  <TableHead>Precio de Venta</TableHead>
                   <TableHead>Valor Total</TableHead>
                   <TableHead>Total Comprado</TableHead>
                   <TableHead>Total Usado/Vendido</TableHead>
@@ -261,6 +297,56 @@ const ControlInventario = () => {
                           currency: 'COP',
                           minimumFractionDigits: 0,
                         }).format(producto.costo_promedio)}
+                      </TableCell>
+                      <TableCell>
+                        {editingPrice === producto.id ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={tempPrice}
+                              onChange={(e) => setTempPrice(Number(e.target.value))}
+                              className="w-24 h-8"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSavePrice(producto.id);
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEdit();
+                                }
+                              }}
+                            />
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleSavePrice(producto.id)}
+                              disabled={updateProducto.isPending}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={handleCancelEdit}
+                              className="h-8 w-8 p-0"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-green-600">
+                              {formatPrice(producto.precio_venta || 0)}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEditPrice(producto.id, producto.precio_venta || 0)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="font-semibold">
                         {new Intl.NumberFormat('es-CO', {

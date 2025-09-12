@@ -58,6 +58,7 @@ export const useCreateProducto = () => {
     mutationFn: async ({ 
       nombre, 
       precio, 
+      precioVenta,
       cantidad,
       descripcion, 
       subcuentaId, 
@@ -65,6 +66,7 @@ export const useCreateProducto = () => {
     }: { 
       nombre: string; 
       precio: number;
+      precioVenta?: number;
       cantidad?: number; // Opcional para compatibilidad con ventas
       descripcion?: string;
       subcuentaId?: string;
@@ -122,7 +124,7 @@ export const useCreateProducto = () => {
           const nuevoValorTotal = valorActual + costoTotal;
           const nuevoCostoPromedio = nuevaCantidad > 0 ? nuevoValorTotal / nuevaCantidad : 0;
 
-          const { data: productoActualizado, error: updateError } = await supabase
+           const { data: productoActualizado, error: updateError } = await supabase
             .from("productos")
             .update({
               cantidad_stock: nuevaCantidad,
@@ -131,6 +133,7 @@ export const useCreateProducto = () => {
               descripcion: descripcion || productoExistente.descripcion,
               imagen_url: imagenUrl || productoExistente.imagen_url,
               subcuenta_id: subcuentaId || productoExistente.subcuenta_id,
+              precio_venta: precioVenta !== undefined ? precioVenta : productoExistente.precio_venta,
               updated_at: new Date().toISOString()
             })
             .eq("id", productoExistente.id)
@@ -166,6 +169,7 @@ export const useCreateProducto = () => {
             .insert({
               nombre,
               precio,
+              precio_venta: precioVenta || 0,
               descripcion: descripcion || null,
               subcuenta_id: subcuentaId || null,
               imagen_url: imagenUrl,
@@ -257,6 +261,42 @@ export const useCreateProducto = () => {
       toast({
         title: "Error",
         description: "Error al registrar compra: " + (error.message || "Error desconocido"),
+        variant: "destructive",
+      });
+    },
+  });
+};
+
+export const useUpdateProducto = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, precio_venta }: { id: string; precio_venta: number }) => {
+      const { data, error } = await supabase
+        .from("productos")
+        .update({ 
+          precio_venta,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+      toast({
+        title: "Precio actualizado",
+        description: "El precio de venta se ha actualizado correctamente",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar el precio",
         variant: "destructive",
       });
     },

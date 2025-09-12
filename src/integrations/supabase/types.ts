@@ -203,6 +203,7 @@ export type Database = {
           imagen_url: string | null
           nombre: string
           precio: number
+          precio_venta: number | null
           subcuenta_id: string | null
           updated_at: string | null
           user_id: string | null
@@ -220,6 +221,7 @@ export type Database = {
           imagen_url?: string | null
           nombre: string
           precio: number
+          precio_venta?: number | null
           subcuenta_id?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -237,6 +239,7 @@ export type Database = {
           imagen_url?: string | null
           nombre?: string
           precio?: number
+          precio_venta?: number | null
           subcuenta_id?: string | null
           updated_at?: string | null
           user_id?: string | null

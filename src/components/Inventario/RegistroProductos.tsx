@@ -26,6 +26,7 @@ type ProductoForm = {
   nombre: string;
   descripcion: string;
   precio: number;
+  precioVenta: number;
   cantidad: number;
   proveedor?: string;
   ubicacion?: string;
@@ -107,6 +108,7 @@ const RegistroProductos = () => {
     setValue("nombre", producto.nombre);
     setValue("descripcion", producto.descripcion || "");
     setValue("subcuentaId", producto.subcuenta_id || "");
+    setValue("precioVenta", producto.precio_venta || 0);
     
     // Pre-cargar imagen existente si la tiene
     if (producto.imagen_url) {
@@ -139,6 +141,7 @@ const RegistroProductos = () => {
     await createProducto.mutateAsync({
       nombre: data.nombre,
       precio: data.precio,
+      precioVenta: data.precioVenta,
       cantidad: data.cantidad,
       descripcion: data.descripcion,
       subcuentaId: data.subcuentaId,
@@ -393,15 +396,29 @@ const RegistroProductos = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="cantidad">Cantidad a Comprar *</Label>
+                    <Label htmlFor="precioVenta">Precio de Venta Sugerido</Label>
                     <Input
-                      id="cantidad"
+                      id="precioVenta"
                       type="number"
-                      min="1"
-                      {...register("cantidad", { required: true, valueAsNumber: true })}
-                      placeholder="1"
+                      step="0.01"
+                      {...register("precioVenta", { valueAsNumber: true })}
+                      placeholder="0.00"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Este precio se usará por defecto al vender el producto
+                    </p>
                   </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="cantidad">Cantidad a Comprar *</Label>
+                  <Input
+                    id="cantidad"
+                    type="number"
+                    min="1"
+                    {...register("cantidad", { required: true, valueAsNumber: true })}
+                    placeholder="1"
+                  />
                 </div>
 
                 {montoTotal > 0 && (
