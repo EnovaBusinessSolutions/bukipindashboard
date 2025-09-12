@@ -41,6 +41,7 @@ const RegistroIngresos = () => {
   const [inventoryProductPrice, setInventoryProductPrice] = useState("");
   const [inventoryQuantity, setInventoryQuantity] = useState("1");
   const [availableStock, setAvailableStock] = useState(0);
+  const [usePrecioRegistrado, setUsePrecioRegistrado] = useState(true);
   
   // Estados para productos precargados
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -73,6 +74,10 @@ const RegistroIngresos = () => {
       const precioAUsar = precioVenta && precioVenta > 0 
         ? precioVenta.toString() 
         : (selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
+      
+      // Si tiene precio de venta registrado, activar esa opción por defecto
+      const tienePrecioRegistrado = precioVenta && precioVenta > 0;
+      setUsePrecioRegistrado(tienePrecioRegistrado);
       
       setInventoryProductPrice(precioAUsar);
       setAvailableStock(selectedProduct.cantidad_stock || 0);
@@ -263,6 +268,7 @@ const RegistroIngresos = () => {
       setInventoryProductPrice("");
       setInventoryQuantity("1");
       setAvailableStock(0);
+      setUsePrecioRegistrado(true);
 
     } catch (error) {
       toast({
@@ -473,9 +479,9 @@ const RegistroIngresos = () => {
                   className={hasFieldError('Cantidad') || hasFieldError('Cantidad excede stock disponible') ? 'border-destructive' : ''}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="precio-inv">Precio de Venta</Label>
+                  <Label htmlFor="precio-inv">Precio de Venta Registrado</Label>
                   {selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
                     <div className="flex items-center text-orange-600">
                       <AlertCircle className="h-4 w-4 mr-1" />
@@ -483,7 +489,56 @@ const RegistroIngresos = () => {
                     </div>
                   )}
                 </div>
-                {selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
+                
+                {/* Selector de tipo de precio */}
+                {selectedInventoryProductId && (
+                  <div className="space-y-2">
+                    <RadioGroup 
+                      value={usePrecioRegistrado ? "registrado" : "personalizado"}
+                      onValueChange={(value) => {
+                        const useRegistrado = value === "registrado";
+                        setUsePrecioRegistrado(useRegistrado);
+                        
+                        // Si cambia a precio registrado, restaurar el precio del inventario
+                        if (useRegistrado) {
+                          const selectedProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
+                          if (selectedProduct) {
+                            const precioVenta = (selectedProduct as any).precio_venta;
+                            const precioAUsar = precioVenta && precioVenta > 0 
+                              ? precioVenta.toString() 
+                              : (selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
+                            setInventoryProductPrice(precioAUsar);
+                            // Recalcular total
+                            const precioNumerico = precioVenta && precioVenta > 0 
+                              ? precioVenta 
+                              : (selectedProduct.costo_unitario || selectedProduct.precio);
+                            const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
+                            setMontoTotal(total);
+                          }
+                        }
+                      }}
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="registrado" id="precio-registrado" />
+                        <Label htmlFor="precio-registrado" className="text-sm">
+                          Usar precio registrado
+                          {selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0 && (
+                            <span className="ml-1 text-green-600 font-medium">
+                              (${(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta})
+                            </span>
+                          )}
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="personalizado" id="precio-personalizado" />
+                        <Label htmlFor="precio-personalizado" className="text-sm">Precio personalizado</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
+
+                {selectedInventoryProductId && !usePrecioRegistrado && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
                   <Alert className="border-orange-200 bg-orange-50">
                     <AlertCircle className="h-4 w-4 text-orange-600" />
                     <AlertDescription className="text-orange-800">
@@ -492,6 +547,7 @@ const RegistroIngresos = () => {
                     </AlertDescription>
                   </Alert>
                 )}
+                
                 <Input 
                   id="precio-inv" 
                   type="number" 
@@ -499,7 +555,16 @@ const RegistroIngresos = () => {
                   step="0.01"
                   value={inventoryProductPrice}
                   onChange={(e) => handleInventoryPriceChange(e.target.value)}
-                  className={selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta ? 'border-orange-300 bg-orange-50' : ''}
+                  disabled={usePrecioRegistrado && selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0}
+                  className={`${
+                    selectedInventoryProductId && !usePrecioRegistrado && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta 
+                      ? 'border-orange-300 bg-orange-50' 
+                      : ''
+                  } ${
+                    usePrecioRegistrado && selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0 
+                      ? 'bg-muted' 
+                      : ''
+                  }`}
                 />
               </div>
               <div className="space-y-2">
