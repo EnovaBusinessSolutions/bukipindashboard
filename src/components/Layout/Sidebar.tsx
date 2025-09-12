@@ -44,6 +44,7 @@ const Sidebar = () => {
   const cobrosPagosItems = [
     { name: "Cuentas por Cobrar", path: "/cobros-pagos/cuentas-por-cobrar", active: location.pathname === "/cobros-pagos/cuentas-por-cobrar" },
     { name: "Cuentas por Pagar", path: "/cobros-pagos/cuentas-por-pagar", active: location.pathname === "/cobros-pagos/cuentas-por-pagar" },
+    { name: "Analíticas CxC", path: "/cobros-pagos/analiticas", active: location.pathname === "/cobros-pagos/analiticas" },
   ];
 
   return (
