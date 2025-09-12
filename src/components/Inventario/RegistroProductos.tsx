@@ -60,6 +60,16 @@ const RegistroProductos = () => {
   const montoTotal = precio * cantidad;
   const montoPendiente = montoTotal - montoPagado;
 
+  // Auto-completar monto pagado según tipo de pago
+  React.useEffect(() => {
+    if (tipoPago === "contado") {
+      setValue("montoPagado", montoTotal);
+    } else if (tipoPago === "pendiente") {
+      setValue("montoPagado", 0);
+    }
+    // Para "parcial" no hacemos nada, el usuario debe introducir el monto
+  }, [tipoPago, montoTotal, setValue]);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -276,7 +286,24 @@ const RegistroProductos = () => {
                       step="0.01"
                       {...register("montoPagado", { required: true, valueAsNumber: true })}
                       placeholder="0.00"
+                      readOnly={tipoPago === "contado" || tipoPago === "pendiente"}
+                      className={tipoPago === "contado" || tipoPago === "pendiente" ? "bg-muted" : ""}
                     />
+                    {tipoPago === "contado" && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Se completa automáticamente con el monto total
+                      </p>
+                    )}
+                    {tipoPago === "pendiente" && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Se establece en 0 automáticamente
+                      </p>
+                    )}
+                    {tipoPago === "parcial" && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Introduce el monto pagado parcialmente
+                      </p>
+                    )}
                   </div>
 
                   {(tipoPago === "parcial" || tipoPago === "pendiente") && (
