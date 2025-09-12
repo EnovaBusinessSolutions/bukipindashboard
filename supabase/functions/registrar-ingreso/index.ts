@@ -212,10 +212,10 @@ serve(async (req) => {
     if (montoPendiente > 0) {
       detallesAsiento.push({
         asiento_id: asiento.id,
-        cuenta_codigo: '1201', // Cuentas por Cobrar (asumiendo que existe)
+        cuenta_codigo: '1201', // Cuentas por Cobrar
         debe: montoPendiente,
         haber: 0,
-        descripcion: `Por cobrar - ${requestData.descripcion}`
+        descripcion: `Cuenta por cobrar - ${requestData.clienteNombre || 'Cliente'} - ${requestData.descripcion}`
       })
     }
 
