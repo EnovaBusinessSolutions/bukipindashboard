@@ -18,13 +18,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
-import { useProductos, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
+import { useProductos, useProductosServicios, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
 
 const RegistroIngresos = () => {
   const { ventasResumen, loading: loadingVentas, refetch: refetchVentas } = useVentasResumen();
   const { transacciones, loading: loadingTransacciones, refetch: refetchTransacciones } = useTransaccionesRecientes(10);
   const { data: subcuentas = [] } = useSubcuentas();
   const { data: productos = [], isLoading: loadingProductos } = useProductos();
+  const { data: productosServicios = [], isLoading: loadingProductosServicios } = useProductosServicios();
   const createProducto = useCreateProducto();
   const deleteProducto = useDeleteProducto();
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
@@ -306,15 +307,15 @@ const RegistroIngresos = () => {
                 onValueChange={handleProductSelection}
               >
                 <SelectTrigger className={hasFieldError('Producto Precargado') ? 'border-destructive' : ''}>
-                  <SelectValue placeholder={loadingProductos ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
+                  <SelectValue placeholder={loadingProductosServicios ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
-                  {loadingProductos ? (
+                  {loadingProductosServicios ? (
                     <SelectItem value="loading" disabled>Cargando productos...</SelectItem>
-                  ) : productos.length === 0 ? (
-                    <SelectItem value="empty" disabled>No hay productos registrados</SelectItem>
+                  ) : productosServicios.length === 0 ? (
+                    <SelectItem value="empty" disabled>No hay productos de servicios registrados</SelectItem>
                   ) : (
-                    productos.map((producto) => (
+                    productosServicios.map((producto) => (
                        <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
                          <div className="flex items-center space-x-3 w-full">
                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
@@ -1749,13 +1750,13 @@ const RegistroIngresos = () => {
                 </Alert>
                 
                 <div className="space-y-6">
-                  {loadingProductos ? (
+                  {loadingProductosServicios ? (
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     </div>
-                  ) : productos.length === 0 ? (
+                  ) : productosServicios.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      No hay productos registrados aún
+                      No hay productos de servicios registrados aún
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -1763,7 +1764,7 @@ const RegistroIngresos = () => {
                       {subcuentas
                         .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
                         .map(subcuenta => {
-                          const productosSubcuenta = productos.filter(p => p.subcuenta_id === subcuenta.id);
+                          const productosSubcuenta = productosServicios.filter(p => p.subcuenta_id === subcuenta.id);
                           if (productosSubcuenta.length === 0) return null;
                           
                           return (
@@ -1815,7 +1816,7 @@ const RegistroIngresos = () => {
                       
                       {/* Productos sin subcuenta (cuenta general) */}
                       {(() => {
-                        const productosSinSubcuenta = productos.filter(p => !p.subcuenta_id);
+                        const productosSinSubcuenta = productosServicios.filter(p => !p.subcuenta_id);
                         if (productosSinSubcuenta.length === 0) return null;
                         
                         return (

@@ -51,6 +51,34 @@ export const useProductos = () => {
   });
 };
 
+// Hook para obtener solo productos de servicios (precargados) - excluye inventario
+export const useProductosServicios = () => {
+  return useQuery({
+    queryKey: ["productos-servicios"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("productos")
+        .select(`
+          *,
+          subcuentas (nombre)
+        `)
+        .eq("activo", true)
+        .eq("cuenta_codigo", "4001") // Solo productos de servicios, no inventario
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Transform to include subcuenta name
+      const productosConSubcuenta: ProductoConSubcuenta[] = data?.map((producto: any) => ({
+        ...producto,
+        subcuenta_nombre: producto.subcuentas?.nombre || null
+      })) || [];
+
+      return productosConSubcuenta;
+    },
+  });
+};
+
 export const useCreateProducto = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
