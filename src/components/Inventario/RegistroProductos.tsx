@@ -426,12 +426,15 @@ const RegistroProductos = () => {
           </div>
           
           <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-900 mb-2">Nota Importante:</h4>
-            <p className="text-blue-800 text-sm">
-              Este sistema está diseñado para el control de inventario de compras. Los productos que registres aquí 
-              son independientes del sistema de ventas (que está en la sección de ingresos). Aquí puedes llevar 
-              control de qué compras para revender.
+            <h4 className="font-semibold text-blue-900 mb-2">🔄 Control Inteligente de Inventario:</h4>
+            <p className="text-blue-800 text-sm mb-2">
+              El sistema detecta automáticamente si ya tienes este producto en inventario:
             </p>
+            <ul className="text-blue-700 text-sm space-y-1 ml-4">
+              <li>• <strong>Producto nuevo:</strong> Se crea el registro inicial</li>
+              <li>• <strong>Producto existente:</strong> Se actualiza el stock y calcula el costo promedio ponderado</li>
+              <li>• <strong>Historial completo:</strong> Cada compra queda registrada para análisis detallado</li>
+            </ul>
           </div>
         </CardContent>
       </Card>
