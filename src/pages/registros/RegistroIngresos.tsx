@@ -896,46 +896,7 @@ const RegistroIngresos = () => {
 
                     <Separator />
 
-                    {/* Método de pago */}
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Label className="font-medium">Método de Pago</Label>
-                        {hasFieldError('Método de Pago') && (
-                          <div className="flex items-center text-destructive">
-                            <AlertCircle className="h-4 w-4 mr-1" />
-                            <span className="text-xs">Requerido</span>
-                          </div>
-                        )}
-                      </div>
-                      <RadioGroup 
-                        value={paymentMethod} 
-                        onValueChange={setPaymentMethod}
-                        className={hasFieldError('Método de Pago') ? 'border border-destructive rounded-lg p-2' : ''}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="efectivo" id="efectivo" />
-                          <div className="flex items-center space-x-2">
-                            <Wallet className="h-4 w-4 text-green-600" />
-                            <Label htmlFor="efectivo" className="cursor-pointer">
-                              Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
-                            </Label>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="tarjeta" id="tarjeta" />
-                          <div className="flex items-center space-x-2">
-                            <CreditCard className="h-4 w-4 text-blue-800" />
-                            <Label htmlFor="tarjeta" className="cursor-pointer">
-                              Tarjeta <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
-                            </Label>
-                          </div>
-                        </div>
-                      </RadioGroup>
-                    </div>
-
-                    <Separator />
-
-                    {/* Estado del pago */}
+                    {/* Estado del pago - PRIMERO */}
                     <div className="space-y-4">
                       <div className="flex items-center space-x-2">
                         <Label className="font-medium">Estado del Pago</Label>
@@ -997,6 +958,48 @@ const RegistroIngresos = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Método de pago - SOLO si es contado o parcial */}
+                    {(paymentStatus === "contado" || paymentStatus === "parcial") && (
+                      <>
+                        <Separator />
+                        <div className="space-y-4">
+                          <div className="flex items-center space-x-2">
+                            <Label className="font-medium">Método de Pago</Label>
+                            {hasFieldError('Método de Pago') && (
+                              <div className="flex items-center text-destructive">
+                                <AlertCircle className="h-4 w-4 mr-1" />
+                                <span className="text-xs">Requerido</span>
+                              </div>
+                            )}
+                          </div>
+                          <RadioGroup 
+                            value={paymentMethod} 
+                            onValueChange={setPaymentMethod}
+                            className={hasFieldError('Método de Pago') ? 'border border-destructive rounded-lg p-2' : ''}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <RadioGroupItem value="efectivo" id="efectivo" />
+                              <div className="flex items-center space-x-2">
+                                <Wallet className="h-4 w-4 text-green-600" />
+                                <Label htmlFor="efectivo" className="cursor-pointer">
+                                  Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
+                                </Label>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <RadioGroupItem value="tarjeta" id="tarjeta" />
+                              <div className="flex items-center space-x-2">
+                                <CreditCard className="h-4 w-4 text-blue-800" />
+                                <Label htmlFor="tarjeta" className="cursor-pointer">
+                                  Tarjeta <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
+                                </Label>
+                              </div>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      </>
+                    )}
 
                     <div className="flex justify-end pt-4">
                       <Button 
