@@ -198,35 +198,18 @@ const RegistroProductos = () => {
                       <RadioGroupItem value="efectivo" id="efectivo-inv" />
                       <div className="flex items-center space-x-2">
                         <Wallet className="h-4 w-4 text-green-600" />
-                        <Label htmlFor="efectivo-inv" className="cursor-pointer">Efectivo</Label>
+                        <Label htmlFor="efectivo-inv" className="cursor-pointer">
+                          Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
+                        </Label>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="tarjeta_debito" id="tarjeta-debito-inv" />
+                      <RadioGroupItem value="bancos" id="bancos-inv" />
                       <div className="flex items-center space-x-2">
                         <CreditCard className="h-4 w-4 text-blue-800" />
-                        <Label htmlFor="tarjeta-debito-inv" className="cursor-pointer">Tarjeta de Débito</Label>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="tarjeta_credito" id="tarjeta-credito-inv" />
-                      <div className="flex items-center space-x-2">
-                        <CreditCard className="h-4 w-4 text-purple-600" />
-                        <Label htmlFor="tarjeta-credito-inv" className="cursor-pointer">Tarjeta de Crédito</Label>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="transferencia" id="transferencia-inv" />
-                      <div className="flex items-center space-x-2">
-                        <Package className="h-4 w-4 text-orange-600" />
-                        <Label htmlFor="transferencia-inv" className="cursor-pointer">Transferencia</Label>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="cheque" id="cheque-inv" />
-                      <div className="flex items-center space-x-2">
-                        <FileText className="h-4 w-4 text-gray-600" />
-                        <Label htmlFor="cheque-inv" className="cursor-pointer">Cheque</Label>
+                        <Label htmlFor="bancos-inv" className="cursor-pointer">
+                          Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
+                        </Label>
                       </div>
                     </div>
                   </RadioGroup>
