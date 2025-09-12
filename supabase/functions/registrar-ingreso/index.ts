@@ -229,6 +229,40 @@ serve(async (req) => {
       descripcion: requestData.descripcion
     })
 
+    // Para ventas de inventario, registrar el costo de ventas
+    if (requestData.tipoIngreso === 'inventariados' && requestData.productoId && requestData.cantidadVendida) {
+      // Obtener información del producto nuevamente para el costo
+      const { data: productoInfo, error: productoInfoError } = await supabaseClient
+        .from('productos')
+        .select('costo_unitario, nombre')
+        .eq('id', requestData.productoId)
+        .single()
+
+      if (!productoInfoError && productoInfo) {
+        const costoVenta = (productoInfo.costo_unitario || 0) * requestData.cantidadVendida
+
+        // Débito a Costo de Ventas
+        detallesAsiento.push({
+          asiento_id: asiento.id,
+          cuenta_codigo: '6001', // Costo de Ventas
+          debe: costoVenta,
+          haber: 0,
+          descripcion: `Costo de venta - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
+        })
+
+        // Crédito a Inventario (reducir el inventario contablemente)
+        detallesAsiento.push({
+          asiento_id: asiento.id,
+          cuenta_codigo: '1005', // Inventario
+          debe: 0,
+          haber: costoVenta,
+          descripcion: `Salida de inventario - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
+        })
+
+        console.log(`Registrando costo de venta: ${costoVenta} para producto ${productoInfo.nombre}`)
+      }
+    }
+
     // Insertar todos los detalles
     const { error: detallesError } = await supabaseClient
       .from('detalle_asientos')
