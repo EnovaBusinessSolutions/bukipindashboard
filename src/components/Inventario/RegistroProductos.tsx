@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Upload, Image, Trash2, Package, CreditCard, Wallet, FileText, AlertCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useProductos, useCreateProducto } from "@/hooks/useProductos";
-import { useSubcuentas } from "@/hooks/useSubcuentas";
+import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
 import {
   Table,
   TableBody,
@@ -42,7 +42,7 @@ const RegistroProductos = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   const { data: productos, isLoading: loadingProductos } = useProductos();
-  const { data: subcuentas } = useSubcuentas();
+  const { data: subcuentasInventario } = useSubcuentasInventario();
   const createProducto = useCreateProducto();
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<ProductoForm>({
@@ -166,19 +166,26 @@ const RegistroProductos = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="subcuenta">Subcuenta (Opcional)</Label>
+                  <Label htmlFor="subcuenta">Subcuenta de Inventario (Opcional)</Label>
                   <Select onValueChange={(value) => setValue("subcuentaId", value)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar subcuenta" />
+                      <SelectValue placeholder={
+                        subcuentasInventario && subcuentasInventario.length > 0 
+                          ? "Seleccionar subcuenta de inventario" 
+                          : "No hay subcuentas - se asignará a Inventario General"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
-                      {subcuentas?.map((subcuenta) => (
+                      {subcuentasInventario?.map((subcuenta) => (
                         <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                          {subcuenta.nombre}
+                          {subcuenta.nombre} ({subcuenta.nombreCuentaMadre})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Se registrará automáticamente en cuentas de Inventario (1005/1006)
+                  </p>
                 </div>
               </div>
 

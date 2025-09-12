@@ -40,6 +40,33 @@ export const useSubcuentas = () => {
   });
 };
 
+// Hook específico para subcuentas de inventario
+export const useSubcuentasInventario = () => {
+  return useQuery({
+    queryKey: ["subcuentas-inventario"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subcuentas")
+        .select(`
+          *,
+          cuentas!subcuentas_cuenta_madre_codigo_fkey (nombre)
+        `)
+        .in("cuenta_madre_codigo", ["1005", "1006"]) // Inventario de Mercancías y Materias Primas
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Transform to include cuenta madre name
+      const subcuentasWithCuentaMadre: SubcuentaWithCuentaMadre[] = data?.map((subcuenta: any) => ({
+        ...subcuenta,
+        nombreCuentaMadre: subcuenta.cuentas?.nombre || "Cuenta no encontrada"
+      })) || [];
+
+      return subcuentasWithCuentaMadre;
+    },
+  });
+};
+
 export const useCreateSubcuenta = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();

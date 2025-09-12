@@ -97,7 +97,7 @@ export const useCreateProducto = () => {
           descripcion: descripcion || null,
           subcuenta_id: subcuentaId || null,
           imagen_url: imagenUrl,
-          cuenta_codigo: "4001", // Fijo en ventas
+          cuenta_codigo: "1005", // Inventario de Mercancías
           user_id: null // Para prototipo
         })
         .select()
