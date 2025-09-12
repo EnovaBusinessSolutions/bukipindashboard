@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Upload, Image, Trash2, Package } from "lucide-react";
+import { Plus, Upload, Image, Trash2, Package, CreditCard, Wallet, FileText, AlertCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useProductos, useCreateProducto } from "@/hooks/useProductos";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
@@ -18,6 +18,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type ProductoForm = {
   nombre: string;
@@ -183,66 +186,113 @@ const RegistroProductos = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-foreground border-b pb-2">Información de Pago</h3>
                 
-                <div>
-                  <Label htmlFor="tipoPago">Tipo de Pago *</Label>
-                  <Select onValueChange={(value) => setValue("tipoPago", value)} defaultValue="contado">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar tipo de pago" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="contado">Pago de Contado</SelectItem>
-                      <SelectItem value="credito">Pago a Crédito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="metodoPago">Método de Pago *</Label>
-                  <Select onValueChange={(value) => setValue("metodoPago", value)} defaultValue="efectivo">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar método" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="efectivo">Efectivo</SelectItem>
-                      <SelectItem value="tarjeta_debito">Tarjeta de Débito</SelectItem>
-                      <SelectItem value="tarjeta_credito">Tarjeta de Crédito</SelectItem>
-                      <SelectItem value="transferencia">Transferencia</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="montoPagado">Monto Pagado *</Label>
-                  <Input
-                    id="montoPagado"
-                    type="number"
-                    step="0.01"
-                    {...register("montoPagado", { required: true, valueAsNumber: true })}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                {tipoPago === "credito" && (
-                  <>
-                    {montoPendiente > 0 && (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p className="text-sm font-medium text-yellow-800">
-                          Monto Pendiente: {formatPrice(montoPendiente)}
-                        </p>
+                {/* Método de pago */}
+                <div className="space-y-4">
+                  <Label className="font-medium">Método de Pago *</Label>
+                  <RadioGroup 
+                    value={watch("metodoPago")} 
+                    onValueChange={(value) => setValue("metodoPago", value)}
+                    defaultValue="efectivo"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="efectivo" id="efectivo-inv" />
+                      <div className="flex items-center space-x-2">
+                        <Wallet className="h-4 w-4 text-green-600" />
+                        <Label htmlFor="efectivo-inv" className="cursor-pointer">Efectivo</Label>
                       </div>
-                    )}
-                    
-                    <div>
-                      <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
-                      <Input
-                        id="fechaVencimiento"
-                        type="date"
-                        {...register("fechaVencimiento")}
-                      />
                     </div>
-                  </>
-                )}
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="tarjeta_debito" id="tarjeta-debito-inv" />
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="h-4 w-4 text-blue-800" />
+                        <Label htmlFor="tarjeta-debito-inv" className="cursor-pointer">Tarjeta de Débito</Label>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="tarjeta_credito" id="tarjeta-credito-inv" />
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="h-4 w-4 text-purple-600" />
+                        <Label htmlFor="tarjeta-credito-inv" className="cursor-pointer">Tarjeta de Crédito</Label>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="transferencia" id="transferencia-inv" />
+                      <div className="flex items-center space-x-2">
+                        <Package className="h-4 w-4 text-orange-600" />
+                        <Label htmlFor="transferencia-inv" className="cursor-pointer">Transferencia</Label>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="cheque" id="cheque-inv" />
+                      <div className="flex items-center space-x-2">
+                        <FileText className="h-4 w-4 text-gray-600" />
+                        <Label htmlFor="cheque-inv" className="cursor-pointer">Cheque</Label>
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <Separator />
+
+                {/* Estado del pago */}
+                <div className="space-y-4">
+                  <Label className="font-medium">Tipo de Pago *</Label>
+                  <RadioGroup 
+                    value={tipoPago} 
+                    onValueChange={(value) => setValue("tipoPago", value)}
+                    defaultValue="contado"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="contado" id="contado-inv" />
+                      <Label htmlFor="contado-inv" className="cursor-pointer">Pago de contado</Label>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="credito" id="credito-inv" />
+                      <Label htmlFor="credito-inv" className="cursor-pointer">Pago a crédito</Label>
+                    </div>
+                  </RadioGroup>
+
+                  <div>
+                    <Label htmlFor="montoPagado">Monto Pagado *</Label>
+                    <Input
+                      id="montoPagado"
+                      type="number"
+                      step="0.01"
+                      {...register("montoPagado", { required: true, valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  {tipoPago === "credito" && (
+                    <div className="space-y-4 ml-6 p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Se registrará como cuenta por pagar al proveedor
+                        </AlertDescription>
+                      </Alert>
+                      
+                      {montoPendiente > 0 && (
+                        <div className="p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+                          <p className="text-sm font-medium text-yellow-800">
+                            Monto Pendiente: {formatPrice(montoPendiente)}
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
+                        <Input
+                          id="fechaVencimiento"
+                          type="date"
+                          {...register("fechaVencimiento")}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
 
                 <div>
                   <Label htmlFor="ubicacion">Ubicación en Almacén</Label>
