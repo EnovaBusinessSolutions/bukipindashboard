@@ -81,6 +81,7 @@ const RegistroProductos = () => {
     await createProducto.mutateAsync({
       nombre: data.nombre,
       precio: data.precio,
+      cantidad: data.cantidad,
       descripcion: data.descripcion,
       subcuentaId: data.subcuentaId,
       imagen: selectedImage || undefined,
@@ -111,7 +112,16 @@ const RegistroProductos = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* Alerta informativa sobre agrupación de productos */}
+            <Alert className="mb-4">
+              <Package className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Control de Inventario Inteligente:</strong> Si el producto ya existe, se actualizará automáticamente 
+                la cantidad y se calculará el costo promedio ponderado para un mejor control financiero.
+              </AlertDescription>
+            </Alert>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Información del producto */}
               <div className="space-y-4">

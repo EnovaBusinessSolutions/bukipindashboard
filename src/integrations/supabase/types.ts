@@ -140,9 +140,62 @@ export type Database = {
           },
         ]
       }
+      movimientos_inventario: {
+        Row: {
+          cantidad: number
+          costo_total: number
+          costo_unitario: number
+          created_at: string
+          descripcion: string | null
+          fecha: string
+          id: string
+          producto_id: string
+          tipo_movimiento: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          cantidad: number
+          costo_total: number
+          costo_unitario: number
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          producto_id: string
+          tipo_movimiento: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          cantidad?: number
+          costo_total?: number
+          costo_unitario?: number
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          producto_id?: string
+          tipo_movimiento?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimientos_inventario_producto_id_fkey"
+            columns: ["producto_id"]
+            isOneToOne: false
+            referencedRelation: "productos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       productos: {
         Row: {
           activo: boolean | null
+          cantidad_comprada: number | null
+          cantidad_stock: number | null
+          costo_unitario: number | null
           created_at: string | null
           cuenta_codigo: string
           descripcion: string | null
@@ -153,9 +206,13 @@ export type Database = {
           subcuenta_id: string | null
           updated_at: string | null
           user_id: string | null
+          valor_total_inventario: number | null
         }
         Insert: {
           activo?: boolean | null
+          cantidad_comprada?: number | null
+          cantidad_stock?: number | null
+          costo_unitario?: number | null
           created_at?: string | null
           cuenta_codigo?: string
           descripcion?: string | null
@@ -166,9 +223,13 @@ export type Database = {
           subcuenta_id?: string | null
           updated_at?: string | null
           user_id?: string | null
+          valor_total_inventario?: number | null
         }
         Update: {
           activo?: boolean | null
+          cantidad_comprada?: number | null
+          cantidad_stock?: number | null
+          costo_unitario?: number | null
           created_at?: string | null
           cuenta_codigo?: string
           descripcion?: string | null
@@ -179,6 +240,7 @@ export type Database = {
           subcuenta_id?: string | null
           updated_at?: string | null
           user_id?: string | null
+          valor_total_inventario?: number | null
         }
         Relationships: [
           {
