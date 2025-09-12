@@ -1,9 +1,24 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link, useLocation } from "react-router-dom";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
 const Sidebar = () => {
   const location = useLocation();
+  const [openSections, setOpenSections] = useState({
+    contabilidad: false,
+    registros: false,
+    estadosFinancieros: false,
+  });
+
+  const toggleSection = (section: keyof typeof openSections) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
   
   const mainMenuItems = [
     { name: "Dashboard", path: "/", active: location.pathname === "/" },
@@ -58,74 +73,116 @@ const Sidebar = () => {
 
       <Separator className="mx-6 bg-sidebar-border" />
 
-      {/* Cuentas Contables Section */}
+      {/* Contabilidad Section */}
       <div className="px-3 py-4">
-        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
-          Contabilidad
-        </h2>
-        <nav className="space-y-1">
-          {accountItems.map((item) => (
-            <Link key={item.name} to={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
-                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
-                }`}
-              >
-                {item.name}
-              </Button>
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      <Separator className="mx-6 bg-sidebar-border" />
-
-      {/* Estados Financieros Section */}
-      <div className="px-3 py-4">
-        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
-          Estados Financieros
-        </h2>
-        <nav className="space-y-1">
-          {estadosFinancierosItems.map((item) => (
-            <Link key={item.name} to={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
-                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
-                }`}
-              >
-                {item.name}
-              </Button>
-            </Link>
-          ))}
-        </nav>
+        <Collapsible 
+          open={openSections.contabilidad} 
+          onOpenChange={() => toggleSection('contabilidad')}
+        >
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <span className="font-semibold text-sm">Contabilidad</span>
+              {openSections.contabilidad ? 
+                <ChevronDown className="h-4 w-4" /> : 
+                <ChevronRight className="h-4 w-4" />
+              }
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 mt-2">
+            {accountItems.map((item) => (
+              <Link key={item.name} to={item.path}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`w-full justify-start ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
+                    item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
+                  }`}
+                >
+                  {item.name}
+                </Button>
+              </Link>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       <Separator className="mx-6 bg-sidebar-border" />
 
       {/* Registros Section */}
+      <div className="px-3 py-4">
+        <Collapsible 
+          open={openSections.registros} 
+          onOpenChange={() => toggleSection('registros')}
+        >
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <span className="font-semibold text-sm">Registros</span>
+              {openSections.registros ? 
+                <ChevronDown className="h-4 w-4" /> : 
+                <ChevronRight className="h-4 w-4" />
+              }
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 mt-2">
+            {registrosItems.map((item) => (
+              <Link key={item.name} to={item.path}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`w-full justify-start ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
+                    item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
+                  }`}
+                >
+                  {item.name}
+                </Button>
+              </Link>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      <Separator className="mx-6 bg-sidebar-border" />
+
+      {/* Estados Financieros Section */}
       <div className="px-3 py-4 flex-1">
-        <h2 className="text-sidebar-foreground font-semibold text-sm mb-3 px-3">
-          Registros
-        </h2>
-        <nav className="space-y-1">
-          {registrosItems.map((item) => (
-            <Link key={item.name} to={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
-                  item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
-                }`}
-              >
-                {item.name}
-              </Button>
-            </Link>
-          ))}
-        </nav>
+        <Collapsible 
+          open={openSections.estadosFinancieros} 
+          onOpenChange={() => toggleSection('estadosFinancieros')}
+        >
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <span className="font-semibold text-sm">Estados Financieros</span>
+              {openSections.estadosFinancieros ? 
+                <ChevronDown className="h-4 w-4" /> : 
+                <ChevronRight className="h-4 w-4" />
+              }
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 mt-2">
+            {estadosFinancierosItems.map((item) => (
+              <Link key={item.name} to={item.path}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`w-full justify-start ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${
+                    item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''
+                  }`}
+                >
+                  {item.name}
+                </Button>
+              </Link>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* Bottom Section */}
