@@ -219,7 +219,7 @@ const RegistroProductos = () => {
 
                 {/* Estado del pago */}
                 <div className="space-y-4">
-                  <Label className="font-medium">Tipo de Pago *</Label>
+                  <Label className="font-medium">Estado del Pago *</Label>
                   <RadioGroup 
                     value={tipoPago} 
                     onValueChange={(value) => setValue("tipoPago", value)}
@@ -230,8 +230,12 @@ const RegistroProductos = () => {
                       <Label htmlFor="contado-inv" className="cursor-pointer">Pago de contado</Label>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="credito" id="credito-inv" />
-                      <Label htmlFor="credito-inv" className="cursor-pointer">Pago a crédito</Label>
+                      <RadioGroupItem value="parcial" id="parcial-inv" />
+                      <Label htmlFor="parcial-inv" className="cursor-pointer">Pago parcial</Label>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="pendiente" id="pendiente-inv" />
+                      <Label htmlFor="pendiente-inv" className="cursor-pointer">Quedó pendiente</Label>
                     </div>
                   </RadioGroup>
 
@@ -246,7 +250,7 @@ const RegistroProductos = () => {
                     />
                   </div>
 
-                  {tipoPago === "credito" && (
+                  {(tipoPago === "parcial" || tipoPago === "pendiente") && (
                     <div className="space-y-4 ml-6 p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
@@ -263,13 +267,23 @@ const RegistroProductos = () => {
                         </div>
                       )}
                       
-                      <div>
-                        <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
-                        <Input
-                          id="fechaVencimiento"
-                          type="date"
-                          {...register("fechaVencimiento")}
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="proveedor-nombre">Nombre del proveedor</Label>
+                          <Input 
+                            id="proveedor-nombre" 
+                            {...register("proveedor")}
+                            placeholder="Nombre del proveedor" 
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
+                          <Input
+                            id="fechaVencimiento"
+                            type="date"
+                            {...register("fechaVencimiento")}
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
