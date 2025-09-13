@@ -22,7 +22,8 @@ const CatalogoProductos = () => {
     categoria: "",
     proveedorPrincipal: "",
     esRecurrente: false,
-    subcuentaId: ""
+    subcuentaId: "",
+    cuentaContable: "" // Nueva propiedad para la cuenta contable seleccionada
   });
 
   // Mock data para subcuentas - en producción vendría de la base de datos
@@ -89,11 +90,21 @@ const CatalogoProductos = () => {
       return;
     }
 
-    // Validar subcuenta para productos recurrentes
-    if (newProduct.esRecurrente && !newProduct.subcuentaId) {
+    // Validar cuenta contable
+    if (!newProduct.cuentaContable) {
+      toast({
+        title: "⚠️ Cuenta contable requerida",
+        description: "Selecciona la cuenta contable que se verá afectada por este producto",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar subcuenta obligatoria cuando se selecciona cuenta contable
+    if (newProduct.cuentaContable && !newProduct.subcuentaId) {
       toast({
         title: "⚠️ Subcuenta requerida",
-        description: "Para productos recurrentes es obligatorio asignar una subcuenta para llevar un mejor control analítico",
+        description: "Es obligatorio crear/seleccionar una subcuenta asociada a la cuenta contable seleccionada",
         variant: "destructive"
       });
       return;
@@ -115,7 +126,8 @@ const CatalogoProductos = () => {
       categoria: "",
       proveedorPrincipal: "",
       esRecurrente: false,
-      subcuentaId: ""
+      subcuentaId: "",
+      cuentaContable: ""
     });
     setIsDialogOpen(false);
   };
@@ -241,23 +253,71 @@ const CatalogoProductos = () => {
                 </div>
               </div>
 
-              {/* Mostrar cuentas contables afectadas */}
+              {/* Mostrar selector de cuentas contables */}
               {newProduct.tipo && (
-                <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                  <h4 className="font-medium text-sm mb-2 text-blue-800 dark:text-blue-200">
-                    📊 Cuentas Contables que se verán afectadas:
-                  </h4>
-                  <div className="space-y-1">
-                    {getCuentasAfectadas(newProduct.tipo).map((cuenta) => (
-                      <div key={cuenta.codigo} className="flex justify-between text-xs">
-                        <span className="font-mono">{cuenta.codigo}</span>
-                        <span className="flex-1 mx-2">{cuenta.nombre}</span>
-                        <span className="text-muted-foreground">{cuenta.subgrupo}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    💡 Estas cuentas se actualizarán automáticamente cuando registres transacciones con este producto
+                <div className="space-y-2">
+                  <Label htmlFor="cuenta-contable">Cuenta Contable a Afectar *</Label>
+                  <Select value={newProduct.cuentaContable} onValueChange={(value) => setNewProduct({...newProduct, cuentaContable: value, subcuentaId: ""})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar cuenta contable" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getCuentasAfectadas(newProduct.tipo).map((cuenta) => (
+                        <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                          {cuenta.codigo} - {cuenta.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {newProduct.tipo && !newProduct.cuentaContable && (
+                    <p className="text-xs text-muted-foreground">
+                      📊 Selecciona la cuenta contable que se verá afectada por este {newProduct.tipo}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Selector de subcuenta obligatorio cuando se selecciona cuenta */}
+              {newProduct.cuentaContable && (
+                <div className="space-y-2 p-4 border rounded-lg bg-orange-50 dark:bg-orange-900/20">
+                  <Label htmlFor="subcuenta-obligatoria" className="flex items-center gap-2 text-orange-800 dark:text-orange-200">
+                    Subcuenta Asociada *
+                    <span className="text-xs">(Obligatorio)</span>
+                  </Label>
+                  <Select value={newProduct.subcuentaId} onValueChange={(value) => setNewProduct({...newProduct, subcuentaId: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar subcuenta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subcuentas
+                        .filter(sub => sub.cuenta_madre_codigo === newProduct.cuentaContable)
+                        .map((subcuenta) => (
+                          <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                            {subcuenta.nombre}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {subcuentas.filter(sub => sub.cuenta_madre_codigo === newProduct.cuentaContable).length === 0 && (
+                    <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                        ⚠️ No hay subcuentas disponibles para esta cuenta
+                      </p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                        Debes crear una subcuenta en el Plan de Cuentas antes de continuar
+                      </p>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-2 text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                      >
+                        Ir al Plan de Cuentas
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    💡 La subcuenta permite un mejor control y análisis contable de este producto
                   </p>
                 </div>
               )}
@@ -331,35 +391,10 @@ const CatalogoProductos = () => {
                     Producto recurrente
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Para productos que se compran frecuentemente es recomendable asignar una subcuenta para análisis detallado
+                    Para productos que se compran frecuentemente (opcional)
                   </p>
                 </div>
               </div>
-
-              {/* Selector de subcuenta */}
-              {newProduct.esRecurrente && (
-                <div className="space-y-2 p-4 border rounded-lg bg-primary/5">
-                  <Label htmlFor="subcuenta" className="flex items-center gap-2">
-                    Subcuenta *
-                    <span className="text-xs text-muted-foreground">(Obligatorio para productos recurrentes)</span>
-                  </Label>
-                  <Select value={newProduct.subcuentaId} onValueChange={(value) => setNewProduct({...newProduct, subcuentaId: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar subcuenta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subcuentas.map((subcuenta) => (
-                        <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                          {subcuenta.nombre} ({subcuenta.cuenta_madre_codigo})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    💡 Si no tienes la subcuenta que necesitas, ve al Plan de Cuentas para crearla
-                  </p>
-                </div>
-              )}
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
