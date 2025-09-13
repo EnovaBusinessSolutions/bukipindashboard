@@ -286,14 +286,6 @@ const Clientes = () => {
               Gestiona la información de todos tus clientes
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link to="/clientes/analiticas">
-              <Button variant="outline" className="gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Ver Analíticas
-              </Button>
-            </Link>
-          </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={openCreateDialog} className="gap-2">
@@ -444,6 +436,12 @@ const Clientes = () => {
             </div>
             
             <div className="flex gap-4">
+              <Link to="/clientes/analiticas">
+                <Button variant="outline" className="gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Ver Analíticas
+                </Button>
+              </Link>
               <Card className="p-3">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-primary">{clientes.length}</div>
