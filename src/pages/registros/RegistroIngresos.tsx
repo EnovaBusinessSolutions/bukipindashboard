@@ -1135,6 +1135,33 @@ const RegistroIngresos = () => {
                             maxLength={13}
                           />
                         </div>
+                        
+                        {/* Fecha de vencimiento para pagos parciales y crédito */}
+                        {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
+                              <span className="text-destructive text-sm">*</span>
+                              {hasFieldError('Fecha de Vencimiento') && (
+                                <div className="flex items-center text-destructive">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  <span className="text-xs">Requerido</span>
+                                </div>
+                              )}
+                            </div>
+                            <Input
+                              id="fecha-vencimiento"
+                              type="date"
+                              value={fechaVencimiento}
+                              onChange={(e) => setFechaVencimiento(e.target.value)}
+                              className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''}
+                              min={new Date().toISOString().split('T')[0]}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Fecha límite para el pago {paymentStatus === "parcial" ? "del monto pendiente" : "completo"}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
