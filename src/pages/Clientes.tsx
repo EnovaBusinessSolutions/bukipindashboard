@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { AlertCircle, Edit, Plus, Search, Trash2, Users } from "lucide-react";
+import { AlertCircle, Edit, Plus, Search, Trash2, Users, BarChart3 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Switch } from "@/components/ui/switch";
 
 interface Cliente {
@@ -284,6 +285,14 @@ const Clientes = () => {
             <p className="text-muted-foreground mt-2">
               Gestiona la información de todos tus clientes
             </p>
+          </div>
+          <div className="flex gap-2">
+            <Link to="/clientes/analiticas">
+              <Button variant="outline" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Ver Analíticas
+              </Button>
+            </Link>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
