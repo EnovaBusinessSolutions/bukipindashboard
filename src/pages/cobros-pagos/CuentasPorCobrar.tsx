@@ -232,6 +232,7 @@ const CuentasPorCobrar = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Cliente</TableHead>
+                          <TableHead>Contacto</TableHead>
                           <TableHead>Descripción</TableHead>
                           <TableHead>Monto Total</TableHead>
                           <TableHead>Monto Pagado</TableHead>
@@ -245,7 +246,10 @@ const CuentasPorCobrar = () => {
                         {filteredCuentas.map((cuenta) => (
                           <TableRow key={cuenta.id}>
                             <TableCell className="font-medium">
-                              {cuenta.cliente_nombre || "Sin nombre"}
+                              {cuenta.cliente_nombre || "Sin especificar"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {cuenta.cliente_contacto || "Sin contacto"}
                             </TableCell>
                             <TableCell>{cuenta.descripcion}</TableCell>
                             <TableCell>
