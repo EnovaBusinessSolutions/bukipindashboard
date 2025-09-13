@@ -292,8 +292,10 @@ export type Database = {
       }
       transacciones_ingresos: {
         Row: {
-          cliente_contacto: string | null
+          cliente_email: string | null
           cliente_nombre: string | null
+          cliente_rfc: string | null
+          cliente_telefono: string | null
           created_at: string
           cuenta_principal_codigo: string
           descripcion: string
@@ -312,8 +314,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          cliente_contacto?: string | null
+          cliente_email?: string | null
           cliente_nombre?: string | null
+          cliente_rfc?: string | null
+          cliente_telefono?: string | null
           created_at?: string
           cuenta_principal_codigo: string
           descripcion: string
@@ -332,8 +336,10 @@ export type Database = {
           user_id: string
         }
         Update: {
-          cliente_contacto?: string | null
+          cliente_email?: string | null
           cliente_nombre?: string | null
+          cliente_rfc?: string | null
+          cliente_telefono?: string | null
           created_at?: string
           cuenta_principal_codigo?: string
           descripcion?: string

@@ -82,7 +82,10 @@ const CuentasPorCobrar = () => {
   const filteredCuentas = cuentasPorCobrar?.filter(
     (cuenta) =>
       cuenta.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+      cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (cuenta as any).cliente_telefono?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (cuenta as any).cliente_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (cuenta as any).cliente_rfc?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
   const totalPorCobrar = filteredCuentas.reduce((sum, cuenta) => sum + (cuenta.monto_pendiente || 0), 0);
@@ -206,11 +209,11 @@ const CuentasPorCobrar = () => {
               <CardContent>
                 <div className="flex gap-4">
                   <div className="flex-1">
-                    <Input
-                      placeholder="Buscar por cliente o descripción..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                          <Input
+                            placeholder="Buscar por cliente, descripción, teléfono, email o RFC..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
                   </div>
                 </div>
               </CardContent>
@@ -232,7 +235,7 @@ const CuentasPorCobrar = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Cliente</TableHead>
-                          <TableHead>Contacto</TableHead>
+                          <TableHead>Información de Contacto</TableHead>
                           <TableHead>Descripción</TableHead>
                           <TableHead>Desglose de Montos</TableHead>
                           <TableHead>Estado de Pago</TableHead>
@@ -247,8 +250,27 @@ const CuentasPorCobrar = () => {
                             <TableCell className="font-medium">
                               {cuenta.cliente_nombre || "Sin especificar"}
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {cuenta.cliente_contacto || "Sin contacto"}
+                            <TableCell className="min-w-[200px]">
+                              <div className="space-y-1">
+                                {(cuenta as any).cliente_telefono && (
+                                  <div className="text-sm">
+                                    📞 {(cuenta as any).cliente_telefono}
+                                  </div>
+                                )}
+                                {(cuenta as any).cliente_email && (
+                                  <div className="text-sm">
+                                    📧 {(cuenta as any).cliente_email}
+                                  </div>
+                                )}
+                                {(cuenta as any).cliente_rfc && (
+                                  <div className="text-sm">
+                                    🆔 {(cuenta as any).cliente_rfc}
+                                  </div>
+                                )}
+                                {!(cuenta as any).cliente_telefono && !(cuenta as any).cliente_email && !(cuenta as any).cliente_rfc && (
+                                  <span className="text-muted-foreground text-sm">Sin información de contacto</span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>{cuenta.descripcion}</TableCell>
                             <TableCell className="min-w-[280px]">
