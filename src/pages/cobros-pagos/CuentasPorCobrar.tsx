@@ -296,11 +296,49 @@ const CuentasPorCobrar = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {cuenta.fecha_vencimiento
-                                ? format(new Date(cuenta.fecha_vencimiento), "dd/MM/yyyy", {
-                                    locale: es,
-                                  })
-                                : "Sin vencimiento"}
+                              {cuenta.fecha_vencimiento ? (
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium">
+                                    {format(new Date(cuenta.fecha_vencimiento), "dd/MM/yyyy", { locale: es })}
+                                  </div>
+                                  <div className="text-xs">
+                                    {(() => {
+                                      const today = new Date();
+                                      const dueDate = new Date(cuenta.fecha_vencimiento);
+                                      const diffTime = dueDate.getTime() - today.getTime();
+                                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                      
+                                      if (diffDays < 0) {
+                                        return (
+                                          <span className="text-destructive font-medium">
+                                            Vencida hace {Math.abs(diffDays)} día(s)
+                                          </span>
+                                        );
+                                      } else if (diffDays === 0) {
+                                        return (
+                                          <span className="text-warning font-medium">
+                                            Vence hoy
+                                          </span>
+                                        );
+                                      } else if (diffDays <= 7) {
+                                        return (
+                                          <span className="text-warning font-medium">
+                                            Vence en {diffDays} día(s)
+                                          </span>
+                                        );
+                                      } else {
+                                        return (
+                                          <span className="text-muted-foreground">
+                                            Vence en {diffDays} día(s)
+                                          </span>
+                                        );
+                                      }
+                                    })()}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">Sin fecha límite</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente || 0)}

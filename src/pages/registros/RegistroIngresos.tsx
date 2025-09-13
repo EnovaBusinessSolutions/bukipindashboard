@@ -40,6 +40,7 @@ const RegistroIngresos = () => {
   // Estados para información del cliente
   const [clienteNombre, setClienteNombre] = useState("");
   const [clienteContacto, setClienteContacto] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
   
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
@@ -231,6 +232,7 @@ const RegistroIngresos = () => {
           montoPagado: montoPagado,
           clienteNombre: clienteNombre.trim() || null,
           clienteContacto: clienteContacto.trim() || null,
+          fechaVencimiento: fechaVencimiento || null,
           // Datos adicionales para inventario
           ...(selectedIncomeType === 'inventariados' && selectedInventoryProduct && {
             productoId: selectedInventoryProduct.id,
@@ -271,6 +273,7 @@ const RegistroIngresos = () => {
       setPaymentStatus("");
       setClienteNombre("");
       setClienteContacto("");
+      setFechaVencimiento("");
       setSelectedProductId("");
       setProductUnitPrice("");
       setProductQuantity("1");
@@ -911,7 +914,7 @@ const RegistroIngresos = () => {
                         <Label className="font-medium">Información del Cliente (Opcional)</Label>
                         <span className="text-xs text-muted-foreground">Para control de cuentas por cobrar</span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
                           <Input
@@ -931,6 +934,18 @@ const RegistroIngresos = () => {
                             value={clienteContacto}
                             onChange={(e) => setClienteContacto(e.target.value)}
                           />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
+                          <Input
+                            id="fecha-vencimiento"
+                            type="date"
+                            value={fechaVencimiento}
+                            onChange={(e) => setFechaVencimiento(e.target.value)}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            Solo para ventas a crédito
+                          </span>
                         </div>
                       </div>
                     </div>
