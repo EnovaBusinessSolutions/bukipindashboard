@@ -385,22 +385,6 @@ const CatalogoProductos = () => {
                 />
               </div>
 
-              {/* Checkbox para producto recurrente */}
-              <div className="flex items-center space-x-2 p-4 border rounded-lg bg-muted/50">
-                <Checkbox
-                  id="recurrente"
-                  checked={newProduct.esRecurrente}
-                  onCheckedChange={(checked) => setNewProduct({...newProduct, esRecurrente: !!checked})}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label htmlFor="recurrente" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                    Producto recurrente
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Para productos que se compran frecuentemente (opcional)
-                  </p>
-                </div>
-              </div>
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
