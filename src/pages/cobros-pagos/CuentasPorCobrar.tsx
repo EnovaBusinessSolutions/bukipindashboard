@@ -234,9 +234,8 @@ const CuentasPorCobrar = () => {
                           <TableHead>Cliente</TableHead>
                           <TableHead>Contacto</TableHead>
                           <TableHead>Descripción</TableHead>
-                          <TableHead>Monto Total</TableHead>
-                          <TableHead>Monto Pagado</TableHead>
-                          <TableHead>Monto Pendiente</TableHead>
+                          <TableHead>Desglose de Montos</TableHead>
+                          <TableHead>Estado de Pago</TableHead>
                           <TableHead>Fecha Vencimiento</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead>Acciones</TableHead>
@@ -252,14 +251,49 @@ const CuentasPorCobrar = () => {
                               {cuenta.cliente_contacto || "Sin contacto"}
                             </TableCell>
                             <TableCell>{cuenta.descripcion}</TableCell>
-                            <TableCell>
-                              ${cuenta.monto_total.toLocaleString('es-CO')}
+                            <TableCell className="min-w-[280px]">
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Total original:</span>
+                                  <span className="font-medium">${cuenta.monto_total.toLocaleString('es-CO')}</span>
+                                </div>
+                                {cuenta.monto_descuento && cuenta.monto_descuento > 0 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Descuento:</span>
+                                    <span className="text-destructive">-${cuenta.monto_descuento.toLocaleString('es-CO')}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center border-t pt-1">
+                                  <span className="text-sm text-muted-foreground">Subtotal:</span>
+                                  <span className="font-medium">${cuenta.monto_neto.toLocaleString('es-CO')}</span>
+                                </div>
+                                {cuenta.monto_pagado > 0 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Pagado:</span>
+                                    <span className="text-success">+${cuenta.monto_pagado.toLocaleString('es-CO')}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center border-t pt-1">
+                                  <span className="text-sm font-medium">Pendiente:</span>
+                                  <span className="font-bold text-lg text-primary">
+                                    ${cuenta.monto_pendiente?.toLocaleString('es-CO') || 0}
+                                  </span>
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell>
-                              ${cuenta.monto_pagado.toLocaleString('es-CO')}
-                            </TableCell>
-                            <TableCell className="font-semibold">
-                              ${cuenta.monto_pendiente?.toLocaleString('es-CO') || 0}
+                              <div className="space-y-1">
+                                <Badge variant={cuenta.tipo_pago === 'contado' ? 'default' : cuenta.tipo_pago === 'parcial' ? 'secondary' : 'outline'}>
+                                  {cuenta.tipo_pago === 'contado' ? 'Contado' : 
+                                   cuenta.tipo_pago === 'parcial' ? 'Pago Parcial' : 
+                                   'A Crédito'}
+                                </Badge>
+                                {cuenta.metodo_pago && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {cuenta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Tarjeta/Banco'}
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               {cuenta.fecha_vencimiento
