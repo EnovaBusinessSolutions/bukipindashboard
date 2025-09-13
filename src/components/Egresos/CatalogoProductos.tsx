@@ -3,10 +3,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Package2, Edit, Trash2, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    nombre: "",
+    descripcion: "",
+    tipo: "", // "gasto" o "costo"
+    unidad: "",
+    categoria: "",
+    proveedorPrincipal: ""
+  });
 
   // Catálogos vacíos para comenzar desde cero
   const gastos: any[] = [];
@@ -26,6 +40,37 @@ const CatalogoProductos = () => {
     if (variacion > 20) return "text-destructive";
     if (variacion > 10) return "text-yellow-600";
     return "text-green-600";
+  };
+
+  const handleAddProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newProduct.nombre || !newProduct.tipo || !newProduct.unidad) {
+      toast({
+        title: "⚠️ Campos requeridos",
+        description: "Completa al menos el nombre, tipo y unidad",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    console.log("Nuevo producto agregado:", newProduct);
+    
+    toast({
+      title: "Producto agregado",
+      description: `${newProduct.tipo === "gasto" ? "Gasto" : "Costo"} "${newProduct.nombre}" agregado al catálogo`
+    });
+
+    // Reset form
+    setNewProduct({
+      nombre: "",
+      descripcion: "",
+      tipo: "",
+      unidad: "",
+      categoria: "",
+      proveedorPrincipal: ""
+    });
+    setIsDialogOpen(false);
   };
 
   const renderProductCard = (producto: any) => (
@@ -109,10 +154,115 @@ const CatalogoProductos = () => {
           </Button>
         </div>
         
-        <Button className="gap-2">
-          <Package2 className="h-4 w-4" />
-          Agregar Gasto/Costo
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Agregar Gasto/Costo
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Agregar Nuevo Gasto/Costo</DialogTitle>
+              <DialogDescription>
+                Agrega un nuevo item al catálogo de gastos o costos
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddProduct} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nombre">Nombre *</Label>
+                  <Input
+                    id="nombre"
+                    value={newProduct.nombre}
+                    onChange={(e) => setNewProduct({...newProduct, nombre: e.target.value})}
+                    placeholder="Nombre del producto/servicio"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tipo">Tipo *</Label>
+                  <Select value={newProduct.tipo} onValueChange={(value) => setNewProduct({...newProduct, tipo: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gasto">Gasto</SelectItem>
+                      <SelectItem value="costo">Costo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="descripcion">Descripción</Label>
+                <Textarea
+                  id="descripcion"
+                  value={newProduct.descripcion}
+                  onChange={(e) => setNewProduct({...newProduct, descripcion: e.target.value})}
+                  placeholder="Descripción del producto/servicio"
+                  rows={2}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="unidad">Unidad de Medida *</Label>
+                  <Select value={newProduct.unidad} onValueChange={(value) => setNewProduct({...newProduct, unidad: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar unidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                      <SelectItem value="litros">Litros (L)</SelectItem>
+                      <SelectItem value="metros">Metros (m)</SelectItem>
+                      <SelectItem value="piezas">Piezas (pz)</SelectItem>
+                      <SelectItem value="horas">Horas (hrs)</SelectItem>
+                      <SelectItem value="servicios">Servicios</SelectItem>
+                      <SelectItem value="otros">Otros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="categoria">Categoría</Label>
+                  <Select value={newProduct.categoria} onValueChange={(value) => setNewProduct({...newProduct, categoria: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="materias-primas">Materias Primas</SelectItem>
+                      <SelectItem value="servicios-publicos">Servicios Públicos</SelectItem>
+                      <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
+                      <SelectItem value="marketing">Marketing</SelectItem>
+                      <SelectItem value="administrativos">Administrativos</SelectItem>
+                      <SelectItem value="otros">Otros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="proveedor">Proveedor Principal</Label>
+                <Input
+                  id="proveedor"
+                  value={newProduct.proveedorPrincipal}
+                  onChange={(e) => setNewProduct({...newProduct, proveedorPrincipal: e.target.value})}
+                  placeholder="Nombre del proveedor"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Sección de Gastos */}
