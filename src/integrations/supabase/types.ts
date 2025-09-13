@@ -52,6 +52,54 @@ export type Database = {
           },
         ]
       }
+      clientes: {
+        Row: {
+          activo: boolean
+          ciudad: string | null
+          codigo_postal: string | null
+          created_at: string
+          direccion: string | null
+          email: string | null
+          estado: string | null
+          id: string
+          nombre: string
+          rfc: string | null
+          telefono: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activo?: boolean
+          ciudad?: string | null
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          nombre: string
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activo?: boolean
+          ciudad?: string | null
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          nombre?: string
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cuentas: {
         Row: {
           codigo: string
