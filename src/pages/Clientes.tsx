@@ -552,8 +552,8 @@ const Clientes = () => {
                                   }}
                                   className="text-green-600 hover:text-green-700"
                                 >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  Registrar
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Editar
                                 </Button>
                               )}
                             </div>
