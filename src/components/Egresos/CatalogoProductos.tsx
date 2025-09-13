@@ -32,6 +32,31 @@ const CatalogoProductos = () => {
     { id: "3", nombre: "Materia Prima Principal", cuenta_madre_codigo: "4001" }
   ];
 
+  // Cuentas contables que se verán afectadas según el tipo
+  const getCuentasAfectadas = (tipo: string) => {
+    if (tipo === "costo") {
+      return [
+        { codigo: "5001", nombre: "Compras", subgrupo: "Costo de Ventas" },
+        { codigo: "5002", nombre: "Gastos sobre Compras", subgrupo: "Costo de Ventas" },
+        { codigo: "5003", nombre: "Devoluciones sobre Compras", subgrupo: "Costo de Ventas" },
+        { codigo: "5004", nombre: "Descuentos sobre Compras", subgrupo: "Costo de Ventas" }
+      ];
+    } else if (tipo === "gasto") {
+      return [
+        { codigo: "5101", nombre: "Gastos de Venta", subgrupo: "Gastos de Operación" },
+        { codigo: "5102", nombre: "Sueldos y Salarios Ventas", subgrupo: "Gastos de Operación" },
+        { codigo: "5104", nombre: "Publicidad", subgrupo: "Gastos de Operación" },
+        { codigo: "5105", nombre: "Gastos de Administración", subgrupo: "Gastos de Operación" },
+        { codigo: "5106", nombre: "Sueldos y Salarios Administración", subgrupo: "Gastos de Operación" },
+        { codigo: "5107", nombre: "Renta de Oficinas", subgrupo: "Gastos de Operación" },
+        { codigo: "5108", nombre: "Servicios Públicos", subgrupo: "Gastos de Operación" },
+        { codigo: "5201", nombre: "Intereses Pagados", subgrupo: "Gastos Financieros" },
+        { codigo: "5202", nombre: "Comisiones Bancarias", subgrupo: "Gastos Financieros" }
+      ];
+    }
+    return [];
+  };
+
   // Catálogos vacíos para comenzar desde cero
   const gastos: any[] = [];
   const costos: any[] = [];
@@ -215,6 +240,27 @@ const CatalogoProductos = () => {
                   </Select>
                 </div>
               </div>
+
+              {/* Mostrar cuentas contables afectadas */}
+              {newProduct.tipo && (
+                <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                  <h4 className="font-medium text-sm mb-2 text-blue-800 dark:text-blue-200">
+                    📊 Cuentas Contables que se verán afectadas:
+                  </h4>
+                  <div className="space-y-1">
+                    {getCuentasAfectadas(newProduct.tipo).map((cuenta) => (
+                      <div key={cuenta.codigo} className="flex justify-between text-xs">
+                        <span className="font-mono">{cuenta.codigo}</span>
+                        <span className="flex-1 mx-2">{cuenta.nombre}</span>
+                        <span className="text-muted-foreground">{cuenta.subgrupo}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    💡 Estas cuentas se actualizarán automáticamente cuando registres transacciones con este producto
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="descripcion">Descripción</Label>
