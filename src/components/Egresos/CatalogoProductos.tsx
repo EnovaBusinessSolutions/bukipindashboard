@@ -10,10 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const navigate = useNavigate();
   const [newProduct, setNewProduct] = useState({
     nombre: "",
     descripcion: "",
@@ -311,6 +313,10 @@ const CatalogoProductos = () => {
                         variant="outline" 
                         size="sm" 
                         className="mt-2 text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                        onClick={() => {
+                          setIsDialogOpen(false);
+                          navigate('/plan-cuentas');
+                        }}
                       >
                         Ir al Plan de Cuentas
                       </Button>
