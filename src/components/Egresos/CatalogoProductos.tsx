@@ -7,7 +7,6 @@ import { Search, Filter, Package2, Edit, Trash2, Eye } from "lucide-react";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategory, setFilterCategory] = useState("all");
 
   // Datos de ejemplo de productos para gastos y costos
   const gastos = [
@@ -88,8 +87,6 @@ const CatalogoProductos = () => {
     }
   ];
 
-  const allProducts = [...gastos, ...costos];
-  
   const filteredGastos = gastos.filter(producto => 
     producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     producto.proveedorPrincipal.toLowerCase().includes(searchTerm.toLowerCase())
