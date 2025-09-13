@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -19,8 +20,17 @@ const CatalogoProductos = () => {
     tipo: "", // "gasto" o "costo"
     unidad: "",
     categoria: "",
-    proveedorPrincipal: ""
+    proveedorPrincipal: "",
+    esRecurrente: false,
+    subcuentaId: ""
   });
+
+  // Mock data para subcuentas - en producción vendría de la base de datos
+  const subcuentas = [
+    { id: "1", nombre: "Gastos de Oficina", cuenta_madre_codigo: "5001" },
+    { id: "2", nombre: "Servicios Públicos", cuenta_madre_codigo: "5002" },
+    { id: "3", nombre: "Materia Prima Principal", cuenta_madre_codigo: "4001" }
+  ];
 
   // Catálogos vacíos para comenzar desde cero
   const gastos: any[] = [];
@@ -54,6 +64,16 @@ const CatalogoProductos = () => {
       return;
     }
 
+    // Validar subcuenta para productos recurrentes
+    if (newProduct.esRecurrente && !newProduct.subcuentaId) {
+      toast({
+        title: "⚠️ Subcuenta requerida",
+        description: "Para productos recurrentes es obligatorio asignar una subcuenta para llevar un mejor control analítico",
+        variant: "destructive"
+      });
+      return;
+    }
+
     console.log("Nuevo producto agregado:", newProduct);
     
     toast({
@@ -68,7 +88,9 @@ const CatalogoProductos = () => {
       tipo: "",
       unidad: "",
       categoria: "",
-      proveedorPrincipal: ""
+      proveedorPrincipal: "",
+      esRecurrente: false,
+      subcuentaId: ""
     });
     setIsDialogOpen(false);
   };
@@ -250,6 +272,48 @@ const CatalogoProductos = () => {
                   placeholder="Nombre del proveedor"
                 />
               </div>
+
+              {/* Checkbox para producto recurrente */}
+              <div className="flex items-center space-x-2 p-4 border rounded-lg bg-muted/50">
+                <Checkbox
+                  id="recurrente"
+                  checked={newProduct.esRecurrente}
+                  onCheckedChange={(checked) => setNewProduct({...newProduct, esRecurrente: !!checked})}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label htmlFor="recurrente" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Producto recurrente
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Para productos que se compran frecuentemente es recomendable asignar una subcuenta para análisis detallado
+                  </p>
+                </div>
+              </div>
+
+              {/* Selector de subcuenta */}
+              {newProduct.esRecurrente && (
+                <div className="space-y-2 p-4 border rounded-lg bg-primary/5">
+                  <Label htmlFor="subcuenta" className="flex items-center gap-2">
+                    Subcuenta *
+                    <span className="text-xs text-muted-foreground">(Obligatorio para productos recurrentes)</span>
+                  </Label>
+                  <Select value={newProduct.subcuentaId} onValueChange={(value) => setNewProduct({...newProduct, subcuentaId: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar subcuenta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subcuentas.map((subcuenta) => (
+                        <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                          {subcuenta.nombre} ({subcuenta.cuenta_madre_codigo})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    💡 Si no tienes la subcuenta que necesitas, ve al Plan de Cuentas para crearla
+                  </p>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
