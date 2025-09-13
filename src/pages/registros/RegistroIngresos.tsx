@@ -43,6 +43,7 @@ const RegistroIngresos = () => {
   const [clienteEmail, setClienteEmail] = useState("");
   const [clienteRFC, setClienteRFC] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
+  const [montoAbonado, setMontoAbonado] = useState("");
   
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
@@ -166,6 +167,14 @@ const RegistroIngresos = () => {
       if (!clienteTelefono.trim()) errors.push('Teléfono del Cliente');
       if (!clienteEmail.trim()) errors.push('Email del Cliente');
       if (!fechaVencimiento) errors.push('Fecha de Vencimiento');
+      
+      // Validación específica para pago parcial
+      if (paymentStatus === 'parcial') {
+        if (!montoAbonado || parseFloat(montoAbonado) <= 0) errors.push('Monto Abonado');
+        if (montoTotal && montoAbonado && parseFloat(montoAbonado) >= parseFloat(montoTotal)) {
+          errors.push('Monto Abonado debe ser menor al total');
+        }
+      }
     }
     
     // Solo requerir método de pago cuando hay pago efectivo (contado o parcial)
@@ -217,7 +226,21 @@ const RegistroIngresos = () => {
 
       const descuento = hasDiscount ? Number(discountAmount || '0') : 0;
       const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
-      const montoPagado = paymentStatus === 'contado' ? neto : 0;
+      
+      // Calcular monto pagado y pendiente según el tipo de pago
+      let montoPagado = 0;
+      let montoPendiente = 0;
+      
+      if (paymentStatus === 'contado') {
+        montoPagado = neto;
+        montoPendiente = 0;
+      } else if (paymentStatus === 'parcial') {
+        montoPagado = Number(montoAbonado || '0');
+        montoPendiente = Math.max(0, neto - montoPagado);
+      } else if (paymentStatus === 'credito') {
+        montoPagado = 0;
+        montoPendiente = neto;
+      }
 
       if (!descripcionToSend || montoTotalDerived <= 0) {
         toast({
@@ -240,6 +263,7 @@ const RegistroIngresos = () => {
           metodoPago: paymentMethod,
           tipoPago: paymentStatus,
           montoPagado: montoPagado,
+          montoPendiente: montoPendiente,
           clienteNombre: clienteNombre.trim() || null,
           clienteTelefono: clienteTelefono.trim() || null,
           clienteEmail: clienteEmail.trim() || null,
@@ -288,6 +312,7 @@ const RegistroIngresos = () => {
       setClienteEmail("");
       setClienteRFC("");
       setFechaVencimiento("");
+      setMontoAbonado("");
       setSelectedProductId("");
       setProductUnitPrice("");
       setProductQuantity("1");
@@ -949,7 +974,53 @@ const RegistroIngresos = () => {
                           <RadioGroupItem value="credito" id="credito" />
                           <Label htmlFor="credito" className="cursor-pointer">Quedó a deber</Label>
                         </div>
-                      </RadioGroup>
+                       </RadioGroup>
+
+                      {/* Campo para monto abonado en pago parcial */}
+                      {paymentStatus === "parcial" && (
+                        <div className="ml-6 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20 space-y-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Label htmlFor="monto-abonado">Monto que se va a pagar</Label>
+                              <span className="text-destructive text-sm">*</span>
+                              {hasFieldError('Monto Abonado') && (
+                                <div className="flex items-center text-destructive">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  <span className="text-xs">Requerido</span>
+                                </div>
+                              )}
+                            </div>
+                            <Input 
+                              id="monto-abonado" 
+                              type="number" 
+                              step="0.01"
+                              placeholder="0.00" 
+                              value={montoAbonado}
+                              onChange={(e) => setMontoAbonado(e.target.value)}
+                              className={hasFieldError('Monto Abonado') ? 'border-destructive' : ''}
+                            />
+                          </div>
+                          
+                          {montoTotal && montoAbonado && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 bg-white dark:bg-gray-900 rounded border">
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Total de la venta</p>
+                                <p className="text-lg font-semibold text-primary">${parseFloat(montoTotal).toFixed(2)}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Se pagará ahora</p>
+                                <p className="text-lg font-semibold text-green-600">${parseFloat(montoAbonado).toFixed(2)}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Queda pendiente</p>
+                                <p className="text-lg font-semibold text-orange-600">
+                                  ${(parseFloat(montoTotal) - parseFloat(montoAbonado)).toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                     </div>
 

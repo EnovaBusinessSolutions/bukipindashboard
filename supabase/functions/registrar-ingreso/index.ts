@@ -16,6 +16,7 @@ interface RegistroIngresoRequest {
   metodoPago: 'efectivo' | 'bancos'
   tipoPago: 'contado' | 'parcial' | 'credito'
   montoPagado: number
+  montoPendiente?: number
   clienteNombre?: string
   clienteTelefono?: string
   clienteEmail?: string
