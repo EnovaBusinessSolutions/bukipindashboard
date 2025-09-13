@@ -16,7 +16,7 @@ import RegistroEgresos from "./pages/registros/RegistroEgresos";
 import RegistroAsientos from "./pages/registros/RegistroAsientos";
 import CuentasPorCobrar from "./pages/cobros-pagos/CuentasPorCobrar";
 import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
-import Clientes from "./pages/clientes/Clientes";
+import Clientes from "./pages/Clientes";
 
 const queryClient = new QueryClient();
 
