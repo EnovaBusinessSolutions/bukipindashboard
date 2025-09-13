@@ -8,84 +8,9 @@ import { Search, Filter, Package2, Edit, Trash2, Eye } from "lucide-react";
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Datos de ejemplo de productos para gastos y costos
-  const gastos = [
-    {
-      id: 1,
-      nombre: "Servicios de Mantenimiento",
-      descripcion: "Mantenimiento de equipos y maquinaria",
-      imagen: "/placeholder.svg",
-      proveedorPrincipal: "Proveedor C",
-      precioPromedio: 2800.00,
-      ultimaCompra: "2024-01-08",
-      totalTransacciones: 12,
-      variacionPrecio: 15.5, // porcentaje de variación
-      unidad: "servicio"
-    },
-    {
-      id: 2,
-      nombre: "Servicios Profesionales",
-      descripcion: "Consultoría y asesoría especializada",
-      imagen: "/placeholder.svg",
-      proveedorPrincipal: "Consultor A",
-      precioPromedio: 4200.00,
-      ultimaCompra: "2024-01-14",
-      totalTransacciones: 8,
-      variacionPrecio: 8.2,
-      unidad: "hora"
-    },
-    {
-      id: 3,
-      nombre: "Servicios Públicos",
-      descripcion: "Electricidad, agua, internet",
-      imagen: "/placeholder.svg",
-      proveedorPrincipal: "CFE",
-      precioPromedio: 1850.00,
-      ultimaCompra: "2024-01-12",
-      totalTransacciones: 24,
-      variacionPrecio: 12.1,
-      unidad: "mes"
-    }
-  ];
-
-  const costos = [
-    {
-      id: 4,
-      nombre: "Materiales de Construcción",
-      descripcion: "Cemento, varillas, ladrillos",
-      imagen: "/placeholder.svg",
-      proveedorPrincipal: "Proveedor A",
-      precioPromedio: 1250.00,
-      ultimaCompra: "2024-01-15",
-      totalTransacciones: 18,
-      variacionPrecio: 22.3,
-      unidad: "kg"
-    },
-    {
-      id: 5,
-      nombre: "Insumos Químicos",
-      descripcion: "Productos químicos para procesos",
-      imagen: "/placeholder.svg",
-      proveedorPrincipal: "Proveedor D",
-      precioPromedio: 980.00,
-      ultimaCompra: "2024-01-12",
-      totalTransacciones: 15,
-      variacionPrecio: 18.7,
-      unidad: "lt"
-    },
-    {
-      id: 6,
-      nombre: "Materia Prima",
-      descripcion: "Materiales base para producción",
-      imagen: "/placeholder.svg",
-      proveedorPrincipal: "Proveedor E",
-      precioPromedio: 3200.00,
-      ultimaCompra: "2024-01-10",
-      totalTransacciones: 22,
-      variacionPrecio: 9.8,
-      unidad: "ton"
-    }
-  ];
+  // Catálogos vacíos para comenzar desde cero
+  const gastos: any[] = [];
+  const costos: any[] = [];
 
   const filteredGastos = gastos.filter(producto => 
     producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
