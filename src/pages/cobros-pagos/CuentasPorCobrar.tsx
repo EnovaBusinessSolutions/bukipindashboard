@@ -4,8 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -60,6 +64,10 @@ const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.dest
 const CuentasPorCobrar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("lista");
+  const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
+  const [selectedCuenta, setSelectedCuenta] = useState<any>(null);
+  const [montoPago, setMontoPago] = useState("");
+  const [metodoPago, setMetodoPago] = useState("");
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -75,9 +83,44 @@ const CuentasPorCobrar = () => {
     },
   });
 
+  const queryClient = useQueryClient();
+
   // Hooks para analíticas
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar();
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
+
+  // Mutación para registrar pago
+  const registrarPagoMutation = useMutation({
+    mutationFn: async ({ cuentaId, monto, metodo }: { cuentaId: string; monto: number; metodo: string }) => {
+      const cuenta = cuentasPorCobrar?.find(c => c.id === cuentaId);
+      if (!cuenta) throw new Error("Cuenta no encontrada");
+
+      const nuevoMontoPendiente = (cuenta.monto_pendiente || 0) - monto;
+      const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
+
+      const { error } = await supabase
+        .from('transacciones_ingresos')
+        .update({
+          monto_pendiente: Math.max(0, nuevoMontoPendiente),
+          monto_pagado: nuevoMontoPagado,
+          tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
+        })
+        .eq('id', cuentaId);
+
+      if (error) throw error;
+      
+      return { cuentaId, monto, metodo };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar"] });
+      toast.success("Pago registrado exitosamente");
+      setPagoDialogOpen(false);
+      resetPagoForm();
+    },
+    onError: (error: any) => {
+      toast.error("Error al registrar el pago: " + error.message);
+    }
+  });
 
   const filteredCuentas = cuentasPorCobrar?.filter(
     (cuenta) =>
@@ -95,6 +138,43 @@ const CuentasPorCobrar = () => {
   const porVencer = filteredCuentas.filter(cuenta => 
     cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) >= new Date()
   ).length;
+
+  const openPagoDialog = (cuenta: any) => {
+    setSelectedCuenta(cuenta);
+    setMontoPago("");
+    setMetodoPago("");
+    setPagoDialogOpen(true);
+  };
+
+  const resetPagoForm = () => {
+    setSelectedCuenta(null);
+    setMontoPago("");
+    setMetodoPago("");
+  };
+
+  const handleRegistrarPago = () => {
+    if (!selectedCuenta || !montoPago || !metodoPago) {
+      toast.error("Por favor completa todos los campos");
+      return;
+    }
+
+    const monto = parseFloat(montoPago);
+    if (isNaN(monto) || monto <= 0) {
+      toast.error("El monto debe ser un número válido mayor a 0");
+      return;
+    }
+
+    if (monto > (selectedCuenta.monto_pendiente || 0)) {
+      toast.error("El monto no puede ser mayor al monto pendiente");
+      return;
+    }
+
+    registrarPagoMutation.mutate({
+      cuentaId: selectedCuenta.id,
+      monto: monto,
+      metodo: metodoPago
+    });
+  };
 
   const getEstadoBadge = (fechaVencimiento: string | null, montoPendiente: number) => {
     if (montoPendiente === 0) {
@@ -366,7 +446,12 @@ const CuentasPorCobrar = () => {
                               {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente || 0)}
                             </TableCell>
                             <TableCell>
-                              <Button size="sm" variant="outline">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => openPagoDialog(cuenta)}
+                                disabled={cuenta.monto_pendiente <= 0}
+                              >
                                 Registrar Pago
                               </Button>
                             </TableCell>
@@ -665,6 +750,92 @@ const CuentasPorCobrar = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Diálogo de Registro de Pago */}
+      <Dialog open={pagoDialogOpen} onOpenChange={setPagoDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registrar Pago</DialogTitle>
+            <DialogDescription>
+              {selectedCuenta && (
+                <>
+                  Cliente: {selectedCuenta.cliente_nombre}<br/>
+                  Monto pendiente: ${(selectedCuenta.monto_pendiente || 0).toLocaleString()}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="metodo-pago">Método de Pago</Label>
+              <Select value={metodoPago} onValueChange={setMetodoPago}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona el método de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="bancos">Bancos (Transferencia/Depósito)</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="tarjeta">Tarjeta de Crédito/Débito</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="monto-pago">Monto del Pago</Label>
+              <Input
+                id="monto-pago"
+                type="number"
+                placeholder="0.00"
+                value={montoPago}
+                onChange={(e) => setMontoPago(e.target.value)}
+                min="0"
+                max={selectedCuenta?.monto_pendiente || 0}
+                step="0.01"
+              />
+              <div className="text-xs text-muted-foreground">
+                Máximo: ${(selectedCuenta?.monto_pendiente || 0).toLocaleString()}
+              </div>
+            </div>
+
+            {montoPago && selectedCuenta && (
+              <div className="bg-muted p-3 rounded-lg space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>Monto actual pendiente:</span>
+                  <span className="font-medium">${(selectedCuenta.monto_pendiente || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Monto a pagar:</span>
+                  <span className="font-medium text-primary">${parseFloat(montoPago || "0").toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm font-semibold pt-1 border-t">
+                  <span>Quedará pendiente:</span>
+                  <span>${Math.max(0, (selectedCuenta.monto_pendiente || 0) - parseFloat(montoPago || "0")).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-4">
+              <Button 
+                onClick={handleRegistrarPago}
+                disabled={registrarPagoMutation.isPending || !montoPago || !metodoPago}
+                className="flex-1"
+              >
+                {registrarPagoMutation.isPending ? "Procesando..." : "Registrar Pago"}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setPagoDialogOpen(false)}
+                disabled={registrarPagoMutation.isPending}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
