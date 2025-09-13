@@ -1003,20 +1003,45 @@ const RegistroIngresos = () => {
                           
                           {montoTotal && montoAbonado && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 bg-white dark:bg-gray-900 rounded border">
-                              <div className="text-center">
-                                <p className="text-sm text-muted-foreground">Total de la venta</p>
-                                <p className="text-lg font-semibold text-primary">${parseFloat(montoTotal).toFixed(2)}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-sm text-muted-foreground">Se pagará ahora</p>
-                                <p className="text-lg font-semibold text-green-600">${parseFloat(montoAbonado).toFixed(2)}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-sm text-muted-foreground">Queda pendiente</p>
-                                <p className="text-lg font-semibold text-orange-600">
-                                  ${(parseFloat(montoTotal) - parseFloat(montoAbonado)).toFixed(2)}
-                                </p>
-                              </div>
+                              {hasDiscount && discountAmount ? (
+                                <>
+                                  <div className="text-center">
+                                    <p className="text-sm text-muted-foreground">Total original</p>
+                                    <p className="text-sm line-through text-muted-foreground">${parseFloat(montoTotal).toFixed(2)}</p>
+                                    <p className="text-sm text-muted-foreground">Descuento: -${parseFloat(discountAmount).toFixed(2)}</p>
+                                    <p className="text-lg font-semibold text-primary">
+                                      ${(parseFloat(montoTotal) - parseFloat(discountAmount)).toFixed(2)}
+                                    </p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-sm text-muted-foreground">Se pagará ahora</p>
+                                    <p className="text-lg font-semibold text-green-600">${parseFloat(montoAbonado).toFixed(2)}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-sm text-muted-foreground">Queda pendiente</p>
+                                    <p className="text-lg font-semibold text-orange-600">
+                                      ${((parseFloat(montoTotal) - parseFloat(discountAmount)) - parseFloat(montoAbonado)).toFixed(2)}
+                                    </p>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-center">
+                                    <p className="text-sm text-muted-foreground">Total de la venta</p>
+                                    <p className="text-lg font-semibold text-primary">${parseFloat(montoTotal).toFixed(2)}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-sm text-muted-foreground">Se pagará ahora</p>
+                                    <p className="text-lg font-semibold text-green-600">${parseFloat(montoAbonado).toFixed(2)}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-sm text-muted-foreground">Queda pendiente</p>
+                                    <p className="text-lg font-semibold text-orange-600">
+                                      ${(parseFloat(montoTotal) - parseFloat(montoAbonado)).toFixed(2)}
+                                    </p>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
