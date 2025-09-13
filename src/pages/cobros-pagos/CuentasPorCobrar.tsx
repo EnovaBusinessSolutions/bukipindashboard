@@ -775,9 +775,7 @@ const CuentasPorCobrar = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="efectivo">Efectivo</SelectItem>
-                  <SelectItem value="bancos">Bancos (Transferencia/Depósito)</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                  <SelectItem value="tarjeta">Tarjeta de Crédito/Débito</SelectItem>
+                  <SelectItem value="bancos">Transferencia/Tarjeta</SelectItem>
                 </SelectContent>
               </Select>
             </div>
