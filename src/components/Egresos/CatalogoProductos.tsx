@@ -9,65 +9,164 @@ const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
 
-  // Datos de ejemplo de productos para compras/gastos
-  const productos = [
+  // Datos de ejemplo de productos para gastos y costos
+  const gastos = [
     {
       id: 1,
-      nombre: "Materiales de Construcción",
-      categoria: "materiales",
-      proveedor: "Proveedor A",
-      ultimoPrecio: 1250.00,
-      ultimaCompra: "2024-01-15",
-      stock: 45,
-      unidad: "kg"
-    },
-    {
-      id: 2,
-      nombre: "Equipo de Oficina",
-      categoria: "equipos",
-      proveedor: "Proveedor B",
-      ultimoPrecio: 3500.00,
-      ultimaCompra: "2024-01-10",
-      stock: 8,
-      unidad: "pza"
-    },
-    {
-      id: 3,
       nombre: "Servicios de Mantenimiento",
-      categoria: "servicios",
-      proveedor: "Proveedor C",
-      ultimoPrecio: 2800.00,
+      descripcion: "Mantenimiento de equipos y maquinaria",
+      imagen: "/placeholder.svg",
+      proveedorPrincipal: "Proveedor C",
+      precioPromedio: 2800.00,
       ultimaCompra: "2024-01-08",
-      stock: 0,
+      totalTransacciones: 12,
+      variacionPrecio: 15.5, // porcentaje de variación
       unidad: "servicio"
     },
     {
-      id: 4,
-      nombre: "Insumos Químicos",
-      categoria: "materiales",
-      proveedor: "Proveedor D",
-      ultimoPrecio: 980.00,
+      id: 2,
+      nombre: "Servicios Profesionales",
+      descripcion: "Consultoría y asesoría especializada",
+      imagen: "/placeholder.svg",
+      proveedorPrincipal: "Consultor A",
+      precioPromedio: 4200.00,
+      ultimaCompra: "2024-01-14",
+      totalTransacciones: 8,
+      variacionPrecio: 8.2,
+      unidad: "hora"
+    },
+    {
+      id: 3,
+      nombre: "Servicios Públicos",
+      descripcion: "Electricidad, agua, internet",
+      imagen: "/placeholder.svg",
+      proveedorPrincipal: "CFE",
+      precioPromedio: 1850.00,
       ultimaCompra: "2024-01-12",
-      stock: 120,
-      unidad: "lt"
+      totalTransacciones: 24,
+      variacionPrecio: 12.1,
+      unidad: "mes"
     }
   ];
 
-  const filteredProducts = productos.filter(producto => {
-    const matchesSearch = producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         producto.proveedor.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === "all" || producto.categoria === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const costos = [
+    {
+      id: 4,
+      nombre: "Materiales de Construcción",
+      descripcion: "Cemento, varillas, ladrillos",
+      imagen: "/placeholder.svg",
+      proveedorPrincipal: "Proveedor A",
+      precioPromedio: 1250.00,
+      ultimaCompra: "2024-01-15",
+      totalTransacciones: 18,
+      variacionPrecio: 22.3,
+      unidad: "kg"
+    },
+    {
+      id: 5,
+      nombre: "Insumos Químicos",
+      descripcion: "Productos químicos para procesos",
+      imagen: "/placeholder.svg",
+      proveedorPrincipal: "Proveedor D",
+      precioPromedio: 980.00,
+      ultimaCompra: "2024-01-12",
+      totalTransacciones: 15,
+      variacionPrecio: 18.7,
+      unidad: "lt"
+    },
+    {
+      id: 6,
+      nombre: "Materia Prima",
+      descripcion: "Materiales base para producción",
+      imagen: "/placeholder.svg",
+      proveedorPrincipal: "Proveedor E",
+      precioPromedio: 3200.00,
+      ultimaCompra: "2024-01-10",
+      totalTransacciones: 22,
+      variacionPrecio: 9.8,
+      unidad: "ton"
+    }
+  ];
 
-  const getCategoryColor = (categoria: string) => {
-    const colors = {
-      materiales: "bg-blue-100 text-blue-800",
-      equipos: "bg-green-100 text-green-800",
-      servicios: "bg-purple-100 text-purple-800"
-    };
-    return colors[categoria as keyof typeof colors] || "bg-gray-100 text-gray-800";
+  const allProducts = [...gastos, ...costos];
+  
+  const filteredGastos = gastos.filter(producto => 
+    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    producto.proveedorPrincipal.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  
+  const filteredCostos = costos.filter(producto => 
+    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    producto.proveedorPrincipal.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getVariationColor = (variacion: number) => {
+    if (variacion > 20) return "text-destructive";
+    if (variacion > 10) return "text-yellow-600";
+    return "text-green-600";
   };
+
+  const renderProductCard = (producto: any) => (
+    <Card key={producto.id} className="hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex gap-3 items-start">
+          <img 
+            src={producto.imagen} 
+            alt={producto.nombre}
+            className="w-16 h-16 object-cover rounded-md border"
+          />
+          <div className="flex-1">
+            <CardTitle className="text-lg">{producto.nombre}</CardTitle>
+            <CardDescription className="mt-1">
+              {producto.descripcion}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Proveedor principal:</span>
+          <span className="font-medium">{producto.proveedorPrincipal}</span>
+        </div>
+        
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Precio promedio:</span>
+          <span className="font-semibold">${producto.precioPromedio.toLocaleString()}/{producto.unidad}</span>
+        </div>
+        
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Variación de precio:</span>
+          <span className={`font-medium ${getVariationColor(producto.variacionPrecio)}`}>
+            ±{producto.variacionPrecio}%
+          </span>
+        </div>
+        
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Transacciones:</span>
+          <span>{producto.totalTransacciones}</span>
+        </div>
+        
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Última compra:</span>
+          <span>{new Date(producto.ultimaCompra).toLocaleDateString()}</span>
+        </div>
+        
+        <div className="flex gap-2 pt-2">
+          <Button size="sm" variant="outline" className="flex-1">
+            <Eye className="h-3 w-3 mr-1" />
+            Analíticas
+          </Button>
+          <Button size="sm" variant="outline" className="flex-1">
+            <Edit className="h-3 w-3 mr-1" />
+            Editar
+          </Button>
+          <Button size="sm" variant="outline" className="text-destructive">
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -77,7 +176,7 @@ const CatalogoProductos = () => {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar productos o proveedores..."
+              placeholder="Buscar gastos o costos..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8"
@@ -90,103 +189,55 @@ const CatalogoProductos = () => {
         
         <Button className="gap-2">
           <Package2 className="h-4 w-4" />
-          Agregar Producto
+          Agregar Gasto/Costo
         </Button>
       </div>
 
-      {/* Filtros de categoría */}
-      <div className="flex gap-2 flex-wrap">
-        <Badge 
-          variant={filterCategory === "all" ? "default" : "outline"}
-          className="cursor-pointer"
-          onClick={() => setFilterCategory("all")}
-        >
-          Todos
-        </Badge>
-        <Badge 
-          variant={filterCategory === "materiales" ? "default" : "outline"}
-          className="cursor-pointer"
-          onClick={() => setFilterCategory("materiales")}
-        >
-          Materiales
-        </Badge>
-        <Badge 
-          variant={filterCategory === "equipos" ? "default" : "outline"}
-          className="cursor-pointer"
-          onClick={() => setFilterCategory("equipos")}
-        >
-          Equipos
-        </Badge>
-        <Badge 
-          variant={filterCategory === "servicios" ? "default" : "outline"}
-          className="cursor-pointer"
-          onClick={() => setFilterCategory("servicios")}
-        >
-          Servicios
-        </Badge>
-      </div>
+      {/* Sección de Gastos */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold">Catálogo de Gastos</h2>
+          <Badge variant="secondary">{filteredGastos.length}</Badge>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredGastos.map(renderProductCard)}
+        </div>
 
-      {/* Lista de productos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredProducts.map((producto) => (
-          <Card key={producto.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-lg">{producto.nombre}</CardTitle>
-                <Badge className={getCategoryColor(producto.categoria)}>
-                  {producto.categoria}
-                </Badge>
-              </div>
-              <CardDescription>
-                Proveedor: {producto.proveedor}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Último precio:</span>
-                <span className="font-semibold">${producto.ultimoPrecio.toLocaleString()}</span>
-              </div>
-              
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Última compra:</span>
-                <span>{new Date(producto.ultimaCompra).toLocaleDateString()}</span>
-              </div>
-              
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Stock:</span>
-                <span className={producto.stock === 0 ? "text-destructive" : ""}>
-                  {producto.stock} {producto.unidad}
-                </span>
-              </div>
-              
-              <div className="flex gap-2 pt-2">
-                <Button size="sm" variant="outline" className="flex-1">
-                  <Eye className="h-3 w-3 mr-1" />
-                  Ver
-                </Button>
-                <Button size="sm" variant="outline" className="flex-1">
-                  <Edit className="h-3 w-3 mr-1" />
-                  Editar
-                </Button>
-                <Button size="sm" variant="outline" className="text-destructive">
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
+        {filteredGastos.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-8">
+              <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">
+                No se encontraron gastos que coincidan con la búsqueda
+              </p>
             </CardContent>
           </Card>
-        ))}
+        )}
       </div>
 
-      {filteredProducts.length === 0 && (
-        <Card>
-          <CardContent className="text-center py-8">
-            <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              No se encontraron productos que coincidan con los filtros
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Sección de Costos */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold">Catálogo de Costos</h2>
+          <Badge variant="secondary">{filteredCostos.length}</Badge>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCostos.map(renderProductCard)}
+        </div>
+
+        {filteredCostos.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-8">
+              <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">
+                No se encontraron costos que coincidan con la búsqueda
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };
