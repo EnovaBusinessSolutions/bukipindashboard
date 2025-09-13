@@ -920,73 +920,6 @@ const RegistroIngresos = () => {
                       )}
                     </div>
 
-                    <Separator />
-
-                    {/* Información del Cliente */}
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Label className="font-medium">Base de Datos de Clientes (Opcional)</Label>
-                        <span className="text-xs text-muted-foreground">Para control y seguimiento de clientes</span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
-                          <Input
-                            id="cliente-nombre"
-                            type="text"
-                            placeholder="Nombre completo"
-                            value={clienteNombre}
-                            onChange={(e) => setClienteNombre(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
-                          <Input
-                            id="cliente-telefono"
-                            type="tel"
-                            placeholder="Ej: +52 55 1234 5678"
-                            value={clienteTelefono}
-                            onChange={(e) => setClienteTelefono(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cliente-email">Correo Electrónico</Label>
-                          <Input
-                            id="cliente-email"
-                            type="email"
-                            placeholder="cliente@ejemplo.com"
-                            value={clienteEmail}
-                            onChange={(e) => setClienteEmail(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cliente-rfc">RFC (ID Fiscal)</Label>
-                          <Input
-                            id="cliente-rfc"
-                            type="text"
-                            placeholder="RFC123456ABC1"
-                            value={clienteRFC}
-                            onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
-                            maxLength={13}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento (Solo para crédito)</Label>
-                        <Input
-                          id="fecha-vencimiento"
-                          type="date"
-                          value={fechaVencimiento}
-                          onChange={(e) => setFechaVencimiento(e.target.value)}
-                          className="md:w-1/2"
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          Establece cuándo debe pagarse si es venta a crédito
-                        </span>
-                      </div>
-                    </div>
-
-                    <Separator />
 
                     {/* Estado del pago - PRIMERO */}
                     <div className="space-y-4">
@@ -1018,156 +951,98 @@ const RegistroIngresos = () => {
                         </div>
                       </RadioGroup>
 
+                    </div>
+
+                    <Separator />
+
+                    {/* Base de Datos de Clientes */}
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Label className="font-medium">Base de Datos de Clientes</Label>
+                        <span className="text-xs text-muted-foreground">
+                          {paymentStatus === "contado" ? "Opcional - Para control y seguimiento" : "Obligatorio para cuentas por cobrar"}
+                        </span>
+                      </div>
+                      
                       {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                        <div className="space-y-4 ml-6 p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-                          <Alert>
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertDescription>
-                              Se registrará en Cuentas por Cobrar para análisis de vencimientos
-                            </AlertDescription>
-                          </Alert>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="cliente-nombre">Nombre del cliente (opcional)</Label>
-                              <Input 
-                                id="cliente-nombre" 
-                                placeholder="Nombre completo" 
-                                value={clienteNombre}
-                                onChange={(e) => setClienteNombre(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <Label htmlFor="cliente-telefono">Número de teléfono</Label>
-                                <span className="text-destructive text-sm">*</span>
-                                {hasFieldError('Teléfono del Cliente') && (
-                                  <div className="flex items-center text-destructive">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    <span className="text-xs">Requerido</span>
-                                  </div>
-                                )}
-                              </div>
-                              <Input 
-                                id="cliente-telefono" 
-                                placeholder="Teléfono del cliente" 
-                                value={clienteTelefono}
-                                onChange={(e) => setClienteTelefono(e.target.value)}
-                                className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <Label htmlFor="cliente-email">Correo Electrónico</Label>
-                                <span className="text-destructive text-sm">*</span>
-                                {hasFieldError('Email del Cliente') && (
-                                  <div className="flex items-center text-destructive">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    <span className="text-xs">Requerido</span>
-                                  </div>
-                                )}
-                              </div>
-                              <Input 
-                                id="cliente-email" 
-                                type="email"
-                                placeholder="email@ejemplo.com" 
-                                value={clienteEmail}
-                                onChange={(e) => setClienteEmail(e.target.value)}
-                                className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
-                              <Input 
-                                id="cliente-rfc" 
-                                placeholder="RFC del cliente" 
-                                value={clienteRFC}
-                                onChange={(e) => setClienteRFC(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <Label htmlFor="fecha-vencimiento">Fecha de vencimiento</Label>
-                                <span className="text-destructive text-sm">*</span>
-                                {hasFieldError('Fecha de Vencimiento') && (
-                                  <div className="flex items-center text-destructive">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    <span className="text-xs">Requerido</span>
-                                  </div>
-                                )}
-                              </div>
-                              <Input 
-                                id="fecha-vencimiento" 
-                                type="date" 
-                                value={fechaVencimiento}
-                                onChange={(e) => setFechaVencimiento(e.target.value)}
-                                className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''}
-                              />
-                            </div>
-                            {paymentStatus === "parcial" && (
-                              <div className="space-y-2">
-                                <Label htmlFor="monto-abonado">Monto abonado</Label>
-                                <Input id="monto-abonado" type="number" placeholder="0.00" />
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            Se registrará en Cuentas por Cobrar para análisis de vencimientos
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
+                          <Input
+                            id="cliente-nombre"
+                            type="text"
+                            placeholder="Nombre completo"
+                            value={clienteNombre}
+                            onChange={(e) => setClienteNombre(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
+                            {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                              <span className="text-destructive text-sm">*</span>
+                            )}
+                            {hasFieldError('Teléfono del Cliente') && (
+                              <div className="flex items-center text-destructive">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                <span className="text-xs">Requerido</span>
                               </div>
                             )}
                           </div>
-                          
-                          <div className="text-sm text-muted-foreground mt-2">
-                            <strong>Nota:</strong> Para cuentas pendientes, el teléfono y email son obligatorios para llevar control de clientes.
-                          </div>
+                          <Input
+                            id="cliente-telefono"
+                            type="tel"
+                            placeholder="Ej: +52 55 1234 5678"
+                            value={clienteTelefono}
+                            onChange={(e) => setClienteTelefono(e.target.value)}
+                            className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
+                          />
                         </div>
-                      )}
-
-                      {/* Información opcional del cliente para ventas de contado */}
-                      {paymentStatus === "contado" && (
-                        <div className="space-y-4 ml-6 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                        <div className="space-y-2">
                           <div className="flex items-center space-x-2">
-                            <Label className="font-medium">Información del Cliente (Opcional)</Label>
-                            <span className="text-sm text-muted-foreground">- Para crear base de datos de clientes</span>
+                            <Label htmlFor="cliente-email">Correo Electrónico</Label>
+                            {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                              <span className="text-destructive text-sm">*</span>
+                            )}
+                            {hasFieldError('Email del Cliente') && (
+                              <div className="flex items-center text-destructive">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                <span className="text-xs">Requerido</span>
+                              </div>
+                            )}
                           </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="cliente-nombre-opcional">Nombre del cliente</Label>
-                              <Input 
-                                id="cliente-nombre-opcional" 
-                                placeholder="Nombre completo (opcional)" 
-                                value={clienteNombre}
-                                onChange={(e) => setClienteNombre(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="cliente-telefono-opcional">Número de teléfono</Label>
-                              <Input 
-                                id="cliente-telefono-opcional" 
-                                placeholder="Teléfono (opcional)" 
-                                value={clienteTelefono}
-                                onChange={(e) => setClienteTelefono(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="cliente-email-opcional">Correo Electrónico</Label>
-                              <Input 
-                                id="cliente-email-opcional" 
-                                type="email"
-                                placeholder="email@ejemplo.com (opcional)" 
-                                value={clienteEmail}
-                                onChange={(e) => setClienteEmail(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="cliente-rfc-opcional">RFC (ID Fiscal)</Label>
-                              <Input 
-                                id="cliente-rfc-opcional" 
-                                placeholder="RFC (opcional)" 
-                                value={clienteRFC}
-                                onChange={(e) => setClienteRFC(e.target.value)}
-                              />
-                            </div>
-                          </div>
+                          <Input
+                            id="cliente-email"
+                            type="email"
+                            placeholder="cliente@ejemplo.com"
+                            value={clienteEmail}
+                            onChange={(e) => setClienteEmail(e.target.value)}
+                            className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
+                          />
                         </div>
-                      )}
+                        <div className="space-y-2">
+                          <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
+                          <Input
+                            id="cliente-rfc"
+                            type="text"
+                            placeholder="RFC123456ABC1"
+                            value={clienteRFC}
+                            onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
+                            maxLength={13}
+                          />
+                        </div>
+                      </div>
                     </div>
+
+                    <Separator />
 
                     {/* Método de pago - SOLO si es contado o parcial */}
                     {(paymentStatus === "contado" || paymentStatus === "parcial") && (
