@@ -39,7 +39,9 @@ const RegistroIngresos = () => {
   
   // Estados para información del cliente
   const [clienteNombre, setClienteNombre] = useState("");
-  const [clienteContacto, setClienteContacto] = useState("");
+  const [clienteTelefono, setClienteTelefono] = useState("");
+  const [clienteEmail, setClienteEmail] = useState("");
+  const [clienteRFC, setClienteRFC] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   
   // Estados para productos de inventario
@@ -231,7 +233,9 @@ const RegistroIngresos = () => {
           tipoPago: paymentStatus,
           montoPagado: montoPagado,
           clienteNombre: clienteNombre.trim() || null,
-          clienteContacto: clienteContacto.trim() || null,
+          clienteTelefono: clienteTelefono.trim() || null,
+          clienteEmail: clienteEmail.trim() || null,
+          clienteRFC: clienteRFC.trim() || null,
           fechaVencimiento: fechaVencimiento || null,
           // Datos adicionales para inventario
           ...(selectedIncomeType === 'inventariados' && selectedInventoryProduct && {
@@ -272,7 +276,9 @@ const RegistroIngresos = () => {
       setPaymentMethod("");
       setPaymentStatus("");
       setClienteNombre("");
-      setClienteContacto("");
+      setClienteTelefono("");
+      setClienteEmail("");
+      setClienteRFC("");
       setFechaVencimiento("");
       setSelectedProductId("");
       setProductUnitPrice("");
@@ -911,42 +917,64 @@ const RegistroIngresos = () => {
                     {/* Información del Cliente */}
                     <div className="space-y-4">
                       <div className="flex items-center space-x-2">
-                        <Label className="font-medium">Información del Cliente (Opcional)</Label>
-                        <span className="text-xs text-muted-foreground">Para control de cuentas por cobrar</span>
+                        <Label className="font-medium">Base de Datos de Clientes (Opcional)</Label>
+                        <span className="text-xs text-muted-foreground">Para control y seguimiento de clientes</span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
                           <Input
                             id="cliente-nombre"
                             type="text"
-                            placeholder="Nombre completo del cliente"
+                            placeholder="Nombre completo"
                             value={clienteNombre}
                             onChange={(e) => setClienteNombre(e.target.value)}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="cliente-contacto">Información de Contacto</Label>
+                          <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
                           <Input
-                            id="cliente-contacto"
-                            type="text"
-                            placeholder="Teléfono, email u otro contacto"
-                            value={clienteContacto}
-                            onChange={(e) => setClienteContacto(e.target.value)}
+                            id="cliente-telefono"
+                            type="tel"
+                            placeholder="Ej: +52 55 1234 5678"
+                            value={clienteTelefono}
+                            onChange={(e) => setClienteTelefono(e.target.value)}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
+                          <Label htmlFor="cliente-email">Correo Electrónico</Label>
                           <Input
-                            id="fecha-vencimiento"
-                            type="date"
-                            value={fechaVencimiento}
-                            onChange={(e) => setFechaVencimiento(e.target.value)}
+                            id="cliente-email"
+                            type="email"
+                            placeholder="cliente@ejemplo.com"
+                            value={clienteEmail}
+                            onChange={(e) => setClienteEmail(e.target.value)}
                           />
-                          <span className="text-xs text-muted-foreground">
-                            Solo para ventas a crédito
-                          </span>
                         </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cliente-rfc">RFC (ID Fiscal)</Label>
+                          <Input
+                            id="cliente-rfc"
+                            type="text"
+                            placeholder="RFC123456ABC1"
+                            value={clienteRFC}
+                            onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
+                            maxLength={13}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento (Solo para crédito)</Label>
+                        <Input
+                          id="fecha-vencimiento"
+                          type="date"
+                          value={fechaVencimiento}
+                          onChange={(e) => setFechaVencimiento(e.target.value)}
+                          className="md:w-1/2"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          Establece cuándo debe pagarse si es venta a crédito
+                        </span>
                       </div>
                     </div>
 

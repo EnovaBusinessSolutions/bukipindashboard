@@ -17,7 +17,9 @@ interface RegistroIngresoRequest {
   tipoPago: 'contado' | 'parcial' | 'credito'
   montoPagado: number
   clienteNombre?: string
-  clienteContacto?: string
+  clienteTelefono?: string
+  clienteEmail?: string
+  clienteRFC?: string
   fechaVencimiento?: string
   // Nuevos campos para inventario
   productoId?: string
@@ -150,7 +152,9 @@ serve(async (req) => {
         monto_pagado: requestData.montoPagado,
         monto_pendiente: montoPendiente,
         cliente_nombre: requestData.clienteNombre || null,
-        cliente_contacto: requestData.clienteContacto || null,
+        cliente_telefono: requestData.clienteTelefono || null,
+        cliente_email: requestData.clienteEmail || null,
+        cliente_rfc: requestData.clienteRFC || null,
         fecha_vencimiento: requestData.fechaVencimiento || null
       })
       .select()
