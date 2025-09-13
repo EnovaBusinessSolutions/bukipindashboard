@@ -26,6 +26,7 @@ interface Cliente {
   activo: boolean;
   created_at: string;
   updated_at: string;
+  source?: 'dedicated' | 'transaction';
 }
 
 const Clientes = () => {
@@ -46,17 +47,66 @@ const Clientes = () => {
 
   const queryClient = useQueryClient();
 
-  // Fetch clients
+  // Fetch clients from transactions and dedicated clients table
   const { data: clientes = [], isLoading, error } = useQuery({
     queryKey: ['clientes'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Get clients from dedicated table
+      const { data: dedicatedClients, error: dedicatedError } = await supabase
         .from('clientes')
         .select('*')
         .order('nombre', { ascending: true });
+
+      if (dedicatedError) throw dedicatedError;
+
+      // Get clients from transactions
+      const { data: transactionClients, error: transactionError } = await supabase
+        .from('transacciones_ingresos')
+        .select(`
+          cliente_nombre,
+          cliente_email,
+          cliente_telefono,
+          cliente_rfc,
+          created_at
+        `)
+        .not('cliente_nombre', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (transactionError) throw transactionError;
+
+      // Convert transaction clients to client format and deduplicate
+      const transactionClientMap = new Map();
       
-      if (error) throw error;
-      return data as Cliente[];
+      transactionClients?.forEach((tc) => {
+        const key = `${tc.cliente_nombre}_${tc.cliente_email}_${tc.cliente_telefono}_${tc.cliente_rfc}`.toLowerCase();
+        if (!transactionClientMap.has(key)) {
+          transactionClientMap.set(key, {
+            id: `tx-${Math.random().toString(36).substr(2, 9)}`, // temporary ID
+            nombre: tc.cliente_nombre || '',
+            email: tc.cliente_email || '',
+            telefono: tc.cliente_telefono || '',
+            rfc: tc.cliente_rfc || '',
+            direccion: '',
+            ciudad: '',
+            estado: '',
+            codigo_postal: '',
+            activo: true,
+            created_at: tc.created_at,
+            updated_at: tc.created_at,
+            source: 'transaction'
+          });
+        }
+      });
+
+      const transactionClientsFormatted = Array.from(transactionClientMap.values());
+      
+      // Combine both sources, prioritizing dedicated clients
+      const allClients = [
+        ...(dedicatedClients || []).map(c => ({ ...c, source: 'dedicated' })),
+        ...transactionClientsFormatted
+      ];
+
+      return allClients.sort((a, b) => a.nombre.localeCompare(b.nombre));
     }
   });
 
@@ -394,9 +444,17 @@ const Clientes = () => {
               <Card className="p-3">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">
-                    {clientes.filter(c => c.activo).length}
+                    {clientes.filter(c => c.source === 'dedicated').length}
                   </div>
-                  <div className="text-xs text-muted-foreground">Activos</div>
+                  <div className="text-xs text-muted-foreground">En Base de Datos</div>
+                </div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {clientes.filter(c => c.source === 'transaction').length}
+                  </div>
+                  <div className="text-xs text-muted-foreground">De Ventas</div>
                 </div>
               </Card>
             </div>
@@ -407,7 +465,7 @@ const Clientes = () => {
             <CardHeader>
               <CardTitle>Lista de Clientes</CardTitle>
               <CardDescription>
-                Administra todos los clientes registrados en el sistema
+                Administra todos los clientes registrados. Los clientes de "Ventas" provienen de transacciones registradas y pueden ser convertidos a registros permanentes.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -424,7 +482,7 @@ const Clientes = () => {
                         <TableHead>Email</TableHead>
                         <TableHead>Teléfono</TableHead>
                         <TableHead>RFC</TableHead>
-                        <TableHead>Ciudad</TableHead>
+                        <TableHead>Origen</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Acciones</TableHead>
                       </TableRow>
@@ -443,7 +501,11 @@ const Clientes = () => {
                           <TableCell>{client.email || "-"}</TableCell>
                           <TableCell>{client.telefono || "-"}</TableCell>
                           <TableCell>{client.rfc || "-"}</TableCell>
-                          <TableCell>{client.ciudad || "-"}</TableCell>
+                          <TableCell>
+                            <Badge variant={client.source === 'dedicated' ? "default" : "outline"}>
+                              {client.source === 'dedicated' ? "Base de Datos" : "Ventas"}
+                            </Badge>
+                          </TableCell>
                           <TableCell>
                             <Badge variant={client.activo ? "default" : "secondary"}>
                               {client.activo ? "Activo" : "Inactivo"}
@@ -451,21 +513,49 @@ const Clientes = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditDialog(client)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDelete(client.id, client.nombre)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {client.source === 'dedicated' ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEditDialog(client)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDelete(client.id, client.nombre)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setFormData({
+                                      nombre: client.nombre,
+                                      email: client.email || "",
+                                      telefono: client.telefono || "",
+                                      rfc: client.rfc || "",
+                                      direccion: "",
+                                      ciudad: "",
+                                      estado: "",
+                                      codigo_postal: "",
+                                      activo: true
+                                    });
+                                    setEditingClient(null);
+                                    setIsDialogOpen(true);
+                                  }}
+                                  className="text-green-600 hover:text-green-700"
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Registrar
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
