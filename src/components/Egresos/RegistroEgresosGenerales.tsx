@@ -9,10 +9,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Wallet, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useCuentas } from "@/hooks/useCuentas";
+import { useSubcuentas } from "@/hooks/useSubcuentas";
 
 const RegistroEgresosGenerales = () => {
   const [concept, setConcept] = useState("");
-  const [category, setCategory] = useState("");
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState("");
+  const [subcuentaSeleccionada, setSubcuentaSeleccionada] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [paymentType, setPaymentType] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -24,10 +27,13 @@ const RegistroEgresosGenerales = () => {
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
 
+  const { data: cuentasData } = useCuentas();
+  const { data: subcuentasData } = useSubcuentas();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!concept || !category || !totalAmount || !paymentType) {
+    if (!concept || !cuentaSeleccionada || !totalAmount || !paymentType) {
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa todos los campos obligatorios",
@@ -38,7 +44,8 @@ const RegistroEgresosGenerales = () => {
 
     console.log("Egreso general registrado:", {
       concept,
-      category,
+      cuentaSeleccionada,
+      subcuentaSeleccionada,
       totalAmount,
       paymentType,
       paymentMethod,
@@ -87,25 +94,51 @@ const RegistroEgresosGenerales = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="categoria">Categoría *</Label>
-                <Select value={category} onValueChange={setCategory}>
+                <Label htmlFor="cuenta">Cuenta *</Label>
+                <Select value={cuentaSeleccionada} onValueChange={(value) => {
+                  setCuentaSeleccionada(value);
+                  setSubcuentaSeleccionada(""); // Reset subcuenta when cuenta changes
+                }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar categoría" />
+                    <SelectValue placeholder="Seleccionar cuenta" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="servicios-publicos">Servicios Públicos</SelectItem>
-                    <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
-                    <SelectItem value="seguros">Seguros</SelectItem>
-                    <SelectItem value="impuestos">Impuestos</SelectItem>
-                    <SelectItem value="licencias">Licencias y Permisos</SelectItem>
-                    <SelectItem value="capacitacion">Capacitación</SelectItem>
-                    <SelectItem value="marketing">Marketing y Publicidad</SelectItem>
-                    <SelectItem value="profesionales">Servicios Profesionales</SelectItem>
-                    <SelectItem value="materiales">Materiales y Suministros</SelectItem>
-                    <SelectItem value="otros">Otros</SelectItem>
+                    {cuentasData?.cuentasFlat?.map((cuenta) => (
+                      <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                        {cuenta.codigo} - {cuenta.nombre}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {cuentaSeleccionada && (
+                <div className="space-y-2">
+                  <Label htmlFor="subcuenta">Subcuenta *</Label>
+                  <Select value={subcuentaSeleccionada} onValueChange={setSubcuentaSeleccionada}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar subcuenta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subcuentasData?.filter(sub => sub.cuenta_madre_codigo === cuentaSeleccionada).length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          No hay subcuentas para esta cuenta.
+                          <br />
+                          <span className="text-primary cursor-pointer hover:underline">
+                            Ir al Plan de Cuentas para crear una
+                          </span>
+                        </div>
+                      ) : (
+                        subcuentasData?.filter(sub => sub.cuenta_madre_codigo === cuentaSeleccionada).map((subcuenta) => (
+                          <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                            {subcuenta.nombre}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="monto-total">Monto Total *</Label>
