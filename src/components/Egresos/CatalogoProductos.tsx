@@ -11,11 +11,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useSubcuentas } from "@/hooks/useSubcuentas";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const navigate = useNavigate();
+  const { data: subcuentasData } = useSubcuentas();
+  const subcuentas = subcuentasData || [];
+
   const [newProduct, setNewProduct] = useState({
     nombre: "",
     descripcion: "",
@@ -27,13 +31,6 @@ const CatalogoProductos = () => {
     subcuentaId: "",
     cuentaContable: "" // Nueva propiedad para la cuenta contable seleccionada
   });
-
-  // Mock data para subcuentas - en producción vendría de la base de datos
-  const subcuentas = [
-    { id: "1", nombre: "Gastos de Oficina", cuenta_madre_codigo: "5001" },
-    { id: "2", nombre: "Servicios Públicos", cuenta_madre_codigo: "5002" },
-    { id: "3", nombre: "Materia Prima Principal", cuenta_madre_codigo: "4001" }
-  ];
 
   // Cuentas contables que se verán afectadas según el tipo
   const getCuentasAfectadas = (tipo: string) => {
@@ -102,11 +99,11 @@ const CatalogoProductos = () => {
       return;
     }
 
-    // Validar subcuenta obligatoria cuando se selecciona cuenta contable
-    if (newProduct.cuentaContable && !newProduct.subcuentaId) {
+    // Validar subcuenta obligatoria - SIEMPRE requerida
+    if (!newProduct.subcuentaId) {
       toast({
         title: "⚠️ Subcuenta requerida",
-        description: "Es obligatorio crear/seleccionar una subcuenta asociada a la cuenta contable seleccionada",
+        description: "Es obligatorio seleccionar una subcuenta para registrar este producto",
         variant: "destructive"
       });
       return;
