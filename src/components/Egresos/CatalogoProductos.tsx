@@ -12,6 +12,7 @@ import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react"
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
+import { supabase } from "@/integrations/supabase/client";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,7 +27,8 @@ const CatalogoProductos = () => {
     proveedorPrincipal: "",
     esRecurrente: false,
     subcuentaId: "",
-    cuentaContable: "" // Nueva propiedad para la cuenta contable seleccionada
+    cuentaContable: "", // Nueva propiedad para la cuenta contable seleccionada
+    imagen: null as File | null
   });
 
   // Cuentas contables que se verán afectadas según el tipo
@@ -74,7 +76,7 @@ const CatalogoProductos = () => {
     return "text-green-600";
   };
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!newProduct.nombre || !newProduct.tipo || !newProduct.unidad) {
@@ -106,25 +108,68 @@ const CatalogoProductos = () => {
       return;
     }
 
-    console.log("Nuevo producto agregado:", newProduct);
-    
-    toast({
-      title: "Producto agregado",
-      description: `${newProduct.tipo === "gasto" ? "Gasto" : "Costo"} "${newProduct.nombre}" agregado al catálogo`
-    });
+    try {
+      let imagenUrl = null;
 
-    // Reset form
-    setNewProduct({
-      nombre: "",
-      descripcion: "",
-      tipo: "",
-      unidad: "",
-      proveedorPrincipal: "",
-      esRecurrente: false,
-      subcuentaId: "",
-      cuentaContable: ""
-    });
-    setIsDialogOpen(false);
+      // Subir imagen si se seleccionó una
+      if (newProduct.imagen) {
+        const fileExt = newProduct.imagen.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(fileName, newProduct.imagen);
+
+        if (uploadError) {
+          toast({
+            title: "⚠️ Error al subir imagen",
+            description: "No se pudo subir la imagen, pero el producto se guardará sin imagen",
+            variant: "destructive"
+          });
+          console.error("Error uploading image:", uploadError);
+        } else {
+          const { data: { publicUrl } } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(uploadData.path);
+          
+          imagenUrl = publicUrl;
+        }
+      }
+
+      const productData = {
+        ...newProduct,
+        imagenUrl
+      };
+
+      console.log("Nuevo producto agregado:", productData);
+      
+      toast({
+        title: "✅ Producto agregado",
+        description: `${newProduct.tipo === "gasto" ? "Gasto" : "Costo"} "${newProduct.nombre}" agregado al catálogo${imagenUrl ? " con imagen" : ""}`
+      });
+
+      // Reset form
+      setNewProduct({
+        nombre: "",
+        descripcion: "",
+        tipo: "",
+        unidad: "",
+        proveedorPrincipal: "",
+        esRecurrente: false,
+        subcuentaId: "",
+        cuentaContable: "",
+        imagen: null
+      });
+      setIsDialogOpen(false);
+      
+    } catch (error) {
+      console.error("Error creating product:", error);
+      toast({
+        title: "⚠️ Error",
+        description: "Hubo un problema al agregar el producto",
+        variant: "destructive"
+      });
+    }
   };
 
   const renderProductCard = (producto: any) => (
@@ -313,6 +358,23 @@ const CatalogoProductos = () => {
                   placeholder="Descripción del producto/servicio"
                   rows={2}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="imagen">Imagen (Opcional)</Label>
+                <Input
+                  id="imagen"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setNewProduct({...newProduct, imagen: file});
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground">
+                  📸 Sube una imagen para identificar fácilmente este {newProduct.tipo || "elemento"}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
