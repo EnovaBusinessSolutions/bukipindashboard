@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas, useCreateSubcuenta, useDeleteSubcuenta } from "@/hooks/useSubcuentas";
+import FriendlyAccountSelector from "@/components/ui/friendly-account-selector";
 
 const PlanCuentas = () => {
   // Hooks para datos
@@ -247,45 +248,11 @@ const PlanCuentas = () => {
                       onChange={(e) => setNombreSubcuenta(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cuenta-madre">Cuenta Madre</Label>
-                    <Select value={cuentaMadreSeleccionada} onValueChange={setCuentaMadreSeleccionada}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una cuenta madre" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-80">
-                        {Object.entries(estadosFinancieros).map(([estadoFinanciero, grupos]) => (
-                          <SelectGroup key={estadoFinanciero}>
-                            <SelectLabel className="font-semibold text-primary">
-                              {estadoFinanciero}
-                            </SelectLabel>
-                            {Object.entries(grupos).map(([grupo, subgrupos]) => (
-                              <SelectGroup key={grupo}>
-                                <SelectLabel className="pl-4 text-muted-foreground font-medium">
-                                  {grupo}
-                                </SelectLabel>
-                                {Object.entries(subgrupos).map(([subgrupo, cuentas]) => (
-                                  <div key={subgrupo}>
-                                    <SelectLabel className="pl-8 text-sm text-muted-foreground/80">
-                                      {subgrupo}
-                                    </SelectLabel>
-                                    {cuentas.map((cuenta) => (
-                                      <SelectItem key={cuenta.codigo} value={cuenta.codigo} className="pl-12">
-                                        <span className="font-mono text-xs text-primary mr-2">
-                                          {cuenta.codigo}
-                                        </span>
-                                        {cuenta.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </div>
-                                ))}
-                              </SelectGroup>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <FriendlyAccountSelector
+                    value={cuentaMadreSeleccionada}
+                    onValueChange={(codigo) => setCuentaMadreSeleccionada(codigo)}
+                    estadosFinancieros={estadosFinancieros}
+                  />
                 </div>
                 <Button 
                   onClick={agregarSubcuenta}
