@@ -56,10 +56,13 @@ export const useCreateProductoEgreso = () => {
   
   return useMutation({
     mutationFn: async (productData: CreateProductoEgresoData) => {
+      console.log("🔍 Starting product creation with data:", productData);
+      
       let imagenUrl = null;
 
       // Subir imagen si se seleccionó una
       if (productData.imagen) {
+        console.log("📸 Uploading image...");
         const fileExt = productData.imagen.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
         
@@ -68,7 +71,7 @@ export const useCreateProductoEgreso = () => {
           .upload(fileName, productData.imagen);
 
         if (uploadError) {
-          console.error("Error uploading image:", uploadError);
+          console.error("❌ Error uploading image:", uploadError);
           throw new Error("Error al subir la imagen");
         }
 
@@ -77,30 +80,41 @@ export const useCreateProductoEgreso = () => {
           .getPublicUrl(uploadData.path);
         
         imagenUrl = publicUrl;
+        console.log("✅ Image uploaded successfully:", imagenUrl);
       }
+
+      const insertData = {
+        nombre: productData.nombre,
+        descripcion: productData.descripcion,
+        tipo: productData.tipo,
+        unidad: productData.unidad,
+        proveedor_principal: productData.proveedor_principal,
+        es_recurrente: productData.es_recurrente || false,
+        subcuenta_id: productData.subcuenta_id,
+        cuenta_contable: productData.cuenta_contable,
+        imagen_url: imagenUrl,
+        user_id: null, // Set to null for prototype
+      };
+
+      console.log("💾 Inserting product data:", insertData);
 
       // Insertar producto en la base de datos
       const { data, error } = await supabase
         .from("productos_egresos")
-        .insert({
-          nombre: productData.nombre,
-          descripcion: productData.descripcion,
-          tipo: productData.tipo,
-          unidad: productData.unidad,
-          proveedor_principal: productData.proveedor_principal,
-          es_recurrente: productData.es_recurrente || false,
-          subcuenta_id: productData.subcuenta_id,
-          cuenta_contable: productData.cuenta_contable,
-          imagen_url: imagenUrl,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Database insertion error:", error);
+        throw error;
+      }
+      
+      console.log("✅ Product created successfully:", data);
       return data;
     },
     onSuccess: (data) => {
+      console.log("🎉 Mutation success, invalidating queries...");
       queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
       toast({
         title: "✅ Producto agregado",
@@ -108,7 +122,7 @@ export const useCreateProductoEgreso = () => {
       });
     },
     onError: (error) => {
-      console.error("Error creating product:", error);
+      console.error("❌ Mutation error:", error);
       toast({
         title: "⚠️ Error",
         description: "Hubo un problema al agregar el producto",
