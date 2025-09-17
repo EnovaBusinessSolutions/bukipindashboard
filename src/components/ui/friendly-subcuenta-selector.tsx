@@ -41,6 +41,8 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       setSelectedGrupo("Egresos");
       setSelectedSubgrupo("Costo de Ventas");
       setSelectedCuenta("5001");
+      // Automatically set the account code for costs
+      onValueChange("", "5001");
     } else {
       setSelectedEstado("");
       setSelectedGrupo("");
@@ -84,6 +86,11 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
   };
 
   const getStepStatus = (step: number) => {
+    if (accountType === "costo") {
+      // For costs, we only have one step: subcuenta selection
+      return value ? "completed" : "active";
+    }
+    
     switch (step) {
       case 1: return selectedEstado ? "completed" : "pending";
       case 2: return selectedGrupo ? "completed" : selectedEstado ? "active" : "disabled";
@@ -122,148 +129,174 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
         
         {/* Progress indicator */}
         <div className="flex flex-wrap items-center gap-1 p-3 bg-muted/30 rounded-lg">
-          <StepIndicator step={1} title="Tipo" status={getStepStatus(1)} />
-          <StepIndicator step={2} title="Categoría" status={getStepStatus(2)} />
-          <StepIndicator step={3} title="Subcategoría" status={getStepStatus(3)} />
-          <StepIndicator step={4} title="Cuenta" status={getStepStatus(4)} />
-          <StepIndicator step={5} title="Detalle" status={getStepStatus(5)} />
+          {accountType === "costo" ? (
+            <>
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium bg-green-500 text-white">
+                  <CheckCircle className="w-3 h-3" />
+                </div>
+                <span className="text-sm text-foreground">Cuenta: 5001 - Costo de Ventas</span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                  value ? "bg-green-500 text-white" : "bg-blue-500 text-white"
+                }`}>
+                  {value ? <CheckCircle className="w-3 h-3" /> : "1"}
+                </div>
+                <span className={`text-sm ${value ? "text-foreground" : "text-foreground"}`}>
+                  Seleccionar detalle específico
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <StepIndicator step={1} title="Tipo" status={getStepStatus(1)} />
+              <StepIndicator step={2} title="Categoría" status={getStepStatus(2)} />
+              <StepIndicator step={3} title="Subcategoría" status={getStepStatus(3)} />
+              <StepIndicator step={4} title="Cuenta" status={getStepStatus(4)} />
+              <StepIndicator step={5} title="Detalle" status={getStepStatus(5)} />
+            </>
+          )}
         </div>
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {/* Step 1: Estado Financiero */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">
-            1. ¿En qué tipo de reporte aparecerá?
-          </Label>
-          <Select
-            value={selectedEstado}
-            onValueChange={(val) => {
-              setSelectedEstado(val);
-              resetFrom(1);
-            }}
-            disabled={accountType === "costo"}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona el tipo de reporte" />
-            </SelectTrigger>
-            <SelectContent>
-              {getEstados().map((estado) => (
-                <SelectItem key={estado} value={estado}>
-                  <div className="flex items-center space-x-2">
-                    <span>{estado}</span>
-                    {estado === "Balance General" && (
-                      <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
-                    )}
-                    {estado === "Estado de Resultados" && (
-                      <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Steps 1-4: Only show for gastos, not for costos */}
+        {accountType !== "costo" && (
+          <>
+            {/* Step 1: Estado Financiero */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                1. ¿En qué tipo de reporte aparecerá?
+              </Label>
+              <Select
+                value={selectedEstado}
+                onValueChange={(val) => {
+                  setSelectedEstado(val);
+                  resetFrom(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona el tipo de reporte" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getEstados().map((estado) => (
+                    <SelectItem key={estado} value={estado}>
+                      <div className="flex items-center space-x-2">
+                        <span>{estado}</span>
+                        {estado === "Balance General" && (
+                          <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
+                        )}
+                        {estado === "Estado de Resultados" && (
+                          <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        {/* Step 2: Grupo */}
-        {selectedEstado && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              2. ¿Qué tipo de movimiento es?
-            </Label>
-            <Select
-              value={selectedGrupo}
-              onValueChange={(val) => {
-                setSelectedGrupo(val);
-                resetFrom(2);
-              }}
-              disabled={accountType === "costo"}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona la categoría principal" />
-              </SelectTrigger>
-              <SelectContent>
-                {getGrupos().map((grupo) => (
-                  <SelectItem key={grupo} value={grupo}>
-                    <div className="flex items-center space-x-2">
-                      <span>{grupo}</span>
-                      {grupo === "Activos" && <Badge variant="outline" className="text-xs">Lo que posees</Badge>}
-                      {grupo === "Pasivos" && <Badge variant="outline" className="text-xs">Lo que debes</Badge>}
-                      {grupo === "Ingresos" && <Badge variant="outline" className="text-xs">Dinero que entra</Badge>}
-                      {grupo === "Egresos" && <Badge variant="outline" className="text-xs">Dinero que sale</Badge>}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Step 2: Grupo */}
+            {selectedEstado && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  2. ¿Qué tipo de movimiento es?
+                </Label>
+                <Select
+                  value={selectedGrupo}
+                  onValueChange={(val) => {
+                    setSelectedGrupo(val);
+                    resetFrom(2);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona la categoría principal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getGrupos().map((grupo) => (
+                      <SelectItem key={grupo} value={grupo}>
+                        <div className="flex items-center space-x-2">
+                          <span>{grupo}</span>
+                          {grupo === "Activos" && <Badge variant="outline" className="text-xs">Lo que posees</Badge>}
+                          {grupo === "Pasivos" && <Badge variant="outline" className="text-xs">Lo que debes</Badge>}
+                          {grupo === "Ingresos" && <Badge variant="outline" className="text-xs">Dinero que entra</Badge>}
+                          {grupo === "Egresos" && <Badge variant="outline" className="text-xs">Dinero que sale</Badge>}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Step 3: Subgrupo */}
+            {selectedGrupo && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  3. ¿Qué tipo específico?
+                </Label>
+                <Select
+                  value={selectedSubgrupo}
+                  onValueChange={(val) => {
+                    setSelectedSubgrupo(val);
+                    resetFrom(3);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona la subcategoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getSubgrupos().map((subgrupo) => (
+                      <SelectItem key={subgrupo} value={subgrupo}>
+                        {subgrupo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Step 4: Cuenta */}
+            {selectedSubgrupo && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  4. ¿Cuál cuenta específica?
+                </Label>
+                <Select
+                  value={selectedCuenta}
+                  onValueChange={(val) => {
+                    setSelectedCuenta(val);
+                    onValueChange("", val);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona la cuenta contable" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getCuentas().map((cuenta) => (
+                      <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {cuenta.codigo}
+                          </Badge>
+                          <span>{cuenta.nombre}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Step 3: Subgrupo */}
-        {selectedGrupo && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              3. ¿Qué tipo específico?
-            </Label>
-            <Select
-              value={selectedSubgrupo}
-              onValueChange={(val) => {
-                setSelectedSubgrupo(val);
-                resetFrom(3);
-              }}
-              disabled={accountType === "costo"}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona la subcategoría" />
-              </SelectTrigger>
-              <SelectContent>
-                {getSubgrupos().map((subgrupo) => (
-                  <SelectItem key={subgrupo} value={subgrupo}>
-                    {subgrupo}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Step 4: Cuenta */}
-        {selectedSubgrupo && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              4. ¿Cuál cuenta específica?
-            </Label>
-            <Select
-              value={selectedCuenta}
-              onValueChange={(val) => {
-                setSelectedCuenta(val);
-                onValueChange("", val);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona la cuenta contable" />
-              </SelectTrigger>
-              <SelectContent>
-                {getCuentas().map((cuenta) => (
-                  <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="font-mono text-xs">
-                        {cuenta.codigo}
-                      </Badge>
-                      <span>{cuenta.nombre}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Step 5: Subcuenta */}
+        {/* Step 5: Subcuenta (Always show when cuenta is selected) */}
         {selectedCuenta && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              5. ¿En qué detalle específico? *
+              {accountType === "costo" ? "1." : "5."} ¿En qué detalle específico? *
             </Label>
             {getSubcuentas().length > 0 ? (
               <Select
