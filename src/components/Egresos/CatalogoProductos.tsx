@@ -11,14 +11,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { useSubcuentas } from "@/hooks/useSubcuentas";
+import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const navigate = useNavigate();
-  const { data: subcuentasData } = useSubcuentas();
-  const subcuentas = subcuentasData || [];
 
   const [newProduct, setNewProduct] = useState({
     nombre: "",
@@ -219,7 +217,7 @@ const CatalogoProductos = () => {
               Agregar Gasto/Costo
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Agregar Nuevo Gasto/Costo</DialogTitle>
               <DialogDescription>
@@ -297,53 +295,15 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {/* Selector de subcuenta obligatorio cuando se selecciona cuenta */}
-              {newProduct.cuentaContable && (
-                <div className="space-y-2 p-4 border rounded-lg bg-orange-50 dark:bg-orange-900/20">
-                  <Label htmlFor="subcuenta-obligatoria" className="flex items-center gap-2 text-orange-800 dark:text-orange-200">
-                    Subcuenta Asociada *
-                    <span className="text-xs">(Obligatorio)</span>
-                  </Label>
-                  <Select value={newProduct.subcuentaId} onValueChange={(value) => setNewProduct({...newProduct, subcuentaId: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar subcuenta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subcuentas
-                        .filter(sub => sub.cuenta_madre_codigo === newProduct.cuentaContable)
-                        .map((subcuenta) => (
-                          <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                            {subcuenta.nombre}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {subcuentas.filter(sub => sub.cuenta_madre_codigo === newProduct.cuentaContable).length === 0 && (
-                    <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
-                        ⚠️ No hay subcuentas disponibles para esta cuenta
-                      </p>
-                      <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                        Debes crear una subcuenta en el Plan de Cuentas antes de continuar
-                      </p>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm" 
-                        className="mt-2 text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-                        onClick={() => {
-                          setIsDialogOpen(false);
-                          navigate('/plan-cuentas');
-                        }}
-                      >
-                        Ir al Plan de Cuentas
-                      </Button>
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    💡 La subcuenta permite un mejor control y análisis contable de este producto
-                  </p>
-                </div>
+              {/* Selector amigable de subcuenta - SIEMPRE visible */}
+              {newProduct.tipo && (
+                <FriendlySubcuentaSelector
+                  value={newProduct.subcuentaId}
+                  onValueChange={(subcuentaId, cuentaCodigo) => 
+                    setNewProduct({...newProduct, subcuentaId, cuentaContable: cuentaCodigo})
+                  }
+                  accountType={newProduct.tipo as "gasto" | "costo"}
+                />
               )}
 
               <div className="space-y-2">
