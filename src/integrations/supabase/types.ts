@@ -303,6 +303,77 @@ export type Database = {
           },
         ]
       }
+      productos_egresos: {
+        Row: {
+          activo: boolean | null
+          created_at: string
+          cuenta_contable: string
+          descripcion: string | null
+          es_recurrente: boolean | null
+          id: string
+          imagen_url: string | null
+          nombre: string
+          precio_promedio: number | null
+          proveedor_principal: string | null
+          subcuenta_id: string | null
+          tipo: string
+          total_transacciones: number | null
+          ultima_compra: string | null
+          unidad: string
+          updated_at: string
+          user_id: string
+          variacion_precio: number | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string
+          cuenta_contable: string
+          descripcion?: string | null
+          es_recurrente?: boolean | null
+          id?: string
+          imagen_url?: string | null
+          nombre: string
+          precio_promedio?: number | null
+          proveedor_principal?: string | null
+          subcuenta_id?: string | null
+          tipo: string
+          total_transacciones?: number | null
+          ultima_compra?: string | null
+          unidad: string
+          updated_at?: string
+          user_id: string
+          variacion_precio?: number | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string
+          cuenta_contable?: string
+          descripcion?: string | null
+          es_recurrente?: boolean | null
+          id?: string
+          imagen_url?: string | null
+          nombre?: string
+          precio_promedio?: number | null
+          proveedor_principal?: string | null
+          subcuenta_id?: string | null
+          tipo?: string
+          total_transacciones?: number | null
+          ultima_compra?: string | null
+          unidad?: string
+          updated_at?: string
+          user_id?: string
+          variacion_precio?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_productos_egresos_subcuenta"
+            columns: ["subcuenta_id"]
+            isOneToOne: false
+            referencedRelation: "subcuentas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subcuentas: {
         Row: {
           created_at: string

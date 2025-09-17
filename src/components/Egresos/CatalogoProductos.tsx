@@ -13,11 +13,17 @@ import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
 import { supabase } from "@/integrations/supabase/client";
+import { useProductosEgresos, useCreateProductoEgreso, useDeleteProductoEgreso, CreateProductoEgresoData } from "@/hooks/useProductosEgresos";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const navigate = useNavigate();
+  
+  // Use real data hooks
+  const { data: productosEgresos = [], isLoading } = useProductosEgresos();
+  const createProducto = useCreateProductoEgreso();
+  const deleteProducto = useDeleteProductoEgreso();
 
   const [newProduct, setNewProduct] = useState({
     nombre: "",
@@ -56,18 +62,18 @@ const CatalogoProductos = () => {
     return [];
   };
 
-  // Catálogos vacíos para comenzar desde cero
-  const gastos: any[] = [];
-  const costos: any[] = [];
+  // Filter real data by type and search term
+  const gastos = productosEgresos.filter(p => p.tipo === "gasto");
+  const costos = productosEgresos.filter(p => p.tipo === "costo");
 
   const filteredGastos = gastos.filter(producto => 
     producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    producto.proveedorPrincipal.toLowerCase().includes(searchTerm.toLowerCase())
+    (producto.proveedor_principal && producto.proveedor_principal.toLowerCase().includes(searchTerm.toLowerCase()))
   );
   
   const filteredCostos = costos.filter(producto => 
     producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    producto.proveedorPrincipal.toLowerCase().includes(searchTerm.toLowerCase())
+    (producto.proveedor_principal && producto.proveedor_principal.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const getVariationColor = (variacion: number) => {
@@ -108,83 +114,56 @@ const CatalogoProductos = () => {
       return;
     }
 
-    try {
-      let imagenUrl = null;
+    const createData: CreateProductoEgresoData = {
+      nombre: newProduct.nombre,
+      descripcion: newProduct.descripcion,
+      tipo: newProduct.tipo as "gasto" | "costo",
+      unidad: newProduct.unidad,
+      proveedor_principal: newProduct.proveedorPrincipal,
+      es_recurrente: newProduct.esRecurrente,
+      subcuenta_id: newProduct.subcuentaId,
+      cuenta_contable: newProduct.cuentaContable,
+      imagen: newProduct.imagen || undefined,
+    };
 
-      // Subir imagen si se seleccionó una
-      if (newProduct.imagen) {
-        const fileExt = newProduct.imagen.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(fileName, newProduct.imagen);
-
-        if (uploadError) {
-          toast({
-            title: "⚠️ Error al subir imagen",
-            description: "No se pudo subir la imagen, pero el producto se guardará sin imagen",
-            variant: "destructive"
-          });
-          console.error("Error uploading image:", uploadError);
-        } else {
-          const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(uploadData.path);
-          
-          imagenUrl = publicUrl;
-        }
+    createProducto.mutate(createData, {
+      onSuccess: () => {
+        // Reset form
+        setNewProduct({
+          nombre: "",
+          descripcion: "",
+          tipo: "",
+          unidad: "",
+          proveedorPrincipal: "",
+          esRecurrente: false,
+          subcuentaId: "",
+          cuentaContable: "",
+          imagen: null
+        });
+        setIsDialogOpen(false);
       }
-
-      const productData = {
-        ...newProduct,
-        imagenUrl
-      };
-
-      console.log("Nuevo producto agregado:", productData);
-      
-      toast({
-        title: "✅ Producto agregado",
-        description: `${newProduct.tipo === "gasto" ? "Gasto" : "Costo"} "${newProduct.nombre}" agregado al catálogo${imagenUrl ? " con imagen" : ""}`
-      });
-
-      // Reset form
-      setNewProduct({
-        nombre: "",
-        descripcion: "",
-        tipo: "",
-        unidad: "",
-        proveedorPrincipal: "",
-        esRecurrente: false,
-        subcuentaId: "",
-        cuentaContable: "",
-        imagen: null
-      });
-      setIsDialogOpen(false);
-      
-    } catch (error) {
-      console.error("Error creating product:", error);
-      toast({
-        title: "⚠️ Error",
-        description: "Hubo un problema al agregar el producto",
-        variant: "destructive"
-      });
-    }
+    });
   };
 
   const renderProductCard = (producto: any) => (
     <Card key={producto.id} className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
         <div className="flex gap-3 items-start">
-          <img 
-            src={producto.imagen} 
-            alt={producto.nombre}
-            className="w-16 h-16 object-cover rounded-md border"
-          />
+          {producto.imagen_url ? (
+            <img 
+              src={producto.imagen_url} 
+              alt={producto.nombre}
+              className="w-16 h-16 object-cover rounded-md border"
+            />
+          ) : (
+            <div className="w-16 h-16 bg-muted rounded-md border flex items-center justify-center">
+              <Package2 className="h-8 w-8 text-muted-foreground" />
+            </div>
+          )}
           <div className="flex-1">
             <CardTitle className="text-lg">{producto.nombre}</CardTitle>
             <CardDescription className="mt-1">
-              {producto.descripcion}
+              {producto.descripcion || "Sin descripción"}
             </CardDescription>
           </div>
         </div>
@@ -192,29 +171,34 @@ const CatalogoProductos = () => {
       <CardContent className="space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Proveedor principal:</span>
-          <span className="font-medium">{producto.proveedorPrincipal}</span>
+          <span className="font-medium">{producto.proveedor_principal || "No especificado"}</span>
+        </div>
+        
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Unidad:</span>
+          <span className="font-medium">{producto.unidad}</span>
         </div>
         
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Precio promedio:</span>
-          <span className="font-semibold">${producto.precioPromedio.toLocaleString()}/{producto.unidad}</span>
+          <span className="font-semibold">${producto.precio_promedio?.toLocaleString() || 0}/{producto.unidad}</span>
         </div>
         
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Variación de precio:</span>
-          <span className={`font-medium ${getVariationColor(producto.variacionPrecio)}`}>
-            ±{producto.variacionPrecio}%
+          <span className={`font-medium ${getVariationColor(producto.variacion_precio || 0)}`}>
+            ±{producto.variacion_precio || 0}%
           </span>
         </div>
         
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Transacciones:</span>
-          <span>{producto.totalTransacciones}</span>
+          <span>{producto.total_transacciones || 0}</span>
         </div>
         
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Última compra:</span>
-          <span>{new Date(producto.ultimaCompra).toLocaleDateString()}</span>
+          <span>{new Date(producto.ultima_compra).toLocaleDateString()}</span>
         </div>
         
         <div className="flex gap-2 pt-2">
@@ -226,7 +210,12 @@ const CatalogoProductos = () => {
             <Edit className="h-3 w-3 mr-1" />
             Editar
           </Button>
-          <Button size="sm" variant="outline" className="text-destructive">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="text-destructive"
+            onClick={() => deleteProducto.mutate(producto.id)}
+          >
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
@@ -429,16 +418,27 @@ const CatalogoProductos = () => {
           <Badge variant="secondary">{filteredGastos.length}</Badge>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredGastos.map(renderProductCard)}
-        </div>
-
-        {filteredGastos.length === 0 && (
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-6">
+                  <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-muted rounded w-1/2"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredGastos.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredGastos.map(renderProductCard)}
+          </div>
+        ) : (
           <Card>
             <CardContent className="text-center py-8">
               <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                No se encontraron gastos que coincidan con la búsqueda
+                {searchTerm ? "No se encontraron gastos que coincidan con la búsqueda" : "Aún no has agregado gastos al catálogo"}
               </p>
             </CardContent>
           </Card>
@@ -452,16 +452,27 @@ const CatalogoProductos = () => {
           <Badge variant="secondary">{filteredCostos.length}</Badge>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCostos.map(renderProductCard)}
-        </div>
-
-        {filteredCostos.length === 0 && (
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-6">
+                  <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-muted rounded w-1/2"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredCostos.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCostos.map(renderProductCard)}
+          </div>
+        ) : (
           <Card>
             <CardContent className="text-center py-8">
               <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                No se encontraron costos que coincidan con la búsqueda
+                {searchTerm ? "No se encontraron costos que coincidan con la búsqueda" : "Aún no has agregado costos al catálogo"}
               </p>
             </CardContent>
           </Card>
