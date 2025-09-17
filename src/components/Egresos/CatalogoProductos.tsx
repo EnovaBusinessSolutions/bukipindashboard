@@ -39,8 +39,8 @@ const CatalogoProductos = () => {
   const getCuentasAfectadas = (tipo: string) => {
     if (tipo === "costo") {
       return [
-        { codigo: "5001", nombre: "Compras", subgrupo: "Costo de Ventas" },
-        { codigo: "5002", nombre: "Gastos sobre Compras", subgrupo: "Costo de Ventas" },
+        { codigo: "5001", nombre: "Costo de Ventas", subgrupo: "Costo de Ventas" },
+        { codigo: "5002", nombre: "Costo de Ventas Inventario", subgrupo: "Costo de Ventas" },
         { codigo: "5003", nombre: "Devoluciones sobre Compras", subgrupo: "Costo de Ventas" },
         { codigo: "5004", nombre: "Descuentos sobre Compras", subgrupo: "Costo de Ventas" }
       ];
