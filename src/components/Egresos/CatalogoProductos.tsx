@@ -84,8 +84,11 @@ const CatalogoProductos = () => {
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("🚀 Form submitted - handleAddProduct called");
+    console.log("📋 Current form data:", newProduct);
     
     if (!newProduct.nombre || !newProduct.tipo || !newProduct.unidad) {
+      console.log("❌ Validation failed: missing required fields");
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa al menos el nombre, tipo y unidad",
@@ -96,6 +99,7 @@ const CatalogoProductos = () => {
 
     // Validar cuenta contable (solo para gastos, costos usan 5001 automáticamente)
     if (newProduct.tipo === "gasto" && !newProduct.cuentaContable) {
+      console.log("❌ Validation failed: missing cuenta contable for gasto");
       toast({
         title: "⚠️ Cuenta contable requerida",
         description: "Selecciona la cuenta contable que se verá afectada por este gasto",
@@ -106,6 +110,7 @@ const CatalogoProductos = () => {
 
     // Validar subcuenta obligatoria - SIEMPRE requerida
     if (!newProduct.subcuentaId) {
+      console.log("❌ Validation failed: missing subcuenta");
       toast({
         title: "⚠️ Subcuenta requerida",
         description: "Es obligatorio seleccionar una subcuenta para registrar este producto",
@@ -113,6 +118,8 @@ const CatalogoProductos = () => {
       });
       return;
     }
+
+    console.log("✅ All validations passed");
 
     const createData: CreateProductoEgresoData = {
       nombre: newProduct.nombre,
@@ -126,23 +133,33 @@ const CatalogoProductos = () => {
       imagen: newProduct.imagen || undefined,
     };
 
-    createProducto.mutate(createData, {
-      onSuccess: () => {
-        // Reset form
-        setNewProduct({
-          nombre: "",
-          descripcion: "",
-          tipo: "",
-          unidad: "",
-          proveedorPrincipal: "",
-          esRecurrente: false,
-          subcuentaId: "",
-          cuentaContable: "",
-          imagen: null
-        });
-        setIsDialogOpen(false);
-      }
-    });
+    console.log("📤 About to call createProducto.mutate with data:", createData);
+
+    try {
+      createProducto.mutate(createData, {
+        onSuccess: (data) => {
+          console.log("🎉 Product created successfully in component:", data);
+          // Reset form
+          setNewProduct({
+            nombre: "",
+            descripcion: "",
+            tipo: "",
+            unidad: "",
+            proveedorPrincipal: "",
+            esRecurrente: false,
+            subcuentaId: "",
+            cuentaContable: "",
+            imagen: null
+          });
+          setIsDialogOpen(false);
+        },
+        onError: (error) => {
+          console.error("❌ Error in component onError callback:", error);
+        }
+      });
+    } catch (error) {
+      console.error("❌ Unexpected error calling mutate:", error);
+    }
   };
 
   const renderProductCard = (producto: any) => (
