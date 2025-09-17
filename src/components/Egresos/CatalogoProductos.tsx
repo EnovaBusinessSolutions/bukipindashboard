@@ -92,11 +92,11 @@ const CatalogoProductos = () => {
       return;
     }
 
-    // Validar cuenta contable
-    if (!newProduct.cuentaContable) {
+    // Validar cuenta contable (solo para gastos, costos usan 5001 automáticamente)
+    if (newProduct.tipo === "gasto" && !newProduct.cuentaContable) {
       toast({
         title: "⚠️ Cuenta contable requerida",
-        description: "Selecciona la cuenta contable que se verá afectada por este producto",
+        description: "Selecciona la cuenta contable que se verá afectada por este gasto",
         variant: "destructive"
       });
       return;
@@ -243,7 +243,15 @@ const CatalogoProductos = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo *</Label>
-                  <Select value={newProduct.tipo} onValueChange={(value) => setNewProduct({...newProduct, tipo: value})}>
+                  <Select value={newProduct.tipo} onValueChange={(value) => {
+                    const updatedProduct = {...newProduct, tipo: value, subcuentaId: ""};
+                    if (value === "costo") {
+                      updatedProduct.cuentaContable = "5001";
+                    } else {
+                      updatedProduct.cuentaContable = "";
+                    }
+                    setNewProduct(updatedProduct);
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar tipo" />
                     </SelectTrigger>
@@ -255,8 +263,8 @@ const CatalogoProductos = () => {
                 </div>
               </div>
 
-              {/* Mostrar selector de cuentas contables */}
-              {newProduct.tipo && (
+              {/* Mostrar selector de cuentas contables solo para gastos */}
+              {newProduct.tipo === "gasto" && (
                 <div className="space-y-2">
                   <Label htmlFor="cuenta-contable">Cuenta Contable a Afectar *</Label>
                   <Select value={newProduct.cuentaContable} onValueChange={(value) => setNewProduct({...newProduct, cuentaContable: value, subcuentaId: ""})}>
@@ -271,11 +279,24 @@ const CatalogoProductos = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  {newProduct.tipo && !newProduct.cuentaContable && (
+                  {!newProduct.cuentaContable && (
                     <p className="text-xs text-muted-foreground">
-                      📊 Selecciona la cuenta contable que se verá afectada por este {newProduct.tipo}
+                      📊 Selecciona la cuenta contable que se verá afectada por este gasto
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Mostrar cuenta automática para costos */}
+              {newProduct.tipo === "costo" && (
+                <div className="space-y-2">
+                  <Label>Cuenta Contable Asignada</Label>
+                  <div className="p-3 bg-muted rounded-md border">
+                    <p className="text-sm font-medium">5001 - Costo de Ventas</p>
+                    <p className="text-xs text-muted-foreground">
+                      ✓ Cuenta asignada automáticamente para costos
+                    </p>
+                  </div>
                 </div>
               )}
 
