@@ -23,7 +23,6 @@ const CatalogoProductos = () => {
     descripcion: "",
     tipo: "", // "gasto" o "costo"
     unidad: "",
-    categoria: "",
     proveedorPrincipal: "",
     esRecurrente: false,
     subcuentaId: "",
@@ -120,7 +119,6 @@ const CatalogoProductos = () => {
       descripcion: "",
       tipo: "",
       unidad: "",
-      categoria: "",
       proveedorPrincipal: "",
       esRecurrente: false,
       subcuentaId: "",
@@ -317,7 +315,7 @@ const CatalogoProductos = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="unidad">Unidad de Medida *</Label>
                   <Select value={newProduct.unidad} onValueChange={(value) => setNewProduct({...newProduct, unidad: value})}>
@@ -331,22 +329,6 @@ const CatalogoProductos = () => {
                       <SelectItem value="piezas">Piezas (pz)</SelectItem>
                       <SelectItem value="horas">Horas (hrs)</SelectItem>
                       <SelectItem value="servicios">Servicios</SelectItem>
-                      <SelectItem value="otros">Otros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="categoria">Categoría</Label>
-                  <Select value={newProduct.categoria} onValueChange={(value) => setNewProduct({...newProduct, categoria: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="materias-primas">Materias Primas</SelectItem>
-                      <SelectItem value="servicios-publicos">Servicios Públicos</SelectItem>
-                      <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                      <SelectItem value="administrativos">Administrativos</SelectItem>
                       <SelectItem value="otros">Otros</SelectItem>
                     </SelectContent>
                   </Select>
