@@ -321,7 +321,7 @@ export type Database = {
           ultima_compra: string | null
           unidad: string
           updated_at: string
-          user_id: string
+          user_id: string | null
           variacion_precio: number | null
         }
         Insert: {
@@ -341,7 +341,7 @@ export type Database = {
           ultima_compra?: string | null
           unidad: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           variacion_precio?: number | null
         }
         Update: {
@@ -361,7 +361,7 @@ export type Database = {
           ultima_compra?: string | null
           unidad?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           variacion_precio?: number | null
         }
         Relationships: [
