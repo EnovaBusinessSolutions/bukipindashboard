@@ -221,12 +221,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
               value={value || "none"}
               onValueChange={(val) => {
                 if (val === "none") {
-                  // Get any available gasto account from the data
-                  const gastoCuentas = Object.values(estadosFinancieros["Estado de Resultados"]?.["Egresos"] || {})
-                    .flat()
-                    .filter(cuenta => cuenta.codigo.startsWith('6') || cuenta.codigo.startsWith('5'));
-                  const defaultCuenta = gastoCuentas[0]?.codigo || "6001";
-                  onValueChange("", defaultCuenta);
+                  onValueChange("", selectedCuenta);
                 } else {
                   handleSubcuentaSelect(val);
                 }
@@ -239,27 +234,23 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 <SelectItem value="none">
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary" className="font-mono text-xs">
-                      GASTO
+                      {selectedCuenta}
                     </Badge>
                     <span>Cuenta principal (sin detalle específico)</span>
                   </div>
                 </SelectItem>
-                {subcuentas && subcuentas.length > 0 ? (
-                  subcuentas
-                    .filter(s => s.cuenta_madre_codigo && (s.cuenta_madre_codigo.startsWith('6') || s.cuenta_madre_codigo.startsWith('5')))
-                    .map((subcuenta) => (
-                      <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {subcuenta.cuenta_madre_codigo}
-                          </Badge>
-                          <span>{subcuenta.nombre}</span>
-                        </div>
-                      </SelectItem>
-                    ))
+                {getSubcuentas().length > 0 ? (
+                  getSubcuentas().map((subcuenta) => (
+                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                      <div className="flex items-center space-x-2">
+                        <span>{subcuenta.nombre}</span>
+                        <Badge variant="outline" className="text-xs">Detalle específico</Badge>
+                      </div>
+                    </SelectItem>
+                  ))
                 ) : (
                   <SelectItem value="no-subcuentas" disabled>
-                    <span className="text-muted-foreground italic">No hay subcuentas de gastos disponibles</span>
+                    <span className="text-muted-foreground italic">No hay subcuentas para la cuenta {selectedCuenta}</span>
                   </SelectItem>
                 )}
               </SelectContent>
