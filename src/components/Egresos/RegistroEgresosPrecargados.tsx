@@ -14,6 +14,7 @@ import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 
 const RegistroEgresosPrecargados = () => {
   const { data: productos = [] } = useProductosEgresos();
+  const [selectedType, setSelectedType] = useState(""); // "costo" or "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState("1");
@@ -28,6 +29,19 @@ const RegistroEgresosPrecargados = () => {
   const [supplierEmail, setSupplierEmail] = useState("");
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
+
+  // Filter products based on selected type
+  const filteredProducts = productos.filter(p => p.tipo === selectedType);
+
+  const handleTypeChange = (type: string) => {
+    setSelectedType(type);
+    // Reset product selection when type changes
+    setSelectedProductId("");
+    setSelectedProduct(null);
+    setSupplierName("");
+    setUnitPrice("");
+    setTotalAmount("");
+  };
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
@@ -118,120 +132,154 @@ const RegistroEgresosPrecargados = () => {
         </Alert>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Selección de Producto */}
+          {/* Selección de Tipo */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Información del Producto</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="producto">Producto Precargado *</Label>
-                <Select value={selectedProductId} onValueChange={handleProductChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar producto del catálogo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {productos.length > 0 ? (
-                      productos.map((producto) => (
-                        <SelectItem key={producto.id} value={producto.id}>
-                          <div className="flex items-center space-x-2">
-                            <span>{producto.nombre}</span>
-                            <span className="text-muted-foreground text-xs">
-                              - {producto.unidad} ({producto.tipo})
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="no-products" disabled>
-                        No hay productos en el catálogo
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                {productos.length === 0 && (
-                  <p className="text-sm text-yellow-600">
-                    No hay productos precargados. Ve al catálogo de costos y gastos para agregar productos.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cantidad">Cantidad *</Label>
-                <Input
-                  id="cantidad"
-                  type="number"
-                  step="0.01"
-                  value={quantity}
-                  onChange={(e) => handleQuantityChange(e.target.value)}
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="unidad">Unidad de Medida</Label>
-                <Input
-                  id="unidad"
-                  value={selectedProduct?.unidad || ""}
-                  placeholder="kg, litros, metros, etc."
-                  disabled
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="precio-unitario">Precio Unitario *</Label>
-                <Input
-                  id="precio-unitario"
-                  type="number"
-                  step="0.01"
-                  value={unitPrice}
-                  onChange={(e) => handleUnitPriceChange(e.target.value)}
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="total">Monto Total</Label>
-                <div className="flex items-center space-x-2">
-                  <Calculator className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="total"
-                    type="number"
-                    step="0.01"
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(e.target.value)}
-                    placeholder="0.00"
-                    disabled
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Información de Pago */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Información de Pago</h3>
+            <h3 className="text-lg font-semibold">Tipo de Egreso</h3>
             
             <div className="space-y-2">
-              <Label>Tipo de Pago *</Label>
-              <RadioGroup value={paymentType} onValueChange={setPaymentType}>
+              <Label>¿Qué tipo de egreso vas a registrar? *</Label>
+              <RadioGroup value={selectedType} onValueChange={handleTypeChange}>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="contado" id="contado" />
-                  <Label htmlFor="contado">Contado</Label>
+                  <RadioGroupItem value="costo" id="tipo-costo" />
+                  <Label htmlFor="tipo-costo">Costo</Label>
+                  <span className="text-xs text-muted-foreground">(Directamente relacionado con la producción)</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="credito" id="credito" />
-                  <Label htmlFor="credito">Crédito</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="parcial" id="parcial" />
-                  <Label htmlFor="parcial">Pago Parcial</Label>
+                  <RadioGroupItem value="gasto" id="tipo-gasto" />
+                  <Label htmlFor="tipo-gasto">Gasto</Label>
+                  <span className="text-xs text-muted-foreground">(Gastos operativos y administrativos)</span>
                 </div>
               </RadioGroup>
             </div>
+          </div>
+
+          {selectedType && (
+            <>
+              <Separator />
+              
+              {/* Selección de Producto */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Información del Producto</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="producto">{selectedType === "costo" ? "Costo" : "Gasto"} Precargado *</Label>
+                    <Select value={selectedProductId} onValueChange={handleProductChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={`Seleccionar ${selectedType} del catálogo`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredProducts.length > 0 ? (
+                          filteredProducts.map((producto) => (
+                            <SelectItem key={producto.id} value={producto.id}>
+                              <div className="flex items-center space-x-2">
+                                <span>{producto.nombre}</span>
+                                <span className="text-muted-foreground text-xs">
+                                  - {producto.unidad}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-products" disabled>
+                            No hay {selectedType}s en el catálogo
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {filteredProducts.length === 0 && (
+                      <p className="text-sm text-yellow-600">
+                        No hay {selectedType}s precargados. Ve al catálogo de costos y gastos para agregar {selectedType}s.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="unidad">Unidad de Medida</Label>
+                    <Input
+                      id="unidad"
+                      value={selectedProduct?.unidad || ""}
+                      placeholder="Se completa automáticamente"
+                      disabled
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="cantidad">Cantidad *</Label>
+                    <Input
+                      id="cantidad"
+                      type="number"
+                      step="0.01"
+                      value={quantity}
+                      onChange={(e) => handleQuantityChange(e.target.value)}
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="precio-unitario">Precio Unitario *</Label>
+                    <Input
+                      id="precio-unitario"
+                      type="number"
+                      step="0.01"
+                      value={unitPrice}
+                      onChange={(e) => handleUnitPriceChange(e.target.value)}
+                      placeholder="0.00"
+                      required
+                    />
+                    {selectedProduct && selectedProduct.precio_promedio > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Precio promedio del catálogo: ${selectedProduct.precio_promedio}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="total">Monto Total</Label>
+                    <div className="flex items-center space-x-2">
+                      <Calculator className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="total"
+                        type="number"
+                        step="0.01"
+                        value={totalAmount}
+                        onChange={(e) => setTotalAmount(e.target.value)}
+                        placeholder="0.00"
+                        disabled
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {selectedProduct && (
+            <>
+              <Separator />
+
+              {/* Información de Pago */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Información de Pago</h3>
+                
+                <div className="space-y-2">
+                  <Label>Tipo de Pago *</Label>
+                  <RadioGroup value={paymentType} onValueChange={setPaymentType}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="contado" id="contado" />
+                      <Label htmlFor="contado">Contado</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="credito" id="credito" />
+                      <Label htmlFor="credito">Crédito</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="parcial" id="parcial" />
+                      <Label htmlFor="parcial">Pago Parcial</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
 
             {(paymentType === "contado" || paymentType === "parcial") && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -349,6 +397,8 @@ const RegistroEgresosPrecargados = () => {
               Registrar Egreso
             </Button>
           </div>
+              </>
+            )}
         </form>
       </CardContent>
     </Card>
