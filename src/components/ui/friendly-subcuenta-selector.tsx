@@ -46,15 +46,21 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
     } else if (accountType === "gasto") {
       setSelectedEstado("Estado de Resultados");
       setSelectedGrupo("Egresos");
-      setSelectedSubgrupo("");
-      setSelectedCuenta("");
+      setSelectedSubgrupo("Gastos Operativos");
+      // Set a default cuenta for gastos - you can adjust this to match your actual data
+      const gastosCuentas = estadosFinancieros["Estado de Resultados"]?.["Egresos"]?.["Gastos Operativos"];
+      if (gastosCuentas && gastosCuentas.length > 0) {
+        const defaultCuenta = gastosCuentas[0].codigo;
+        setSelectedCuenta(defaultCuenta);
+        onValueChange("", defaultCuenta);
+      }
     } else {
       setSelectedEstado("");
       setSelectedGrupo("");
       setSelectedSubgrupo("");
       setSelectedCuenta("");
     }
-  }, [accountType]);
+  }, [accountType, estadosFinancieros]);
 
   // Helper functions to get data for each step
   const getEstados = () => Object.keys(estadosFinancieros);
@@ -202,46 +208,138 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {/* Steps 1-4: Only show for gastos, not for costos */}
-        {accountType !== "costo" && (
-          <>
-            {/* Step 1: Estado Financiero - Only show for non-gasto types */}
-            {accountType !== "gasto" && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  1. ¿En qué tipo de reporte aparecerá?
-                </Label>
+        {accountType === "gasto" ? (
+          // For gastos: Only show subcuenta selection (optional)
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              Detalle específico (Opcional)
+            </Label>
+            <p className="text-sm text-muted-foreground mb-3">
+              Se asignará automáticamente a una cuenta apropiada de gastos. Puedes agregar un detalle específico si lo deseas.
+            </p>
+            {selectedCuenta && getSubcuentas().length > 0 ? (
+              <Select
+                value={value || ""}
+                onValueChange={(val) => {
+                  if (val === "none") {
+                    onValueChange("", selectedCuenta);
+                  } else {
+                    handleSubcuentaSelect(val);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Asignar a cuenta principal o seleccionar detalle" />
+                </SelectTrigger>
+                <SelectContent className="bg-background border shadow-md">
+                  <SelectItem value="none">
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary" className="font-mono text-xs">
+                        {selectedCuenta}
+                      </Badge>
+                      <span>Cuenta principal (sin detalle)</span>
+                    </div>
+                  </SelectItem>
+                  {getSubcuentas().map((subcuenta) => (
+                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                      {subcuenta.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="p-3 bg-muted/50 rounded border">
+                <p className="text-sm text-muted-foreground">
+                  No hay detalles específicos disponibles. El monto se asignará directamente a la cuenta principal de gastos.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : accountType === "costo" ? (
+          // For costos: Show subcuenta selection (required)
+          selectedCuenta && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Selecciona el detalle específico
+              </Label>
+              {getSubcuentas().length > 0 ? (
                 <Select
-                  value={selectedEstado}
-                  onValueChange={(val) => {
-                    setSelectedEstado(val);
-                    resetFrom(1);
-                  }}
+                  value={value}
+                  onValueChange={handleSubcuentaSelect}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona el tipo de reporte" />
+                    <SelectValue placeholder="Selecciona el detalle específico" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {getEstados().map((estado) => (
-                      <SelectItem key={estado} value={estado}>
-                        <div className="flex items-center space-x-2">
-                          <span>{estado}</span>
-                          {estado === "Balance General" && (
-                            <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
-                          )}
-                          {estado === "Estado de Resultados" && (
-                            <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
-                          )}
-                        </div>
+                  <SelectContent className="bg-background border shadow-md">
+                    {getSubcuentas().map((subcuenta) => (
+                      <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                        {subcuenta.nombre}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
+              ) : (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600" />
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      No hay detalles disponibles
+                    </p>
+                  </div>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                    Necesitas crear un detalle específico para esta cuenta antes de continuar.
+                  </p>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="sm" 
+                    className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                    onClick={() => navigate('/plan-cuentas')}
+                  >
+                    Crear detalle específico
+                  </Button>
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          // For other types: Show full selection process
+          <>
+            {/* Step 1: Estado Financiero */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                1. ¿En qué tipo de reporte aparecerá?
+              </Label>
+              <Select
+                value={selectedEstado}
+                onValueChange={(val) => {
+                  setSelectedEstado(val);
+                  resetFrom(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona el tipo de reporte" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getEstados().map((estado) => (
+                    <SelectItem key={estado} value={estado}>
+                      <div className="flex items-center space-x-2">
+                        <span>{estado}</span>
+                        {estado === "Balance General" && (
+                          <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
+                        )}
+                        {estado === "Estado de Resultados" && (
+                          <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            {/* Step 2: Grupo - Only show for non-gasto types */}
-            {selectedEstado && accountType !== "gasto" && (
+            {/* Step 2: Grupo */}
+            {selectedEstado && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
                   2. ¿Qué tipo de movimiento es?
@@ -277,7 +375,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {selectedGrupo && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  {accountType === "gasto" ? "1." : "3."} ¿Qué tipo específico?
+                  3. ¿Qué tipo específico?
                 </Label>
                 <Select
                   value={selectedSubgrupo}
@@ -304,7 +402,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {selectedSubgrupo && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  {accountType === "gasto" ? "2." : "4."} ¿Cuál cuenta específica?
+                  4. ¿Cuál cuenta específica?
                 </Label>
                 <Select
                   value={selectedCuenta}
@@ -331,100 +429,54 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 </Select>
               </div>
             )}
-          </>
-        )}
 
-        {/* Subcuenta selection - Only show when account type is gasto and we have a selected cuenta */}
-        {accountType === "gasto" && selectedCuenta && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Detalle específico (Opcional)
-            </Label>
-            {getSubcuentas().length > 0 ? (
-              <Select
-                value={value || ""}
-                onValueChange={(val) => {
-                  if (val === "none") {
-                    onValueChange("", selectedCuenta);
-                  } else {
-                    handleSubcuentaSelect(val);
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Asignar a cuenta principal o seleccionar detalle" />
-                </SelectTrigger>
-                <SelectContent className="bg-background border shadow-md">
-                  <SelectItem value="none">
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="secondary" className="font-mono text-xs">
-                        {selectedCuenta}
-                      </Badge>
-                      <span>Cuenta principal (sin detalle)</span>
+            {/* Step 5: Subcuenta */}
+            {selectedCuenta && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  5. ¿En qué detalle específico? *
+                </Label>
+                {getSubcuentas().length > 0 ? (
+                  <Select
+                    value={value}
+                    onValueChange={handleSubcuentaSelect}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona el detalle específico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getSubcuentas().map((subcuenta) => (
+                        <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                          {subcuenta.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-600" />
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        No hay detalles disponibles
+                      </p>
                     </div>
-                  </SelectItem>
-                  {getSubcuentas().map((subcuenta) => (
-                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                      {subcuenta.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="p-3 bg-muted/50 rounded border">
-                <p className="text-sm text-muted-foreground">
-                  No hay detalles específicos para esta cuenta. El monto se asignará directamente a la cuenta principal.
-                </p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                      Necesitas crear un detalle específico para esta cuenta antes de continuar.
+                    </p>
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm" 
+                      className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                      onClick={() => navigate('/plan-cuentas')}
+                    >
+                      Crear detalle específico
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-
-        {/* For costo type, show subcuenta selection */}
-        {accountType === "costo" && selectedCuenta && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              1. ¿En qué detalle específico?
-            </Label>
-            {getSubcuentas().length > 0 ? (
-              <Select
-                value={value}
-                onValueChange={handleSubcuentaSelect}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona el detalle específico" />
-                </SelectTrigger>
-                <SelectContent className="bg-background border shadow-md">
-                  {getSubcuentas().map((subcuenta) => (
-                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                      {subcuenta.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
-                <div className="flex items-center space-x-2 mb-2">
-                  <AlertCircle className="w-4 h-4 text-yellow-600" />
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    No hay detalles disponibles
-                  </p>
-                </div>
-                <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                  Necesitas crear un detalle específico para esta cuenta antes de continuar.
-                </p>
-                <Button 
-                  type="button"
-                  variant="outline" 
-                  size="sm" 
-                  className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-                  onClick={() => navigate('/plan-cuentas')}
-                >
-                  Crear detalle específico
-                </Button>
-              </div>
-            )}
-          </div>
+          </>
         )}
       </CardContent>
     </Card>
