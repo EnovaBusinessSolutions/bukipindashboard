@@ -219,7 +219,23 @@ const CatalogoProductos = () => {
         </div>
         
         <div className="flex gap-2 pt-2">
-          <Button size="sm" variant="outline" className="flex-1">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="flex-1"
+            onClick={() => {
+              if (producto.total_transacciones > 0) {
+                // Navigate to analytics view
+                navigate(`/egresos/analytics/${producto.id}`);
+              } else {
+                toast({
+                  title: "📊 Sin datos suficientes",
+                  description: `No hay transacciones registradas para "${producto.nombre}" aún. Registra algunos egresos para ver las analíticas.`,
+                  variant: "default"
+                });
+              }
+            }}
+          >
             <Eye className="h-3 w-3 mr-1" />
             Analíticas
           </Button>
