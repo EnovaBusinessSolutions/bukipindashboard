@@ -334,11 +334,57 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
           </>
         )}
 
-        {/* Step 5: Subcuenta (Always show when cuenta is selected) */}
-        {selectedCuenta && (
+        {/* Subcuenta selection - Only show when account type is gasto and we have a selected cuenta */}
+        {accountType === "gasto" && selectedCuenta && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              {accountType === "costo" ? "1." : accountType === "gasto" ? "3." : "5."} ¿En qué detalle específico? {accountType === "gasto" ? "(Opcional)" : "*"}
+              Detalle específico (Opcional)
+            </Label>
+            {getSubcuentas().length > 0 ? (
+              <Select
+                value={value || ""}
+                onValueChange={(val) => {
+                  if (val === "none") {
+                    onValueChange("", selectedCuenta);
+                  } else {
+                    handleSubcuentaSelect(val);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Asignar a cuenta principal o seleccionar detalle" />
+                </SelectTrigger>
+                <SelectContent className="bg-background border shadow-md">
+                  <SelectItem value="none">
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary" className="font-mono text-xs">
+                        {selectedCuenta}
+                      </Badge>
+                      <span>Cuenta principal (sin detalle)</span>
+                    </div>
+                  </SelectItem>
+                  {getSubcuentas().map((subcuenta) => (
+                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                      {subcuenta.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="p-3 bg-muted/50 rounded border">
+                <p className="text-sm text-muted-foreground">
+                  No hay detalles específicos para esta cuenta. El monto se asignará directamente a la cuenta principal.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* For costo type, show subcuenta selection */}
+        {accountType === "costo" && selectedCuenta && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              1. ¿En qué detalle específico?
             </Label>
             {getSubcuentas().length > 0 ? (
               <Select
@@ -346,9 +392,9 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 onValueChange={handleSubcuentaSelect}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={accountType === "gasto" ? "Selecciona el detalle específico (opcional)" : "Selecciona el detalle específico"} />
+                  <SelectValue placeholder="Selecciona el detalle específico" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-background border shadow-md">
                   {getSubcuentas().map((subcuenta) => (
                     <SelectItem key={subcuenta.id} value={subcuenta.id}>
                       {subcuenta.nombre}
@@ -365,10 +411,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                   </p>
                 </div>
                 <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                  {accountType === "gasto" 
-                    ? "Puedes continuar sin detalle específico o crear uno para mayor precisión."
-                    : "Necesitas crear un detalle específico para esta cuenta antes de continuar."
-                  }
+                  Necesitas crear un detalle específico para esta cuenta antes de continuar.
                 </p>
                 <Button 
                   type="button"
