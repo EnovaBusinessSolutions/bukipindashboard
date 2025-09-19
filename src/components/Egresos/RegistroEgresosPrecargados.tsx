@@ -10,11 +10,13 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Package, AlertCircle, Save, Calculator } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 
 const RegistroEgresosPrecargados = () => {
-  const [selectedProduct, setSelectedProduct] = useState("");
+  const { data: productos = [] } = useProductosEgresos();
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState("1");
-  const [unitMeasure, setUnitMeasure] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [paymentType, setPaymentType] = useState("");
@@ -26,6 +28,24 @@ const RegistroEgresosPrecargados = () => {
   const [supplierEmail, setSupplierEmail] = useState("");
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
+
+  const handleProductChange = (productId: string) => {
+    setSelectedProductId(productId);
+    const product = productos.find(p => p.id === productId);
+    setSelectedProduct(product);
+    
+    if (product) {
+      // Auto-fill data from catalog
+      setSupplierName(product.proveedor_principal || "");
+      setUnitPrice(product.precio_promedio?.toString() || "");
+      
+      // Recalculate total
+      if (quantity && product.precio_promedio) {
+        const total = (product.precio_promedio * parseFloat(quantity)).toFixed(2);
+        setTotalAmount(total);
+      }
+    }
+  };
 
   const handleQuantityChange = (newQuantity: string) => {
     setQuantity(newQuantity);
@@ -46,7 +66,7 @@ const RegistroEgresosPrecargados = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedProduct || !quantity || !unitPrice || !paymentType) {
+    if (!selectedProductId || !quantity || !unitPrice || !paymentType) {
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa todos los campos obligatorios",
@@ -56,9 +76,9 @@ const RegistroEgresosPrecargados = () => {
     }
 
     console.log("Egreso precargado registrado:", {
-      selectedProduct,
+      selectedProduct: selectedProduct,
+      selectedProductId,
       quantity,
-      unitMeasure,
       unitPrice,
       totalAmount,
       paymentType,
@@ -105,16 +125,34 @@ const RegistroEgresosPrecargados = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="producto">Producto Precargado *</Label>
-                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                <Select value={selectedProductId} onValueChange={handleProductChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar producto del catálogo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cemento">Cemento - kg</SelectItem>
-                    <SelectItem value="gasolina">Gasolina - litros</SelectItem>
-                    <SelectItem value="acero">Varillas de Acero - metros</SelectItem>
+                    {productos.length > 0 ? (
+                      productos.map((producto) => (
+                        <SelectItem key={producto.id} value={producto.id}>
+                          <div className="flex items-center space-x-2">
+                            <span>{producto.nombre}</span>
+                            <span className="text-muted-foreground text-xs">
+                              - {producto.unidad} ({producto.tipo})
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-products" disabled>
+                        No hay productos en el catálogo
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
+                {productos.length === 0 && (
+                  <p className="text-sm text-yellow-600">
+                    No hay productos precargados. Ve al catálogo de costos y gastos para agregar productos.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -134,8 +172,7 @@ const RegistroEgresosPrecargados = () => {
                 <Label htmlFor="unidad">Unidad de Medida</Label>
                 <Input
                   id="unidad"
-                  value={unitMeasure}
-                  onChange={(e) => setUnitMeasure(e.target.value)}
+                  value={selectedProduct?.unidad || ""}
                   placeholder="kg, litros, metros, etc."
                   disabled
                 />
