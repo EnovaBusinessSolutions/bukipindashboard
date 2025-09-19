@@ -43,6 +43,11 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       setSelectedCuenta("5001");
       // Automatically set the account code for costs
       onValueChange("", "5001");
+    } else if (accountType === "gasto") {
+      setSelectedEstado("Estado de Resultados");
+      setSelectedGrupo("Egresos");
+      setSelectedSubgrupo("");
+      setSelectedCuenta("");
     } else {
       setSelectedEstado("");
       setSelectedGrupo("");
@@ -89,6 +94,16 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
     if (accountType === "costo") {
       // For costs, we only have one step: subcuenta selection
       return value ? "completed" : "active";
+    }
+    
+    if (accountType === "gasto") {
+      // For gastos, Estado and Grupo are automatically set
+      switch (step) {
+        case 1: return selectedSubgrupo ? "completed" : "active";
+        case 2: return selectedCuenta ? "completed" : selectedSubgrupo ? "active" : "disabled";
+        case 3: return value ? "completed" : selectedCuenta ? "completed" : "disabled"; // Subcuenta is optional for gastos
+        default: return "disabled";
+      }
     }
     
     switch (step) {
@@ -149,6 +164,31 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 </span>
               </div>
             </>
+          ) : accountType === "gasto" ? (
+            <>
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium bg-green-500 text-white">
+                  <CheckCircle className="w-3 h-3" />
+                </div>
+                <span className="text-sm text-foreground">Estado de Resultados → Egresos</span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <StepIndicator step={1} title="Subcategoría" status={getStepStatus(1)} />
+              <StepIndicator step={2} title="Cuenta" status={getStepStatus(2)} />
+              <div className="flex items-center space-x-2">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                  getStepStatus(3) === "completed" ? "bg-green-500 text-white" : 
+                  getStepStatus(3) === "active" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500"
+                }`}>
+                  {getStepStatus(3) === "completed" ? <CheckCircle className="w-3 h-3" /> : "3"}
+                </div>
+                <span className={`text-sm ${
+                  getStepStatus(3) === "completed" || getStepStatus(3) === "active" ? "text-foreground" : "text-muted-foreground"
+                }`}>
+                  Detalle (Opcional)
+                </span>
+              </div>
+            </>
           ) : (
             <>
               <StepIndicator step={1} title="Tipo" status={getStepStatus(1)} />
@@ -165,41 +205,43 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
         {/* Steps 1-4: Only show for gastos, not for costos */}
         {accountType !== "costo" && (
           <>
-            {/* Step 1: Estado Financiero */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                1. ¿En qué tipo de reporte aparecerá?
-              </Label>
-              <Select
-                value={selectedEstado}
-                onValueChange={(val) => {
-                  setSelectedEstado(val);
-                  resetFrom(1);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona el tipo de reporte" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getEstados().map((estado) => (
-                    <SelectItem key={estado} value={estado}>
-                      <div className="flex items-center space-x-2">
-                        <span>{estado}</span>
-                        {estado === "Balance General" && (
-                          <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
-                        )}
-                        {estado === "Estado de Resultados" && (
-                          <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Step 1: Estado Financiero - Only show for non-gasto types */}
+            {accountType !== "gasto" && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  1. ¿En qué tipo de reporte aparecerá?
+                </Label>
+                <Select
+                  value={selectedEstado}
+                  onValueChange={(val) => {
+                    setSelectedEstado(val);
+                    resetFrom(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el tipo de reporte" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getEstados().map((estado) => (
+                      <SelectItem key={estado} value={estado}>
+                        <div className="flex items-center space-x-2">
+                          <span>{estado}</span>
+                          {estado === "Balance General" && (
+                            <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
+                          )}
+                          {estado === "Estado de Resultados" && (
+                            <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            {/* Step 2: Grupo */}
-            {selectedEstado && (
+            {/* Step 2: Grupo - Only show for non-gasto types */}
+            {selectedEstado && accountType !== "gasto" && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
                   2. ¿Qué tipo de movimiento es?
@@ -235,7 +277,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {selectedGrupo && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  3. ¿Qué tipo específico?
+                  {accountType === "gasto" ? "1." : "3."} ¿Qué tipo específico?
                 </Label>
                 <Select
                   value={selectedSubgrupo}
@@ -262,7 +304,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {selectedSubgrupo && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  4. ¿Cuál cuenta específica?
+                  {accountType === "gasto" ? "2." : "4."} ¿Cuál cuenta específica?
                 </Label>
                 <Select
                   value={selectedCuenta}
@@ -296,7 +338,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
         {selectedCuenta && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              {accountType === "costo" ? "1." : "5."} ¿En qué detalle específico? *
+              {accountType === "costo" ? "1." : accountType === "gasto" ? "3." : "5."} ¿En qué detalle específico? {accountType === "gasto" ? "(Opcional)" : "*"}
             </Label>
             {getSubcuentas().length > 0 ? (
               <Select
@@ -304,7 +346,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 onValueChange={handleSubcuentaSelect}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecciona el detalle específico" />
+                  <SelectValue placeholder={accountType === "gasto" ? "Selecciona el detalle específico (opcional)" : "Selecciona el detalle específico"} />
                 </SelectTrigger>
                 <SelectContent>
                   {getSubcuentas().map((subcuenta) => (
@@ -323,7 +365,10 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                   </p>
                 </div>
                 <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                  Necesitas crear un detalle específico para esta cuenta antes de continuar.
+                  {accountType === "gasto" 
+                    ? "Puedes continuar sin detalle específico o crear uno para mayor precisión."
+                    : "Necesitas crear un detalle específico para esta cuenta antes de continuar."
+                  }
                 </p>
                 <Button 
                   type="button"
