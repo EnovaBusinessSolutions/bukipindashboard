@@ -209,16 +209,16 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       
       <CardContent className="space-y-4">
         {accountType === "gasto" ? (
-          // For gastos: Always show subcuenta dropdown
+          // For gastos: Always show subcuenta dropdown - MANDATORY for gastos
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              ¿Quieres asignar a un detalle específico? (Opcional)
+              Selecciona el detalle específico *
             </Label>
             <p className="text-sm text-muted-foreground mb-3">
-              Se asignará a la cuenta principal por defecto. Puedes elegir un detalle específico si existe.
+              Es obligatorio seleccionar un detalle específico para los gastos recurrentes.
             </p>
             <Select
-              value={value || "none"}
+              value={value || ""}
               onValueChange={(val) => {
                 if (val === "none") {
                   onValueChange("", selectedCuenta);
@@ -228,17 +228,9 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecciona una opción" />
+                <SelectValue placeholder="Selecciona el detalle específico" />
               </SelectTrigger>
               <SelectContent className="bg-background border shadow-md">
-                <SelectItem value="none">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary" className="font-mono text-xs">
-                      {selectedCuenta}
-                    </Badge>
-                    <span>Cuenta principal (sin detalle específico)</span>
-                  </div>
-                </SelectItem>
                 {getSubcuentas().length > 0 ? (
                   getSubcuentas().map((subcuenta) => (
                     <SelectItem key={subcuenta.id} value={subcuenta.id}>
@@ -255,6 +247,30 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 )}
               </SelectContent>
             </Select>
+            
+            {/* Show help message when no subcuentas available */}
+            {getSubcuentas().length === 0 && (
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-center space-x-2 mb-2">
+                  <AlertCircle className="w-4 h-4 text-yellow-600" />
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Subcuenta requerida
+                  </p>
+                </div>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                  Necesitas crear un detalle específico para esta cuenta antes de continuar. Los gastos recurrentes requieren subcuentas para un mejor control contable.
+                </p>
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  size="sm" 
+                  className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                  onClick={() => navigate('/plan-cuentas')}
+                >
+                  Crear subcuenta ahora
+                </Button>
+              </div>
+            )}
           </div>
         ) : accountType === "costo" ? (
           // For costos: Show subcuenta selection (required)
