@@ -209,17 +209,17 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       
       <CardContent className="space-y-4">
         {accountType === "gasto" ? (
-          // For gastos: Only show subcuenta selection (optional)
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Detalle específico (Opcional)
-            </Label>
-            <p className="text-sm text-muted-foreground mb-3">
-              Se asignará automáticamente a una cuenta apropiada de gastos. Puedes agregar un detalle específico si lo deseas.
-            </p>
-            {selectedCuenta && getSubcuentas().length > 0 ? (
+          // For gastos: Only show subcuenta selection if subcuentas exist
+          selectedCuenta && getSubcuentas().length > 0 ? (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                ¿Quieres asignar a un detalle específico? (Opcional)
+              </Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Se asignará a la cuenta principal por defecto. Puedes elegir un detalle específico si lo deseas.
+              </p>
               <Select
-                value={value || ""}
+                value={value || "none"}
                 onValueChange={(val) => {
                   if (val === "none") {
                     onValueChange("", selectedCuenta);
@@ -229,7 +229,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Asignar a cuenta principal o seleccionar detalle" />
+                  <SelectValue placeholder="Selecciona una opción" />
                 </SelectTrigger>
                 <SelectContent className="bg-background border shadow-md">
                   <SelectItem value="none">
@@ -237,24 +237,27 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                       <Badge variant="secondary" className="font-mono text-xs">
                         {selectedCuenta}
                       </Badge>
-                      <span>Cuenta principal (sin detalle)</span>
+                      <span>Cuenta principal (sin detalle específico)</span>
                     </div>
                   </SelectItem>
                   {getSubcuentas().map((subcuenta) => (
                     <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                      {subcuenta.nombre}
+                      <div className="flex items-center space-x-2">
+                        <span>{subcuenta.nombre}</span>
+                        <Badge variant="outline" className="text-xs">Detalle específico</Badge>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            ) : (
-              <div className="p-3 bg-muted/50 rounded border">
-                <p className="text-sm text-muted-foreground">
-                  No hay detalles específicos disponibles. El monto se asignará directamente a la cuenta principal de gastos.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : selectedCuenta ? (
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+              <p className="text-sm text-green-800 dark:text-green-200">
+                ✅ Listo para guardar. Se asignará directamente a la cuenta principal de gastos.
+              </p>
+            </div>
+          ) : null
         ) : accountType === "costo" ? (
           // For costos: Show subcuenta selection (required)
           selectedCuenta && (
