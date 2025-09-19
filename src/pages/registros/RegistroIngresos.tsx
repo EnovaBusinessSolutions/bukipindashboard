@@ -270,6 +270,7 @@ const RegistroIngresos = () => {
           clienteEmail: clienteEmail.trim() || null,
           clienteRFC: clienteRFC.trim() || null,
           fechaVencimiento: fechaVencimiento || null,
+          comentarios: comentarios.trim() || null,
           // Datos adicionales para inventario
           ...(selectedIncomeType === 'inventariados' && selectedInventoryProduct && {
             productoId: selectedInventoryProduct.id,
@@ -314,6 +315,7 @@ const RegistroIngresos = () => {
       setClienteRFC("");
       setFechaVencimiento("");
       setMontoAbonado("");
+      setComentarios("");
       setSelectedProductId("");
       setProductUnitPrice("");
       setProductQuantity("1");
@@ -1782,7 +1784,12 @@ const RegistroIngresos = () => {
                                     alt={producto.nombre}
                                     className="w-full h-full object-cover"
                                   />
-                                </div>
+                                {transaccion.comentarios && (
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    <span className="font-medium">Comentarios:</span> {transaccion.comentarios}
+                                  </div>
+                                )}
+                              </div>
                               ) : null;
                             })()}
                             

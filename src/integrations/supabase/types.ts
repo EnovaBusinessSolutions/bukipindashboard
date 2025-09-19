@@ -415,6 +415,7 @@ export type Database = {
           cliente_nombre: string | null
           cliente_rfc: string | null
           cliente_telefono: string | null
+          comentarios: string | null
           created_at: string
           cuenta_principal_codigo: string
           descripcion: string
@@ -437,6 +438,7 @@ export type Database = {
           cliente_nombre?: string | null
           cliente_rfc?: string | null
           cliente_telefono?: string | null
+          comentarios?: string | null
           created_at?: string
           cuenta_principal_codigo: string
           descripcion: string
@@ -459,6 +461,7 @@ export type Database = {
           cliente_nombre?: string | null
           cliente_rfc?: string | null
           cliente_telefono?: string | null
+          comentarios?: string | null
           created_at?: string
           cuenta_principal_codigo?: string
           descripcion?: string

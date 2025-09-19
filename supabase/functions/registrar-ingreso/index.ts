@@ -22,6 +22,7 @@ interface RegistroIngresoRequest {
   clienteEmail?: string
   clienteRFC?: string
   fechaVencimiento?: string
+  comentarios?: string
   // Nuevos campos para inventario
   productoId?: string
   cantidadVendida?: number
@@ -156,7 +157,8 @@ serve(async (req) => {
         cliente_telefono: requestData.clienteTelefono || null,
         cliente_email: requestData.clienteEmail || null,
         cliente_rfc: requestData.clienteRFC || null,
-        fecha_vencimiento: requestData.fechaVencimiento || null
+        fecha_vencimiento: requestData.fechaVencimiento || null,
+        comentarios: requestData.comentarios || null
       })
       .select()
       .single()

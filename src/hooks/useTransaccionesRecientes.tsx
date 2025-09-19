@@ -13,6 +13,7 @@ interface TransaccionIngreso {
   cuenta_principal_codigo: string;
   subcuenta_id: string | null;
   created_at: string;
+  comentarios?: string | null;
   subcuentas?: {
     nombre: string;
   } | null;
