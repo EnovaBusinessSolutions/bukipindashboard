@@ -209,14 +209,14 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       
       <CardContent className="space-y-4">
         {accountType === "gasto" ? (
-          // For gastos: Only show subcuenta selection if subcuentas exist
-          selectedCuenta && getSubcuentas().length > 0 ? (
+          // For gastos: Always show dropdown - either with subcuentas or "no subcuentas" option
+          selectedCuenta ? (
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 ¿Quieres asignar a un detalle específico? (Opcional)
               </Label>
               <p className="text-sm text-muted-foreground mb-3">
-                Se asignará a la cuenta principal por defecto. Puedes elegir un detalle específico si lo deseas.
+                Se asignará a la cuenta principal por defecto. Puedes elegir un detalle específico si existe.
               </p>
               <Select
                 value={value || "none"}
@@ -240,22 +240,22 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                       <span>Cuenta principal (sin detalle específico)</span>
                     </div>
                   </SelectItem>
-                  {getSubcuentas().map((subcuenta) => (
-                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                      <div className="flex items-center space-x-2">
-                        <span>{subcuenta.nombre}</span>
-                        <Badge variant="outline" className="text-xs">Detalle específico</Badge>
-                      </div>
+                  {getSubcuentas().length > 0 ? (
+                    getSubcuentas().map((subcuenta) => (
+                      <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                        <div className="flex items-center space-x-2">
+                          <span>{subcuenta.nombre}</span>
+                          <Badge variant="outline" className="text-xs">Detalle específico</Badge>
+                        </div>
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-subcuentas" disabled>
+                      <span className="text-muted-foreground italic">No hay subcuentas disponibles para esta cuenta</span>
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
-            </div>
-          ) : selectedCuenta ? (
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-              <p className="text-sm text-green-800 dark:text-green-200">
-                ✅ Listo para guardar. Se asignará directamente a la cuenta principal de gastos.
-              </p>
             </div>
           ) : null
         ) : accountType === "costo" ? (
