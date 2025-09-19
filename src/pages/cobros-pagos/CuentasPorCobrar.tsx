@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,6 +84,29 @@ const CuentasPorCobrar = () => {
   });
 
   const queryClient = useQueryClient();
+
+  // Real-time updates for accounts receivable
+  useEffect(() => {
+    const channel = supabase
+      .channel('cuentas-por-cobrar-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transacciones_ingresos'
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Hooks para analíticas
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar();
