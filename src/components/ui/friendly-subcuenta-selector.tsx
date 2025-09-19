@@ -46,16 +46,16 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
     } else if (accountType === "gasto") {
       setSelectedEstado("Estado de Resultados");
       setSelectedGrupo("Egresos");
-      // For gastos, we don't set a specific cuenta - let user select from available gasto accounts
+      // For gastos, don't reset selectedCuenta - keep user's selection
       setSelectedSubgrupo("");
-      setSelectedCuenta(""); // Let user choose the cuenta
+      // Don't reset selectedCuenta here
     } else {
       setSelectedEstado("");
       setSelectedGrupo("");
       setSelectedSubgrupo("");
       setSelectedCuenta("");
     }
-  }, [accountType, estadosFinancieros]);
+  }, [accountType]); // Remove estadosFinancieros dependency
 
   // Helper functions to get data for each step
   const getEstados = () => Object.keys(estadosFinancieros);
