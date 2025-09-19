@@ -44,6 +44,7 @@ const RegistroIngresos = () => {
   const [clienteRFC, setClienteRFC] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [montoAbonado, setMontoAbonado] = useState("");
+  const [comentarios, setComentarios] = useState(""); // New comments field
   
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
@@ -1208,6 +1209,19 @@ const RegistroIngresos = () => {
                         </div>
                       </>
                     )}
+
+                    {/* Comments section */}
+                    <div className="space-y-2">
+                      <Label htmlFor="comentarios">Comentarios de la venta (Opcional)</Label>
+                      <Textarea
+                        id="comentarios"
+                        placeholder="Agrega cualquier comentario o nota sobre esta venta..."
+                        value={comentarios}
+                        onChange={(e) => setComentarios(e.target.value)}
+                        rows={3}
+                        className="resize-none"
+                      />
+                    </div>
 
                     <div className="flex justify-end pt-4">
                       <Button 
