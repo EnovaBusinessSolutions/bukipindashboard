@@ -46,14 +46,9 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
     } else if (accountType === "gasto") {
       setSelectedEstado("Estado de Resultados");
       setSelectedGrupo("Egresos");
-      setSelectedSubgrupo("Gastos Operativos");
-      // Set a default cuenta for gastos - you can adjust this to match your actual data
-      const gastosCuentas = estadosFinancieros["Estado de Resultados"]?.["Egresos"]?.["Gastos Operativos"];
-      if (gastosCuentas && gastosCuentas.length > 0) {
-        const defaultCuenta = gastosCuentas[0].codigo;
-        setSelectedCuenta(defaultCuenta);
-        onValueChange("", defaultCuenta);
-      }
+      // For gastos, we don't set a specific cuenta - let user select from available gasto accounts
+      setSelectedSubgrupo("");
+      setSelectedCuenta(""); // Let user choose the cuenta
     } else {
       setSelectedEstado("");
       setSelectedGrupo("");
@@ -209,66 +204,99 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       
       <CardContent className="space-y-4">
         {accountType === "gasto" ? (
-          // For gastos: Always show subcuenta dropdown - MANDATORY for gastos
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Selecciona el detalle específico *
-            </Label>
-            <p className="text-sm text-muted-foreground mb-3">
-              Es obligatorio seleccionar un detalle específico para los gastos recurrentes.
-            </p>
-            <Select
-              value={value || ""}
-              onValueChange={(val) => {
-                if (val === "none") {
-                  onValueChange("", selectedCuenta);
-                } else {
-                  handleSubcuentaSelect(val);
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona el detalle específico" />
-              </SelectTrigger>
-              <SelectContent className="bg-background border shadow-md">
-                {getSubcuentas().length > 0 ? (
-                  getSubcuentas().map((subcuenta) => (
-                    <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                      <div className="flex items-center space-x-2">
-                        <span>{subcuenta.nombre}</span>
-                        <Badge variant="outline" className="text-xs">Detalle específico</Badge>
-                      </div>
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="no-subcuentas" disabled>
-                    <span className="text-muted-foreground italic">No hay subcuentas para la cuenta {selectedCuenta}</span>
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            
-            {/* Show help message when no subcuentas available */}
-            {getSubcuentas().length === 0 && (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
-                <div className="flex items-center space-x-2 mb-2">
-                  <AlertCircle className="w-4 h-4 text-yellow-600" />
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Subcuenta requerida
-                  </p>
-                </div>
-                <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                  Necesitas crear un detalle específico para esta cuenta antes de continuar. Los gastos recurrentes requieren subcuentas para un mejor control contable.
+          // For gastos: Show cuenta selection first, then subcuentas based on selected cuenta
+          <div className="space-y-4">
+            {/* Step 1: Select gasto account */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                1. Selecciona la cuenta de gasto *
+              </Label>
+              <Select
+                value={selectedCuenta}
+                onValueChange={(val) => {
+                  setSelectedCuenta(val);
+                  onValueChange("", val); // Set the cuenta first
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona la cuenta de gasto" />
+                </SelectTrigger>
+                <SelectContent className="bg-background border shadow-md">
+                  {/* Show all gasto accounts (codes starting with 5 or 6) */}
+                  {Object.values(estadosFinancieros["Estado de Resultados"]?.["Egresos"] || {})
+                    .flat()
+                    .filter(cuenta => cuenta.codigo.startsWith('5') || cuenta.codigo.startsWith('6'))
+                    .map((cuenta) => (
+                      <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {cuenta.codigo}
+                          </Badge>
+                          <span>{cuenta.nombre}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Step 2: Select subcuenta (mandatory) */}
+            {selectedCuenta && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  2. Selecciona el detalle específico *
+                </Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Es obligatorio seleccionar un detalle específico para los gastos recurrentes.
                 </p>
-                <Button 
-                  type="button"
-                  variant="outline" 
-                  size="sm" 
-                  className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-                  onClick={() => navigate('/plan-cuentas')}
+                <Select
+                  value={value || ""}
+                  onValueChange={handleSubcuentaSelect}
                 >
-                  Crear subcuenta ahora
-                </Button>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el detalle específico" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border shadow-md">
+                    {getSubcuentas().length > 0 ? (
+                      getSubcuentas().map((subcuenta) => (
+                        <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                          <div className="flex items-center space-x-2">
+                            <span>{subcuenta.nombre}</span>
+                            <Badge variant="outline" className="text-xs">Detalle específico</Badge>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-subcuentas" disabled>
+                        <span className="text-muted-foreground italic">No hay subcuentas para la cuenta {selectedCuenta}</span>
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                
+                {/* Show help message when no subcuentas available */}
+                {getSubcuentas().length === 0 && (
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-600" />
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        Subcuenta requerida
+                      </p>
+                    </div>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                      Necesitas crear un detalle específico para la cuenta {selectedCuenta} antes de continuar. Los gastos recurrentes requieren subcuentas para un mejor control contable.
+                    </p>
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm" 
+                      className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+                      onClick={() => navigate('/plan-cuentas')}
+                    >
+                      Crear subcuenta ahora
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
