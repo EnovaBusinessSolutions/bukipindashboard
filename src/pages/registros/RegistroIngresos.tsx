@@ -20,14 +20,32 @@ import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
-
 const RegistroIngresos = () => {
-  const { ventasResumen, loading: loadingVentas, refetch: refetchVentas } = useVentasResumen();
-  const { transacciones, loading: loadingTransacciones, refetch: refetchTransacciones } = useTransaccionesRecientes(10);
-  const { data: subcuentas = [] } = useSubcuentas();
-  const { data: productos = [], isLoading: loadingProductos } = useProductos();
-  const { data: productosServicios = [], isLoading: loadingProductosServicios } = useProductosServicios();
-  const { data: clientes = [], isLoading: loadingClientes } = useClientes();
+  const {
+    ventasResumen,
+    loading: loadingVentas,
+    refetch: refetchVentas
+  } = useVentasResumen();
+  const {
+    transacciones,
+    loading: loadingTransacciones,
+    refetch: refetchTransacciones
+  } = useTransaccionesRecientes(10);
+  const {
+    data: subcuentas = []
+  } = useSubcuentas();
+  const {
+    data: productos = [],
+    isLoading: loadingProductos
+  } = useProductos();
+  const {
+    data: productosServicios = [],
+    isLoading: loadingProductosServicios
+  } = useProductosServicios();
+  const {
+    data: clientes = [],
+    isLoading: loadingClientes
+  } = useClientes();
   const createProducto = useCreateProducto();
   const deleteProducto = useDeleteProducto();
   const createCliente = useCreateCliente();
@@ -39,7 +57,7 @@ const RegistroIngresos = () => {
   const [montoTotal, setMontoTotal] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Estados para información del cliente
   const [tipoCliente, setTipoCliente] = useState(""); // "nuevo" o "recurrente"
   const [clienteSeleccionado, setClienteSeleccionado] = useState("");
@@ -51,19 +69,19 @@ const RegistroIngresos = () => {
   const [montoAbonado, setMontoAbonado] = useState("");
   const [comentarios, setComentarios] = useState(""); // New comments field
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]); // Advertencias de duplicados
-  
+
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
   const [inventoryProductPrice, setInventoryProductPrice] = useState("");
   const [inventoryQuantity, setInventoryQuantity] = useState("1");
   const [availableStock, setAvailableStock] = useState(0);
   const [usePrecioRegistrado, setUsePrecioRegistrado] = useState(true);
-  
+
   // Estados para productos precargados
   const [selectedProductId, setSelectedProductId] = useState("");
   const [productUnitPrice, setProductUnitPrice] = useState("");
   const [productQuantity, setProductQuantity] = useState("1");
-  
+
   // Estados para el catálogo de productos
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [productName, setProductName] = useState("");
@@ -75,10 +93,7 @@ const RegistroIngresos = () => {
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
 
   // Filtrar productos con stock disponible para inventario
-  const productosInventario = productos.filter(producto => 
-    (producto.cantidad_stock && producto.cantidad_stock > 0) ||
-    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
-  );
+  const productosInventario = productos.filter(producto => producto.cantidad_stock && producto.cantidad_stock > 0 || producto.cantidad_comprada && producto.cantidad_comprada > 0);
 
   // Función para manejar selección de producto de inventario
   const handleInventoryProductSelection = (productId: string) => {
@@ -87,22 +102,17 @@ const RegistroIngresos = () => {
     if (selectedProduct) {
       // Usar precio de venta si está disponible, si no, usar costo unitario
       const precioVenta = (selectedProduct as any).precio_venta;
-      const precioAUsar = precioVenta && precioVenta > 0 
-        ? precioVenta.toString() 
-        : (selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
-      
+      const precioAUsar = precioVenta && precioVenta > 0 ? precioVenta.toString() : selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString();
+
       // Si tiene precio de venta registrado, activar esa opción por defecto
       const tienePrecioRegistrado = precioVenta && precioVenta > 0;
       setUsePrecioRegistrado(tienePrecioRegistrado);
-      
       setInventoryProductPrice(precioAUsar);
       setAvailableStock(selectedProduct.cantidad_stock || 0);
       // Autocompletar descripción
       setDescripcion(`Venta de ${selectedProduct.nombre}`);
       // Calcular monto total
-      const precioNumerico = precioVenta && precioVenta > 0 
-        ? precioVenta 
-        : (selectedProduct.costo_unitario || selectedProduct.precio);
+      const precioNumerico = precioVenta && precioVenta > 0 ? precioVenta : selectedProduct.costo_unitario || selectedProduct.precio;
       const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
       setMontoTotal(total);
     }
@@ -152,9 +162,8 @@ const RegistroIngresos = () => {
   // Función para validar campos requeridos y mostrar alertas visuales
   const getValidationErrors = () => {
     const errors = [];
-    
     if (!selectedIncomeType) errors.push('Tipo de Ingreso');
-    
+
     // Validación específica por tipo de ingreso
     if (selectedIncomeType === 'precargados') {
       if (!selectedProductId) errors.push('Producto Precargado');
@@ -166,9 +175,8 @@ const RegistroIngresos = () => {
     } else if (selectedIncomeType === 'general' || selectedIncomeType === 'otros') {
       if (!descripcion.trim()) errors.push('Descripción');
     }
-    
     if (selectedIncomeType !== 'precargados' && selectedIncomeType !== 'inventariados' && (!montoTotal || parseFloat(montoTotal) <= 0)) errors.push('Monto Total');
-    
+
     // Validación de datos del cliente para cuentas pendientes (crédito o parcial)
     if (paymentStatus === 'credito' || paymentStatus === 'parcial') {
       if (!tipoCliente) errors.push('Tipo de Cliente');
@@ -176,7 +184,7 @@ const RegistroIngresos = () => {
       if (!clienteTelefono.trim()) errors.push('Teléfono del Cliente');
       if (!clienteEmail.trim()) errors.push('Email del Cliente');
       if (!fechaVencimiento) errors.push('Fecha de Vencimiento');
-      
+
       // Validación específica para pago parcial
       if (paymentStatus === 'parcial') {
         if (!montoAbonado || parseFloat(montoAbonado) <= 0) errors.push('Monto Abonado');
@@ -185,11 +193,10 @@ const RegistroIngresos = () => {
         }
       }
     }
-    
+
     // Solo requerir método de pago cuando hay pago efectivo (contado o parcial)
     if ((paymentStatus === 'contado' || paymentStatus === 'parcial') && !paymentMethod) errors.push('Método de Pago');
     if (!paymentStatus) errors.push('Tipo de Pago');
-    
     return errors;
   };
 
@@ -202,9 +209,7 @@ const RegistroIngresos = () => {
   // Función para validar duplicados de cliente
   const checkClientDuplicates = (telefono: string, email: string, rfc: string) => {
     const warnings: string[] = [];
-    
     if (!clientes || clientes.length === 0) return warnings;
-
     clientes.forEach(cliente => {
       if (cliente.telefono && telefono && cliente.telefono.trim() === telefono.trim()) {
         warnings.push(`El teléfono ${telefono} ya está registrado para el cliente "${cliente.nombre}"`);
@@ -216,7 +221,6 @@ const RegistroIngresos = () => {
         warnings.push(`El RFC ${rfc} ya está registrado para el cliente "${cliente.nombre}"`);
       }
     });
-
     return warnings;
   };
 
@@ -233,7 +237,6 @@ const RegistroIngresos = () => {
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
     const validationErrors = getValidationErrors();
-    
     if (validationErrors.length > 0) {
       toast({
         title: "⚠️ Campos requeridos faltantes",
@@ -245,16 +248,12 @@ const RegistroIngresos = () => {
 
     // Advertir sobre duplicados pero permitir continuar
     if (tipoCliente === "nuevo" && duplicateWarnings.length > 0) {
-      const continuar = confirm(
-        `Se detectaron posibles duplicados:\n\n${duplicateWarnings.join('\n')}\n\n¿Deseas continuar registrando este cliente de todas formas?`
-      );
+      const continuar = confirm(`Se detectaron posibles duplicados:\n\n${duplicateWarnings.join('\n')}\n\n¿Deseas continuar registrando este cliente de todas formas?`);
       if (!continuar) {
         return;
       }
     }
-
     setIsSubmitting(true);
-
     try {
       // Crear cliente si es nuevo y si hay información del cliente
       let clienteId = null;
@@ -284,11 +283,9 @@ const RegistroIngresos = () => {
       // Derivar valores por seguridad
       const selectedProduct = productos.find(p => p.id === selectedProductId);
       const selectedInventoryProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
-      
       let descripcionToSend = descripcion;
       let montoTotalDerived = Number(montoTotal || '0');
       let subcuentaToSend = null;
-
       if (selectedIncomeType === 'precargados' && selectedProduct) {
         descripcionToSend = selectedProduct.nombre;
         montoTotalDerived = Number((Number(selectedProduct.precio) * Number(productQuantity || '1')).toFixed(2));
@@ -298,14 +295,12 @@ const RegistroIngresos = () => {
         montoTotalDerived = Number((Number(inventoryProductPrice || '0') * Number(inventoryQuantity || '1')).toFixed(2));
         subcuentaToSend = selectedInventoryProduct.subcuenta_id || null;
       }
-
       const descuento = hasDiscount ? Number(discountAmount || '0') : 0;
       const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
-      
+
       // Calcular monto pagado y pendiente según el tipo de pago
       let montoPagado = 0;
       let montoPendiente = 0;
-      
       if (paymentStatus === 'contado') {
         montoPagado = neto;
         montoPendiente = 0;
@@ -316,18 +311,19 @@ const RegistroIngresos = () => {
         montoPagado = 0;
         montoPendiente = neto;
       }
-
       if (!descripcionToSend || montoTotalDerived <= 0) {
         toast({
           title: "⚠️ Datos incompletos",
           description: "Selecciona un producto válido o ingresa una descripción y monto.",
-          variant: "destructive",
+          variant: "destructive"
         });
         setIsSubmitting(false);
         return;
       }
-
-      const { data, error } = await supabase.functions.invoke('registrar-ingreso', {
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('registrar-ingreso', {
         body: {
           tipoIngreso: selectedIncomeType,
           descripcion: descripcionToSend,
@@ -354,22 +350,17 @@ const RegistroIngresos = () => {
           })
         }
       });
-
       if (error) {
         throw error;
       }
-
       toast({
         title: "Ingreso registrado",
         description: `Asiento ${data.numeroAsiento} creado correctamente`
       });
 
       // Refrescar datos para mostrar la nueva venta
-      await Promise.all([
-        refetchVentas(),
-        refetchTransacciones()
-      ]);
-      
+      await Promise.all([refetchVentas(), refetchTransacciones()]);
+
       // Si fue una venta de inventario, refrescar también los productos
       if (selectedIncomeType === 'inventariados') {
         // Forzar actualización de productos para mostrar nuevo stock
@@ -402,7 +393,6 @@ const RegistroIngresos = () => {
       setInventoryQuantity("1");
       setAvailableStock(0);
       setUsePrecioRegistrado(true);
-
     } catch (error) {
       toast({
         title: "Error",
@@ -416,8 +406,7 @@ const RegistroIngresos = () => {
   const renderIncomeTypeForm = (type: string) => {
     switch (type) {
       case "precargados":
-        return (
-          <div className="space-y-4">
+        return <div className="space-y-4">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -427,50 +416,29 @@ const RegistroIngresos = () => {
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
-                {hasFieldError('Producto Precargado') && (
-                  <div className="flex items-center text-destructive">
+                {hasFieldError('Producto Precargado') && <div className="flex items-center text-destructive">
                     <AlertCircle className="h-4 w-4 mr-1" />
                     <span className="text-xs">Requerido</span>
-                  </div>
-                )}
+                  </div>}
               </div>
-              <Select 
-                value={selectedProductId} 
-                onValueChange={handleProductSelection}
-              >
+              <Select value={selectedProductId} onValueChange={handleProductSelection}>
                 <SelectTrigger className={hasFieldError('Producto Precargado') ? 'border-destructive' : ''}>
                   <SelectValue placeholder={loadingProductosServicios ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
-                  {loadingProductosServicios ? (
-                    <SelectItem value="loading" disabled>Cargando productos...</SelectItem>
-                  ) : productosServicios.length === 0 ? (
-                    <SelectItem value="empty" disabled>No hay productos de servicios registrados</SelectItem>
-                  ) : (
-                    productosServicios.map((producto) => (
-                       <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
+                  {loadingProductosServicios ? <SelectItem value="loading" disabled>Cargando productos...</SelectItem> : productosServicios.length === 0 ? <SelectItem value="empty" disabled>No hay productos de servicios registrados</SelectItem> : productosServicios.map(producto => <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
                          <div className="flex items-center space-x-3 w-full">
                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                             {producto.imagen_url ? (
-                               <img 
-                                 src={producto.imagen_url} 
-                                 alt={producto.nombre}
-                                 className="w-full h-full object-cover"
-                               />
-                             ) : (
-                               <div className="w-full h-full bg-muted flex items-center justify-center">
+                             {producto.imagen_url ? <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-muted flex items-center justify-center">
                                  <Package className="w-5 h-5 text-muted-foreground" />
-                               </div>
-                             )}
+                               </div>}
                            </div>
                            <div className="flex-1 min-w-0">
                              <p className="font-medium text-sm truncate mb-1">{producto.nombre}</p>
                              <p className="text-xs text-muted-foreground">${producto.precio}</p>
                            </div>
                          </div>
-                       </SelectItem>
-                    ))
-                  )}
+                       </SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -478,40 +446,21 @@ const RegistroIngresos = () => {
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="cantidad">Cantidad</Label>
-                  {hasFieldError('Cantidad') && (
-                    <div className="flex items-center text-destructive">
+                  {hasFieldError('Cantidad') && <div className="flex items-center text-destructive">
                       <AlertCircle className="h-4 w-4 mr-1" />
                       <span className="text-xs">Requerido</span>
-                    </div>
-                  )}
+                    </div>}
                 </div>
-                <Input 
-                  id="cantidad" 
-                  type="number" 
-                  placeholder="1" 
-                  value={productQuantity}
-                  onChange={(e) => handleQuantityChange(e.target.value)}
-                  className={hasFieldError('Cantidad') ? 'border-destructive' : ''}
-                />
+                <Input id="cantidad" type="number" placeholder="1" value={productQuantity} onChange={e => handleQuantityChange(e.target.value)} className={hasFieldError('Cantidad') ? 'border-destructive' : ''} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="precio-unitario">Precio Unitario</Label>
-                <Input 
-                  id="precio-unitario" 
-                  type="number" 
-                  placeholder="0.00" 
-                  value={productUnitPrice}
-                  readOnly
-                  className="bg-muted"
-                />
+                <Input id="precio-unitario" type="number" placeholder="0.00" value={productUnitPrice} readOnly className="bg-muted" />
               </div>
             </div>
-          </div>
-        );
-      
+          </div>;
       case "inventariados":
-        return (
-          <div className="space-y-4">
+        return <div className="space-y-4">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -521,41 +470,22 @@ const RegistroIngresos = () => {
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Label htmlFor="producto-inventario">Seleccionar Producto del Inventario</Label>
-                {hasFieldError('Producto de Inventario') && (
-                  <div className="flex items-center text-destructive">
+                {hasFieldError('Producto de Inventario') && <div className="flex items-center text-destructive">
                     <AlertCircle className="h-4 w-4 mr-1" />
                     <span className="text-xs">Requerido</span>
-                  </div>
-                )}
+                  </div>}
               </div>
-              <Select 
-                value={selectedInventoryProductId} 
-                onValueChange={handleInventoryProductSelection}
-              >
+              <Select value={selectedInventoryProductId} onValueChange={handleInventoryProductSelection}>
                 <SelectTrigger className={hasFieldError('Producto de Inventario') ? 'border-destructive' : ''}>
                   <SelectValue placeholder={loadingProductos ? "Cargando inventario..." : "Seleccionar producto del inventario"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
-                  {loadingProductos ? (
-                    <SelectItem value="loading" disabled>Cargando inventario...</SelectItem>
-                  ) : productosInventario.length === 0 ? (
-                    <SelectItem value="empty" disabled>No hay productos con stock disponible</SelectItem>
-                  ) : (
-                    productosInventario.map((producto) => (
-                       <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
+                  {loadingProductos ? <SelectItem value="loading" disabled>Cargando inventario...</SelectItem> : productosInventario.length === 0 ? <SelectItem value="empty" disabled>No hay productos con stock disponible</SelectItem> : productosInventario.map(producto => <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
                          <div className="flex items-center space-x-3 w-full">
                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                             {producto.imagen_url ? (
-                               <img 
-                                 src={producto.imagen_url} 
-                                 alt={producto.nombre}
-                                 className="w-full h-full object-cover"
-                               />
-                             ) : (
-                               <div className="w-full h-full bg-muted flex items-center justify-center">
+                             {producto.imagen_url ? <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-muted flex items-center justify-center">
                                  <Package className="w-5 h-5 text-muted-foreground" />
-                               </div>
-                             )}
+                               </div>}
                            </div>
                            <div className="flex-1 min-w-0">
                              <div className="flex items-center justify-between mb-1">
@@ -568,19 +498,13 @@ const RegistroIngresos = () => {
                                <span className="text-xs text-muted-foreground">
                                  Costo: ${producto.costo_unitario || producto.precio}
                                </span>
-                               {(producto as any).precio_venta && (producto as any).precio_venta > 0 ? (
-                                 <span className="text-xs text-green-600 font-medium">
+                               {(producto as any).precio_venta && (producto as any).precio_venta > 0 ? <span className="text-xs text-green-600 font-medium">
                                    Venta: ${(producto as any).precio_venta}
-                                 </span>
-                               ) : (
-                                 <span className="text-xs text-orange-600 font-medium">⚠️ Sin precio</span>
-                               )}
+                                 </span> : <span className="text-xs text-orange-600 font-medium">⚠️ Sin precio</span>}
                              </div>
                            </div>
                          </div>
-                       </SelectItem>
-                    ))
-                  )}
+                       </SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -588,79 +512,53 @@ const RegistroIngresos = () => {
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="cantidad-inv">Cantidad a Vender</Label>
-                  {hasFieldError('Cantidad') && (
-                    <div className="flex items-center text-destructive">
+                  {hasFieldError('Cantidad') && <div className="flex items-center text-destructive">
                       <AlertCircle className="h-4 w-4 mr-1" />
                       <span className="text-xs">Requerido</span>
-                    </div>
-                  )}
-                  {hasFieldError('Cantidad excede stock disponible') && (
-                    <div className="flex items-center text-destructive">
+                    </div>}
+                  {hasFieldError('Cantidad excede stock disponible') && <div className="flex items-center text-destructive">
                       <AlertCircle className="h-4 w-4 mr-1" />
                       <span className="text-xs">Excede stock</span>
-                    </div>
-                  )}
+                    </div>}
                 </div>
-                <Input 
-                  id="cantidad-inv" 
-                  type="number" 
-                  placeholder="1"
-                  min="1"
-                  max={availableStock}
-                  value={inventoryQuantity}
-                  onChange={(e) => handleInventoryQuantityChange(e.target.value)}
-                  className={hasFieldError('Cantidad') || hasFieldError('Cantidad excede stock disponible') ? 'border-destructive' : ''}
-                />
+                <Input id="cantidad-inv" type="number" placeholder="1" min="1" max={availableStock} value={inventoryQuantity} onChange={e => handleInventoryQuantityChange(e.target.value)} className={hasFieldError('Cantidad') || hasFieldError('Cantidad excede stock disponible') ? 'border-destructive' : ''} />
               </div>
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="precio-inv">Precio de Venta Registrado</Label>
-                  {selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
-                    <div className="flex items-center text-orange-600">
+                  {selectedInventoryProductId && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && <div className="flex items-center text-orange-600">
                       <AlertCircle className="h-4 w-4 mr-1" />
                       <span className="text-xs">Sin precio configurado</span>
-                    </div>
-                  )}
+                    </div>}
                 </div>
                 
                 {/* Selector de tipo de precio */}
-                {selectedInventoryProductId && (
-                  <div className="space-y-2">
-                    <RadioGroup 
-                      value={usePrecioRegistrado ? "registrado" : "personalizado"}
-                      onValueChange={(value) => {
-                        const useRegistrado = value === "registrado";
-                        setUsePrecioRegistrado(useRegistrado);
-                        
-                        // Si cambia a precio registrado, restaurar el precio del inventario
-                        if (useRegistrado) {
-                          const selectedProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
-                          if (selectedProduct) {
-                            const precioVenta = (selectedProduct as any).precio_venta;
-                            const precioAUsar = precioVenta && precioVenta > 0 
-                              ? precioVenta.toString() 
-                              : (selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString());
-                            setInventoryProductPrice(precioAUsar);
-                            // Recalcular total
-                            const precioNumerico = precioVenta && precioVenta > 0 
-                              ? precioVenta 
-                              : (selectedProduct.costo_unitario || selectedProduct.precio);
-                            const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
-                            setMontoTotal(total);
-                          }
-                        }
-                      }}
-                      className="flex gap-4"
-                    >
+                {selectedInventoryProductId && <div className="space-y-2">
+                    <RadioGroup value={usePrecioRegistrado ? "registrado" : "personalizado"} onValueChange={value => {
+                  const useRegistrado = value === "registrado";
+                  setUsePrecioRegistrado(useRegistrado);
+
+                  // Si cambia a precio registrado, restaurar el precio del inventario
+                  if (useRegistrado) {
+                    const selectedProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
+                    if (selectedProduct) {
+                      const precioVenta = (selectedProduct as any).precio_venta;
+                      const precioAUsar = precioVenta && precioVenta > 0 ? precioVenta.toString() : selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString();
+                      setInventoryProductPrice(precioAUsar);
+                      // Recalcular total
+                      const precioNumerico = precioVenta && precioVenta > 0 ? precioVenta : selectedProduct.costo_unitario || selectedProduct.precio;
+                      const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
+                      setMontoTotal(total);
+                    }
+                  }
+                }} className="flex gap-4">
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="registrado" id="precio-registrado" />
                         <Label htmlFor="precio-registrado" className="text-sm">
                           Usar precio registrado
-                          {selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0 && (
-                            <span className="ml-1 text-green-600 font-medium">
+                          {selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0 && <span className="ml-1 text-green-600 font-medium">
                               (${(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta})
-                            </span>
-                          )}
+                            </span>}
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -668,51 +566,24 @@ const RegistroIngresos = () => {
                         <Label htmlFor="precio-personalizado" className="text-sm">Precio personalizado</Label>
                       </div>
                     </RadioGroup>
-                  </div>
-                )}
+                  </div>}
 
-                {selectedInventoryProductId && !usePrecioRegistrado && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && (
-                  <Alert className="border-orange-200 bg-orange-50">
+                {selectedInventoryProductId && !usePrecioRegistrado && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta && <Alert className="border-orange-200 bg-orange-50">
                     <AlertCircle className="h-4 w-4 text-orange-600" />
                     <AlertDescription className="text-orange-800">
                       <strong>Advertencia:</strong> Este producto no tiene un precio de venta configurado. 
                       Puedes establecerlo desde Control de Inventario o ingresarlo manualmente aquí.
                     </AlertDescription>
-                  </Alert>
-                )}
+                  </Alert>}
                 
-                <Input 
-                  id="precio-inv" 
-                  type="number" 
-                  placeholder="0.00" 
-                  step="0.01"
-                  value={inventoryProductPrice}
-                  onChange={(e) => handleInventoryPriceChange(e.target.value)}
-                  disabled={usePrecioRegistrado && selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0}
-                  className={`${
-                    selectedInventoryProductId && !usePrecioRegistrado && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta 
-                      ? 'border-orange-300 bg-orange-50' 
-                      : ''
-                  } ${
-                    usePrecioRegistrado && selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0 
-                      ? 'bg-muted' 
-                      : ''
-                  }`}
-                />
+                <Input id="precio-inv" type="number" placeholder="0.00" step="0.01" value={inventoryProductPrice} onChange={e => handleInventoryPriceChange(e.target.value)} disabled={usePrecioRegistrado && selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0} className={`${selectedInventoryProductId && !usePrecioRegistrado && !(productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta ? 'border-orange-300 bg-orange-50' : ''} ${usePrecioRegistrado && selectedInventoryProductId && (productosInventario.find(p => p.id === selectedInventoryProductId) as any)?.precio_venta > 0 ? 'bg-muted' : ''}`} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="stock-disponible">Stock Disponible</Label>
-                <Input 
-                  id="stock-disponible" 
-                  type="number" 
-                  disabled 
-                  value={availableStock}
-                  className="bg-muted"
-                />
+                <Input id="stock-disponible" type="number" disabled value={availableStock} className="bg-muted" />
               </div>
             </div>
-            {selectedInventoryProductId && (
-              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+            {selectedInventoryProductId && <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
                 <h4 className="font-medium text-primary mb-2">Información del Producto</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -736,31 +607,19 @@ const RegistroIngresos = () => {
                     </span>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        );
-      
+              </div>}
+          </div>;
       case "general":
-        return (
-          <div className="space-y-4">
+        return <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Label htmlFor="descripcion-general">Descripción del Ingreso</Label>
-                {hasFieldError('Descripción') && (
-                  <div className="flex items-center text-destructive">
+                {hasFieldError('Descripción') && <div className="flex items-center text-destructive">
                     <AlertCircle className="h-4 w-4 mr-1" />
                     <span className="text-xs">Requerido</span>
-                  </div>
-                )}
+                  </div>}
               </div>
-              <Input 
-                id="descripcion-general" 
-                placeholder="Ej: Servicio de consultoría"
-                value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)}
-                className={hasFieldError('Descripción') ? 'border-destructive' : ''}
-              />
+              <Input id="descripcion-general" placeholder="Ej: Servicio de consultoría" value={descripcion} onChange={e => setDescripcion(e.target.value)} className={hasFieldError('Descripción') ? 'border-destructive' : ''} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -789,28 +648,16 @@ const RegistroIngresos = () => {
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Label htmlFor="monto-general">Monto</Label>
-                {hasFieldError('Monto Total') && (
-                  <div className="flex items-center text-destructive">
+                {hasFieldError('Monto Total') && <div className="flex items-center text-destructive">
                     <AlertCircle className="h-4 w-4 mr-1" />
                     <span className="text-xs">Requerido</span>
-                  </div>
-                )}
+                  </div>}
               </div>
-              <Input 
-                id="monto-general" 
-                type="number" 
-                placeholder="0.00"
-                value={montoTotal}
-                onChange={(e) => setMontoTotal(e.target.value)}
-                className={hasFieldError('Monto Total') ? 'border-destructive' : ''}
-              />
+              <Input id="monto-general" type="number" placeholder="0.00" value={montoTotal} onChange={e => setMontoTotal(e.target.value)} className={hasFieldError('Monto Total') ? 'border-destructive' : ''} />
             </div>
-          </div>
-        );
-      
+          </div>;
       case "otros":
-        return (
-          <div className="space-y-4">
+        return <div className="space-y-4">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -819,33 +666,26 @@ const RegistroIngresos = () => {
             </Alert>
             <div className="space-y-2">
               <Label htmlFor="descripcion-otros">Descripción del Ingreso Extraordinario</Label>
-              <Textarea 
-                id="descripcion-otros" 
-                placeholder="Ej: Venta extraordinaria de equipo usado, donación recibida, etc."
-              />
+              <Textarea id="descripcion-otros" placeholder="Ej: Venta extraordinaria de equipo usado, donación recibida, etc." />
             </div>
             <div className="space-y-2">
               <Label htmlFor="monto-otros">Monto</Label>
               <Input id="monto-otros" type="number" placeholder="0.00" />
             </div>
-          </div>
-        );
-      
+          </div>;
       default:
         return null;
     }
   };
-
   const handleSubmitProduct = async () => {
     if (!productName.trim() || !productPrice.trim()) {
       toast({
         title: "Error",
         description: "El nombre y precio del producto son obligatorios",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     setIsSubmittingProduct(true);
     try {
       await createProducto.mutateAsync({
@@ -853,12 +693,12 @@ const RegistroIngresos = () => {
         precio: parseFloat(productPrice),
         descripcion: productDescription.trim() || undefined,
         subcuentaId: productSubcuenta || undefined,
-        imagen: productImage || undefined,
+        imagen: productImage || undefined
       });
 
       // Limpiar formulario
       setProductName("");
-      setProductPrice("");  
+      setProductPrice("");
       setProductDescription("");
       setProductAccount("4001");
       setProductSubcuenta("");
@@ -870,9 +710,7 @@ const RegistroIngresos = () => {
       setIsSubmittingProduct(false);
     }
   };
-
-  return (
-    <div className="h-full overflow-hidden flex flex-col">
+  return <div className="h-full overflow-hidden flex flex-col">
       <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Registro de Ingresos</h1>
         <p className="text-muted-foreground mt-2">
@@ -950,8 +788,7 @@ const RegistroIngresos = () => {
                 </div>
 
                 {/* Formulario dinámico según el tipo seleccionado */}
-                {selectedIncomeType && (
-                  <div className="space-y-6 p-4 border rounded-lg bg-muted/20">
+                {selectedIncomeType && <div className="space-y-6 p-4 border rounded-lg bg-muted/20">
                     {/* Campos específicos por tipo de ingreso */}
                     {renderIncomeTypeForm(selectedIncomeType)}
                     
@@ -960,9 +797,7 @@ const RegistroIngresos = () => {
                      {/* Sección de cálculos y descuentos */}
                      <div className="space-y-4">
                         {/* Mostrar total calculado para productos precargados e inventariados */}
-                        {((selectedIncomeType === "precargados" && selectedProductId) || 
-                          (selectedIncomeType === "inventariados" && selectedInventoryProductId)) && (
-                          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        {(selectedIncomeType === "precargados" && selectedProductId || selectedIncomeType === "inventariados" && selectedInventoryProductId) && <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
                             <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Cálculo Automático</h4>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between">
@@ -979,29 +814,17 @@ const RegistroIngresos = () => {
                                 <span>${montoTotal}</span>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          </div>}
 
                        <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="discount" 
-                          checked={hasDiscount} 
-                          onCheckedChange={(checked) => setHasDiscount(checked === true)}
-                        />
+                        <Checkbox id="discount" checked={hasDiscount} onCheckedChange={checked => setHasDiscount(checked === true)} />
                         <Label htmlFor="discount" className="font-medium">¿Aplicar descuento?</Label>
                       </div>
                       
-                      {hasDiscount && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+                      {hasDiscount && <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
                           <div className="space-y-2">
                             <Label htmlFor="discount-amount">Monto del descuento</Label>
-                            <Input
-                              id="discount-amount"
-                              type="number"
-                              placeholder="0.00"
-                              value={discountAmount}
-                              onChange={(e) => setDiscountAmount(e.target.value)}
-                            />
+                            <Input id="discount-amount" type="number" placeholder="0.00" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} />
                           </div>
                           <div className="flex items-end">
                             <Alert className="mt-4">
@@ -1010,7 +833,7 @@ const RegistroIngresos = () => {
                                 <strong>Contabilización automática:</strong><br />
                                 • Ventas: +${montoTotal || '0'}<br />
                                 {hasDiscount && discountAmount && <span>• Descuento sobre ventas: +${discountAmount}<br /></span>}
-                                • {paymentMethod === 'efectivo' ? 'Caja' : 'Bancos'}: +${((parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))).toFixed(2)}
+                                • {paymentMethod === 'efectivo' ? 'Caja' : 'Bancos'}: +${(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0')).toFixed(2)}
                               </AlertDescription>
                             </Alert>
                           </div>
@@ -1018,12 +841,11 @@ const RegistroIngresos = () => {
                             <div className="text-center">
                               <p className="text-sm font-medium text-muted-foreground mb-1">Total a cobrar al cliente</p>
                               <p className="text-2xl font-bold text-primary">
-                                ${((parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))).toFixed(2)}
+                                ${(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0')).toFixed(2)}
                               </p>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        </div>}
                     </div>
 
 
@@ -1031,21 +853,16 @@ const RegistroIngresos = () => {
                     <div className="space-y-4">
                       <div className="flex items-center space-x-2">
                         <Label className="font-medium">Estado del Pago</Label>
-                        {hasFieldError('Tipo de Pago') && (
-                          <div className="flex items-center text-destructive">
+                        {hasFieldError('Tipo de Pago') && <div className="flex items-center text-destructive">
                             <AlertCircle className="h-4 w-4 mr-1" />
                             <span className="text-xs">Requerido</span>
-                          </div>
-                        )}
+                          </div>}
                       </div>
-                      <RadioGroup 
-                        value={paymentStatus} 
-                        onValueChange={setPaymentStatus}
-                        className={hasFieldError('Tipo de Pago') ? 'border border-destructive rounded-lg p-2' : ''}
-                      >
+                      <RadioGroup value={paymentStatus} onValueChange={setPaymentStatus} className={hasFieldError('Tipo de Pago') ? 'border border-destructive rounded-lg p-2' : ''}>
                         <div className="flex items-center space-x-3">
                           <RadioGroupItem value="contado" id="contado" />
-                          <Label htmlFor="contado" className="cursor-pointer">Pago de contado</Label>
+                          <Label htmlFor="contado" className="cursor-pointer">Pago Total
+                      </Label>
                         </div>
                         <div className="flex items-center space-x-3">
                           <RadioGroupItem value="parcial" id="parcial" />
@@ -1058,34 +875,21 @@ const RegistroIngresos = () => {
                        </RadioGroup>
 
                       {/* Campo para monto abonado en pago parcial */}
-                      {paymentStatus === "parcial" && (
-                        <div className="ml-6 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20 space-y-3">
+                      {paymentStatus === "parcial" && <div className="ml-6 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20 space-y-3">
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2">
                               <Label htmlFor="monto-abonado">Monto que se va a pagar</Label>
                               <span className="text-destructive text-sm">*</span>
-                              {hasFieldError('Monto Abonado') && (
-                                <div className="flex items-center text-destructive">
+                              {hasFieldError('Monto Abonado') && <div className="flex items-center text-destructive">
                                   <AlertCircle className="h-3 w-3 mr-1" />
                                   <span className="text-xs">Requerido</span>
-                                </div>
-                              )}
+                                </div>}
                             </div>
-                            <Input 
-                              id="monto-abonado" 
-                              type="number" 
-                              step="0.01"
-                              placeholder="0.00" 
-                              value={montoAbonado}
-                              onChange={(e) => setMontoAbonado(e.target.value)}
-                              className={hasFieldError('Monto Abonado') ? 'border-destructive' : ''}
-                            />
+                            <Input id="monto-abonado" type="number" step="0.01" placeholder="0.00" value={montoAbonado} onChange={e => setMontoAbonado(e.target.value)} className={hasFieldError('Monto Abonado') ? 'border-destructive' : ''} />
                           </div>
                           
-                          {montoTotal && montoAbonado && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 bg-white dark:bg-gray-900 rounded border">
-                              {hasDiscount && discountAmount ? (
-                                <>
+                          {montoTotal && montoAbonado && <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 bg-white dark:bg-gray-900 rounded border">
+                              {hasDiscount && discountAmount ? <>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Total original</p>
                                     <p className="text-sm line-through text-muted-foreground">${parseFloat(montoTotal).toFixed(2)}</p>
@@ -1101,12 +905,10 @@ const RegistroIngresos = () => {
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Queda pendiente</p>
                                     <p className="text-lg font-semibold text-orange-600">
-                                      ${((parseFloat(montoTotal) - parseFloat(discountAmount)) - parseFloat(montoAbonado)).toFixed(2)}
+                                      ${(parseFloat(montoTotal) - parseFloat(discountAmount) - parseFloat(montoAbonado)).toFixed(2)}
                                     </p>
                                   </div>
-                                </>
-                              ) : (
-                                <>
+                                </> : <>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Total de la venta</p>
                                     <p className="text-lg font-semibold text-primary">${parseFloat(montoTotal).toFixed(2)}</p>
@@ -1121,12 +923,9 @@ const RegistroIngresos = () => {
                                       ${(parseFloat(montoTotal) - parseFloat(montoAbonado)).toFixed(2)}
                                     </p>
                                   </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                                </>}
+                            </div>}
+                        </div>}
 
                     </div>
 
@@ -1141,27 +940,25 @@ const RegistroIngresos = () => {
                          </span>
                        </div>
                        
-                       {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                         <Alert>
+                       {(paymentStatus === "parcial" || paymentStatus === "credito") && <Alert>
                            <AlertCircle className="h-4 w-4" />
                            <AlertDescription>
                              Se registrará en Cuentas por Cobrar para análisis de vencimientos
                            </AlertDescription>
-                         </Alert>
-                       )}
+                         </Alert>}
 
                         <div className="space-y-2">
                           <Label className="font-medium">Tipo de Cliente</Label>
-                          <Select value={tipoCliente} onValueChange={(value) => {
-                            setTipoCliente(value);
-                            // Reset client data when switching types
-                            setClienteSeleccionado("");
-                            setClienteNombre("");
-                            setClienteTelefono("");
-                            setClienteEmail("");
-                            setClienteRFC("");
-                            setDuplicateWarnings([]); // Limpiar advertencias al cambiar tipo
-                          }}>
+                          <Select value={tipoCliente} onValueChange={value => {
+                      setTipoCliente(value);
+                      // Reset client data when switching types
+                      setClienteSeleccionado("");
+                      setClienteNombre("");
+                      setClienteTelefono("");
+                      setClienteEmail("");
+                      setClienteRFC("");
+                      setDuplicateWarnings([]); // Limpiar advertencias al cambiar tipo
+                    }}>
                             <SelectTrigger>
                               <SelectValue placeholder="Selecciona el tipo de cliente" />
                             </SelectTrigger>
@@ -1173,30 +970,23 @@ const RegistroIngresos = () => {
                         </div>
 
                        {/* Cliente recurrente - selector */}
-                       {tipoCliente === "recurrente" && (
-                         <div className="space-y-2">
+                       {tipoCliente === "recurrente" && <div className="space-y-2">
                            <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
-                           <Select value={clienteSeleccionado} onValueChange={(value) => {
-                             setClienteSeleccionado(value);
-                             const cliente = clientes.find(c => c.id === value);
-                             if (cliente) {
-                               setClienteNombre(cliente.nombre);
-                               setClienteTelefono(cliente.telefono || "");
-                               setClienteEmail(cliente.email || "");
-                               setClienteRFC(cliente.rfc || "");
-                             }
-                           }}>
+                           <Select value={clienteSeleccionado} onValueChange={value => {
+                      setClienteSeleccionado(value);
+                      const cliente = clientes.find(c => c.id === value);
+                      if (cliente) {
+                        setClienteNombre(cliente.nombre);
+                        setClienteTelefono(cliente.telefono || "");
+                        setClienteEmail(cliente.email || "");
+                        setClienteRFC(cliente.rfc || "");
+                      }
+                    }}>
                              <SelectTrigger>
                                <SelectValue placeholder="Buscar cliente existente" />
                              </SelectTrigger>
                              <SelectContent>
-                               {loadingClientes ? (
-                                 <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando clientes...</div>
-                               ) : clientes.length === 0 ? (
-                                 <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay clientes registrados</div>
-                               ) : (
-                                 clientes.map((cliente) => (
-                                   <SelectItem key={cliente.id} value={cliente.id}>
+                               {loadingClientes ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando clientes...</div> : clientes.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay clientes registrados</div> : clientes.map(cliente => <SelectItem key={cliente.id} value={cliente.id}>
                                      <div className="flex flex-col">
                                        <span className="font-medium">{cliente.nombre}</span>
                                        <span className="text-xs text-muted-foreground">
@@ -1205,170 +995,100 @@ const RegistroIngresos = () => {
                                          {cliente.source === 'transaction' && ' • (De transacción)'}
                                        </span>
                                      </div>
-                                   </SelectItem>
-                                 ))
-                               )}
+                                   </SelectItem>)}
                              </SelectContent>
                            </Select>
-                           {clienteSeleccionado && (
-                             <p className="text-xs text-muted-foreground text-green-600">
+                           {clienteSeleccionado && <p className="text-xs text-muted-foreground text-green-600">
                                ✓ Datos del cliente cargados automáticamente
-                             </p>
-                           )}
-                         </div>
-                       )}
+                             </p>}
+                         </div>}
 
                        {/* Campos de cliente - solo si es nuevo o si se seleccionó uno recurrente */}
-                       {(tipoCliente === "nuevo" || (tipoCliente === "recurrente" && clienteSeleccionado)) && (
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       {(tipoCliente === "nuevo" || tipoCliente === "recurrente" && clienteSeleccionado) && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div className="space-y-2">
                            <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
-                           <Input
-                             id="cliente-nombre"
-                             type="text"
-                             placeholder="Nombre completo"
-                             value={clienteNombre}
-                             onChange={(e) => setClienteNombre(e.target.value)}
-                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                           />
+                           <Input id="cliente-nombre" type="text" placeholder="Nombre completo" value={clienteNombre} onChange={e => setClienteNombre(e.target.value)} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
                          </div>
                          <div className="space-y-2">
                            <div className="flex items-center space-x-2">
                              <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
-                             {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                               <span className="text-destructive text-sm">*</span>
-                             )}
-                             {hasFieldError('Teléfono del Cliente') && (
-                               <div className="flex items-center text-destructive">
+                             {(paymentStatus === "parcial" || paymentStatus === "credito") && <span className="text-destructive text-sm">*</span>}
+                             {hasFieldError('Teléfono del Cliente') && <div className="flex items-center text-destructive">
                                  <AlertCircle className="h-3 w-3 mr-1" />
                                  <span className="text-xs">Requerido</span>
-                               </div>
-                             )}
+                               </div>}
                            </div>
-                            <Input
-                              id="cliente-telefono"
-                              type="tel"
-                              placeholder="Ej: +52 55 1234 5678"
-                              value={clienteTelefono}
-                              onChange={(e) => setClienteTelefono(e.target.value)}
-                              className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
-                              disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                            />
+                            <Input id="cliente-telefono" type="tel" placeholder="Ej: +52 55 1234 5678" value={clienteTelefono} onChange={e => setClienteTelefono(e.target.value)} className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
                             {/* Advertencia de duplicado para teléfono */}
-                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteTelefono) && w.includes("teléfono")) && (
-                              <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteTelefono) && w.includes("teléfono")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
                                 <AlertCircle className="h-3 w-3 mr-1" />
                                 <span className="text-xs">
                                   {duplicateWarnings.find(w => w.includes(clienteTelefono) && w.includes("teléfono"))}
                                 </span>
-                              </div>
-                            )}
+                              </div>}
                          </div>
                          <div className="space-y-2">
                            <div className="flex items-center space-x-2">
                              <Label htmlFor="cliente-email">Correo Electrónico</Label>
-                             {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                               <span className="text-destructive text-sm">*</span>
-                             )}
-                             {hasFieldError('Email del Cliente') && (
-                               <div className="flex items-center text-destructive">
+                             {(paymentStatus === "parcial" || paymentStatus === "credito") && <span className="text-destructive text-sm">*</span>}
+                             {hasFieldError('Email del Cliente') && <div className="flex items-center text-destructive">
                                  <AlertCircle className="h-3 w-3 mr-1" />
                                  <span className="text-xs">Requerido</span>
-                               </div>
-                             )}
+                               </div>}
                            </div>
-                            <Input
-                              id="cliente-email"
-                              type="email"
-                              placeholder="cliente@ejemplo.com"
-                              value={clienteEmail}
-                              onChange={(e) => setClienteEmail(e.target.value)}
-                              className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
-                              disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                            />
+                            <Input id="cliente-email" type="email" placeholder="cliente@ejemplo.com" value={clienteEmail} onChange={e => setClienteEmail(e.target.value)} className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
                             {/* Advertencia de duplicado para email */}
-                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteEmail) && w.includes("correo")) && (
-                              <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteEmail) && w.includes("correo")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
                                 <AlertCircle className="h-3 w-3 mr-1" />
                                 <span className="text-xs">
                                   {duplicateWarnings.find(w => w.includes(clienteEmail) && w.includes("correo"))}
                                 </span>
-                              </div>
-                            )}
+                              </div>}
                          </div>
                          <div className="space-y-2">
                            <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
-                            <Input
-                              id="cliente-rfc"
-                              type="text"
-                              placeholder="RFC123456ABC1"
-                              value={clienteRFC}
-                              onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
-                              maxLength={13}
-                              disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                            />
+                            <Input id="cliente-rfc" type="text" placeholder="RFC123456ABC1" value={clienteRFC} onChange={e => setClienteRFC(e.target.value.toUpperCase())} maxLength={13} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
                             {/* Advertencia de duplicado para RFC */}
-                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteRFC) && w.includes("RFC")) && (
-                              <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteRFC) && w.includes("RFC")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
                                 <AlertCircle className="h-3 w-3 mr-1" />
                                 <span className="text-xs">
                                   {duplicateWarnings.find(w => w.includes(clienteRFC) && w.includes("RFC"))}
                                 </span>
-                              </div>
-                            )}
+                              </div>}
                          </div>
                          
                          {/* Fecha de vencimiento para pagos parciales y crédito */}
-                         {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                           <div className="space-y-2">
+                         {(paymentStatus === "parcial" || paymentStatus === "credito") && <div className="space-y-2">
                              <div className="flex items-center space-x-2">
                                <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
                                <span className="text-destructive text-sm">*</span>
-                               {hasFieldError('Fecha de Vencimiento') && (
-                                 <div className="flex items-center text-destructive">
+                               {hasFieldError('Fecha de Vencimiento') && <div className="flex items-center text-destructive">
                                    <AlertCircle className="h-3 w-3 mr-1" />
                                    <span className="text-xs">Requerido</span>
-                                 </div>
-                               )}
+                                 </div>}
                              </div>
-                             <Input
-                               id="fecha-vencimiento"
-                               type="date"
-                               value={fechaVencimiento}
-                               onChange={(e) => setFechaVencimiento(e.target.value)}
-                               className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''}
-                               min={new Date().toISOString().split('T')[0]}
-                             />
+                             <Input id="fecha-vencimiento" type="date" value={fechaVencimiento} onChange={e => setFechaVencimiento(e.target.value)} className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''} min={new Date().toISOString().split('T')[0]} />
                              <p className="text-xs text-muted-foreground">
                                Fecha límite para el pago {paymentStatus === "parcial" ? "del monto pendiente" : "completo"}
                              </p>
-                           </div>
-                         )}
-                       </div>
-                       )}
+                           </div>}
+                       </div>}
                      </div>
 
                     <Separator />
 
                     {/* Método de pago - SOLO si es contado o parcial */}
-                    {(paymentStatus === "contado" || paymentStatus === "parcial") && (
-                      <>
+                    {(paymentStatus === "contado" || paymentStatus === "parcial") && <>
                         <Separator />
                         <div className="space-y-4">
                           <div className="flex items-center space-x-2">
                             <Label className="font-medium">Método de Pago</Label>
-                            {hasFieldError('Método de Pago') && (
-                              <div className="flex items-center text-destructive">
+                            {hasFieldError('Método de Pago') && <div className="flex items-center text-destructive">
                                 <AlertCircle className="h-4 w-4 mr-1" />
                                 <span className="text-xs">Requerido</span>
-                              </div>
-                            )}
+                              </div>}
                           </div>
-                          <RadioGroup 
-                            value={paymentMethod} 
-                            onValueChange={setPaymentMethod}
-                            className={hasFieldError('Método de Pago') ? 'border border-destructive rounded-lg p-2' : ''}
-                          >
+                          <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className={hasFieldError('Método de Pago') ? 'border border-destructive rounded-lg p-2' : ''}>
                             <div className="flex items-center space-x-3">
                               <RadioGroupItem value="efectivo" id="efectivo" />
                               <div className="flex items-center space-x-2">
@@ -1389,35 +1109,21 @@ const RegistroIngresos = () => {
                             </div>
                           </RadioGroup>
                         </div>
-                      </>
-                    )}
+                      </>}
 
                     {/* Comments section */}
                     <div className="space-y-2">
                       <Label htmlFor="comentarios">Comentarios de la venta (Opcional)</Label>
-                      <Textarea
-                        id="comentarios"
-                        placeholder="Agrega cualquier comentario o nota sobre esta venta..."
-                        value={comentarios}
-                        onChange={(e) => setComentarios(e.target.value)}
-                        rows={3}
-                        className="resize-none"
-                      />
+                      <Textarea id="comentarios" placeholder="Agrega cualquier comentario o nota sobre esta venta..." value={comentarios} onChange={e => setComentarios(e.target.value)} rows={3} className="resize-none" />
                     </div>
 
                     <div className="flex justify-end pt-4">
-                      <Button 
-                        size="lg" 
-                        className="px-8"
-                        onClick={handleSubmitIngreso}
-                        disabled={isSubmitting}
-                      >
+                      <Button size="lg" className="px-8" onClick={handleSubmitIngreso} disabled={isSubmitting}>
                         <Calculator className="mr-2 h-4 w-4" />
                         {isSubmitting ? "Registrando..." : "Registrar Ingreso"}
                       </Button>
                     </div>
-                  </div>
-                )}
+                  </div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1519,34 +1225,27 @@ const RegistroIngresos = () => {
                   <CardDescription>Distribución de ingresos por categoría</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  {loadingTransacciones ? <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    </div> : transacciones.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
-                    </div>
-                  ) : (
-                    <div className="h-64">
+                    </div> : <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={
-                          Object.entries(
-                            transacciones.reduce((acc, t) => {
-                              acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
-                              return acc;
-                            }, {} as Record<string, number>)
-                          ).map(([tipo, monto]) => ({ tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1), monto }))
-                        }>
+                        <BarChart data={Object.entries(transacciones.reduce((acc, t) => {
+                      acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
+                      return acc;
+                    }, {} as Record<string, number>)).map(([tipo, monto]) => ({
+                      tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
+                      monto
+                    }))}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="tipo" />
                           <YAxis />
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Tooltip formatter={value => [`$${Number(value).toFixed(2)}`, 'Monto']} />
                           <Bar dataKey="monto" fill="hsl(var(--primary))" />
                         </BarChart>
                       </ResponsiveContainer>
-                    </div>
-                  )}
+                    </div>}
                 </CardContent>
               </Card>
 
@@ -1557,70 +1256,42 @@ const RegistroIngresos = () => {
                   <CardDescription>Distribución por forma de pago</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  {loadingTransacciones ? <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    </div> : transacciones.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
-                    </div>
-                  ) : (
-                    <div className="h-64">
+                    </div> : <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={
-                              Object.entries(
-                                transacciones.reduce((acc, t) => {
-                                  // Manejar métodos de pago vacíos o nulos
-                                  const metodo = t.metodo_pago || 'Sin método definido';
-                                  acc[metodo] = (acc[metodo] || 0) + t.monto_total;
-                                  return acc;
-                                }, {} as Record<string, number>)
-                              ).map(([metodo, monto]) => ({ 
-                                metodo: metodo === 'efectivo' ? 'Efectivo' : 
-                                        metodo === 'tarjeta' ? 'Tarjeta' : 
-                                        metodo === 'Sin método definido' ? 'A Crédito' : 
-                                        metodo.charAt(0).toUpperCase() + metodo.slice(1), 
-                                monto,
-                                porcentaje: ((monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100).toFixed(1)
-                              }))
-                            }
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ metodo, porcentaje, x, y }) => (
-                              <text 
-                                x={x} 
-                                y={y} 
-                                fill="hsl(var(--foreground))" 
-                                textAnchor={x > 150 ? 'start' : 'end'} 
-                                dominantBaseline="central"
-                                className="font-bold text-sm"
-                                style={{ fontWeight: '700', fontSize: '14px' }}
-                              >
+                          <Pie data={Object.entries(transacciones.reduce((acc, t) => {
+                        // Manejar métodos de pago vacíos o nulos
+                        const metodo = t.metodo_pago || 'Sin método definido';
+                        acc[metodo] = (acc[metodo] || 0) + t.monto_total;
+                        return acc;
+                      }, {} as Record<string, number>)).map(([metodo, monto]) => ({
+                        metodo: metodo === 'efectivo' ? 'Efectivo' : metodo === 'tarjeta' ? 'Tarjeta' : metodo === 'Sin método definido' ? 'A Crédito' : metodo.charAt(0).toUpperCase() + metodo.slice(1),
+                        monto,
+                        porcentaje: (monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                      }))} cx="50%" cy="50%" labelLine={false} label={({
+                        metodo,
+                        porcentaje,
+                        x,
+                        y
+                      }) => <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > 150 ? 'start' : 'end'} dominantBaseline="central" className="font-bold text-sm" style={{
+                        fontWeight: '700',
+                        fontSize: '14px'
+                      }}>
                                 {`${metodo} ${porcentaje}%`}
-                              </text>
-                            )}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="monto"
-                          >
-                            {Object.entries(
-                              transacciones.reduce((acc, t) => {
-                                acc[t.metodo_pago] = (acc[t.metodo_pago] || 0) + t.monto_total;
-                                return acc;
-                              }, {} as Record<string, number>)
-                            ).map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={index === 0 ? "hsl(var(--primary))" : "hsl(var(--secondary))"} />
-                            ))}
+                              </text>} outerRadius={80} fill="#8884d8" dataKey="monto">
+                            {Object.entries(transacciones.reduce((acc, t) => {
+                          acc[t.metodo_pago] = (acc[t.metodo_pago] || 0) + t.monto_total;
+                          return acc;
+                        }, {} as Record<string, number>)).map((entry, index) => <Cell key={`cell-${index}`} fill={index === 0 ? "hsl(var(--primary))" : "hsl(var(--secondary))"} />)}
                           </Pie>
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Tooltip formatter={value => [`$${Number(value).toFixed(2)}`, 'Monto']} />
                         </PieChart>
                       </ResponsiveContainer>
-                    </div>
-                  )}
+                    </div>}
                 </CardContent>
               </Card>
             </div>
@@ -1634,27 +1305,25 @@ const RegistroIngresos = () => {
                   <CardDescription>Cantidad y monto promedio por categoría</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="space-y-3">
+                  {loadingTransacciones ? <div className="space-y-3">
                       <div className="h-4 bg-muted rounded animate-pulse"></div>
                       <div className="h-4 bg-muted rounded animate-pulse"></div>
                       <div className="h-4 bg-muted rounded animate-pulse"></div>
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">No hay datos disponibles</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {Object.entries(
-                        transacciones.reduce((acc, t) => {
-                          if (!acc[t.tipo_ingreso]) {
-                            acc[t.tipo_ingreso] = { count: 0, total: 0 };
-                          }
-                          acc[t.tipo_ingreso].count += 1;
-                          acc[t.tipo_ingreso].total += t.monto_total;
-                          return acc;
-                        }, {} as Record<string, { count: number; total: number }>)
-                      ).map(([tipo, stats]) => (
-                        <div key={tipo} className="space-y-2">
+                    </div> : transacciones.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos disponibles</p> : <div className="space-y-4">
+                      {Object.entries(transacciones.reduce((acc, t) => {
+                    if (!acc[t.tipo_ingreso]) {
+                      acc[t.tipo_ingreso] = {
+                        count: 0,
+                        total: 0
+                      };
+                    }
+                    acc[t.tipo_ingreso].count += 1;
+                    acc[t.tipo_ingreso].total += t.monto_total;
+                    return acc;
+                  }, {} as Record<string, {
+                    count: number;
+                    total: number;
+                  }>)).map(([tipo, stats]) => <div key={tipo} className="space-y-2">
                           <div className="flex justify-between items-center">
                             <span className="text-sm font-medium capitalize">{tipo}</span>
                             <div className="text-right">
@@ -1665,17 +1334,12 @@ const RegistroIngresos = () => {
                             </div>
                           </div>
                           <div className="w-full bg-muted rounded-full h-2">
-                            <div 
-                              className="bg-primary h-2 rounded-full" 
-                              style={{ 
-                                width: `${(stats.count / transacciones.length) * 100}%` 
-                              }}
-                            ></div>
+                            <div className="bg-primary h-2 rounded-full" style={{
+                        width: `${stats.count / transacciones.length * 100}%`
+                      }}></div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        </div>)}
+                    </div>}
                 </CardContent>
               </Card>
 
@@ -1686,27 +1350,25 @@ const RegistroIngresos = () => {
                   <CardDescription>Distribución de ingresos por cuenta contable</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="space-y-3">
+                  {loadingTransacciones ? <div className="space-y-3">
                       <div className="h-4 bg-muted rounded animate-pulse"></div>
                       <div className="h-4 bg-muted rounded animate-pulse"></div>
                       <div className="h-4 bg-muted rounded animate-pulse"></div>
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">No hay datos disponibles</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {Object.entries(
-                        transacciones.reduce((acc, t) => {
-                          if (!acc[t.cuenta_principal_codigo]) {
-                            acc[t.cuenta_principal_codigo] = { count: 0, total: 0 };
-                          }
-                          acc[t.cuenta_principal_codigo].count += 1;
-                          acc[t.cuenta_principal_codigo].total += t.monto_total;
-                          return acc;
-                        }, {} as Record<string, { count: number; total: number }>)
-                      ).slice(0, 5).map(([cuenta, stats]) => (
-                        <div key={cuenta} className="space-y-2">
+                    </div> : transacciones.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos disponibles</p> : <div className="space-y-4">
+                      {Object.entries(transacciones.reduce((acc, t) => {
+                    if (!acc[t.cuenta_principal_codigo]) {
+                      acc[t.cuenta_principal_codigo] = {
+                        count: 0,
+                        total: 0
+                      };
+                    }
+                    acc[t.cuenta_principal_codigo].count += 1;
+                    acc[t.cuenta_principal_codigo].total += t.monto_total;
+                    return acc;
+                  }, {} as Record<string, {
+                    count: number;
+                    total: number;
+                  }>)).slice(0, 5).map(([cuenta, stats]) => <div key={cuenta} className="space-y-2">
                           <div className="flex justify-between items-center">
                             <span className="text-sm font-medium">{cuenta}</span>
                             <div className="text-right">
@@ -1715,17 +1377,12 @@ const RegistroIngresos = () => {
                             </div>
                           </div>
                           <div className="w-full bg-muted rounded-full h-2">
-                            <div 
-                              className="bg-chart-2 h-2 rounded-full" 
-                              style={{ 
-                                width: `${(stats.total / transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100}%` 
-                              }}
-                            ></div>
+                            <div className="bg-chart-2 h-2 rounded-full" style={{
+                        width: `${stats.total / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100}%`
+                      }}></div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        </div>)}
+                    </div>}
                 </CardContent>
               </Card>
 
@@ -1736,16 +1393,11 @@ const RegistroIngresos = () => {
                   <CardDescription>Indicadores de rendimiento</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="space-y-4">
+                  {loadingTransacciones ? <div className="space-y-4">
                       <div className="h-8 bg-muted rounded animate-pulse"></div>
                       <div className="h-8 bg-muted rounded animate-pulse"></div>
                       <div className="h-8 bg-muted rounded animate-pulse"></div>
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">No hay datos disponibles</p>
-                  ) : (
-                    <div className="space-y-4">
+                    </div> : transacciones.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos disponibles</p> : <div className="space-y-4">
                       <div className="text-center p-3 bg-primary/5 rounded-lg">
                         <div className="text-2xl font-bold text-primary">
                           {transacciones.length}
@@ -1762,13 +1414,11 @@ const RegistroIngresos = () => {
                       
                       <div className="text-center p-3 bg-destructive/5 rounded-lg">
                         <div className="text-2xl font-bold text-destructive">
-                          {((transacciones.reduce((sum, t) => sum + (t.monto_descuento || 0), 0) / 
-                            transacciones.reduce((sum, t) => sum + t.monto_total, 0)) * 100).toFixed(1)}%
+                          {(transacciones.reduce((sum, t) => sum + (t.monto_descuento || 0), 0) / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)}%
                         </div>
                         <div className="text-sm text-muted-foreground">% Descuento Promedio</div>
                       </div>
-                    </div>
-                  )}
+                    </div>}
                 </CardContent>
               </Card>
             </div>
@@ -1782,73 +1432,57 @@ const RegistroIngresos = () => {
                   <CardDescription>Evolución de ventas día a día</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-80 flex items-center justify-center">
+                  {loadingTransacciones ? <div className="h-80 flex items-center justify-center">
                       <div className="text-muted-foreground">Cargando datos diarios...</div>
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <div className="h-80 flex items-center justify-center">
+                    </div> : transacciones.length === 0 ? <div className="h-80 flex items-center justify-center">
                       <div className="text-muted-foreground">No hay datos para mostrar</div>
-                    </div>
-                  ) : (
-                    <div className="h-80">
+                    </div> : <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={
-                          Object.entries(
-                            transacciones.reduce((acc, t) => {
-                              const fecha = new Date(t.created_at).toLocaleDateString('es-ES', {
-                                day: '2-digit',
-                                month: '2-digit'
-                              });
-                              if (!acc[fecha]) {
-                                acc[fecha] = { 
-                                  ventas: 0, 
-                                  descuentos: 0, 
-                                  neto: 0, 
-                                  transacciones: 0 
-                                };
-                              }
-                              acc[fecha].ventas += t.monto_total;
-                              acc[fecha].descuentos += t.monto_descuento || 0;
-                              acc[fecha].neto += t.monto_neto;
-                              acc[fecha].transacciones += 1;
-                              return acc;
-                            }, {} as Record<string, { ventas: number; descuentos: number; neto: number; transacciones: number }>)
-                          )
-                          .map(([fecha, data]) => ({
-                            fecha,
-                            ventas: data.ventas,
-                            descuentos: data.descuentos,
-                            neto: data.neto,
-                            transacciones: data.transacciones
-                          }))
-                          .sort((a, b) => {
-                            const [diaA, mesA] = a.fecha.split('/').map(Number);
-                            const [diaB, mesB] = b.fecha.split('/').map(Number);
-                            return mesA !== mesB ? mesA - mesB : diaA - diaB;
-                          })
-                          .slice(-15) // Últimos 15 días con datos
-                        }>
+                        <BarChart data={Object.entries(transacciones.reduce((acc, t) => {
+                      const fecha = new Date(t.created_at).toLocaleDateString('es-ES', {
+                        day: '2-digit',
+                        month: '2-digit'
+                      });
+                      if (!acc[fecha]) {
+                        acc[fecha] = {
+                          ventas: 0,
+                          descuentos: 0,
+                          neto: 0,
+                          transacciones: 0
+                        };
+                      }
+                      acc[fecha].ventas += t.monto_total;
+                      acc[fecha].descuentos += t.monto_descuento || 0;
+                      acc[fecha].neto += t.monto_neto;
+                      acc[fecha].transacciones += 1;
+                      return acc;
+                    }, {} as Record<string, {
+                      ventas: number;
+                      descuentos: number;
+                      neto: number;
+                      transacciones: number;
+                    }>)).map(([fecha, data]) => ({
+                      fecha,
+                      ventas: data.ventas,
+                      descuentos: data.descuentos,
+                      neto: data.neto,
+                      transacciones: data.transacciones
+                    })).sort((a, b) => {
+                      const [diaA, mesA] = a.fecha.split('/').map(Number);
+                      const [diaB, mesB] = b.fecha.split('/').map(Number);
+                      return mesA !== mesB ? mesA - mesB : diaA - diaB;
+                    }).slice(-15) // Últimos 15 días con datos
+                    }>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="fecha" 
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                            fontSize={12}
-                          />
+                          <XAxis dataKey="fecha" angle={-45} textAnchor="end" height={80} fontSize={12} />
                           <YAxis />
-                          <Tooltip 
-                            formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]}
-                            labelFormatter={(label) => `Fecha: ${label}`}
-                          />
+                          <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]} labelFormatter={label => `Fecha: ${label}`} />
                           <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
                           <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
                           <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Ventas Netas" />
                         </BarChart>
                       </ResponsiveContainer>
-                    </div>
-                  )}
+                    </div>}
                 </CardContent>
               </Card>
 
@@ -1859,71 +1493,55 @@ const RegistroIngresos = () => {
                   <CardDescription>Evolución de ventas mes a mes</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-80 flex items-center justify-center">
+                  {loadingTransacciones ? <div className="h-80 flex items-center justify-center">
                       <div className="text-muted-foreground">Cargando datos mensuales...</div>
-                    </div>
-                  ) : transacciones.length === 0 ? (
-                    <div className="h-80 flex items-center justify-center">
+                    </div> : transacciones.length === 0 ? <div className="h-80 flex items-center justify-center">
                       <div className="text-muted-foreground">No hay datos para mostrar</div>
-                    </div>
-                  ) : (
-                    <div className="h-80">
+                    </div> : <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={
-                          Object.entries(
-                            transacciones.reduce((acc, t) => {
-                              const fecha = new Date(t.created_at);
-                              const mesAno = `${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`;
-                              if (!acc[mesAno]) {
-                                acc[mesAno] = { 
-                                  ventas: 0, 
-                                  descuentos: 0, 
-                                  neto: 0, 
-                                  transacciones: 0 
-                                };
-                              }
-                              acc[mesAno].ventas += t.monto_total;
-                              acc[mesAno].descuentos += t.monto_descuento || 0;
-                              acc[mesAno].neto += t.monto_neto;
-                              acc[mesAno].transacciones += 1;
-                              return acc;
-                            }, {} as Record<string, { ventas: number; descuentos: number; neto: number; transacciones: number }>)
-                          )
-                          .map(([mesAno, data]) => ({
-                            mes: mesAno,
-                            ventas: data.ventas,
-                            descuentos: data.descuentos,
-                            neto: data.neto,
-                            transacciones: data.transacciones
-                          }))
-                          .sort((a, b) => {
-                            const [mesA, anoA] = a.mes.split('/').map(Number);
-                            const [mesB, anoB] = b.mes.split('/').map(Number);
-                            return anoA !== anoB ? anoA - anoB : mesA - mesB;
-                          })
-                          .slice(-12) // Últimos 12 meses con datos
-                        }>
+                        <BarChart data={Object.entries(transacciones.reduce((acc, t) => {
+                      const fecha = new Date(t.created_at);
+                      const mesAno = `${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`;
+                      if (!acc[mesAno]) {
+                        acc[mesAno] = {
+                          ventas: 0,
+                          descuentos: 0,
+                          neto: 0,
+                          transacciones: 0
+                        };
+                      }
+                      acc[mesAno].ventas += t.monto_total;
+                      acc[mesAno].descuentos += t.monto_descuento || 0;
+                      acc[mesAno].neto += t.monto_neto;
+                      acc[mesAno].transacciones += 1;
+                      return acc;
+                    }, {} as Record<string, {
+                      ventas: number;
+                      descuentos: number;
+                      neto: number;
+                      transacciones: number;
+                    }>)).map(([mesAno, data]) => ({
+                      mes: mesAno,
+                      ventas: data.ventas,
+                      descuentos: data.descuentos,
+                      neto: data.neto,
+                      transacciones: data.transacciones
+                    })).sort((a, b) => {
+                      const [mesA, anoA] = a.mes.split('/').map(Number);
+                      const [mesB, anoB] = b.mes.split('/').map(Number);
+                      return anoA !== anoB ? anoA - anoB : mesA - mesB;
+                    }).slice(-12) // Últimos 12 meses con datos
+                    }>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="mes" 
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                            fontSize={12}
-                          />
+                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} fontSize={12} />
                           <YAxis />
-                          <Tooltip 
-                            formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]}
-                            labelFormatter={(label) => `Mes: ${label}`}
-                          />
+                          <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]} labelFormatter={label => `Mes: ${label}`} />
                           <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
                           <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
                           <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Ventas Netas" />
                         </BarChart>
                       </ResponsiveContainer>
-                    </div>
-                  )}
+                    </div>}
                 </CardContent>
               </Card>
             </div>
@@ -1937,41 +1555,27 @@ const RegistroIngresos = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {loadingTransacciones ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                {loadingTransacciones ? <div className="text-center py-8 text-muted-foreground">
                     Cargando transacciones...
-                  </div>
-                ) : transacciones.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  </div> : transacciones.length === 0 ? <div className="text-center py-8 text-muted-foreground">
                     No hay ventas registradas aún
-                  </div>
-                ) : (
-                  <div className="space-y-4">
+                  </div> : <div className="space-y-4">
                     <div className="text-sm font-medium text-muted-foreground mb-4">
                       Últimas {transacciones.length} transacciones
                     </div>
                     <div className="space-y-3">
-                      {transacciones.map((transaccion) => (
-                        <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
+                      {transacciones.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
                           <div className="flex items-start gap-3 mb-2">
                             {/* Imagen del producto si es precargado */}
                             {transaccion.tipo_ingreso === 'precargados' && (() => {
-                              const producto = productos.find(p => p.nombre === transaccion.descripcion);
-                              return producto?.imagen_url ? (
-                                <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                                  <img 
-                                    src={producto.imagen_url} 
-                                    alt={producto.nombre}
-                                    className="w-full h-full object-cover"
-                                  />
-                                {transaccion.comentarios && (
-                                  <div className="mt-1 text-xs text-muted-foreground">
+                        const producto = productos.find(p => p.nombre === transaccion.descripcion);
+                        return producto?.imagen_url ? <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                                  <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" />
+                                {transaccion.comentarios && <div className="mt-1 text-xs text-muted-foreground">
                                     <span className="font-medium">Comentarios:</span> {transaccion.comentarios}
-                                  </div>
-                                )}
-                              </div>
-                              ) : null;
-                            })()}
+                                  </div>}
+                              </div> : null;
+                      })()}
                             
                             <div className="flex justify-between items-start flex-1">
                               <div className="flex-1">
@@ -1989,56 +1593,44 @@ const RegistroIngresos = () => {
                                   <div className="text-xs space-y-1">
                                     <div>
                                       <span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo}
-                                      {transaccion.cuenta_principal_codigo === '4001' ? ' - Ventas' : 
-                                       transaccion.cuenta_principal_codigo === '4004' ? ' - Otros Ingresos' : ''}
+                                      {transaccion.cuenta_principal_codigo === '4001' ? ' - Ventas' : transaccion.cuenta_principal_codigo === '4004' ? ' - Otros Ingresos' : ''}
                                     </div>
-                                    {transaccion.subcuenta_id ? (
-                                      <div>
-                                        <span className="font-medium">Subcuenta:</span> {
-                                          transaccion.subcuentas?.nombre || 
-                                          (() => {
-                                            const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
-                                            return subcuenta?.nombre || 'Subcuenta no encontrada';
-                                          })()
-                                        }
-                                      </div>
-                                    ) : (
-                                      <div className="text-muted-foreground">
+                                    {transaccion.subcuenta_id ? <div>
+                                        <span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
+                                  const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
+                                  return subcuenta?.nombre || 'Subcuenta no encontrada';
+                                })()}
+                                      </div> : <div className="text-muted-foreground">
                                         <span className="font-medium">Subcuenta:</span> Sin subcuenta asignada
-                                      </div>
-                                    )}
+                                      </div>}
                                   </div>
                                 </div>
                               </div>
                               <div className="text-right ml-4">
                                 <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
-                                {transaccion.monto_descuento > 0 && (
-                                  <p className="text-sm text-red-600">
+                                {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
                                     -${transaccion.monto_descuento.toFixed(2)} desc.
-                                  </p>
-                                )}
+                                  </p>}
                               </div>
                             </div>
                           </div>
                           <div className="flex justify-between items-center text-xs text-muted-foreground">
                             <span>
                               {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                             </span>
                             <span className="font-medium text-green-600">
                               Neto: ${transaccion.monto_neto.toFixed(2)}
                             </span>
                           </div>
-                        </div>
-                      ))}
+                        </div>)}
                     </div>
-                  </div>
-                )}
+                  </div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -2068,39 +1660,20 @@ const RegistroIngresos = () => {
                           <Label htmlFor="product-name" className="text-right">
                             Nombre
                           </Label>
-                          <Input
-                            id="product-name"
-                            value={productName}
-                            onChange={(e) => setProductName(e.target.value)}
-                            className="col-span-3"
-                            placeholder="Nombre del producto"
-                          />
+                          <Input id="product-name" value={productName} onChange={e => setProductName(e.target.value)} className="col-span-3" placeholder="Nombre del producto" />
                         </div>
                         
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="product-image" className="text-right">
                             Imagen
                           </Label>
-                          <Input
-                            id="product-image"
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => setProductImage(e.target.files?.[0] || null)}
-                            className="col-span-3"
-                          />
+                          <Input id="product-image" type="file" accept="image/*" onChange={e => setProductImage(e.target.files?.[0] || null)} className="col-span-3" />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="product-price" className="text-right">
                             Precio
                           </Label>
-                          <Input
-                            id="product-price"
-                            type="number"
-                            value={productPrice}
-                            onChange={(e) => setProductPrice(e.target.value)}
-                            className="col-span-3"
-                            placeholder="0.00"
-                          />
+                          <Input id="product-price" type="number" value={productPrice} onChange={e => setProductPrice(e.target.value)} className="col-span-3" placeholder="0.00" />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="product-account" className="text-right">
@@ -2117,19 +1690,15 @@ const RegistroIngresos = () => {
                           <Label htmlFor="product-subcuenta" className="text-right">
                             Subcuenta
                           </Label>
-                          <Select value={productSubcuenta} onValueChange={(v) => setProductSubcuenta(v === "none" ? "" : v)}>
+                          <Select value={productSubcuenta} onValueChange={v => setProductSubcuenta(v === "none" ? "" : v)}>
                             <SelectTrigger className="col-span-3">
                               <SelectValue placeholder="Sin subcuenta (usar cuenta principal)" />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Sin subcuenta (usar cuenta principal)</SelectItem>
-                              {subcuentas
-                                .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
-                                .map((subcuenta) => (
-                                  <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                              {subcuentas.filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001").map(subcuenta => <SelectItem key={subcuenta.id} value={subcuenta.id}>
                                     {subcuenta.nombre}
-                                  </SelectItem>
-                                ))}
+                                  </SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
@@ -2137,28 +1706,14 @@ const RegistroIngresos = () => {
                           <Label htmlFor="product-description" className="text-right">
                             Descripción
                           </Label>
-                          <Textarea
-                            id="product-description"
-                            value={productDescription}
-                            onChange={(e) => setProductDescription(e.target.value)}
-                            className="col-span-3"
-                            placeholder="Descripción opcional del producto"
-                            rows={3}
-                          />
+                          <Textarea id="product-description" value={productDescription} onChange={e => setProductDescription(e.target.value)} className="col-span-3" placeholder="Descripción opcional del producto" rows={3} />
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={() => setIsProductDialogOpen(false)}
-                        >
+                        <Button type="button" variant="outline" onClick={() => setIsProductDialogOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button 
-                          onClick={handleSubmitProduct} 
-                          disabled={isSubmittingProduct}
-                        >
+                        <Button onClick={handleSubmitProduct} disabled={isSubmittingProduct}>
                           {isSubmittingProduct ? "Guardando..." : "Guardar Producto"}
                         </Button>
                       </DialogFooter>
@@ -2179,25 +1734,16 @@ const RegistroIngresos = () => {
                 </Alert>
                 
                 <div className="space-y-6">
-                  {loadingProductosServicios ? (
-                    <div className="flex justify-center py-8">
+                  {loadingProductosServicios ? <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    </div>
-                  ) : productosServicios.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
+                    </div> : productosServicios.length === 0 ? <div className="text-center py-8 text-muted-foreground">
                       No hay productos de servicios registrados aún
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
+                    </div> : <div className="space-y-6">
                       {/* Productos con subcuentas */}
-                      {subcuentas
-                        .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
-                        .map(subcuenta => {
-                          const productosSubcuenta = productosServicios.filter(p => p.subcuenta_id === subcuenta.id);
-                          if (productosSubcuenta.length === 0) return null;
-                          
-                          return (
-                            <Card key={subcuenta.id}>
+                      {subcuentas.filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001").map(subcuenta => {
+                    const productosSubcuenta = productosServicios.filter(p => p.subcuenta_id === subcuenta.id);
+                    if (productosSubcuenta.length === 0) return null;
+                    return <Card key={subcuenta.id}>
                               <CardHeader>
                                 <CardTitle className="text-lg flex items-center">
                                   <Package className="mr-2 h-5 w-5" />
@@ -2209,47 +1755,29 @@ const RegistroIngresos = () => {
                               </CardHeader>
                               <CardContent>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {productosSubcuenta.map(producto => (
-                                    <div key={producto.id} className="border rounded-lg p-4 space-y-3">
-                                      {producto.imagen_url && (
-                                        <div className="aspect-square w-full max-w-24 mx-auto">
-                                          <img 
-                                            src={producto.imagen_url} 
-                                            alt={producto.nombre}
-                                            className="w-full h-full object-cover rounded-md"
-                                          />
-                                        </div>
-                                      )}
+                                  {productosSubcuenta.map(producto => <div key={producto.id} className="border rounded-lg p-4 space-y-3">
+                                      {producto.imagen_url && <div className="aspect-square w-full max-w-24 mx-auto">
+                                          <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover rounded-md" />
+                                        </div>}
                                       <div>
                                         <h4 className="font-semibold">{producto.nombre}</h4>
-                                        {producto.descripcion && (
-                                          <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
-                                        )}
+                                        {producto.descripcion && <p className="text-sm text-muted-foreground">{producto.descripcion}</p>}
                                         <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
                                       </div>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => deleteProducto.mutate(producto.id)}
-                                        className="w-full text-destructive hover:text-destructive"
-                                      >
+                                      <Button variant="outline" size="sm" onClick={() => deleteProducto.mutate(producto.id)} className="w-full text-destructive hover:text-destructive">
                                         Eliminar
                                       </Button>
-                                    </div>
-                                  ))}
+                                    </div>)}
                                 </div>
                               </CardContent>
-                            </Card>
-                          );
-                        })}
+                            </Card>;
+                  })}
                       
                       {/* Productos sin subcuenta (cuenta general) */}
                       {(() => {
-                        const productosSinSubcuenta = productosServicios.filter(p => !p.subcuenta_id);
-                        if (productosSinSubcuenta.length === 0) return null;
-                        
-                        return (
-                          <Card>
+                    const productosSinSubcuenta = productosServicios.filter(p => !p.subcuenta_id);
+                    if (productosSinSubcuenta.length === 0) return null;
+                    return <Card>
                             <CardHeader>
                               <CardTitle className="text-lg flex items-center">
                                 <ShoppingCart className="mr-2 h-5 w-5" />
@@ -2261,49 +1789,30 @@ const RegistroIngresos = () => {
                             </CardHeader>
                             <CardContent>
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {productosSinSubcuenta.map(producto => (
-                                  <div key={producto.id} className="border rounded-lg p-4 space-y-3">
-                                    {producto.imagen_url && (
-                                      <div className="aspect-square w-full max-w-24 mx-auto">
-                                        <img 
-                                          src={producto.imagen_url} 
-                                          alt={producto.nombre}
-                                          className="w-full h-full object-cover rounded-md"
-                                        />
-                                      </div>
-                                    )}
+                                {productosSinSubcuenta.map(producto => <div key={producto.id} className="border rounded-lg p-4 space-y-3">
+                                    {producto.imagen_url && <div className="aspect-square w-full max-w-24 mx-auto">
+                                        <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover rounded-md" />
+                                      </div>}
                                     <div>
                                       <h4 className="font-semibold">{producto.nombre}</h4>
-                                      {producto.descripcion && (
-                                        <p className="text-sm text-muted-foreground">{producto.descripcion}</p>
-                                      )}
+                                      {producto.descripcion && <p className="text-sm text-muted-foreground">{producto.descripcion}</p>}
                                       <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
                                     </div>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => deleteProducto.mutate(producto.id)}
-                                      className="w-full text-destructive hover:text-destructive"
-                                    >
+                                    <Button variant="outline" size="sm" onClick={() => deleteProducto.mutate(producto.id)} className="w-full text-destructive hover:text-destructive">
                                       Eliminar
                                     </Button>
-                                  </div>
-                                ))}
+                                  </div>)}
                               </div>
                             </CardContent>
-                          </Card>
-                        );
-                      })()}
-                    </div>
-                  )}
+                          </Card>;
+                  })()}
+                    </div>}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default RegistroIngresos;
