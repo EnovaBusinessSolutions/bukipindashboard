@@ -1148,9 +1148,9 @@ const RegistroIngresos = () => {
                              </SelectTrigger>
                              <SelectContent>
                                {loadingClientes ? (
-                                 <SelectItem value="" disabled>Cargando clientes...</SelectItem>
+                                 <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando clientes...</div>
                                ) : clientes.length === 0 ? (
-                                 <SelectItem value="" disabled>No hay clientes registrados</SelectItem>
+                                 <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay clientes registrados</div>
                                ) : (
                                  clientes.map((cliente) => (
                                    <SelectItem key={cliente.id} value={cliente.id}>
