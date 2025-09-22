@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator } from "lucide-react";
+import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator, Users } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -931,149 +931,152 @@ const RegistroIngresos = () => {
 
                     <Separator />
 
-                     {/* Base de Datos de Clientes */}
-                     <div className="space-y-4">
-                       <div className="flex items-center space-x-2">
-                         <Label className="font-medium">Base de Datos de Clientes</Label>
-                         <span className="text-xs text-muted-foreground">
-                           {paymentStatus === "contado" ? "Opcional - Para control y seguimiento" : "Obligatorio para cuentas por cobrar"}
-                         </span>
-                       </div>
-                       
-                       {(paymentStatus === "parcial" || paymentStatus === "credito") && <Alert>
-                           <AlertCircle className="h-4 w-4" />
-                           <AlertDescription>
-                             Se registrará en Cuentas por Cobrar para análisis de vencimientos
-                           </AlertDescription>
-                         </Alert>}
+                      {/* Solo mostrar datos del cliente si es pago parcial o crédito */}
+                      {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                        <div className="space-y-4">
+                          <div className="flex items-center space-x-2">
+                            <Users className="h-5 w-5" />
+                            <Label className="font-medium">Datos del Cliente</Label>
+                            <span className="text-xs text-muted-foreground">
+                              Obligatorio para cuentas por cobrar
+                            </span>
+                          </div>
+                          
+                          <Alert>
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertDescription>
+                                Se registrará en Cuentas por Cobrar para análisis de vencimientos
+                              </AlertDescription>
+                            </Alert>
 
-                        <div className="space-y-2">
-                          <Label className="font-medium">Tipo de Cliente</Label>
-                          <Select value={tipoCliente} onValueChange={value => {
-                      setTipoCliente(value);
-                      // Reset client data when switching types
-                      setClienteSeleccionado("");
-                      setClienteNombre("");
-                      setClienteTelefono("");
-                      setClienteEmail("");
-                      setClienteRFC("");
-                      setDuplicateWarnings([]); // Limpiar advertencias al cambiar tipo
-                    }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona el tipo de cliente" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="nuevo">Cliente Nuevo</SelectItem>
-                              <SelectItem value="recurrente">Cliente Recurrente</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                       {/* Cliente recurrente - selector */}
-                       {tipoCliente === "recurrente" && <div className="space-y-2">
-                           <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
-                           <Select value={clienteSeleccionado} onValueChange={value => {
-                      setClienteSeleccionado(value);
-                      const cliente = clientes.find(c => c.id === value);
-                      if (cliente) {
-                        setClienteNombre(cliente.nombre);
-                        setClienteTelefono(cliente.telefono || "");
-                        setClienteEmail(cliente.email || "");
-                        setClienteRFC(cliente.rfc || "");
-                      }
-                    }}>
-                             <SelectTrigger>
-                               <SelectValue placeholder="Buscar cliente existente" />
-                             </SelectTrigger>
-                             <SelectContent>
-                               {loadingClientes ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando clientes...</div> : clientes.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay clientes registrados</div> : clientes.map(cliente => <SelectItem key={cliente.id} value={cliente.id}>
-                                     <div className="flex flex-col">
-                                       <span className="font-medium">{cliente.nombre}</span>
-                                       <span className="text-xs text-muted-foreground">
-                                         {cliente.telefono && `Tel: ${cliente.telefono}`}
-                                         {cliente.email && ` • Email: ${cliente.email}`}
-                                         {cliente.source === 'transaction' && ' • (De transacción)'}
-                                       </span>
-                                     </div>
-                                   </SelectItem>)}
-                             </SelectContent>
-                           </Select>
-                           {clienteSeleccionado && <p className="text-xs text-muted-foreground text-green-600">
-                               ✓ Datos del cliente cargados automáticamente
-                             </p>}
-                         </div>}
-
-                       {/* Campos de cliente - solo si es nuevo o si se seleccionó uno recurrente */}
-                       {(tipoCliente === "nuevo" || tipoCliente === "recurrente" && clienteSeleccionado) && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div className="space-y-2">
-                           <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
-                           <Input id="cliente-nombre" type="text" placeholder="Nombre completo" value={clienteNombre} onChange={e => setClienteNombre(e.target.value)} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
-                         </div>
-                         <div className="space-y-2">
-                           <div className="flex items-center space-x-2">
-                             <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
-                             {(paymentStatus === "parcial" || paymentStatus === "credito") && <span className="text-destructive text-sm">*</span>}
-                             {hasFieldError('Teléfono del Cliente') && <div className="flex items-center text-destructive">
-                                 <AlertCircle className="h-3 w-3 mr-1" />
-                                 <span className="text-xs">Requerido</span>
-                               </div>}
+                           <div className="space-y-2">
+                             <Label className="font-medium">Tipo de Cliente</Label>
+                             <Select value={tipoCliente} onValueChange={value => {
+                         setTipoCliente(value);
+                         // Reset client data when switching types
+                         setClienteSeleccionado("");
+                         setClienteNombre("");
+                         setClienteTelefono("");
+                         setClienteEmail("");
+                         setClienteRFC("");
+                         setDuplicateWarnings([]); // Limpiar advertencias al cambiar tipo
+                       }}>
+                               <SelectTrigger>
+                                 <SelectValue placeholder="Selecciona el tipo de cliente" />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="nuevo">Cliente Nuevo</SelectItem>
+                                 <SelectItem value="recurrente">Cliente Recurrente</SelectItem>
+                               </SelectContent>
+                             </Select>
                            </div>
-                            <Input id="cliente-telefono" type="tel" placeholder="Ej: +52 55 1234 5678" value={clienteTelefono} onChange={e => setClienteTelefono(e.target.value)} className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
-                            {/* Advertencia de duplicado para teléfono */}
-                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteTelefono) && w.includes("teléfono")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                <span className="text-xs">
-                                  {duplicateWarnings.find(w => w.includes(clienteTelefono) && w.includes("teléfono"))}
-                                </span>
-                              </div>}
-                         </div>
-                         <div className="space-y-2">
-                           <div className="flex items-center space-x-2">
-                             <Label htmlFor="cliente-email">Correo Electrónico</Label>
-                             {(paymentStatus === "parcial" || paymentStatus === "credito") && <span className="text-destructive text-sm">*</span>}
-                             {hasFieldError('Email del Cliente') && <div className="flex items-center text-destructive">
-                                 <AlertCircle className="h-3 w-3 mr-1" />
-                                 <span className="text-xs">Requerido</span>
-                               </div>}
-                           </div>
-                            <Input id="cliente-email" type="email" placeholder="cliente@ejemplo.com" value={clienteEmail} onChange={e => setClienteEmail(e.target.value)} className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
-                            {/* Advertencia de duplicado para email */}
-                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteEmail) && w.includes("correo")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                <span className="text-xs">
-                                  {duplicateWarnings.find(w => w.includes(clienteEmail) && w.includes("correo"))}
-                                </span>
-                              </div>}
-                         </div>
-                         <div className="space-y-2">
-                           <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
-                            <Input id="cliente-rfc" type="text" placeholder="RFC123456ABC1" value={clienteRFC} onChange={e => setClienteRFC(e.target.value.toUpperCase())} maxLength={13} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
-                            {/* Advertencia de duplicado para RFC */}
-                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteRFC) && w.includes("RFC")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                <span className="text-xs">
-                                  {duplicateWarnings.find(w => w.includes(clienteRFC) && w.includes("RFC"))}
-                                </span>
-                              </div>}
-                         </div>
-                         
-                         {/* Fecha de vencimiento para pagos parciales y crédito */}
-                         {(paymentStatus === "parcial" || paymentStatus === "credito") && <div className="space-y-2">
-                             <div className="flex items-center space-x-2">
-                               <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
-                               <span className="text-destructive text-sm">*</span>
-                               {hasFieldError('Fecha de Vencimiento') && <div className="flex items-center text-destructive">
+
+                          {/* Cliente recurrente - selector */}
+                          {tipoCliente === "recurrente" && <div className="space-y-2">
+                              <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
+                              <Select value={clienteSeleccionado} onValueChange={value => {
+                         setClienteSeleccionado(value);
+                         const cliente = clientes.find(c => c.id === value);
+                         if (cliente) {
+                           setClienteNombre(cliente.nombre);
+                           setClienteTelefono(cliente.telefono || "");
+                           setClienteEmail(cliente.email || "");
+                           setClienteRFC(cliente.rfc || "");
+                         }
+                       }}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Buscar cliente existente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {loadingClientes ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando clientes...</div> : clientes.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay clientes registrados</div> : clientes.map(cliente => <SelectItem key={cliente.id} value={cliente.id}>
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{cliente.nombre}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {cliente.telefono && `Tel: ${cliente.telefono}`}
+                                            {cliente.email && ` • Email: ${cliente.email}`}
+                                            {cliente.source === 'transaction' && ' • (De transacción)'}
+                                          </span>
+                                        </div>
+                                      </SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              {clienteSeleccionado && <p className="text-xs text-muted-foreground text-green-600">
+                                  ✓ Datos del cliente cargados automáticamente
+                                </p>}
+                            </div>}
+
+                          {/* Campos de cliente - solo si es nuevo o si se seleccionó uno recurrente */}
+                          {(tipoCliente === "nuevo" || tipoCliente === "recurrente" && clienteSeleccionado) && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
+                              <Input id="cliente-nombre" type="text" placeholder="Nombre completo" value={clienteNombre} onChange={e => setClienteNombre(e.target.value)} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
+                                {(paymentStatus === "parcial" || paymentStatus === "credito") && <span className="text-destructive text-sm">*</span>}
+                                {hasFieldError('Teléfono del Cliente') && <div className="flex items-center text-destructive">
+                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                    <span className="text-xs">Requerido</span>
+                                  </div>}
+                              </div>
+                               <Input id="cliente-telefono" type="tel" placeholder="Ej: +52 55 1234 5678" value={clienteTelefono} onChange={e => setClienteTelefono(e.target.value)} className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
+                               {/* Advertencia de duplicado para teléfono */}
+                               {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteTelefono) && w.includes("teléfono")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                   <span className="text-xs">Requerido</span>
+                                   <span className="text-xs">
+                                     {duplicateWarnings.find(w => w.includes(clienteTelefono) && w.includes("teléfono"))}
+                                   </span>
                                  </div>}
-                             </div>
-                             <Input id="fecha-vencimiento" type="date" value={fechaVencimiento} onChange={e => setFechaVencimiento(e.target.value)} className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''} min={new Date().toISOString().split('T')[0]} />
-                             <p className="text-xs text-muted-foreground">
-                               Fecha límite para el pago {paymentStatus === "parcial" ? "del monto pendiente" : "completo"}
-                             </p>
-                           </div>}
-                       </div>}
-                     </div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Label htmlFor="cliente-email">Correo Electrónico</Label>
+                                {(paymentStatus === "parcial" || paymentStatus === "credito") && <span className="text-destructive text-sm">*</span>}
+                                {hasFieldError('Email del Cliente') && <div className="flex items-center text-destructive">
+                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                    <span className="text-xs">Requerido</span>
+                                  </div>}
+                              </div>
+                               <Input id="cliente-email" type="email" placeholder="cliente@ejemplo.com" value={clienteEmail} onChange={e => setClienteEmail(e.target.value)} className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
+                               {/* Advertencia de duplicado para email */}
+                               {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteEmail) && w.includes("correo")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                                   <AlertCircle className="h-3 w-3 mr-1" />
+                                   <span className="text-xs">
+                                     {duplicateWarnings.find(w => w.includes(clienteEmail) && w.includes("correo"))}
+                                   </span>
+                                 </div>}
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
+                               <Input id="cliente-rfc" type="text" placeholder="RFC123456ABC1" value={clienteRFC} onChange={e => setClienteRFC(e.target.value.toUpperCase())} maxLength={13} disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""} />
+                               {/* Advertencia de duplicado para RFC */}
+                               {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteRFC) && w.includes("RFC")) && <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                                   <AlertCircle className="h-3 w-3 mr-1" />
+                                   <span className="text-xs">
+                                     {duplicateWarnings.find(w => w.includes(clienteRFC) && w.includes("RFC"))}
+                                   </span>
+                                 </div>}
+                            </div>
+                            
+                            {/* Fecha de vencimiento para pagos parciales y crédito */}
+                            {(paymentStatus === "parcial" || paymentStatus === "credito") && <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
+                                  <span className="text-destructive text-sm">*</span>
+                                  {hasFieldError('Fecha de Vencimiento') && <div className="flex items-center text-destructive">
+                                      <AlertCircle className="h-3 w-3 mr-1" />
+                                      <span className="text-xs">Requerido</span>
+                                    </div>}
+                                </div>
+                                <Input id="fecha-vencimiento" type="date" value={fechaVencimiento} onChange={e => setFechaVencimiento(e.target.value)} className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''} min={new Date().toISOString().split('T')[0]} />
+                                <p className="text-xs text-muted-foreground">
+                                  Fecha límite para el pago {paymentStatus === "parcial" ? "del monto pendiente" : "completo"}
+                                </p>
+                              </div>}
+                          </div>}
+                        </div>
+                      )}
 
                     <Separator />
 
