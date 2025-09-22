@@ -720,9 +720,10 @@ const RegistroIngresos = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="registro">Registro de Ingresos</TabsTrigger>
             <TabsTrigger value="resumen">Resumen de Ventas</TabsTrigger>
+            <TabsTrigger value="analitica">Analítica de Ventas</TabsTrigger>
             <TabsTrigger value="catalogo">Catálogo de Productos</TabsTrigger>
           </TabsList>
 
@@ -1752,7 +1753,28 @@ const RegistroIngresos = () => {
             </Card>
           </TabsContent>
 
-          {/* TAB 3: CATÁLOGO DE PRODUCTOS */}
+          {/* TAB 3: ANALÍTICA DE VENTAS */}
+          <TabsContent value="analitica" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Analítica de Ventas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-muted-foreground">
+                  <div className="mb-4">
+                    <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">Analítica de Ventas</h3>
+                  <p>Gráficos e indicadores para el análisis de ventas</p>
+                  <p className="text-sm mt-2">Próximamente disponible</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* TAB 4: CATÁLOGO DE PRODUCTOS */}
           <TabsContent value="catalogo" className="mt-6">
             <Card>
               <CardHeader>
