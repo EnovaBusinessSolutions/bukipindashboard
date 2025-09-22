@@ -1154,7 +1154,14 @@ const RegistroIngresos = () => {
                                ) : (
                                  clientes.map((cliente) => (
                                    <SelectItem key={cliente.id} value={cliente.id}>
-                                     {cliente.nombre} {cliente.telefono && `- ${cliente.telefono}`}
+                                     <div className="flex flex-col">
+                                       <span className="font-medium">{cliente.nombre}</span>
+                                       <span className="text-xs text-muted-foreground">
+                                         {cliente.telefono && `Tel: ${cliente.telefono}`}
+                                         {cliente.email && ` • Email: ${cliente.email}`}
+                                         {cliente.source === 'transaction' && ' • (De transacción)'}
+                                       </span>
+                                     </div>
                                    </SelectItem>
                                  ))
                                )}
