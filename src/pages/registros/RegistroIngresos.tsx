@@ -870,7 +870,7 @@ const RegistroIngresos = () => {
                         </div>
                         <div className="flex items-center space-x-3">
                           <RadioGroupItem value="credito" id="credito" />
-                          <Label htmlFor="credito" className="cursor-pointer">Quedó a deber</Label>
+                          <Label htmlFor="credito" className="cursor-pointer">Adeudo Total</Label>
                         </div>
                        </RadioGroup>
 
