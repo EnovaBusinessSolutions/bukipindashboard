@@ -21,6 +21,7 @@ interface RegistroIngresoRequest {
   clienteTelefono?: string
   clienteEmail?: string
   clienteRFC?: string
+  clienteId?: string
   fechaVencimiento?: string
   comentarios?: string
   // Nuevos campos para inventario

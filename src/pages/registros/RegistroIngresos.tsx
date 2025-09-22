@@ -19,6 +19,7 @@ import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
+import { useClientes, useCreateCliente } from "@/hooks/useClientes";
 
 const RegistroIngresos = () => {
   const { ventasResumen, loading: loadingVentas, refetch: refetchVentas } = useVentasResumen();
@@ -26,8 +27,10 @@ const RegistroIngresos = () => {
   const { data: subcuentas = [] } = useSubcuentas();
   const { data: productos = [], isLoading: loadingProductos } = useProductos();
   const { data: productosServicios = [], isLoading: loadingProductosServicios } = useProductosServicios();
+  const { data: clientes = [], isLoading: loadingClientes } = useClientes();
   const createProducto = useCreateProducto();
   const deleteProducto = useDeleteProducto();
+  const createCliente = useCreateCliente();
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
   const [hasDiscount, setHasDiscount] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
@@ -38,6 +41,8 @@ const RegistroIngresos = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Estados para información del cliente
+  const [tipoCliente, setTipoCliente] = useState(""); // "nuevo" o "recurrente"
+  const [clienteSeleccionado, setClienteSeleccionado] = useState("");
   const [clienteNombre, setClienteNombre] = useState("");
   const [clienteTelefono, setClienteTelefono] = useState("");
   const [clienteEmail, setClienteEmail] = useState("");
@@ -165,6 +170,8 @@ const RegistroIngresos = () => {
     
     // Validación de datos del cliente para cuentas pendientes (crédito o parcial)
     if (paymentStatus === 'credito' || paymentStatus === 'parcial') {
+      if (!tipoCliente) errors.push('Tipo de Cliente');
+      if (tipoCliente === 'recurrente' && !clienteSeleccionado) errors.push('Cliente Seleccionado');
       if (!clienteTelefono.trim()) errors.push('Teléfono del Cliente');
       if (!clienteEmail.trim()) errors.push('Email del Cliente');
       if (!fechaVencimiento) errors.push('Fecha de Vencimiento');
@@ -207,6 +214,31 @@ const RegistroIngresos = () => {
     setIsSubmitting(true);
 
     try {
+      // Crear cliente si es nuevo y si hay información del cliente
+      let clienteId = null;
+      if (tipoCliente === "nuevo" && clienteNombre.trim()) {
+        try {
+          const nuevoCliente = await createCliente.mutateAsync({
+            nombre: clienteNombre.trim(),
+            email: clienteEmail.trim() || undefined,
+            telefono: clienteTelefono.trim() || undefined,
+            rfc: clienteRFC.trim() || undefined,
+            activo: true
+          });
+          clienteId = nuevoCliente.id;
+        } catch (error) {
+          console.error("Error creating client:", error);
+          toast({
+            title: "Error al crear cliente",
+            description: "No se pudo crear el cliente nuevo",
+            variant: "destructive"
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (tipoCliente === "recurrente" && clienteSeleccionado) {
+        clienteId = clienteSeleccionado;
+      }
       // Derivar valores por seguridad
       const selectedProduct = productos.find(p => p.id === selectedProductId);
       const selectedInventoryProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
@@ -269,6 +301,7 @@ const RegistroIngresos = () => {
           clienteTelefono: clienteTelefono.trim() || null,
           clienteEmail: clienteEmail.trim() || null,
           clienteRFC: clienteRFC.trim() || null,
+          clienteId: clienteId,
           fechaVencimiento: fechaVencimiento || null,
           comentarios: comentarios.trim() || null,
           // Datos adicionales para inventario
@@ -309,6 +342,8 @@ const RegistroIngresos = () => {
       setHasDiscount(false);
       setPaymentMethod("");
       setPaymentStatus("");
+      setTipoCliente("");
+      setClienteSeleccionado("");
       setClienteNombre("");
       setClienteTelefono("");
       setClienteEmail("");
@@ -1054,119 +1089,187 @@ const RegistroIngresos = () => {
 
                     <Separator />
 
-                    {/* Base de Datos de Clientes */}
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Label className="font-medium">Base de Datos de Clientes</Label>
-                        <span className="text-xs text-muted-foreground">
-                          {paymentStatus === "contado" ? "Opcional - Para control y seguimiento" : "Obligatorio para cuentas por cobrar"}
-                        </span>
-                      </div>
-                      
-                      {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                        <Alert>
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>
-                            Se registrará en Cuentas por Cobrar para análisis de vencimientos
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
-                          <Input
-                            id="cliente-nombre"
-                            type="text"
-                            placeholder="Nombre completo"
-                            value={clienteNombre}
-                            onChange={(e) => setClienteNombre(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
-                            {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                              <span className="text-destructive text-sm">*</span>
-                            )}
-                            {hasFieldError('Teléfono del Cliente') && (
-                              <div className="flex items-center text-destructive">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                <span className="text-xs">Requerido</span>
-                              </div>
-                            )}
-                          </div>
-                          <Input
-                            id="cliente-telefono"
-                            type="tel"
-                            placeholder="Ej: +52 55 1234 5678"
-                            value={clienteTelefono}
-                            onChange={(e) => setClienteTelefono(e.target.value)}
-                            className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Label htmlFor="cliente-email">Correo Electrónico</Label>
-                            {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                              <span className="text-destructive text-sm">*</span>
-                            )}
-                            {hasFieldError('Email del Cliente') && (
-                              <div className="flex items-center text-destructive">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                <span className="text-xs">Requerido</span>
-                              </div>
-                            )}
-                          </div>
-                          <Input
-                            id="cliente-email"
-                            type="email"
-                            placeholder="cliente@ejemplo.com"
-                            value={clienteEmail}
-                            onChange={(e) => setClienteEmail(e.target.value)}
-                            className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
-                          <Input
-                            id="cliente-rfc"
-                            type="text"
-                            placeholder="RFC123456ABC1"
-                            value={clienteRFC}
-                            onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
-                            maxLength={13}
-                          />
-                        </div>
-                        
-                        {/* Fecha de vencimiento para pagos parciales y crédito */}
-                        {(paymentStatus === "parcial" || paymentStatus === "credito") && (
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
-                              <span className="text-destructive text-sm">*</span>
-                              {hasFieldError('Fecha de Vencimiento') && (
-                                <div className="flex items-center text-destructive">
-                                  <AlertCircle className="h-3 w-3 mr-1" />
-                                  <span className="text-xs">Requerido</span>
-                                </div>
-                              )}
-                            </div>
-                            <Input
-                              id="fecha-vencimiento"
-                              type="date"
-                              value={fechaVencimiento}
-                              onChange={(e) => setFechaVencimiento(e.target.value)}
-                              className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''}
-                              min={new Date().toISOString().split('T')[0]}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Fecha límite para el pago {paymentStatus === "parcial" ? "del monto pendiente" : "completo"}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                     {/* Base de Datos de Clientes */}
+                     <div className="space-y-4">
+                       <div className="flex items-center space-x-2">
+                         <Label className="font-medium">Base de Datos de Clientes</Label>
+                         <span className="text-xs text-muted-foreground">
+                           {paymentStatus === "contado" ? "Opcional - Para control y seguimiento" : "Obligatorio para cuentas por cobrar"}
+                         </span>
+                       </div>
+                       
+                       {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                         <Alert>
+                           <AlertCircle className="h-4 w-4" />
+                           <AlertDescription>
+                             Se registrará en Cuentas por Cobrar para análisis de vencimientos
+                           </AlertDescription>
+                         </Alert>
+                       )}
+
+                       {/* Selector de tipo de cliente */}
+                       <div className="space-y-2">
+                         <Label className="font-medium">Tipo de Cliente</Label>
+                         <Select value={tipoCliente} onValueChange={(value) => {
+                           setTipoCliente(value);
+                           // Reset client data when switching types
+                           setClienteSeleccionado("");
+                           setClienteNombre("");
+                           setClienteTelefono("");
+                           setClienteEmail("");
+                           setClienteRFC("");
+                         }}>
+                           <SelectTrigger>
+                             <SelectValue placeholder="Selecciona el tipo de cliente" />
+                           </SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="nuevo">Cliente Nuevo</SelectItem>
+                             <SelectItem value="recurrente">Cliente Recurrente</SelectItem>
+                           </SelectContent>
+                         </Select>
+                       </div>
+
+                       {/* Cliente recurrente - selector */}
+                       {tipoCliente === "recurrente" && (
+                         <div className="space-y-2">
+                           <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
+                           <Select value={clienteSeleccionado} onValueChange={(value) => {
+                             setClienteSeleccionado(value);
+                             const cliente = clientes.find(c => c.id === value);
+                             if (cliente) {
+                               setClienteNombre(cliente.nombre);
+                               setClienteTelefono(cliente.telefono || "");
+                               setClienteEmail(cliente.email || "");
+                               setClienteRFC(cliente.rfc || "");
+                             }
+                           }}>
+                             <SelectTrigger>
+                               <SelectValue placeholder="Buscar cliente existente" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               {loadingClientes ? (
+                                 <SelectItem value="" disabled>Cargando clientes...</SelectItem>
+                               ) : clientes.length === 0 ? (
+                                 <SelectItem value="" disabled>No hay clientes registrados</SelectItem>
+                               ) : (
+                                 clientes.map((cliente) => (
+                                   <SelectItem key={cliente.id} value={cliente.id}>
+                                     {cliente.nombre} {cliente.telefono && `- ${cliente.telefono}`}
+                                   </SelectItem>
+                                 ))
+                               )}
+                             </SelectContent>
+                           </Select>
+                           {clienteSeleccionado && (
+                             <p className="text-xs text-muted-foreground text-green-600">
+                               ✓ Datos del cliente cargados automáticamente
+                             </p>
+                           )}
+                         </div>
+                       )}
+
+                       {/* Campos de cliente - solo si es nuevo o si se seleccionó uno recurrente */}
+                       {(tipoCliente === "nuevo" || (tipoCliente === "recurrente" && clienteSeleccionado)) && (
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                           <Label htmlFor="cliente-nombre">Nombre del Cliente</Label>
+                           <Input
+                             id="cliente-nombre"
+                             type="text"
+                             placeholder="Nombre completo"
+                             value={clienteNombre}
+                             onChange={(e) => setClienteNombre(e.target.value)}
+                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                           />
+                         </div>
+                         <div className="space-y-2">
+                           <div className="flex items-center space-x-2">
+                             <Label htmlFor="cliente-telefono">Número de Teléfono</Label>
+                             {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                               <span className="text-destructive text-sm">*</span>
+                             )}
+                             {hasFieldError('Teléfono del Cliente') && (
+                               <div className="flex items-center text-destructive">
+                                 <AlertCircle className="h-3 w-3 mr-1" />
+                                 <span className="text-xs">Requerido</span>
+                               </div>
+                             )}
+                           </div>
+                           <Input
+                             id="cliente-telefono"
+                             type="tel"
+                             placeholder="Ej: +52 55 1234 5678"
+                             value={clienteTelefono}
+                             onChange={(e) => setClienteTelefono(e.target.value)}
+                             className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
+                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                           />
+                         </div>
+                         <div className="space-y-2">
+                           <div className="flex items-center space-x-2">
+                             <Label htmlFor="cliente-email">Correo Electrónico</Label>
+                             {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                               <span className="text-destructive text-sm">*</span>
+                             )}
+                             {hasFieldError('Email del Cliente') && (
+                               <div className="flex items-center text-destructive">
+                                 <AlertCircle className="h-3 w-3 mr-1" />
+                                 <span className="text-xs">Requerido</span>
+                               </div>
+                             )}
+                           </div>
+                           <Input
+                             id="cliente-email"
+                             type="email"
+                             placeholder="cliente@ejemplo.com"
+                             value={clienteEmail}
+                             onChange={(e) => setClienteEmail(e.target.value)}
+                             className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
+                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                           />
+                         </div>
+                         <div className="space-y-2">
+                           <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
+                           <Input
+                             id="cliente-rfc"
+                             type="text"
+                             placeholder="RFC123456ABC1"
+                             value={clienteRFC}
+                             onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
+                             maxLength={13}
+                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                           />
+                         </div>
+                         
+                         {/* Fecha de vencimiento para pagos parciales y crédito */}
+                         {(paymentStatus === "parcial" || paymentStatus === "credito") && (
+                           <div className="space-y-2">
+                             <div className="flex items-center space-x-2">
+                               <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
+                               <span className="text-destructive text-sm">*</span>
+                               {hasFieldError('Fecha de Vencimiento') && (
+                                 <div className="flex items-center text-destructive">
+                                   <AlertCircle className="h-3 w-3 mr-1" />
+                                   <span className="text-xs">Requerido</span>
+                                 </div>
+                               )}
+                             </div>
+                             <Input
+                               id="fecha-vencimiento"
+                               type="date"
+                               value={fechaVencimiento}
+                               onChange={(e) => setFechaVencimiento(e.target.value)}
+                               className={hasFieldError('Fecha de Vencimiento') ? 'border-destructive' : ''}
+                               min={new Date().toISOString().split('T')[0]}
+                             />
+                             <p className="text-xs text-muted-foreground">
+                               Fecha límite para el pago {paymentStatus === "parcial" ? "del monto pendiente" : "completo"}
+                             </p>
+                           </div>
+                         )}
+                       </div>
+                       )}
+                     </div>
 
                     <Separator />
 
