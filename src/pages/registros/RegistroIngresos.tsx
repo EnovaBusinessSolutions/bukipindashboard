@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ const RegistroIngresos = () => {
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [montoAbonado, setMontoAbonado] = useState("");
   const [comentarios, setComentarios] = useState(""); // New comments field
+  const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]); // Advertencias de duplicados
   
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
@@ -198,6 +199,37 @@ const RegistroIngresos = () => {
     return errors.includes(fieldName);
   };
 
+  // Función para validar duplicados de cliente
+  const checkClientDuplicates = (telefono: string, email: string, rfc: string) => {
+    const warnings: string[] = [];
+    
+    if (!clientes || clientes.length === 0) return warnings;
+
+    clientes.forEach(cliente => {
+      if (cliente.telefono && telefono && cliente.telefono.trim() === telefono.trim()) {
+        warnings.push(`El teléfono ${telefono} ya está registrado para el cliente "${cliente.nombre}"`);
+      }
+      if (cliente.email && email && cliente.email.trim().toLowerCase() === email.trim().toLowerCase()) {
+        warnings.push(`El correo ${email} ya está registrado para el cliente "${cliente.nombre}"`);
+      }
+      if (cliente.rfc && rfc && cliente.rfc.trim().toUpperCase() === rfc.trim().toUpperCase()) {
+        warnings.push(`El RFC ${rfc} ya está registrado para el cliente "${cliente.nombre}"`);
+      }
+    });
+
+    return warnings;
+  };
+
+  // useEffect para validar duplicados en tiempo real
+  useEffect(() => {
+    if (tipoCliente === "nuevo" && (clienteTelefono || clienteEmail || clienteRFC)) {
+      const warnings = checkClientDuplicates(clienteTelefono, clienteEmail, clienteRFC);
+      setDuplicateWarnings(warnings);
+    } else {
+      setDuplicateWarnings([]);
+    }
+  }, [clienteTelefono, clienteEmail, clienteRFC, tipoCliente, clientes]);
+
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
     const validationErrors = getValidationErrors();
@@ -209,6 +241,16 @@ const RegistroIngresos = () => {
         variant: "destructive"
       });
       return;
+    }
+
+    // Advertir sobre duplicados pero permitir continuar
+    if (tipoCliente === "nuevo" && duplicateWarnings.length > 0) {
+      const continuar = confirm(
+        `Se detectaron posibles duplicados:\n\n${duplicateWarnings.join('\n')}\n\n¿Deseas continuar registrando este cliente de todas formas?`
+      );
+      if (!continuar) {
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -351,6 +393,7 @@ const RegistroIngresos = () => {
       setFechaVencimiento("");
       setMontoAbonado("");
       setComentarios("");
+      setDuplicateWarnings([]); // Limpiar advertencias de duplicados
       setSelectedProductId("");
       setProductUnitPrice("");
       setProductQuantity("1");
@@ -1107,27 +1150,27 @@ const RegistroIngresos = () => {
                          </Alert>
                        )}
 
-                       {/* Selector de tipo de cliente */}
-                       <div className="space-y-2">
-                         <Label className="font-medium">Tipo de Cliente</Label>
-                         <Select value={tipoCliente} onValueChange={(value) => {
-                           setTipoCliente(value);
-                           // Reset client data when switching types
-                           setClienteSeleccionado("");
-                           setClienteNombre("");
-                           setClienteTelefono("");
-                           setClienteEmail("");
-                           setClienteRFC("");
-                         }}>
-                           <SelectTrigger>
-                             <SelectValue placeholder="Selecciona el tipo de cliente" />
-                           </SelectTrigger>
-                           <SelectContent>
-                             <SelectItem value="nuevo">Cliente Nuevo</SelectItem>
-                             <SelectItem value="recurrente">Cliente Recurrente</SelectItem>
-                           </SelectContent>
-                         </Select>
-                       </div>
+                        <div className="space-y-2">
+                          <Label className="font-medium">Tipo de Cliente</Label>
+                          <Select value={tipoCliente} onValueChange={(value) => {
+                            setTipoCliente(value);
+                            // Reset client data when switching types
+                            setClienteSeleccionado("");
+                            setClienteNombre("");
+                            setClienteTelefono("");
+                            setClienteEmail("");
+                            setClienteRFC("");
+                            setDuplicateWarnings([]); // Limpiar advertencias al cambiar tipo
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona el tipo de cliente" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="nuevo">Cliente Nuevo</SelectItem>
+                              <SelectItem value="recurrente">Cliente Recurrente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
                        {/* Cliente recurrente - selector */}
                        {tipoCliente === "recurrente" && (
@@ -1202,15 +1245,24 @@ const RegistroIngresos = () => {
                                </div>
                              )}
                            </div>
-                           <Input
-                             id="cliente-telefono"
-                             type="tel"
-                             placeholder="Ej: +52 55 1234 5678"
-                             value={clienteTelefono}
-                             onChange={(e) => setClienteTelefono(e.target.value)}
-                             className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
-                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                           />
+                            <Input
+                              id="cliente-telefono"
+                              type="tel"
+                              placeholder="Ej: +52 55 1234 5678"
+                              value={clienteTelefono}
+                              onChange={(e) => setClienteTelefono(e.target.value)}
+                              className={hasFieldError('Teléfono del Cliente') ? 'border-destructive' : ''}
+                              disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                            />
+                            {/* Advertencia de duplicado para teléfono */}
+                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteTelefono) && w.includes("teléfono")) && (
+                              <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                <span className="text-xs">
+                                  {duplicateWarnings.find(w => w.includes(clienteTelefono) && w.includes("teléfono"))}
+                                </span>
+                              </div>
+                            )}
                          </div>
                          <div className="space-y-2">
                            <div className="flex items-center space-x-2">
@@ -1225,27 +1277,45 @@ const RegistroIngresos = () => {
                                </div>
                              )}
                            </div>
-                           <Input
-                             id="cliente-email"
-                             type="email"
-                             placeholder="cliente@ejemplo.com"
-                             value={clienteEmail}
-                             onChange={(e) => setClienteEmail(e.target.value)}
-                             className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
-                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                           />
+                            <Input
+                              id="cliente-email"
+                              type="email"
+                              placeholder="cliente@ejemplo.com"
+                              value={clienteEmail}
+                              onChange={(e) => setClienteEmail(e.target.value)}
+                              className={hasFieldError('Email del Cliente') ? 'border-destructive' : ''}
+                              disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                            />
+                            {/* Advertencia de duplicado para email */}
+                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteEmail) && w.includes("correo")) && (
+                              <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                <span className="text-xs">
+                                  {duplicateWarnings.find(w => w.includes(clienteEmail) && w.includes("correo"))}
+                                </span>
+                              </div>
+                            )}
                          </div>
                          <div className="space-y-2">
                            <Label htmlFor="cliente-rfc">RFC (ID Fiscal) - Opcional</Label>
-                           <Input
-                             id="cliente-rfc"
-                             type="text"
-                             placeholder="RFC123456ABC1"
-                             value={clienteRFC}
-                             onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
-                             maxLength={13}
-                             disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
-                           />
+                            <Input
+                              id="cliente-rfc"
+                              type="text"
+                              placeholder="RFC123456ABC1"
+                              value={clienteRFC}
+                              onChange={(e) => setClienteRFC(e.target.value.toUpperCase())}
+                              maxLength={13}
+                              disabled={tipoCliente === "recurrente" && clienteSeleccionado !== ""}
+                            />
+                            {/* Advertencia de duplicado para RFC */}
+                            {tipoCliente === "nuevo" && duplicateWarnings.some(w => w.includes(clienteRFC) && w.includes("RFC")) && (
+                              <div className="flex items-center text-amber-600 bg-amber-50 p-2 rounded">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                <span className="text-xs">
+                                  {duplicateWarnings.find(w => w.includes(clienteRFC) && w.includes("RFC"))}
+                                </span>
+                              </div>
+                            )}
                          </div>
                          
                          {/* Fecha de vencimiento para pagos parciales y crédito */}
