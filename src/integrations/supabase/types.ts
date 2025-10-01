@@ -374,6 +374,54 @@ export type Database = {
           },
         ]
       }
+      proveedores: {
+        Row: {
+          activo: boolean
+          ciudad: string | null
+          codigo_postal: string | null
+          created_at: string
+          direccion: string | null
+          email: string | null
+          estado: string | null
+          id: string
+          nombre: string
+          rfc: string | null
+          telefono: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activo?: boolean
+          ciudad?: string | null
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          nombre: string
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activo?: boolean
+          ciudad?: string | null
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          nombre?: string
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subcuentas: {
         Row: {
           created_at: string
@@ -426,6 +474,7 @@ export type Database = {
           precio_unitario: number | null
           producto_egreso_id: string | null
           proveedor_email: string | null
+          proveedor_id: string | null
           proveedor_nombre: string | null
           proveedor_rfc: string | null
           proveedor_telefono: string | null
@@ -452,6 +501,7 @@ export type Database = {
           precio_unitario?: number | null
           producto_egreso_id?: string | null
           proveedor_email?: string | null
+          proveedor_id?: string | null
           proveedor_nombre?: string | null
           proveedor_rfc?: string | null
           proveedor_telefono?: string | null
@@ -478,6 +528,7 @@ export type Database = {
           precio_unitario?: number | null
           producto_egreso_id?: string | null
           proveedor_email?: string | null
+          proveedor_id?: string | null
           proveedor_nombre?: string | null
           proveedor_rfc?: string | null
           proveedor_telefono?: string | null
@@ -488,7 +539,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transacciones_egresos_proveedor_id_fkey"
+            columns: ["proveedor_id"]
+            isOneToOne: false
+            referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transacciones_ingresos: {
         Row: {

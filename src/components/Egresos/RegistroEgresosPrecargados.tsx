@@ -11,11 +11,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Package, AlertCircle, Save, Calculator } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
+import { useProveedores } from "@/hooks/useProveedores";
 import { supabase } from "@/integrations/supabase/client";
 const RegistroEgresosPrecargados = () => {
-  const {
-    data: productos = []
-  } = useProductosEgresos();
+  const { data: productos = [] } = useProductosEgresos();
+  const { proveedores, createProveedor } = useProveedores();
   const [selectedType, setSelectedType] = useState(""); // "costo" or "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -31,6 +31,11 @@ const RegistroEgresosPrecargados = () => {
   const [supplierEmail, setSupplierEmail] = useState("");
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
+  
+  // Nuevos estados para el manejo de proveedores
+  const [registrarProveedor, setRegistrarProveedor] = useState(false);
+  const [tipoProveedor, setTipoProveedor] = useState(""); // "nuevo" o "existente"
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState("");
 
   // Filter products based on selected type
   const filteredProducts = productos.filter(p => p.tipo === selectedType);
@@ -83,14 +88,85 @@ const RegistroEgresosPrecargados = () => {
       });
       return;
     }
+
+    // Validar proveedor obligatorio para crédito y parcial
+    if ((paymentType === "credito" || paymentType === "parcial") && !registrarProveedor) {
+      toast({
+        title: "⚠️ Proveedor requerido",
+        description: "Para pagos a crédito o parciales es obligatorio registrar el proveedor",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar selección de proveedor si se decidió registrarlo
+    if (registrarProveedor && !tipoProveedor) {
+      toast({
+        title: "⚠️ Tipo de proveedor requerido",
+        description: "Selecciona si es un proveedor nuevo o existente",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar datos del proveedor si es nuevo
+    if (registrarProveedor && tipoProveedor === "nuevo" && !supplierName) {
+      toast({
+        title: "⚠️ Nombre del proveedor requerido",
+        description: "Ingresa el nombre del proveedor",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar selección de proveedor existente
+    if (registrarProveedor && tipoProveedor === "existente" && !proveedorSeleccionado) {
+      toast({
+        title: "⚠️ Proveedor no seleccionado",
+        description: "Selecciona un proveedor de la lista",
+        variant: "destructive"
+      });
+      return;
+    }
     try {
+      let proveedorId = null;
+
+      // Crear o seleccionar proveedor si se decidió registrarlo
+      if (registrarProveedor) {
+        if (tipoProveedor === "nuevo") {
+          const nuevoProveedor = {
+            nombre: supplierName,
+            telefono: supplierPhone || null,
+            email: supplierEmail || null,
+            rfc: supplierRFC || null,
+            direccion: null,
+            ciudad: null,
+            estado: null,
+            codigo_postal: null
+          };
+
+          const { data: proveedorData, error: proveedorError } = await createProveedor(nuevoProveedor);
+          
+          if (proveedorError) {
+            toast({
+              title: "❌ Error al crear proveedor",
+              description: proveedorError,
+              variant: "destructive"
+            });
+            return;
+          }
+
+          proveedorId = proveedorData?.id;
+        } else if (tipoProveedor === "existente") {
+          proveedorId = proveedorSeleccionado;
+        }
+      }
+
       const montoTotal = parseFloat(totalAmount) || 0;
       const montoPagado = paymentType === "contado" ? montoTotal : paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0;
       const montoPendiente = montoTotal - montoPagado;
-      const {
-        data,
-        error
-      } = await supabase.from('transacciones_egresos').insert({
+      
+      const { data, error } = await supabase.from('transacciones_egresos').insert({
         tipo_egreso: selectedType,
         subtipo_egreso: 'precargado',
         descripcion: selectedProduct?.nombre || '',
@@ -103,6 +179,7 @@ const RegistroEgresosPrecargados = () => {
         tipo_pago: paymentType,
         metodo_pago: paymentMethod || null,
         fecha_vencimiento: dueDate || null,
+        proveedor_id: proveedorId,
         proveedor_nombre: supplierName || null,
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
@@ -132,6 +209,9 @@ const RegistroEgresosPrecargados = () => {
       setSupplierEmail("");
       setSupplierRFC("");
       setDescription("");
+      setRegistrarProveedor(false);
+      setTipoProveedor("");
+      setProveedorSeleccionado("");
     } catch (error) {
       console.error('Error al registrar egreso:', error);
       toast({
@@ -299,27 +379,174 @@ const RegistroEgresosPrecargados = () => {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Información del Proveedor</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Solo mostrar opción de registrar para pago total */}
+            {paymentType === "contado" && (
               <div className="space-y-2">
-                <Label htmlFor="proveedor-nombre">Nombre del Proveedor</Label>
-                <Input id="proveedor-nombre" value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Nombre completo o razón social" />
+                <Label>¿Deseas registrar información del proveedor?</Label>
+                <RadioGroup value={registrarProveedor ? "si" : "no"} onValueChange={(val) => {
+                  setRegistrarProveedor(val === "si");
+                  if (val === "no") {
+                    setTipoProveedor("");
+                    setProveedorSeleccionado("");
+                    setSupplierName("");
+                    setSupplierPhone("");
+                    setSupplierEmail("");
+                    setSupplierRFC("");
+                  }
+                }}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="no" id="no-proveedor" />
+                    <Label htmlFor="no-proveedor">No, continuar sin proveedor</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="si" id="si-proveedor" />
+                    <Label htmlFor="si-proveedor">Sí, registrar proveedor</Label>
+                  </div>
+                </RadioGroup>
               </div>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                <Input id="proveedor-telefono" value={supplierPhone} onChange={e => setSupplierPhone(e.target.value)} placeholder="Número de teléfono" />
-              </div>
+            {/* Para crédito y parcial, siempre obligatorio */}
+            {(paymentType === "credito" || paymentType === "parcial") && (
+              <>
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Para pagos a crédito o parciales es obligatorio registrar la información del proveedor
+                  </AlertDescription>
+                </Alert>
+                {!registrarProveedor && setRegistrarProveedor(true)}
+              </>
+            )}
 
+            {/* Selección de tipo de proveedor */}
+            {registrarProveedor && (
               <div className="space-y-2">
-                <Label htmlFor="proveedor-email">Email</Label>
-                <Input id="proveedor-email" type="email" value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="correo@ejemplo.com" />
+                <Label>Tipo de Proveedor *</Label>
+                <RadioGroup value={tipoProveedor} onValueChange={(val) => {
+                  setTipoProveedor(val);
+                  if (val === "nuevo") {
+                    setProveedorSeleccionado("");
+                    setSupplierName("");
+                    setSupplierPhone("");
+                    setSupplierEmail("");
+                    setSupplierRFC("");
+                  } else if (val === "existente") {
+                    setSupplierName("");
+                    setSupplierPhone("");
+                    setSupplierEmail("");
+                    setSupplierRFC("");
+                  }
+                }}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
+                    <Label htmlFor="proveedor-nuevo">Nuevo Proveedor</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="existente" id="proveedor-existente" />
+                    <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
+                  </div>
+                </RadioGroup>
               </div>
+            )}
 
+            {/* Seleccionar proveedor existente */}
+            {registrarProveedor && tipoProveedor === "existente" && (
               <div className="space-y-2">
-                <Label htmlFor="proveedor-rfc">RFC</Label>
-                <Input id="proveedor-rfc" value={supplierRFC} onChange={e => setSupplierRFC(e.target.value)} placeholder="RFC del proveedor" />
+                <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
+                <Select value={proveedorSeleccionado} onValueChange={(val) => {
+                  setProveedorSeleccionado(val);
+                  const proveedor = proveedores.find(p => p.id === val);
+                  if (proveedor) {
+                    setSupplierName(proveedor.nombre);
+                    setSupplierPhone(proveedor.telefono || "");
+                    setSupplierEmail(proveedor.email || "");
+                    setSupplierRFC(proveedor.rfc || "");
+                  }
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar proveedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {proveedores.length > 0 ? (
+                      proveedores.map(proveedor => (
+                        <SelectItem key={proveedor.id} value={proveedor.id}>
+                          {proveedor.nombre}
+                          {proveedor.rfc && ` - ${proveedor.rfc}`}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-proveedores" disabled>
+                        No hay proveedores registrados
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
+            )}
+
+            {/* Formulario para nuevo proveedor o mostrar datos del existente */}
+            {registrarProveedor && tipoProveedor === "nuevo" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
+                  <Input 
+                    id="proveedor-nombre" 
+                    value={supplierName} 
+                    onChange={e => setSupplierName(e.target.value)} 
+                    placeholder="Nombre completo o razón social"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="proveedor-telefono">Teléfono</Label>
+                  <Input 
+                    id="proveedor-telefono" 
+                    value={supplierPhone} 
+                    onChange={e => setSupplierPhone(e.target.value)} 
+                    placeholder="Número de teléfono" 
+                  />
+                  <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="proveedor-email">Email</Label>
+                  <Input 
+                    id="proveedor-email" 
+                    type="email" 
+                    value={supplierEmail} 
+                    onChange={e => setSupplierEmail(e.target.value)} 
+                    placeholder="correo@ejemplo.com" 
+                  />
+                  <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="proveedor-rfc">RFC</Label>
+                  <Input 
+                    id="proveedor-rfc" 
+                    value={supplierRFC} 
+                    onChange={e => setSupplierRFC(e.target.value)} 
+                    placeholder="RFC del proveedor" 
+                  />
+                  <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
+                </div>
+              </div>
+            )}
+
+            {/* Mostrar datos del proveedor existente seleccionado */}
+            {registrarProveedor && tipoProveedor === "existente" && proveedorSeleccionado && (
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <p className="font-semibold">Datos del proveedor seleccionado:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <div><span className="font-medium">Nombre:</span> {supplierName}</div>
+                  {supplierPhone && <div><span className="font-medium">Teléfono:</span> {supplierPhone}</div>}
+                  {supplierEmail && <div><span className="font-medium">Email:</span> {supplierEmail}</div>}
+                  {supplierRFC && <div><span className="font-medium">RFC:</span> {supplierRFC}</div>}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
