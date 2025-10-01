@@ -64,7 +64,7 @@ const RegistroEgresosPrecargados = () => {
       }
     }
   };
-  // Función para formatear números con separador de miles
+  // Función para formatear números con separador de miles (solo para display)
   const formatNumber = (value: string) => {
     if (!value) return "";
     const num = parseFloat(value.replace(/,/g, ''));
@@ -73,18 +73,21 @@ const RegistroEgresosPrecargados = () => {
   };
 
   const handleQuantityChange = (newQuantity: string) => {
-    const cleanValue = newQuantity.replace(/,/g, '');
+    // Permitir solo números y punto decimal
+    const cleanValue = newQuantity.replace(/[^\d.]/g, '');
     setQuantity(cleanValue);
     if (unitPrice && cleanValue) {
-      const total = (parseFloat(unitPrice.replace(/,/g, '')) * parseFloat(cleanValue)).toFixed(2);
+      const total = (parseFloat(unitPrice) * parseFloat(cleanValue)).toFixed(2);
       setTotalAmount(total);
     }
   };
+  
   const handleUnitPriceChange = (price: string) => {
-    const cleanValue = price.replace(/,/g, '');
+    // Permitir solo números y punto decimal
+    const cleanValue = price.replace(/[^\d.]/g, '');
     setUnitPrice(cleanValue);
     if (quantity && cleanValue) {
-      const total = (parseFloat(cleanValue) * parseFloat(quantity.replace(/,/g, ''))).toFixed(2);
+      const total = (parseFloat(cleanValue) * parseFloat(quantity)).toFixed(2);
       setTotalAmount(total);
     }
   };
@@ -325,9 +328,9 @@ const RegistroEgresosPrecargados = () => {
                     <Input 
                       id="cantidad" 
                       type="text" 
-                      value={quantity ? formatNumber(quantity) : ''} 
+                      value={quantity} 
                       onChange={e => handleQuantityChange(e.target.value)} 
-                      placeholder="0.00" 
+                      placeholder="Ej: 10 o 10.5" 
                       required 
                     />
                   </div>
@@ -337,9 +340,9 @@ const RegistroEgresosPrecargados = () => {
                     <Input 
                       id="precio-unitario" 
                       type="text" 
-                      value={unitPrice ? formatNumber(unitPrice) : ''} 
+                      value={unitPrice} 
                       onChange={e => handleUnitPriceChange(e.target.value)} 
-                      placeholder="0.00" 
+                      placeholder="Ej: 100 o 100.50" 
                       required 
                     />
                     {selectedProduct && selectedProduct.precio_promedio > 0 && <p className="text-xs text-muted-foreground">
@@ -409,12 +412,12 @@ const RegistroEgresosPrecargados = () => {
                     <Input 
                       id="monto-pagado" 
                       type="text" 
-                      value={paidAmount ? formatNumber(paidAmount) : ''} 
+                      value={paidAmount} 
                       onChange={e => {
-                        const cleanValue = e.target.value.replace(/,/g, '');
+                        const cleanValue = e.target.value.replace(/[^\d.]/g, '');
                         setPaidAmount(cleanValue);
                       }} 
-                      placeholder="0.00" 
+                      placeholder="Ej: 500 o 500.50" 
                     />
                   </div>}
               </div>}

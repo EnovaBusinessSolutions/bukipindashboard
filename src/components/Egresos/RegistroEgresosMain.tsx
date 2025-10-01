@@ -7,7 +7,7 @@ import RegistroOtrosGastos from "./RegistroOtrosGastos";
 
 const RegistroEgresosMain = () => {
   return (
-    <div className="w-full">
+    <div className="w-full space-y-6">
       <Tabs defaultValue="precargados" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="precargados" className="flex items-center gap-2">

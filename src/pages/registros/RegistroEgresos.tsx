@@ -8,7 +8,7 @@ import ResumenEgresos from "@/components/Egresos/ResumenEgresos";
 
 const RegistroEgresos = () => {
   return (
-    <div className="w-full">
+    <div className="w-full space-y-6">
       <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Gestión de Egresos</h1>
         <p className="text-muted-foreground mt-2">
