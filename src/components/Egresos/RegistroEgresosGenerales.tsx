@@ -44,6 +44,18 @@ const RegistroEgresosGenerales = () => {
     }
 
     try {
+      // Obtener usuario autenticado primero
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "❌ Error de autenticación",
+          description: "Debes iniciar sesión para registrar egresos",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const montoTotal = parseFloat(totalAmount);
       const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
       const montoPendiente = montoTotal - montoPagado;
@@ -54,6 +66,7 @@ const RegistroEgresosGenerales = () => {
       const { data, error } = await supabase
         .from('transacciones_egresos')
         .insert({
+          user_id: user.id,
           tipo_egreso: tipoEgreso,
           subtipo_egreso: 'general',
           descripcion: concept,
@@ -70,8 +83,7 @@ const RegistroEgresosGenerales = () => {
           proveedor_telefono: supplierPhone || null,
           proveedor_email: supplierEmail || null,
           proveedor_rfc: supplierRFC || null,
-          comentarios: description || null,
-          user_id: (await supabase.auth.getUser()).data.user?.id
+          comentarios: description || null
         });
 
       if (error) throw error;

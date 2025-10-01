@@ -139,6 +139,18 @@ const RegistroEgresosPrecargados = () => {
       return;
     }
     try {
+      // Obtener usuario autenticado primero
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "❌ Error de autenticación",
+          description: "Debes iniciar sesión para registrar egresos",
+          variant: "destructive"
+        });
+        return;
+      }
+
       let proveedorId = null;
 
       // Crear o seleccionar proveedor si se decidió registrarlo
@@ -177,6 +189,7 @@ const RegistroEgresosPrecargados = () => {
       const montoPendiente = montoTotal - montoPagado;
       
       const { data, error } = await supabase.from('transacciones_egresos').insert({
+        user_id: user.id,
         tipo_egreso: selectedType,
         subtipo_egreso: 'precargado',
         descripcion: selectedProduct?.nombre || '',
@@ -194,8 +207,7 @@ const RegistroEgresosPrecargados = () => {
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
-        comentarios: description || null,
-        user_id: (await supabase.auth.getUser()).data.user?.id
+        comentarios: description || null
       });
       if (error) throw error;
       toast({
