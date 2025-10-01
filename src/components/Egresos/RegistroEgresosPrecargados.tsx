@@ -12,9 +12,10 @@ import { Package, AlertCircle, Save, Calculator } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 import { supabase } from "@/integrations/supabase/client";
-
 const RegistroEgresosPrecargados = () => {
-  const { data: productos = [] } = useProductosEgresos();
+  const {
+    data: productos = []
+  } = useProductosEgresos();
   const [selectedType, setSelectedType] = useState(""); // "costo" or "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -33,7 +34,6 @@ const RegistroEgresosPrecargados = () => {
 
   // Filter products based on selected type
   const filteredProducts = productos.filter(p => p.tipo === selectedType);
-
   const handleTypeChange = (type: string) => {
     setSelectedType(type);
     // Reset product selection when type changes
@@ -43,17 +43,15 @@ const RegistroEgresosPrecargados = () => {
     setUnitPrice("");
     setTotalAmount("");
   };
-
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
     const product = productos.find(p => p.id === productId);
     setSelectedProduct(product);
-    
     if (product) {
       // Auto-fill data from catalog
       setSupplierName(product.proveedor_principal || "");
       setUnitPrice(product.precio_promedio?.toString() || "");
-      
+
       // Recalculate total
       if (quantity && product.precio_promedio) {
         const total = (product.precio_promedio * parseFloat(quantity)).toFixed(2);
@@ -61,7 +59,6 @@ const RegistroEgresosPrecargados = () => {
       }
     }
   };
-
   const handleQuantityChange = (newQuantity: string) => {
     setQuantity(newQuantity);
     if (unitPrice && newQuantity) {
@@ -69,7 +66,6 @@ const RegistroEgresosPrecargados = () => {
       setTotalAmount(total);
     }
   };
-
   const handleUnitPriceChange = (price: string) => {
     setUnitPrice(price);
     if (quantity && price) {
@@ -77,10 +73,8 @@ const RegistroEgresosPrecargados = () => {
       setTotalAmount(total);
     }
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!selectedProductId || !quantity || !unitPrice || !paymentType) {
       toast({
         title: "⚠️ Campos requeridos",
@@ -89,37 +83,34 @@ const RegistroEgresosPrecargados = () => {
       });
       return;
     }
-
     try {
       const montoTotal = parseFloat(totalAmount) || 0;
-      const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
+      const montoPagado = paymentType === "contado" ? montoTotal : paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0;
       const montoPendiente = montoTotal - montoPagado;
-
-      const { data, error } = await supabase
-        .from('transacciones_egresos')
-        .insert({
-          tipo_egreso: selectedType,
-          subtipo_egreso: 'precargado',
-          descripcion: selectedProduct?.nombre || '',
-          producto_egreso_id: selectedProductId,
-          cantidad: parseFloat(quantity),
-          precio_unitario: parseFloat(unitPrice),
-          monto_total: montoTotal,
-          monto_pagado: montoPagado,
-          monto_pendiente: montoPendiente,
-          tipo_pago: paymentType,
-          metodo_pago: paymentMethod || null,
-          fecha_vencimiento: dueDate || null,
-          proveedor_nombre: supplierName || null,
-          proveedor_telefono: supplierPhone || null,
-          proveedor_email: supplierEmail || null,
-          proveedor_rfc: supplierRFC || null,
-          comentarios: description || null,
-          user_id: (await supabase.auth.getUser()).data.user?.id
-        });
-
+      const {
+        data,
+        error
+      } = await supabase.from('transacciones_egresos').insert({
+        tipo_egreso: selectedType,
+        subtipo_egreso: 'precargado',
+        descripcion: selectedProduct?.nombre || '',
+        producto_egreso_id: selectedProductId,
+        cantidad: parseFloat(quantity),
+        precio_unitario: parseFloat(unitPrice),
+        monto_total: montoTotal,
+        monto_pagado: montoPagado,
+        monto_pendiente: montoPendiente,
+        tipo_pago: paymentType,
+        metodo_pago: paymentMethod || null,
+        fecha_vencimiento: dueDate || null,
+        proveedor_nombre: supplierName || null,
+        proveedor_telefono: supplierPhone || null,
+        proveedor_email: supplierEmail || null,
+        proveedor_rfc: supplierRFC || null,
+        comentarios: description || null,
+        user_id: (await supabase.auth.getUser()).data.user?.id
+      });
       if (error) throw error;
-
       toast({
         title: "✅ Egreso registrado",
         description: "El costo/gasto precargado se ha registrado correctamente"
@@ -150,9 +141,7 @@ const RegistroEgresosPrecargados = () => {
       });
     }
   };
-
-  return (
-    <Card className="h-full">
+  return <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Package className="h-5 w-5" />
@@ -192,8 +181,7 @@ const RegistroEgresosPrecargados = () => {
             </div>
           </div>
 
-          {selectedType && (
-            <>
+          {selectedType && <>
               <Separator />
               
               {/* Selección de Producto */}
@@ -208,94 +196,53 @@ const RegistroEgresosPrecargados = () => {
                         <SelectValue placeholder={`Seleccionar ${selectedType} del catálogo`} />
                       </SelectTrigger>
                       <SelectContent>
-                        {filteredProducts.length > 0 ? (
-                          filteredProducts.map((producto) => (
-                            <SelectItem key={producto.id} value={producto.id}>
+                        {filteredProducts.length > 0 ? filteredProducts.map(producto => <SelectItem key={producto.id} value={producto.id}>
                               <div className="flex items-center space-x-2">
                                 <span>{producto.nombre}</span>
                                 <span className="text-muted-foreground text-xs">
                                   - {producto.unidad}
                                 </span>
                               </div>
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="no-products" disabled>
+                            </SelectItem>) : <SelectItem value="no-products" disabled>
                             No hay {selectedType}s en el catálogo
-                          </SelectItem>
-                        )}
+                          </SelectItem>}
                       </SelectContent>
                     </Select>
-                    {filteredProducts.length === 0 && (
-                      <p className="text-sm text-yellow-600">
+                    {filteredProducts.length === 0 && <p className="text-sm text-yellow-600">
                         No hay {selectedType}s precargados. Ve al catálogo de costos y gastos para agregar {selectedType}s.
-                      </p>
-                    )}
+                      </p>}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="unidad">Unidad de Medida</Label>
-                    <Input
-                      id="unidad"
-                      value={selectedProduct?.unidad || ""}
-                      placeholder="Se completa automáticamente"
-                      disabled
-                    />
+                    <Input id="unidad" value={selectedProduct?.unidad || ""} placeholder="Se completa automáticamente" disabled />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="cantidad">Cantidad *</Label>
-                    <Input
-                      id="cantidad"
-                      type="number"
-                      step="0.01"
-                      value={quantity}
-                      onChange={(e) => handleQuantityChange(e.target.value)}
-                      placeholder="0.00"
-                      required
-                    />
+                    <Input id="cantidad" type="number" step="0.01" value={quantity} onChange={e => handleQuantityChange(e.target.value)} placeholder="0.00" required />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="precio-unitario">Precio Unitario *</Label>
-                    <Input
-                      id="precio-unitario"
-                      type="number"
-                      step="0.01"
-                      value={unitPrice}
-                      onChange={(e) => handleUnitPriceChange(e.target.value)}
-                      placeholder="0.00"
-                      required
-                    />
-                    {selectedProduct && selectedProduct.precio_promedio > 0 && (
-                      <p className="text-xs text-muted-foreground">
+                    <Input id="precio-unitario" type="number" step="0.01" value={unitPrice} onChange={e => handleUnitPriceChange(e.target.value)} placeholder="0.00" required />
+                    {selectedProduct && selectedProduct.precio_promedio > 0 && <p className="text-xs text-muted-foreground">
                         Precio promedio del catálogo: ${selectedProduct.precio_promedio}
-                      </p>
-                    )}
+                      </p>}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="total">Monto Total</Label>
                     <div className="flex items-center space-x-2">
                       <Calculator className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="total"
-                        type="number"
-                        step="0.01"
-                        value={totalAmount}
-                        onChange={(e) => setTotalAmount(e.target.value)}
-                        placeholder="0.00"
-                        disabled
-                      />
+                      <Input id="total" type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} placeholder="0.00" disabled />
                     </div>
                   </div>
                 </div>
               </div>
-            </>
-          )}
+            </>}
 
-          {selectedProduct && (
-            <>
+          {selectedProduct && <>
               <Separator />
 
               {/* Información de Pago */}
@@ -307,7 +254,7 @@ const RegistroEgresosPrecargados = () => {
                   <RadioGroup value={paymentType} onValueChange={setPaymentType}>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="contado" id="contado" />
-                      <Label htmlFor="contado">Contado</Label>
+                      <Label htmlFor="contado">Pago Total</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="credito" id="credito" />
@@ -320,8 +267,7 @@ const RegistroEgresosPrecargados = () => {
                   </RadioGroup>
                 </div>
 
-            {(paymentType === "contado" || paymentType === "parcial") && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(paymentType === "contado" || paymentType === "parcial") && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="metodo-pago">Método de Pago</Label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -335,33 +281,16 @@ const RegistroEgresosPrecargados = () => {
                   </Select>
                 </div>
 
-                {paymentType === "parcial" && (
-                  <div className="space-y-2">
+                {paymentType === "parcial" && <div className="space-y-2">
                     <Label htmlFor="monto-pagado">Monto Pagado</Label>
-                    <Input
-                      id="monto-pagado"
-                      type="number"
-                      step="0.01"
-                      value={paidAmount}
-                      onChange={(e) => setPaidAmount(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+                    <Input id="monto-pagado" type="number" step="0.01" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} placeholder="0.00" />
+                  </div>}
+              </div>}
 
-            {(paymentType === "credito" || paymentType === "parcial") && (
-              <div className="space-y-2">
+            {(paymentType === "credito" || paymentType === "parcial") && <div className="space-y-2">
                 <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
-                <Input
-                  id="fecha-vencimiento"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-            )}
+                <Input id="fecha-vencimiento" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+              </div>}
           </div>
 
           <Separator />
@@ -373,56 +302,29 @@ const RegistroEgresosPrecargados = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="proveedor-nombre">Nombre del Proveedor</Label>
-                <Input
-                  id="proveedor-nombre"
-                  value={supplierName}
-                  onChange={(e) => setSupplierName(e.target.value)}
-                  placeholder="Nombre completo o razón social"
-                />
+                <Input id="proveedor-nombre" value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Nombre completo o razón social" />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                <Input
-                  id="proveedor-telefono"
-                  value={supplierPhone}
-                  onChange={(e) => setSupplierPhone(e.target.value)}
-                  placeholder="Número de teléfono"
-                />
+                <Input id="proveedor-telefono" value={supplierPhone} onChange={e => setSupplierPhone(e.target.value)} placeholder="Número de teléfono" />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="proveedor-email">Email</Label>
-                <Input
-                  id="proveedor-email"
-                  type="email"
-                  value={supplierEmail}
-                  onChange={(e) => setSupplierEmail(e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                />
+                <Input id="proveedor-email" type="email" value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="correo@ejemplo.com" />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="proveedor-rfc">RFC</Label>
-                <Input
-                  id="proveedor-rfc"
-                  value={supplierRFC}
-                  onChange={(e) => setSupplierRFC(e.target.value)}
-                  placeholder="RFC del proveedor"
-                />
+                <Input id="proveedor-rfc" value={supplierRFC} onChange={e => setSupplierRFC(e.target.value)} placeholder="RFC del proveedor" />
               </div>
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="descripcion">Descripción Adicional</Label>
-            <Textarea
-              id="descripcion"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detalles adicionales del gasto..."
-              rows={3}
-            />
+            <Textarea id="descripcion" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalles adicionales del gasto..." rows={3} />
           </div>
 
           <div className="flex justify-end gap-2">
@@ -434,12 +336,9 @@ const RegistroEgresosPrecargados = () => {
               Registrar Egreso
             </Button>
           </div>
-              </>
-            )}
+              </>}
         </form>
       </CardContent>
-    </Card>
-  );
+    </Card>;
 };
-
 export default RegistroEgresosPrecargados;
