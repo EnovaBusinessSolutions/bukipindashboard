@@ -155,10 +155,8 @@ const RegistroOtrosGastos = () => {
                       <SelectValue placeholder="Seleccionar método" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="efectivo">Efectivo</SelectItem>
-                      <SelectItem value="transferencia">Transferencia</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                      <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                      <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
+                      <SelectItem value="tarjeta-transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
