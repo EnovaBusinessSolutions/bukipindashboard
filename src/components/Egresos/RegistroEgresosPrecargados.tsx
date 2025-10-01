@@ -64,17 +64,27 @@ const RegistroEgresosPrecargados = () => {
       }
     }
   };
+  // Función para formatear números con separador de miles
+  const formatNumber = (value: string) => {
+    if (!value) return "";
+    const num = parseFloat(value.replace(/,/g, ''));
+    if (isNaN(num)) return "";
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const handleQuantityChange = (newQuantity: string) => {
-    setQuantity(newQuantity);
-    if (unitPrice && newQuantity) {
-      const total = (parseFloat(unitPrice) * parseFloat(newQuantity)).toFixed(2);
+    const cleanValue = newQuantity.replace(/,/g, '');
+    setQuantity(cleanValue);
+    if (unitPrice && cleanValue) {
+      const total = (parseFloat(unitPrice.replace(/,/g, '')) * parseFloat(cleanValue)).toFixed(2);
       setTotalAmount(total);
     }
   };
   const handleUnitPriceChange = (price: string) => {
-    setUnitPrice(price);
-    if (quantity && price) {
-      const total = (parseFloat(price) * parseFloat(quantity)).toFixed(2);
+    const cleanValue = price.replace(/,/g, '');
+    setUnitPrice(cleanValue);
+    if (quantity && cleanValue) {
+      const total = (parseFloat(cleanValue) * parseFloat(quantity.replace(/,/g, ''))).toFixed(2);
       setTotalAmount(total);
     }
   };
@@ -300,14 +310,28 @@ const RegistroEgresosPrecargados = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="cantidad">Cantidad *</Label>
-                    <Input id="cantidad" type="number" step="0.01" value={quantity} onChange={e => handleQuantityChange(e.target.value)} placeholder="0.00" required />
+                    <Input 
+                      id="cantidad" 
+                      type="text" 
+                      value={quantity ? formatNumber(quantity) : ''} 
+                      onChange={e => handleQuantityChange(e.target.value)} 
+                      placeholder="0.00" 
+                      required 
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="precio-unitario">Precio Unitario *</Label>
-                    <Input id="precio-unitario" type="number" step="0.01" value={unitPrice} onChange={e => handleUnitPriceChange(e.target.value)} placeholder="0.00" required />
+                    <Input 
+                      id="precio-unitario" 
+                      type="text" 
+                      value={unitPrice ? formatNumber(unitPrice) : ''} 
+                      onChange={e => handleUnitPriceChange(e.target.value)} 
+                      placeholder="0.00" 
+                      required 
+                    />
                     {selectedProduct && selectedProduct.precio_promedio > 0 && <p className="text-xs text-muted-foreground">
-                        Precio promedio del catálogo: ${selectedProduct.precio_promedio}
+                        Precio promedio del catálogo: ${formatNumber(selectedProduct.precio_promedio.toString())}
                       </p>}
                   </div>
 
@@ -315,7 +339,14 @@ const RegistroEgresosPrecargados = () => {
                     <Label htmlFor="total">Monto Total</Label>
                     <div className="flex items-center space-x-2">
                       <Calculator className="h-4 w-4 text-muted-foreground" />
-                      <Input id="total" type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} placeholder="0.00" disabled />
+                      <Input 
+                        id="total" 
+                        type="text" 
+                        value={totalAmount ? formatNumber(totalAmount) : ''} 
+                        placeholder="0.00" 
+                        disabled 
+                        className="bg-muted"
+                      />
                     </div>
                   </div>
                 </div>
@@ -363,7 +394,16 @@ const RegistroEgresosPrecargados = () => {
 
                 {paymentType === "parcial" && <div className="space-y-2">
                     <Label htmlFor="monto-pagado">Monto Pagado</Label>
-                    <Input id="monto-pagado" type="number" step="0.01" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} placeholder="0.00" />
+                    <Input 
+                      id="monto-pagado" 
+                      type="text" 
+                      value={paidAmount ? formatNumber(paidAmount) : ''} 
+                      onChange={e => {
+                        const cleanValue = e.target.value.replace(/,/g, '');
+                        setPaidAmount(cleanValue);
+                      }} 
+                      placeholder="0.00" 
+                    />
                   </div>}
               </div>}
 
