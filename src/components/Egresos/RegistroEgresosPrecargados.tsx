@@ -243,7 +243,7 @@ const RegistroEgresosPrecargados = () => {
       });
     }
   };
-  return <Card className="max-w-5xl mx-auto">
+  return <Card className="max-w-5xl mx-auto mb-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Package className="h-5 w-5" />
@@ -253,7 +253,7 @@ const RegistroEgresosPrecargados = () => {
           Registra gastos y costos de productos precargados del catálogo con unidades de medida específicas
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pb-6">
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>

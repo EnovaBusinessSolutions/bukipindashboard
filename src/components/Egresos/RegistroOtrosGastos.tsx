@@ -106,7 +106,7 @@ const RegistroOtrosGastos = () => {
   };
 
   return (
-    <Card className="max-w-5xl mx-auto">
+    <Card className="max-w-5xl mx-auto mb-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Receipt className="h-5 w-5" />
