@@ -253,8 +253,7 @@ const RegistroEgresosPrecargados = () => {
           Registra gastos y costos de productos precargados del catálogo con unidades de medida específicas
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-6 pt-0">
-        <div className="space-y-6">
+      <CardContent className="p-6 pt-0 space-y-6">
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -262,7 +261,7 @@ const RegistroEgresosPrecargados = () => {
             </AlertDescription>
           </Alert>
 
-          <form onSubmit={handleSubmit} className="space-y-6 pb-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
           {/* Selección de Tipo */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Tipo de Egreso</h3>
@@ -618,7 +617,6 @@ const RegistroEgresosPrecargados = () => {
           </div>
               </>}
           </form>
-        </div>
       </CardContent>
     </Card>;
 };

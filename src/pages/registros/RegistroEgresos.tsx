@@ -37,19 +37,19 @@ const RegistroEgresos = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="registro" className="w-full">
+          <TabsContent value="registro" className="w-full overflow-visible">
             <RegistroEgresosMain />
           </TabsContent>
 
-          <TabsContent value="resumen" className="w-full">
+          <TabsContent value="resumen" className="w-full overflow-visible">
             <ResumenEgresos />
           </TabsContent>
 
-          <TabsContent value="reportes" className="w-full">
+          <TabsContent value="reportes" className="w-full overflow-visible">
             <AnalyticaEgresos />
           </TabsContent>
 
-          <TabsContent value="catalogo" className="w-full">
+          <TabsContent value="catalogo" className="w-full overflow-visible">
             <CatalogoProductos />
           </TabsContent>
         </Tabs>

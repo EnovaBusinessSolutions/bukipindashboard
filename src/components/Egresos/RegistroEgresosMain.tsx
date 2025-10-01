@@ -24,15 +24,15 @@ const RegistroEgresosMain = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="precargados" className="w-full">
+        <TabsContent value="precargados" className="w-full overflow-visible">
           <RegistroEgresosPrecargados />
         </TabsContent>
 
-        <TabsContent value="generales" className="w-full">
+        <TabsContent value="generales" className="w-full overflow-visible">
           <RegistroEgresosGenerales />
         </TabsContent>
 
-        <TabsContent value="otros" className="w-full">
+        <TabsContent value="otros" className="w-full overflow-visible">
           <RegistroOtrosGastos />
         </TabsContent>
       </Tabs>
