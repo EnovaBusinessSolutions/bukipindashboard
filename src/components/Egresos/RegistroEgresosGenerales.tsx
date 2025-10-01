@@ -128,8 +128,8 @@ const RegistroEgresosGenerales = () => {
           Registra egresos generales que no tienen un segmento específico en el catálogo
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <CardContent className="p-6 pt-0">
+        <form onSubmit={handleSubmit} className="space-y-6 pb-4">
           {/* Información del Gasto */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Información del Gasto</h3>
