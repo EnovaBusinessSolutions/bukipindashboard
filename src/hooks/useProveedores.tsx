@@ -67,13 +67,25 @@ export const useProveedores = () => {
 
   const createProveedor = async (proveedor: Omit<Proveedor, 'id' | 'created_at' | 'activo'>) => {
     try {
-      const user = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        return { data: null, error: 'Usuario no autenticado' };
+      }
       
       const { data, error: insertError } = await supabase
         .from('proveedores')
         .insert({
-          ...proveedor,
-          user_id: user.data.user?.id
+          nombre: proveedor.nombre,
+          telefono: proveedor.telefono,
+          email: proveedor.email,
+          rfc: proveedor.rfc,
+          direccion: proveedor.direccion,
+          ciudad: proveedor.ciudad,
+          estado: proveedor.estado,
+          codigo_postal: proveedor.codigo_postal,
+          user_id: user.id,
+          activo: true
         })
         .select()
         .single();
@@ -86,15 +98,20 @@ export const useProveedores = () => {
       
       // Detectar errores de duplicados
       if (err.code === '23505') {
-        if (err.message.includes('unique_rfc_per_user')) {
+        if (err.message.includes('unique_rfc_per_user_idx')) {
           return { data: null, error: 'Ya existe un proveedor con este RFC' };
         }
-        if (err.message.includes('unique_email_per_user')) {
+        if (err.message.includes('unique_email_per_user_idx')) {
           return { data: null, error: 'Ya existe un proveedor con este correo electrónico' };
         }
-        if (err.message.includes('unique_telefono_per_user')) {
+        if (err.message.includes('unique_telefono_per_user_idx')) {
           return { data: null, error: 'Ya existe un proveedor con este teléfono' };
         }
+      }
+      
+      // Errores de RLS
+      if (err.code === '42501') {
+        return { data: null, error: 'No tienes permisos para crear proveedores. Por favor inicia sesión.' };
       }
       
       return { data: null, error: err.message || 'Error al crear proveedor' };
