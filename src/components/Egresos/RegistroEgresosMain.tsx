@@ -7,8 +7,8 @@ import RegistroOtrosGastos from "./RegistroOtrosGastos";
 
 const RegistroEgresosMain = () => {
   return (
-    <div className="h-full">
-      <Tabs defaultValue="precargados" className="h-full">
+    <div className="w-full">
+      <Tabs defaultValue="precargados" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="precargados" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
@@ -24,15 +24,15 @@ const RegistroEgresosMain = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="precargados" className="h-full">
+        <TabsContent value="precargados" className="w-full">
           <RegistroEgresosPrecargados />
         </TabsContent>
 
-        <TabsContent value="generales" className="h-full">
+        <TabsContent value="generales" className="w-full">
           <RegistroEgresosGenerales />
         </TabsContent>
 
-        <TabsContent value="otros" className="h-full">
+        <TabsContent value="otros" className="w-full">
           <RegistroOtrosGastos />
         </TabsContent>
       </Tabs>
