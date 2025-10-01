@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Receipt, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const RegistroOtrosGastos = () => {
   const [concept, setConcept] = useState("");
@@ -24,7 +25,7 @@ const RegistroOtrosGastos = () => {
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!concept || !category || !totalAmount || !paymentType) {
@@ -36,25 +37,60 @@ const RegistroOtrosGastos = () => {
       return;
     }
 
-    console.log("Otro gasto registrado:", {
-      concept,
-      category,
-      totalAmount,
-      paymentType,
-      paymentMethod,
-      paidAmount,
-      dueDate,
-      supplierName,
-      supplierPhone,
-      supplierEmail,
-      supplierRFC,
-      description
-    });
+    try {
+      const montoTotal = parseFloat(totalAmount);
+      const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
+      const montoPendiente = montoTotal - montoPagado;
 
-    toast({
-      title: "Gasto registrado",
-      description: "El gasto fuera de operación se ha registrado correctamente"
-    });
+      const { data, error } = await supabase
+        .from('transacciones_egresos')
+        .insert({
+          tipo_egreso: 'otro',
+          subtipo_egreso: category,
+          descripcion: concept,
+          concepto: concept,
+          monto_total: montoTotal,
+          monto_pagado: montoPagado,
+          monto_pendiente: montoPendiente,
+          tipo_pago: paymentType,
+          metodo_pago: paymentMethod || null,
+          fecha_vencimiento: dueDate || null,
+          proveedor_nombre: supplierName || null,
+          proveedor_telefono: supplierPhone || null,
+          proveedor_email: supplierEmail || null,
+          proveedor_rfc: supplierRFC || null,
+          comentarios: description || null,
+          user_id: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Gasto registrado",
+        description: "El gasto fuera de operación se ha registrado correctamente"
+      });
+
+      // Limpiar formulario
+      setConcept("");
+      setCategory("");
+      setTotalAmount("");
+      setPaymentType("");
+      setPaymentMethod("");
+      setPaidAmount("");
+      setDueDate("");
+      setSupplierName("");
+      setSupplierPhone("");
+      setSupplierEmail("");
+      setSupplierRFC("");
+      setDescription("");
+    } catch (error) {
+      console.error('Error al registrar gasto:', error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo registrar el gasto. Intenta nuevamente.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

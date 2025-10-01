@@ -11,6 +11,7 @@ import { Wallet, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
+import { supabase } from "@/integrations/supabase/client";
 
 const RegistroEgresosGenerales = () => {
   const [concept, setConcept] = useState("");
@@ -30,7 +31,7 @@ const RegistroEgresosGenerales = () => {
   const { data: cuentasData } = useCuentas();
   const { data: subcuentasData } = useSubcuentas();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!concept || !cuentaSeleccionada || !totalAmount || !paymentType) {
@@ -42,26 +43,66 @@ const RegistroEgresosGenerales = () => {
       return;
     }
 
-    console.log("Egreso general registrado:", {
-      concept,
-      cuentaSeleccionada,
-      subcuentaSeleccionada,
-      totalAmount,
-      paymentType,
-      paymentMethod,
-      paidAmount,
-      dueDate,
-      supplierName,
-      supplierPhone,
-      supplierEmail,
-      supplierRFC,
-      description
-    });
+    try {
+      const montoTotal = parseFloat(totalAmount);
+      const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
+      const montoPendiente = montoTotal - montoPagado;
 
-    toast({
-      title: "Egreso registrado",
-      description: "El costo/gasto general se ha registrado correctamente"
-    });
+      // Determinar el tipo de egreso basado en el código de cuenta
+      const tipoEgreso = cuentaSeleccionada.startsWith('5') ? 'costo' : 'gasto';
+
+      const { data, error } = await supabase
+        .from('transacciones_egresos')
+        .insert({
+          tipo_egreso: tipoEgreso,
+          subtipo_egreso: 'general',
+          descripcion: concept,
+          concepto: concept,
+          cuenta_codigo: cuentaSeleccionada,
+          subcuenta_id: subcuentaSeleccionada || null,
+          monto_total: montoTotal,
+          monto_pagado: montoPagado,
+          monto_pendiente: montoPendiente,
+          tipo_pago: paymentType,
+          metodo_pago: paymentMethod || null,
+          fecha_vencimiento: dueDate || null,
+          proveedor_nombre: supplierName || null,
+          proveedor_telefono: supplierPhone || null,
+          proveedor_email: supplierEmail || null,
+          proveedor_rfc: supplierRFC || null,
+          comentarios: description || null,
+          user_id: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Egreso registrado",
+        description: "El costo/gasto general se ha registrado correctamente"
+      });
+
+      // Limpiar formulario
+      setConcept("");
+      setCuentaSeleccionada("");
+      setSubcuentaSeleccionada("");
+      setTotalAmount("");
+      setPaymentType("");
+      setPaymentMethod("");
+      setPaidAmount("");
+      setDueDate("");
+      setSupplierName("");
+      setSupplierPhone("");
+      setSupplierEmail("");
+      setSupplierRFC("");
+      setDescription("");
+    } catch (error) {
+      console.error('Error al registrar egreso:', error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo registrar el egreso. Intenta nuevamente.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

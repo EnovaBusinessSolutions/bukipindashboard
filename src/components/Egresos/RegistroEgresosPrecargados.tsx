@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Package, AlertCircle, Save, Calculator } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
+import { supabase } from "@/integrations/supabase/client";
 
 const RegistroEgresosPrecargados = () => {
   const { data: productos = [] } = useProductosEgresos();
@@ -77,7 +78,7 @@ const RegistroEgresosPrecargados = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedProductId || !quantity || !unitPrice || !paymentType) {
@@ -89,27 +90,65 @@ const RegistroEgresosPrecargados = () => {
       return;
     }
 
-    console.log("Egreso precargado registrado:", {
-      selectedProduct: selectedProduct,
-      selectedProductId,
-      quantity,
-      unitPrice,
-      totalAmount,
-      paymentType,
-      paymentMethod,
-      paidAmount,
-      dueDate,
-      supplierName,
-      supplierPhone,
-      supplierEmail,
-      supplierRFC,
-      description
-    });
+    try {
+      const montoTotal = parseFloat(totalAmount) || 0;
+      const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
+      const montoPendiente = montoTotal - montoPagado;
 
-    toast({
-      title: "Egreso registrado",
-      description: "El costo/gasto precargado se ha registrado correctamente"
-    });
+      const { data, error } = await supabase
+        .from('transacciones_egresos')
+        .insert({
+          tipo_egreso: selectedType,
+          subtipo_egreso: 'precargado',
+          descripcion: selectedProduct?.nombre || '',
+          producto_egreso_id: selectedProductId,
+          cantidad: parseFloat(quantity),
+          precio_unitario: parseFloat(unitPrice),
+          monto_total: montoTotal,
+          monto_pagado: montoPagado,
+          monto_pendiente: montoPendiente,
+          tipo_pago: paymentType,
+          metodo_pago: paymentMethod || null,
+          fecha_vencimiento: dueDate || null,
+          proveedor_nombre: supplierName || null,
+          proveedor_telefono: supplierPhone || null,
+          proveedor_email: supplierEmail || null,
+          proveedor_rfc: supplierRFC || null,
+          comentarios: description || null,
+          user_id: (await supabase.auth.getUser()).data.user?.id
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Egreso registrado",
+        description: "El costo/gasto precargado se ha registrado correctamente"
+      });
+
+      // Limpiar formulario
+      setSelectedType("");
+      setSelectedProductId("");
+      setSelectedProduct(null);
+      setQuantity("1");
+      setUnitPrice("");
+      setTotalAmount("");
+      setPaymentType("");
+      setPaymentMethod("");
+      setPaidAmount("");
+      setDueDate("");
+      setSupplierName("");
+      setSupplierPhone("");
+      setSupplierEmail("");
+      setSupplierRFC("");
+      setDescription("");
+    } catch (error) {
+      console.error('Error al registrar egreso:', error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo registrar el egreso. Intenta nuevamente.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

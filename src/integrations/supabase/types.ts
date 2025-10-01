@@ -409,6 +409,87 @@ export type Database = {
           },
         ]
       }
+      transacciones_egresos: {
+        Row: {
+          cantidad: number | null
+          comentarios: string | null
+          concepto: string | null
+          created_at: string
+          cuenta_codigo: string | null
+          descripcion: string
+          fecha_vencimiento: string | null
+          id: string
+          metodo_pago: string | null
+          monto_pagado: number
+          monto_pendiente: number | null
+          monto_total: number
+          precio_unitario: number | null
+          producto_egreso_id: string | null
+          proveedor_email: string | null
+          proveedor_nombre: string | null
+          proveedor_rfc: string | null
+          proveedor_telefono: string | null
+          subcuenta_id: string | null
+          subtipo_egreso: string | null
+          tipo_egreso: string
+          tipo_pago: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cantidad?: number | null
+          comentarios?: string | null
+          concepto?: string | null
+          created_at?: string
+          cuenta_codigo?: string | null
+          descripcion: string
+          fecha_vencimiento?: string | null
+          id?: string
+          metodo_pago?: string | null
+          monto_pagado?: number
+          monto_pendiente?: number | null
+          monto_total: number
+          precio_unitario?: number | null
+          producto_egreso_id?: string | null
+          proveedor_email?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rfc?: string | null
+          proveedor_telefono?: string | null
+          subcuenta_id?: string | null
+          subtipo_egreso?: string | null
+          tipo_egreso: string
+          tipo_pago: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cantidad?: number | null
+          comentarios?: string | null
+          concepto?: string | null
+          created_at?: string
+          cuenta_codigo?: string | null
+          descripcion?: string
+          fecha_vencimiento?: string | null
+          id?: string
+          metodo_pago?: string | null
+          monto_pagado?: number
+          monto_pendiente?: number | null
+          monto_total?: number
+          precio_unitario?: number | null
+          producto_egreso_id?: string | null
+          proveedor_email?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rfc?: string | null
+          proveedor_telefono?: string | null
+          subcuenta_id?: string | null
+          subtipo_egreso?: string | null
+          tipo_egreso?: string
+          tipo_pago?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transacciones_ingresos: {
         Row: {
           cliente_email: string | null

@@ -4,6 +4,7 @@ import { Save, BarChart3, Package, FileText, ShoppingCart } from "lucide-react";
 import RegistroEgresosMain from "@/components/Egresos/RegistroEgresosMain";
 import AnalyticaEgresos from "@/components/Egresos/AnalyticaEgresos";
 import CatalogoProductos from "@/components/Egresos/CatalogoProductos";
+import ResumenEgresos from "@/components/Egresos/ResumenEgresos";
 
 const RegistroEgresos = () => {
   return (
@@ -17,14 +18,18 @@ const RegistroEgresos = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="h-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="registro" className="flex items-center gap-2">
               <Save className="h-4 w-4" />
               Registro de Egresos
             </TabsTrigger>
+            <TabsTrigger value="resumen" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Resumen de Egresos
+            </TabsTrigger>
             <TabsTrigger value="reportes" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
-              Reporte de Egresos
+              Analítica de Egresos
             </TabsTrigger>
             <TabsTrigger value="catalogo" className="flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
@@ -34,6 +39,10 @@ const RegistroEgresos = () => {
 
           <TabsContent value="registro" className="h-full">
             <RegistroEgresosMain />
+          </TabsContent>
+
+          <TabsContent value="resumen" className="h-full">
+            <ResumenEgresos />
           </TabsContent>
 
           <TabsContent value="reportes" className="h-full">
