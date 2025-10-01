@@ -8,7 +8,7 @@ import ResumenEgresos from "@/components/Egresos/ResumenEgresos";
 
 const RegistroEgresos = () => {
   return (
-    <div className="h-full overflow-hidden flex flex-col">
+    <div className="w-full">
       <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Gestión de Egresos</h1>
         <p className="text-muted-foreground mt-2">
@@ -16,8 +16,8 @@ const RegistroEgresos = () => {
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="registro" className="h-full">
+      <div className="p-6">
+        <Tabs defaultValue="registro" className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="registro" className="flex items-center gap-2">
               <Save className="h-4 w-4" />
@@ -37,19 +37,19 @@ const RegistroEgresos = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="registro" className="h-full">
+          <TabsContent value="registro" className="w-full">
             <RegistroEgresosMain />
           </TabsContent>
 
-          <TabsContent value="resumen" className="h-full">
+          <TabsContent value="resumen" className="w-full">
             <ResumenEgresos />
           </TabsContent>
 
-          <TabsContent value="reportes" className="h-full">
+          <TabsContent value="reportes" className="w-full">
             <AnalyticaEgresos />
           </TabsContent>
 
-          <TabsContent value="catalogo" className="h-full">
+          <TabsContent value="catalogo" className="w-full">
             <CatalogoProductos />
           </TabsContent>
         </Tabs>
