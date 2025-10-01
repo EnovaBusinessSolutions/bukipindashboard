@@ -1,17 +1,30 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Link, useLocation } from "react-router-dom";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronRight, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [openSections, setOpenSections] = useState({
     contabilidad: false,
     registros: false,
     cobrosPagos: false,
     estadosFinancieros: false
   });
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: "Sesión cerrada",
+      description: "Has cerrado sesión correctamente"
+    });
+    navigate('/auth');
+  };
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections(prev => ({
       ...prev,
@@ -174,16 +187,29 @@ const Sidebar = () => {
       </div>
 
       {/* Bottom Section */}
-      <div className="p-6 border-t border-sidebar-border">
+      <div className="p-6 border-t border-sidebar-border space-y-3">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-sidebar-primary rounded-full flex items-center justify-center">
-            <span className="text-sidebar-primary-foreground font-medium text-sm">U</span>
+            <span className="text-sidebar-primary-foreground font-medium text-sm">
+              {user?.email?.charAt(0).toUpperCase() || 'U'}
+            </span>
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-sidebar-foreground">Usuario</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-sidebar-foreground truncate">
+              {user?.email?.split('@')[0] || 'Usuario'}
+            </p>
             <p className="text-xs text-sidebar-foreground opacity-70">Administrador</p>
           </div>
         </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handleSignOut}
+          className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Cerrar Sesión
+        </Button>
       </div>
     </div>;
 };
