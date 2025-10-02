@@ -118,7 +118,7 @@ const RegistroEgresosGenerales = () => {
   };
 
   return (
-    <Card className="max-w-5xl mx-auto border-0 shadow-none overflow-visible">
+    <Card className="max-w-5xl mx-auto border-0 shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Wallet className="h-5 w-5" />

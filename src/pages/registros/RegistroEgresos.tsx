@@ -16,7 +16,7 @@ const RegistroEgresos = () => {
         </p>
       </div>
 
-      <div className="p-6">
+      <div className="p-6 pb-0">
         <Tabs defaultValue="registro" className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="registro" className="flex items-center gap-2">
