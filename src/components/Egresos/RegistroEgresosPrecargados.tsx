@@ -256,7 +256,7 @@ const RegistroEgresosPrecargados = () => {
           Registra gastos y costos de productos precargados del catálogo con unidades de medida específicas
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-6 pt-0 space-y-6">
+      <CardContent className="p-6 pt-0">
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
