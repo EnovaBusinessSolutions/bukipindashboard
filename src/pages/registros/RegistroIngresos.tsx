@@ -1152,8 +1152,192 @@ const RegistroIngresos = () => {
             </Card>
           </TabsContent>
 
-          {/* TAB 2: RESUMEN DE VENTAS */}
+          {/* TAB 2: RESUMEN DE VENTAS - SOLO LISTA */}
           <TabsContent value="resumen" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Registro Detallado de Ventas</CardTitle>
+                <CardDescription>
+                  Historial completo de transacciones de ingresos
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? <div className="text-center py-8 text-muted-foreground">
+                    Cargando transacciones...
+                  </div> : transacciones.length === 0 ? <div className="text-center py-8 text-muted-foreground">
+                    No hay ventas registradas aún
+                  </div> : <div className="space-y-4">
+                    <div className="text-sm font-medium text-muted-foreground mb-4">
+                      Últimas {transacciones.length} transacciones
+                    </div>
+                    <div className="space-y-3">
+                       {transacciones.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
+                           <div className="flex items-start gap-3 mb-2">
+                             {/* Imagen del producto si es precargado */}
+                             {transaccion.tipo_ingreso === 'precargados' && (() => {
+                         const producto = productos.find(p => p.nombre === transaccion.descripcion);
+                         return producto?.imagen_url ? <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                                   <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" />
+                               </div> : null;
+                       })()}
+                             
+                             <div className="flex justify-between items-start flex-1">
+                               <div className="flex-1">
+                                 <div className="flex items-center gap-2">
+                                   <p className="font-medium">{transaccion.descripcion}</p>
+                                   <Dialog>
+                                     <DialogTrigger asChild>
+                                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                         <FileText className="h-3 w-3" />
+                                       </Button>
+                                     </DialogTrigger>
+                                     <DialogContent className="max-w-2xl">
+                                       <DialogHeader>
+                                         <DialogTitle>Detalles de la Transacción</DialogTitle>
+                                       </DialogHeader>
+                                       <div className="space-y-4">
+                                         <div className="grid grid-cols-2 gap-4">
+                                           <div>
+                                             <h4 className="font-semibold text-sm">Información General</h4>
+                                             <div className="space-y-1 text-sm">
+                                               <p><span className="font-medium">Descripción:</span> {transaccion.descripcion}</p>
+                                               <p><span className="font-medium">Tipo:</span> {transaccion.tipo_ingreso}</p>
+                                               <p><span className="font-medium">Método de Pago:</span> {transaccion.metodo_pago || 'N/A'}</p>
+                                               <p><span className="font-medium">Tipo de Pago:</span> {transaccion.tipo_pago}</p>
+                                               <p><span className="font-medium">Fecha:</span> {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
+                                                 day: '2-digit',
+                                                 month: '2-digit', 
+                                                 year: 'numeric',
+                                                 hour: '2-digit',
+                                                 minute: '2-digit'
+                                               })}</p>
+                                             </div>
+                                           </div>
+                                           <div>
+                                             <h4 className="font-semibold text-sm">Montos</h4>
+                                             <div className="space-y-1 text-sm">
+                                               <p><span className="font-medium">Total:</span> ${transaccion.monto_total.toFixed(2)}</p>
+                                               <p><span className="font-medium">Descuento:</span> ${transaccion.monto_descuento.toFixed(2)}</p>
+                                               <p><span className="font-medium">Neto:</span> ${transaccion.monto_neto.toFixed(2)}</p>
+                                                <p><span className="font-medium">Pagado:</span> ${(transaccion as any).monto_pagado?.toFixed(2) || '0.00'}</p>
+                                                <p><span className="font-medium">Pendiente:</span> ${(transaccion as any).monto_pendiente?.toFixed(2) || '0.00'}</p>
+                                             </div>
+                                           </div>
+                                         </div>
+
+                                          {/* Información del Cliente */}
+                                          {((transaccion as any).cliente_nombre || (transaccion as any).cliente_telefono || (transaccion as any).cliente_email) && (
+                                            <div>
+                                              <h4 className="font-semibold text-sm mb-2">Información del Cliente</h4>
+                                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                                {(transaccion as any).cliente_nombre && <p><span className="font-medium">Nombre:</span> {(transaccion as any).cliente_nombre}</p>}
+                                                {(transaccion as any).cliente_telefono && <p><span className="font-medium">Teléfono:</span> {(transaccion as any).cliente_telefono}</p>}
+                                                {(transaccion as any).cliente_email && <p><span className="font-medium">Email:</span> {(transaccion as any).cliente_email}</p>}
+                                                {(transaccion as any).cliente_rfc && <p><span className="font-medium">RFC:</span> {(transaccion as any).cliente_rfc}</p>}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                         {/* Información Contable */}
+                                         <div>
+                                           <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
+                                           <div className="text-sm space-y-1">
+                                             <p><span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo} - {transaccion.cuenta_principal_codigo === '4001' ? 'Ventas' : transaccion.cuenta_principal_codigo === '4004' ? 'Otros Ingresos' : ''}</p>
+                                             {transaccion.subcuenta_id ? (
+                                               <p><span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
+                                                 const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
+                                                 return subcuenta?.nombre || 'Subcuenta no encontrada';
+                                               })()}</p>
+                                             ) : (
+                                               <p><span className="font-medium">Subcuenta:</span> Sin subcuenta asignada</p>
+                                             )}
+                                           </div>
+                                         </div>
+
+                                          {/* Comentarios */}
+                                          {(transaccion as any).comentarios && (
+                                            <div>
+                                              <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
+                                              <div className="p-3 bg-muted rounded-md">
+                                                <p className="text-sm">{(transaccion as any).comentarios}</p>
+                                              </div>
+                                            </div>
+                                          )}
+                                       </div>
+                                     </DialogContent>
+                                   </Dialog>
+                                 </div>
+
+                                  {/* Comentarios resumidos */}
+                                  {(transaccion as any).comentarios && (
+                                    <div className="mt-1 p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-xs">
+                                      <span className="font-medium text-blue-700 dark:text-blue-300">💬 </span>
+                                      <span className="text-blue-600 dark:text-blue-400">
+                                        {(transaccion as any).comentarios.length > 50 ? 
+                                          `${(transaccion as any).comentarios.substring(0, 50)}...` : 
+                                          (transaccion as any).comentarios
+                                        }
+                                      </span>
+                                    </div>
+                                  )}
+
+                                 <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                   <span className="capitalize">{transaccion.tipo_ingreso}</span>
+                                   <span>•</span>
+                                   <span className="capitalize">{transaccion.metodo_pago}</span>
+                                   <span>•</span>
+                                   <span className="capitalize">{transaccion.tipo_pago}</span>
+                                 </div>
+                                 {/* Información contable */}
+                                 <div className="mt-2 p-2 bg-muted/30 rounded-md">
+                                   <div className="text-xs font-medium text-muted-foreground mb-1">Información Contable:</div>
+                                   <div className="text-xs space-y-1">
+                                     <div>
+                                       <span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo}
+                                       {transaccion.cuenta_principal_codigo === '4001' ? ' - Ventas' : transaccion.cuenta_principal_codigo === '4004' ? ' - Otros Ingresos' : ''}
+                                     </div>
+                                     {transaccion.subcuenta_id ? <div>
+                                         <span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
+                                   const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
+                                   return subcuenta?.nombre || 'Subcuenta no encontrada';
+                                 })()}
+                                       </div> : <div className="text-muted-foreground">
+                                         <span className="font-medium">Subcuenta:</span> Sin subcuenta asignada
+                                       </div>}
+                                   </div>
+                                 </div>
+                               </div>
+                               <div className="text-right ml-4">
+                                 <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
+                                 {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
+                                     -${transaccion.monto_descuento.toFixed(2)} desc.
+                                   </p>}
+                               </div>
+                             </div>
+                           </div>
+                           <div className="flex justify-between items-center text-xs text-muted-foreground">
+                             <span>
+                               {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
+                           day: '2-digit',
+                           month: '2-digit',
+                           year: 'numeric',
+                           hour: '2-digit',
+                           minute: '2-digit'
+                         })}
+                             </span>
+                             <span className="font-medium text-green-600">
+                               Neto: ${transaccion.monto_neto.toFixed(2)}
+                             </span>
+                           </div>
+                         </div>)}
+                    </div>
+                  </div>}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* TAB 3: ANALÍTICA DE VENTAS - GRÁFICAS Y DESTACADOS */}
+          <TabsContent value="analitica" className="mt-6">
             {/* Resumen de Ventas, Descuentos e Ingreso Neto */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               {/* Día */}
@@ -1569,209 +1753,6 @@ const RegistroIngresos = () => {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Lista de transacciones detallada */}
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Registro Detallado de Ventas</CardTitle>
-                <CardDescription>
-                  Historial completo de transacciones
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? <div className="text-center py-8 text-muted-foreground">
-                    Cargando transacciones...
-                  </div> : transacciones.length === 0 ? <div className="text-center py-8 text-muted-foreground">
-                    No hay ventas registradas aún
-                  </div> : <div className="space-y-4">
-                    <div className="text-sm font-medium text-muted-foreground mb-4">
-                      Últimas {transacciones.length} transacciones
-                    </div>
-                    <div className="space-y-3">
-                       {transacciones.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
-                           <div className="flex items-start gap-3 mb-2">
-                             {/* Imagen del producto si es precargado */}
-                             {transaccion.tipo_ingreso === 'precargados' && (() => {
-                         const producto = productos.find(p => p.nombre === transaccion.descripcion);
-                         return producto?.imagen_url ? <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                                   <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" />
-                               </div> : null;
-                       })()}
-                             
-                             <div className="flex justify-between items-start flex-1">
-                               <div className="flex-1">
-                                 <div className="flex items-center gap-2">
-                                   <p className="font-medium">{transaccion.descripcion}</p>
-                                   <Dialog>
-                                     <DialogTrigger asChild>
-                                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                         <FileText className="h-3 w-3" />
-                                       </Button>
-                                     </DialogTrigger>
-                                     <DialogContent className="max-w-2xl">
-                                       <DialogHeader>
-                                         <DialogTitle>Detalles de la Transacción</DialogTitle>
-                                       </DialogHeader>
-                                       <div className="space-y-4">
-                                         <div className="grid grid-cols-2 gap-4">
-                                           <div>
-                                             <h4 className="font-semibold text-sm">Información General</h4>
-                                             <div className="space-y-1 text-sm">
-                                               <p><span className="font-medium">Descripción:</span> {transaccion.descripcion}</p>
-                                               <p><span className="font-medium">Tipo:</span> {transaccion.tipo_ingreso}</p>
-                                               <p><span className="font-medium">Método de Pago:</span> {transaccion.metodo_pago || 'N/A'}</p>
-                                               <p><span className="font-medium">Tipo de Pago:</span> {transaccion.tipo_pago}</p>
-                                               <p><span className="font-medium">Fecha:</span> {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
-                                                 day: '2-digit',
-                                                 month: '2-digit', 
-                                                 year: 'numeric',
-                                                 hour: '2-digit',
-                                                 minute: '2-digit'
-                                               })}</p>
-                                             </div>
-                                           </div>
-                                           <div>
-                                             <h4 className="font-semibold text-sm">Montos</h4>
-                                             <div className="space-y-1 text-sm">
-                                               <p><span className="font-medium">Total:</span> ${transaccion.monto_total.toFixed(2)}</p>
-                                               <p><span className="font-medium">Descuento:</span> ${transaccion.monto_descuento.toFixed(2)}</p>
-                                               <p><span className="font-medium">Neto:</span> ${transaccion.monto_neto.toFixed(2)}</p>
-                                                <p><span className="font-medium">Pagado:</span> ${(transaccion as any).monto_pagado?.toFixed(2) || '0.00'}</p>
-                                                <p><span className="font-medium">Pendiente:</span> ${(transaccion as any).monto_pendiente?.toFixed(2) || '0.00'}</p>
-                                             </div>
-                                           </div>
-                                         </div>
-
-                                          {/* Información del Cliente */}
-                                          {((transaccion as any).cliente_nombre || (transaccion as any).cliente_telefono || (transaccion as any).cliente_email) && (
-                                            <div>
-                                              <h4 className="font-semibold text-sm mb-2">Información del Cliente</h4>
-                                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                                {(transaccion as any).cliente_nombre && <p><span className="font-medium">Nombre:</span> {(transaccion as any).cliente_nombre}</p>}
-                                                {(transaccion as any).cliente_telefono && <p><span className="font-medium">Teléfono:</span> {(transaccion as any).cliente_telefono}</p>}
-                                                {(transaccion as any).cliente_email && <p><span className="font-medium">Email:</span> {(transaccion as any).cliente_email}</p>}
-                                                {(transaccion as any).cliente_rfc && <p><span className="font-medium">RFC:</span> {(transaccion as any).cliente_rfc}</p>}
-                                              </div>
-                                            </div>
-                                          )}
-
-                                         {/* Información Contable */}
-                                         <div>
-                                           <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
-                                           <div className="text-sm space-y-1">
-                                             <p><span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo} - {transaccion.cuenta_principal_codigo === '4001' ? 'Ventas' : transaccion.cuenta_principal_codigo === '4004' ? 'Otros Ingresos' : ''}</p>
-                                             {transaccion.subcuenta_id ? (
-                                               <p><span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
-                                                 const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
-                                                 return subcuenta?.nombre || 'Subcuenta no encontrada';
-                                               })()}</p>
-                                             ) : (
-                                               <p><span className="font-medium">Subcuenta:</span> Sin subcuenta asignada</p>
-                                             )}
-                                           </div>
-                                         </div>
-
-                                          {/* Comentarios */}
-                                          {(transaccion as any).comentarios && (
-                                            <div>
-                                              <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
-                                              <div className="p-3 bg-muted rounded-md">
-                                                <p className="text-sm">{(transaccion as any).comentarios}</p>
-                                              </div>
-                                            </div>
-                                          )}
-                                       </div>
-                                     </DialogContent>
-                                   </Dialog>
-                                 </div>
-
-                                  {/* Comentarios resumidos */}
-                                  {(transaccion as any).comentarios && (
-                                    <div className="mt-1 p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-xs">
-                                      <span className="font-medium text-blue-700 dark:text-blue-300">💬 </span>
-                                      <span className="text-blue-600 dark:text-blue-400">
-                                        {(transaccion as any).comentarios.length > 50 ? 
-                                          `${(transaccion as any).comentarios.substring(0, 50)}...` : 
-                                          (transaccion as any).comentarios
-                                        }
-                                      </span>
-                                    </div>
-                                  )}
-
-                                 <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                                   <span className="capitalize">{transaccion.tipo_ingreso}</span>
-                                   <span>•</span>
-                                   <span className="capitalize">{transaccion.metodo_pago}</span>
-                                   <span>•</span>
-                                   <span className="capitalize">{transaccion.tipo_pago}</span>
-                                 </div>
-                                 {/* Información contable */}
-                                 <div className="mt-2 p-2 bg-muted/30 rounded-md">
-                                   <div className="text-xs font-medium text-muted-foreground mb-1">Información Contable:</div>
-                                   <div className="text-xs space-y-1">
-                                     <div>
-                                       <span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo}
-                                       {transaccion.cuenta_principal_codigo === '4001' ? ' - Ventas' : transaccion.cuenta_principal_codigo === '4004' ? ' - Otros Ingresos' : ''}
-                                     </div>
-                                     {transaccion.subcuenta_id ? <div>
-                                         <span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
-                                   const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
-                                   return subcuenta?.nombre || 'Subcuenta no encontrada';
-                                 })()}
-                                       </div> : <div className="text-muted-foreground">
-                                         <span className="font-medium">Subcuenta:</span> Sin subcuenta asignada
-                                       </div>}
-                                   </div>
-                                 </div>
-                               </div>
-                               <div className="text-right ml-4">
-                                 <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
-                                 {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
-                                     -${transaccion.monto_descuento.toFixed(2)} desc.
-                                   </p>}
-                               </div>
-                             </div>
-                           </div>
-                           <div className="flex justify-between items-center text-xs text-muted-foreground">
-                             <span>
-                               {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
-                           day: '2-digit',
-                           month: '2-digit',
-                           year: 'numeric',
-                           hour: '2-digit',
-                           minute: '2-digit'
-                         })}
-                             </span>
-                             <span className="font-medium text-green-600">
-                               Neto: ${transaccion.monto_neto.toFixed(2)}
-                             </span>
-                           </div>
-                         </div>)}
-                    </div>
-                  </div>}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* TAB 3: ANALÍTICA DE VENTAS */}
-          <TabsContent value="analitica" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Analítica de Ventas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <div className="mb-4">
-                    <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">Analítica de Ventas</h3>
-                  <p>Gráficos e indicadores para el análisis de ventas</p>
-                  <p className="text-sm mt-2">Próximamente disponible</p>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* TAB 4: CATÁLOGO DE PRODUCTOS */}
