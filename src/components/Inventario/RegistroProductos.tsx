@@ -550,38 +550,7 @@ const RegistroProductos = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-foreground border-b pb-2">Información de Pago</h3>
                 
-                {/* Método de pago */}
-                <div className="space-y-4">
-                  <Label className="font-medium">Método de Pago *</Label>
-                  <RadioGroup 
-                    value={watch("metodoPago")} 
-                    onValueChange={(value) => setValue("metodoPago", value)}
-                    defaultValue="efectivo"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="efectivo" id="efectivo-inv" />
-                      <div className="flex items-center space-x-2">
-                        <Wallet className="h-4 w-4 text-primary" />
-                        <Label htmlFor="efectivo-inv" className="cursor-pointer">
-                          Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
-                        </Label>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="bancos" id="bancos-inv" />
-                      <div className="flex items-center space-x-2">
-                        <CreditCard className="h-4 w-4 text-primary" />
-                        <Label htmlFor="bancos-inv" className="cursor-pointer">
-                          Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
-                        </Label>
-                      </div>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <Separator />
-
-                {/* Estado del pago */}
+                {/* Estado del pago - PRIMERO */}
                 <div className="space-y-4">
                   <Label className="font-medium">Estado del Pago *</Label>
                   <RadioGroup 
@@ -599,171 +568,207 @@ const RegistroProductos = () => {
                     </div>
                     <div className="flex items-center space-x-3">
                       <RadioGroupItem value="pendiente" id="pendiente-inv" />
-                      <Label htmlFor="pendiente-inv" className="cursor-pointer">Quedó pendiente</Label>
+                      <Label htmlFor="pendiente-inv" className="cursor-pointer">Quedó pendiente en su totalidad</Label>
                     </div>
                   </RadioGroup>
+                </div>
 
-                  <div>
-                    <Label htmlFor="montoPagado">Monto Pagado *</Label>
-                    <Input
-                      id="montoPagado"
-                      type="number"
-                      step="0.01"
-                      {...register("montoPagado", { required: true, valueAsNumber: true })}
-                      placeholder="0.00"
-                      readOnly={tipoPago === "contado" || tipoPago === "pendiente"}
-                      className={tipoPago === "contado" || tipoPago === "pendiente" ? "bg-muted" : ""}
-                    />
-                    {tipoPago === "contado" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Se completa automáticamente con el monto total
-                      </p>
-                    )}
-                    {tipoPago === "pendiente" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Se establece en 0 automáticamente
-                      </p>
-                    )}
-                    {tipoPago === "parcial" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Introduce el monto pagado parcialmente
-                      </p>
-                    )}
-                  </div>
+                {/* Método de pago - SOLO si hay pago (contado o parcial) */}
+                {(tipoPago === "contado" || tipoPago === "parcial") && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <Label className="font-medium">Método de Pago *</Label>
+                      <RadioGroup 
+                        value={watch("metodoPago")} 
+                        onValueChange={(value) => setValue("metodoPago", value)}
+                        defaultValue="efectivo"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <RadioGroupItem value="efectivo" id="efectivo-inv" />
+                          <div className="flex items-center space-x-2">
+                            <Wallet className="h-4 w-4 text-primary" />
+                            <Label htmlFor="efectivo-inv" className="cursor-pointer">
+                              Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
+                            </Label>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <RadioGroupItem value="bancos" id="bancos-inv" />
+                          <div className="flex items-center space-x-2">
+                            <CreditCard className="h-4 w-4 text-primary" />
+                            <Label htmlFor="bancos-inv" className="cursor-pointer">
+                              Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
+                            </Label>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  </>
+                )}
 
-                  {(tipoPago === "parcial" || tipoPago === "pendiente") && (
-                    <div className="space-y-4 ml-6 p-4 border rounded-lg bg-muted/50">
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Se registrará como cuenta por pagar al proveedor (obligatorio)
-                        </AlertDescription>
-                      </Alert>
+                <Separator />
+
+                <div>
+                  <Label htmlFor="montoPagado">Monto Pagado *</Label>
+                  <Input
+                    id="montoPagado"
+                    type="number"
+                    step="0.01"
+                    {...register("montoPagado", { required: true, valueAsNumber: true })}
+                    placeholder="0.00"
+                    readOnly={tipoPago === "contado" || tipoPago === "pendiente"}
+                    className={tipoPago === "contado" || tipoPago === "pendiente" ? "bg-muted" : ""}
+                  />
+                  {tipoPago === "contado" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Se completa automáticamente con el monto total
+                    </p>
+                  )}
+                  {tipoPago === "pendiente" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Se establece en 0 automáticamente
+                    </p>
+                  )}
+                  {tipoPago === "parcial" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Introduce el monto pagado parcialmente
+                    </p>
+                  )}
+                </div>
+
+                {(tipoPago === "parcial" || tipoPago === "pendiente") && (
+                  <div className="space-y-4 ml-6 p-4 border rounded-lg bg-muted/50">
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Se registrará como cuenta por pagar al proveedor (obligatorio)
+                      </AlertDescription>
+                    </Alert>
+                    
+                    {montoPendiente > 0 && (
+                      <div className="p-3 bg-muted border rounded-lg">
+                        <p className="text-sm font-medium">
+                          Monto Pendiente: {formatPrice(montoPendiente)}
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
+                      <Input
+                        id="fechaVencimiento"
+                        type="date"
+                        {...register("fechaVencimiento")}
+                      />
+                    </div>
+
+                    <Separator />
+
+                    {/* Información del Proveedor (Obligatorio) */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-semibold text-primary">Información del Proveedor *</h4>
                       
-                      {montoPendiente > 0 && (
-                        <div className="p-3 bg-muted border rounded-lg">
-                          <p className="text-sm font-medium">
-                            Monto Pendiente: {formatPrice(montoPendiente)}
+                      {/* Tipo de proveedor */}
+                      <div className="space-y-2">
+                        <Label>¿Es un proveedor nuevo o existente? *</Label>
+                        <RadioGroup value={tipoProveedor} onValueChange={(value) => {
+                          setTipoProveedor(value);
+                          if (value === "nuevo") {
+                            setProveedorSeleccionado("");
+                          } else {
+                            // Limpiar campos de proveedor nuevo
+                            setValue("proveedor", "");
+                            setProveedorTelefono("");
+                            setProveedorEmail("");
+                            setProveedorRFC("");
+                          }
+                        }}>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
+                            <Label htmlFor="proveedor-nuevo">Proveedor Nuevo</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="existente" id="proveedor-existente" />
+                            <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      {tipoProveedor === "nuevo" && (
+                        <div className="space-y-4 p-3 bg-background rounded-lg border">
+                          <h4 className="text-sm font-semibold">Datos del Nuevo Proveedor</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
+                              <Input
+                                id="proveedor-nombre"
+                                {...register("proveedor")}
+                                placeholder="Nombre completo o razón social"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="proveedor-telefono">Teléfono</Label>
+                              <Input
+                                id="proveedor-telefono"
+                                value={proveedorTelefono}
+                                onChange={(e) => setProveedorTelefono(e.target.value)}
+                                placeholder="Número de teléfono"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="proveedor-email">Email</Label>
+                              <Input
+                                id="proveedor-email"
+                                type="email"
+                                value={proveedorEmail}
+                                onChange={(e) => setProveedorEmail(e.target.value)}
+                                placeholder="correo@ejemplo.com"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="proveedor-rfc">RFC</Label>
+                              <Input
+                                id="proveedor-rfc"
+                                value={proveedorRFC}
+                                onChange={(e) => setProveedorRFC(e.target.value)}
+                                placeholder="RFC del proveedor"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {tipoProveedor === "existente" && (
+                        <div className="space-y-2">
+                          <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
+                          <Select value={proveedorSeleccionado} onValueChange={setProveedorSeleccionado}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar proveedor de la base de datos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {proveedores && proveedores.length > 0 ? (
+                                proveedores.map((proveedor) => (
+                                  <SelectItem key={proveedor.id} value={proveedor.id}>
+                                    {proveedor.nombre}
+                                    {proveedor.telefono && ` - ${proveedor.telefono}`}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="no-proveedores" disabled>
+                                  No hay proveedores registrados
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Proveedores desde el menú de Cobros y Pagos
                           </p>
                         </div>
                       )}
-                      
-                      <div>
-                        <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
-                        <Input
-                          id="fechaVencimiento"
-                          type="date"
-                          {...register("fechaVencimiento")}
-                        />
-                      </div>
-
-                      <Separator />
-
-                      {/* Información del Proveedor (Obligatorio) */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-primary">Información del Proveedor *</h4>
-                        
-                        {/* Tipo de proveedor */}
-                        <div className="space-y-2">
-                          <Label>¿Es un proveedor nuevo o existente? *</Label>
-                          <RadioGroup value={tipoProveedor} onValueChange={(value) => {
-                            setTipoProveedor(value);
-                            if (value === "nuevo") {
-                              setProveedorSeleccionado("");
-                            } else {
-                              // Limpiar campos de proveedor nuevo
-                              setValue("proveedor", "");
-                              setProveedorTelefono("");
-                              setProveedorEmail("");
-                              setProveedorRFC("");
-                            }
-                          }}>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
-                              <Label htmlFor="proveedor-nuevo">Proveedor Nuevo</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="existente" id="proveedor-existente" />
-                              <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
-                            </div>
-                          </RadioGroup>
-                        </div>
-
-                        {tipoProveedor === "nuevo" && (
-                          <div className="space-y-4 p-3 bg-background rounded-lg border">
-                            <h4 className="text-sm font-semibold">Datos del Nuevo Proveedor</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
-                                <Input
-                                  id="proveedor-nombre"
-                                  {...register("proveedor")}
-                                  placeholder="Nombre completo o razón social"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                                <Input
-                                  id="proveedor-telefono"
-                                  value={proveedorTelefono}
-                                  onChange={(e) => setProveedorTelefono(e.target.value)}
-                                  placeholder="Número de teléfono"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="proveedor-email">Email</Label>
-                                <Input
-                                  id="proveedor-email"
-                                  type="email"
-                                  value={proveedorEmail}
-                                  onChange={(e) => setProveedorEmail(e.target.value)}
-                                  placeholder="correo@ejemplo.com"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="proveedor-rfc">RFC</Label>
-                                <Input
-                                  id="proveedor-rfc"
-                                  value={proveedorRFC}
-                                  onChange={(e) => setProveedorRFC(e.target.value)}
-                                  placeholder="RFC del proveedor"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {tipoProveedor === "existente" && (
-                          <div className="space-y-2">
-                            <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
-                            <Select value={proveedorSeleccionado} onValueChange={setProveedorSeleccionado}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar proveedor de la base de datos" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {proveedores && proveedores.length > 0 ? (
-                                  proveedores.map((proveedor) => (
-                                    <SelectItem key={proveedor.id} value={proveedor.id}>
-                                      {proveedor.nombre}
-                                      {proveedor.telefono && ` - ${proveedor.telefono}`}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <SelectItem value="no-proveedores" disabled>
-                                    No hay proveedores registrados
-                                  </SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                              Proveedores desde el menú de Cobros y Pagos
-                            </p>
-                          </div>
-                        )}
-                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <Separator />
 
