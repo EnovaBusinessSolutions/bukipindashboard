@@ -150,6 +150,9 @@ const EstadoResultados = () => {
   const totalGastos = calcularTotalGastos();
   const utilidadBruta = totalIngresos - totalCostos;
   const utilidadNeta = utilidadBruta - totalGastos;
+  
+  // Utilidad del ejercicio desde transacciones automáticas (debe coincidir con Balance General)
+  const utilidadEjercicio = saldosAutomaticos?.utilidad || 0;
 
   return (
     <div className="container mx-auto p-6">
@@ -290,7 +293,7 @@ const EstadoResultados = () => {
         {/* Utilidad Neta del Período */}
         <Card className="border-2 border-primary">
           <CardHeader>
-            <CardTitle className={utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}>
+            <CardTitle className={utilidadEjercicio >= 0 ? "text-green-600" : "text-red-600"}>
               Resultado del Período
             </CardTitle>
           </CardHeader>
@@ -314,17 +317,17 @@ const EstadoResultados = () => {
               </div>
               <div className="border-t-2 pt-3 mt-4">
                 <div className={`flex justify-between items-center font-bold text-xl ${
-                  utilidadNeta >= 0 ? "text-green-600" : "text-red-600"
+                  utilidadEjercicio >= 0 ? "text-green-600" : "text-red-600"
                 }`}>
-                  <span>{utilidadNeta >= 0 ? "Utilidad Neta" : "Pérdida Neta"}</span>
-                  <span>${utilidadNeta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span>{utilidadEjercicio >= 0 ? "Utilidad Neta del Ejercicio" : "Pérdida Neta del Ejercicio"}</span>
+                  <span>${utilidadEjercicio.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
               {saldosAutomaticos && (
                 <div className="text-xs text-muted-foreground mt-2 pt-2 border-t">
-                  Cálculo automático: ${saldosAutomaticos.ingresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
-                  ${saldosAutomaticos.costos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
-                  ${saldosAutomaticos.gastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} = 
+                  Transacciones: Ingresos ${saldosAutomaticos.ingresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
+                  Costos ${saldosAutomaticos.costos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
+                  Gastos ${saldosAutomaticos.gastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} = 
                   ${saldosAutomaticos.utilidad.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                 </div>
               )}
