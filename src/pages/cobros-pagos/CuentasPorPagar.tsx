@@ -1,54 +1,213 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Calendar, DollarSign, Building, AlertCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { 
+  Search, 
+  Calendar, 
+  DollarSign, 
+  Building2, 
+  AlertCircle,
+  BarChart3,
+  TrendingUp, 
+  Users, 
+  Clock, 
+  Target
+} from "lucide-react";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  Area,
+  AreaChart
+} from "recharts";
+import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
+
+const COLORS = {
+  primary: "hsl(var(--primary))",
+  secondary: "hsl(var(--secondary))",
+  accent: "hsl(var(--accent))",
+  destructive: "hsl(var(--destructive))",
+  warning: "hsl(var(--warning))",
+  success: "hsl(var(--success))"
+};
+
+const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.destructive];
 
 const CuentasPorPagar = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("lista");
+  const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
+  const [selectedCuenta, setSelectedCuenta] = useState<any>(null);
+  const [montoPago, setMontoPago] = useState("");
+  const [metodoPago, setMetodoPago] = useState("");
 
-  // Datos de ejemplo - posteriormente se conectará con Supabase
-  const cuentasPorPagar = [
-    {
-      id: "1",
-      proveedor_nombre: "Proveedor ABC",
-      descripcion: "Compra de materiales",
-      monto_total: 500000,
-      monto_pagado: 200000,
-      monto_pendiente: 300000,
-      fecha_vencimiento: "2024-02-15",
-    },
-    {
-      id: "2",
-      proveedor_nombre: "Servicios XYZ",
-      descripcion: "Servicios profesionales",
-      monto_total: 800000,
-      monto_pagado: 0,
-      monto_pendiente: 800000,
-      fecha_vencimiento: "2024-02-20",
-    },
-  ];
+  const { data: cuentasPorPagar, isLoading } = useQuery({
+    queryKey: ["cuentas-por-pagar"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transacciones_egresos")
+        .select("*")
+        .gt("monto_pendiente", 0)
+        .order("fecha_vencimiento", { ascending: true });
 
-  const filteredCuentas = cuentasPorPagar.filter(
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const queryClient = useQueryClient();
+
+  // Real-time updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('cuentas-por-pagar-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transacciones_egresos'
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  // Hooks para analíticas
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
+  const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
+
+  // Mutación para registrar pago
+  const registrarPagoMutation = useMutation({
+    mutationFn: async ({ cuentaId, monto, metodo }: { cuentaId: string; monto: number; metodo: string }) => {
+      const cuenta = cuentasPorPagar?.find(c => c.id === cuentaId);
+      if (!cuenta) throw new Error("Cuenta no encontrada");
+
+      const nuevoMontoPendiente = (cuenta.monto_pendiente || 0) - monto;
+      const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
+
+      const { error } = await supabase
+        .from('transacciones_egresos')
+        .update({
+          monto_pendiente: Math.max(0, nuevoMontoPendiente),
+          monto_pagado: nuevoMontoPagado,
+          tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
+        })
+        .eq('id', cuentaId);
+
+      if (error) throw error;
+      
+      return { cuentaId, monto, metodo };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar"] });
+      toast.success("Pago registrado exitosamente");
+      setPagoDialogOpen(false);
+      resetPagoForm();
+    },
+    onError: (error: any) => {
+      toast.error("Error al registrar el pago: " + error.message);
+    }
+  });
+
+  const filteredCuentas = cuentasPorPagar?.filter(
     (cuenta) =>
       cuenta.proveedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cuenta.proveedor_telefono?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cuenta.proveedor_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cuenta.proveedor_rfc?.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
-  const totalPorPagar = filteredCuentas.reduce((sum, cuenta) => sum + cuenta.monto_pendiente, 0);
+  const totalPorPagar = filteredCuentas.reduce((sum, cuenta) => sum + (cuenta.monto_pendiente || 0), 0);
   const vencidas = filteredCuentas.filter(cuenta => 
-    new Date(cuenta.fecha_vencimiento) < new Date()
+    cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) < new Date()
   ).length;
   const porVencer = filteredCuentas.filter(cuenta => 
-    new Date(cuenta.fecha_vencimiento) >= new Date()
+    cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) >= new Date()
   ).length;
 
-  const getEstadoBadge = (fechaVencimiento: string, montoPendiente: number) => {
+  const openPagoDialog = (cuenta: any) => {
+    setSelectedCuenta(cuenta);
+    setMontoPago("");
+    setMetodoPago("");
+    setPagoDialogOpen(true);
+  };
+
+  const resetPagoForm = () => {
+    setSelectedCuenta(null);
+    setMontoPago("");
+    setMetodoPago("");
+  };
+
+  const handleRegistrarPago = () => {
+    if (!selectedCuenta || !montoPago || !metodoPago) {
+      toast.error("Por favor completa todos los campos");
+      return;
+    }
+
+    const monto = parseFloat(montoPago);
+    if (isNaN(monto) || monto <= 0) {
+      toast.error("El monto debe ser un número válido mayor a 0");
+      return;
+    }
+
+    if (monto > (selectedCuenta.monto_pendiente || 0)) {
+      toast.error("El monto no puede ser mayor al monto pendiente");
+      return;
+    }
+
+    registrarPagoMutation.mutate({
+      cuentaId: selectedCuenta.id,
+      monto: monto,
+      metodo: metodoPago
+    });
+  };
+
+  const getEstadoBadge = (fechaVencimiento: string | null, montoPendiente: number) => {
     if (montoPendiente === 0) {
       return <Badge variant="secondary">Pagado</Badge>;
     }
     
+    if (!fechaVencimiento) {
+      return <Badge variant="outline">Sin vencimiento</Badge>;
+    }
+
     const fechaVence = new Date(fechaVencimiento);
     const hoy = new Date();
     
@@ -58,6 +217,16 @@ const CuentasPorPagar = () => {
       return <Badge variant="default">Por vencer</Badge>;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-muted-foreground">Cargando cuentas por pagar...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -72,87 +241,420 @@ const CuentasPorPagar = () => {
           </div>
         </div>
 
-        {/* Métricas Resumen */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total por Pagar</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${totalPorPagar.toLocaleString('es-CO')}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="lista" className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Lista de Cuentas
+            </TabsTrigger>
+            <TabsTrigger value="analiticas" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analíticas
+            </TabsTrigger>
+          </TabsList>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
-              <AlertCircle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{vencidas}</div>
-            </CardContent>
-          </Card>
+          {/* Tab 1: Lista de Cuentas */}
+          <TabsContent value="lista" className="space-y-6">
+            {/* Métricas Resumen */}
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total por Pagar</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    ${totalPorPagar.toLocaleString('es-CO')}
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{porVencer}</div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">{vencidas}</div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Cuentas</CardTitle>
-              <Building className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{filteredCuentas.length}</div>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{porVencer}</div>
+                </CardContent>
+              </Card>
 
-        {/* Filtros */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5" />
-              Filtrar Cuentas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <Input
-                  placeholder="Buscar por proveedor o descripción..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Cuentas</CardTitle>
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{filteredCuentas.length}</div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Próximamente */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Listado de Cuentas por Pagar</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-12">
-              <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Funcionalidad en desarrollo</h3>
-              <p className="text-muted-foreground">
-                El módulo de cuentas por pagar estará disponible próximamente.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Filtros */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Filtrar Cuentas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                          <Input
+                            placeholder="Buscar por proveedor, descripción, teléfono, email o RFC..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tabla de Cuentas por Pagar */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Listado de Cuentas por Pagar</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {filteredCuentas.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No se encontraron cuentas por pagar.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Proveedor</TableHead>
+                          <TableHead>Información de Contacto</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead>Desglose de Montos</TableHead>
+                          <TableHead>Estado de Pago</TableHead>
+                          <TableHead>Fecha Vencimiento</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredCuentas.map((cuenta) => (
+                          <TableRow key={cuenta.id}>
+                            <TableCell className="font-medium">
+                              {cuenta.proveedor_nombre || "Sin especificar"}
+                            </TableCell>
+                            <TableCell className="min-w-[200px]">
+                              <div className="space-y-1">
+                                {cuenta.proveedor_telefono && (
+                                  <div className="text-sm">
+                                    📞 {cuenta.proveedor_telefono}
+                                  </div>
+                                )}
+                                {cuenta.proveedor_email && (
+                                  <div className="text-sm">
+                                    📧 {cuenta.proveedor_email}
+                                  </div>
+                                )}
+                                {cuenta.proveedor_rfc && (
+                                  <div className="text-sm">
+                                    🆔 {cuenta.proveedor_rfc}
+                                  </div>
+                                )}
+                                {!cuenta.proveedor_telefono && !cuenta.proveedor_email && !cuenta.proveedor_rfc && (
+                                  <span className="text-muted-foreground text-sm">Sin información de contacto</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{cuenta.descripcion}</TableCell>
+                            <TableCell className="min-w-[280px]">
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Total original:</span>
+                                  <span className="font-medium">${cuenta.monto_total.toLocaleString('es-CO')}</span>
+                                </div>
+                                {cuenta.monto_pagado > 0 && (
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Pagado:</span>
+                                    <span className="text-success">+${cuenta.monto_pagado.toLocaleString('es-CO')}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center border-t pt-1">
+                                  <span className="text-sm font-medium">Pendiente:</span>
+                                  <span className="font-bold text-lg text-primary">
+                                    ${cuenta.monto_pendiente?.toLocaleString('es-CO') || 0}
+                                  </span>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <Badge variant={cuenta.tipo_pago === 'contado' ? 'default' : cuenta.tipo_pago === 'parcial' ? 'secondary' : 'outline'}>
+                                  {cuenta.tipo_pago === 'contado' ? 'Contado' : 
+                                   cuenta.tipo_pago === 'parcial' ? 'Pago Parcial' : 
+                                   'A Crédito'}
+                                </Badge>
+                                {cuenta.metodo_pago && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {cuenta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Tarjeta/Banco'}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {cuenta.fecha_vencimiento ? (
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium">
+                                    {format(new Date(cuenta.fecha_vencimiento), "dd/MM/yyyy", { locale: es })}
+                                  </div>
+                                  <div className="text-xs">
+                                    {(() => {
+                                      const today = new Date();
+                                      const dueDate = new Date(cuenta.fecha_vencimiento);
+                                      const diffTime = dueDate.getTime() - today.getTime();
+                                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                      
+                                      if (diffDays < 0) {
+                                        return <span className="text-destructive">Vencido hace {Math.abs(diffDays)} días</span>;
+                                      } else if (diffDays === 0) {
+                                        return <span className="text-warning">Vence hoy</span>;
+                                      } else {
+                                        return <span className="text-muted-foreground">Vence en {diffDays} días</span>;
+                                      }
+                                    })()}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">Sin fecha</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente)}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                onClick={() => openPagoDialog(cuenta)}
+                              >
+                                Registrar Pago
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab 2: Analíticas */}
+          <TabsContent value="analiticas" className="space-y-6">
+            {loadingAnalytics || loadingDetalles ? (
+              <div className="text-center py-12">
+                <div className="text-muted-foreground">Cargando analíticas...</div>
+              </div>
+            ) : analytics && detalles ? (
+              <>
+                {/* Métricas Principales */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        ${analytics.totalPendiente.toLocaleString('es-CO')}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analytics.totalProveedores}</div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Promedio por Deuda</CardTitle>
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        ${analytics.promedioDeuda.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Cuentas Activas</CardTitle>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{detalles.length}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Top Proveedores */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Top 10 Proveedores por Deuda</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={analytics.cuentasPorProveedor}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="proveedor" angle={-45} textAnchor="end" height={100} />
+                          <YAxis />
+                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
+                          <Bar dataKey="monto" fill={COLORS.primary} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Aging Analysis */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Análisis de Antigüedad</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={analytics.agingAnalysis}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ rango, monto }) => `${rango}: $${monto.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="monto"
+                          >
+                            {analytics.agingAnalysis.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Tendencia Mensual */}
+                  <Card className="md:col-span-2">
+                    <CardHeader>
+                      <CardTitle>Tendencia de Deudas (Últimos 6 Meses)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <AreaChart data={analytics.tendenciaMensual}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="mes" />
+                          <YAxis />
+                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
+                          <Area type="monotone" dataKey="monto" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.3} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No hay datos suficientes para mostrar analíticas</p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Dialog para Registrar Pago */}
+        <Dialog open={pagoDialogOpen} onOpenChange={setPagoDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Registrar Pago</DialogTitle>
+              <DialogDescription>
+                Registra un pago para {selectedCuenta?.proveedor_nombre || "este proveedor"}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedCuenta && (
+              <div className="space-y-4">
+                <div className="bg-muted p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Monto Total:</span>
+                    <span className="font-medium">${selectedCuenta.monto_total.toLocaleString('es-CO')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Ya Pagado:</span>
+                    <span className="font-medium">${selectedCuenta.monto_pagado.toLocaleString('es-CO')}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="font-semibold">Pendiente:</span>
+                    <span className="font-bold text-lg">${selectedCuenta.monto_pendiente.toLocaleString('es-CO')}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monto">Monto a Pagar *</Label>
+                  <Input
+                    id="monto"
+                    type="number"
+                    placeholder="0.00"
+                    value={montoPago}
+                    onChange={(e) => setMontoPago(e.target.value)}
+                    step="0.01"
+                    min="0"
+                    max={selectedCuenta.monto_pendiente}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="metodo">Método de Pago *</Label>
+                  <Select value={metodoPago} onValueChange={setMetodoPago}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar método" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="efectivo">Efectivo</SelectItem>
+                      <SelectItem value="transferencia">Transferencia Bancaria</SelectItem>
+                      <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setPagoDialogOpen(false)} className="flex-1">
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleRegistrarPago} className="flex-1">
+                    Registrar Pago
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
