@@ -178,10 +178,6 @@ const BalanceGeneral = () => {
               <div className="space-y-2">
                 {cuentasActivos.map((cuenta) => {
                   const saldo = obtenerSaldo(cuenta.codigo);
-                  // Solo mostrar cuentas con saldo diferente de cero
-                  if (saldo === 0 && !['1001', '1002', '1003', '1005'].includes(cuenta.codigo)) {
-                    return null;
-                  }
                   return (
                     <div key={cuenta.codigo} className="flex justify-between items-center">
                       <span className="text-sm">
@@ -215,10 +211,6 @@ const BalanceGeneral = () => {
               <div className="space-y-2">
                 {cuentasPasivos.map((cuenta) => {
                   const saldo = obtenerSaldo(cuenta.codigo);
-                  // Solo mostrar cuentas con saldo diferente de cero
-                  if (saldo === 0 && cuenta.codigo !== '2001') {
-                    return null;
-                  }
                   return (
                     <div key={cuenta.codigo} className="flex justify-between items-center">
                       <span className="text-sm">
@@ -249,7 +241,6 @@ const BalanceGeneral = () => {
               <div className="space-y-2">
                 {cuentasPatrimonio.map((cuenta) => {
                   const saldo = obtenerSaldo(cuenta.codigo);
-                  if (saldo === 0) return null;
                   return (
                     <div key={cuenta.codigo} className="flex justify-between items-center">
                       <span className="text-sm">
