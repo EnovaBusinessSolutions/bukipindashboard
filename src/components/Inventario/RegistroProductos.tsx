@@ -11,6 +11,7 @@ import { useProductos, useCreateProducto } from "@/hooks/useProductos";
 import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
 import { useProveedores } from "@/hooks/useProveedores";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -217,6 +218,7 @@ const RegistroProductos = () => {
       }
     }
 
+    // Crear el producto
     await createProducto.mutateAsync({
       nombre: data.nombre,
       precio: data.precio,
@@ -226,6 +228,58 @@ const RegistroProductos = () => {
       subcuentaId: data.subcuentaId,
       imagen: selectedImage || undefined,
     });
+
+    // Si hay pago parcial o pendiente, crear cuenta por pagar
+    if ((tipoPago === "parcial" || tipoPago === "pendiente") && montoPendiente > 0) {
+      // Obtener user_id actual
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Usuario no autenticado",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { error: cuentaPorPagarError } = await supabase
+        .from("transacciones_egresos")
+        .insert({
+          user_id: user.id,
+          tipo_egreso: "compra_inventario",
+          descripcion: `Compra de ${data.cantidad} unidades de ${data.nombre}`,
+          monto_total: montoTotal,
+          monto_pagado: montoPagado,
+          monto_pendiente: montoPendiente,
+          tipo_pago: tipoPago,
+          metodo_pago: tipoPago === "parcial" ? data.metodoPago : null,
+          proveedor_id: proveedorId,
+          proveedor_nombre: proveedorNombre,
+          proveedor_telefono: proveedorTelefono || null,
+          proveedor_email: proveedorEmail || null,
+          proveedor_rfc: proveedorRFC || null,
+          fecha_vencimiento: data.fechaVencimiento || null,
+          subcuenta_id: data.subcuentaId || null,
+          cuenta_codigo: "1005",
+          cantidad: data.cantidad,
+          precio_unitario: data.precio
+        });
+
+      if (cuentaPorPagarError) {
+        console.error("Error al crear cuenta por pagar:", cuentaPorPagarError);
+        toast({
+          title: "⚠️ Advertencia",
+          description: "Producto registrado pero hubo un error al crear la cuenta por pagar",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "✅ Cuenta por pagar creada",
+          description: `Se registró la cuenta por pagar de ${formatPrice(montoPendiente)} al proveedor ${proveedorNombre}`,
+        });
+      }
+    }
     
     // Reset del formulario y volver al inicio
     reset();
