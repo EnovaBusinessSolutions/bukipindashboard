@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Building2, Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Building2, Plus, Search, Edit, Trash2, Users, TrendingUp, ShoppingCart, DollarSign } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useProveedores } from "@/hooks/useProveedores";
+import { useProveedoresAnalytics } from "@/hooks/useProveedoresAnalytics";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 
 const Proveedores = () => {
   const { proveedores, loading, createProveedor, updateProveedor, deleteProveedor } = useProveedores();
+  const { stats, loading: statsLoading } = useProveedoresAnalytics();
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState<any>(null);
@@ -168,7 +170,125 @@ const Proveedores = () => {
         </p>
       </div>
 
-      <div className="p-6">
+      <div className="p-6 space-y-6">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Proveedores
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-2xl font-bold">
+                  {statsLoading ? "..." : stats.totalProveedores}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.proveedoresActivos} activos
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Transacciones
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                <span className="text-2xl font-bold">
+                  {statsLoading ? "..." : stats.totalTransacciones}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Total de compras registradas
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Monto Total Gastado
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <span className="text-2xl font-bold">
+                  {statsLoading ? "..." : `$${stats.montoTotalGastado.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                En todas las transacciones
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Proveedor Principal
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <span className="text-lg font-bold truncate">
+                  {statsLoading ? "..." : stats.topProveedores[0]?.proveedor_nombre || "N/A"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.topProveedores[0] ? `$${stats.topProveedores[0].monto_total.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : "Sin datos"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Top 5 Proveedores */}
+        {!statsLoading && stats.topProveedores.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Top 5 Proveedores por Monto
+              </CardTitle>
+              <CardDescription>
+                Los proveedores con mayor volumen de compras
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stats.topProveedores.map((proveedor, index) => (
+                  <div key={proveedor.proveedor_id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium">{proveedor.proveedor_nombre}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {proveedor.total_transacciones} transacciones
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-lg">
+                        ${proveedor.monto_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
