@@ -21,6 +21,7 @@ import CuentasPorCobrar from "./pages/cobros-pagos/CuentasPorCobrar";
 import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
 import Clientes from "./pages/Clientes";
 import AnalyticasClientes from "./pages/clientes/AnalyticasClientes";
+import Proveedores from "./pages/Proveedores";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const App = () => (
                         <Route path="/cobros-pagos/cuentas-por-pagar" element={<CuentasPorPagar />} />
                         <Route path="/clientes" element={<Clientes />} />
                         <Route path="/clientes/analiticas" element={<AnalyticasClientes />} />
+                        <Route path="/proveedores" element={<Proveedores />} />
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </main>

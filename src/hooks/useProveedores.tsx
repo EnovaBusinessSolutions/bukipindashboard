@@ -118,11 +118,84 @@ export const useProveedores = () => {
     }
   };
 
+  const updateProveedor = async (id: string, proveedor: Omit<Proveedor, 'id' | 'created_at' | 'activo'>) => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        return { data: null, error: 'Usuario no autenticado' };
+      }
+      
+      const { data, error: updateError } = await supabase
+        .from('proveedores')
+        .update({
+          nombre: proveedor.nombre,
+          telefono: proveedor.telefono,
+          email: proveedor.email,
+          rfc: proveedor.rfc,
+          direccion: proveedor.direccion,
+          ciudad: proveedor.ciudad,
+          estado: proveedor.estado,
+          codigo_postal: proveedor.codigo_postal
+        })
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      return { data, error: null };
+    } catch (err: any) {
+      console.error('Error updating proveedor:', err);
+      
+      // Detectar errores de duplicados
+      if (err.code === '23505') {
+        if (err.message.includes('unique_rfc_per_user_idx')) {
+          return { data: null, error: 'Ya existe un proveedor con este RFC' };
+        }
+        if (err.message.includes('unique_email_per_user_idx')) {
+          return { data: null, error: 'Ya existe un proveedor con este correo electrónico' };
+        }
+        if (err.message.includes('unique_telefono_per_user_idx')) {
+          return { data: null, error: 'Ya existe un proveedor con este teléfono' };
+        }
+      }
+      
+      return { data: null, error: err.message || 'Error al actualizar proveedor' };
+    }
+  };
+
+  const deleteProveedor = async (id: string) => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        return { error: 'Usuario no autenticado' };
+      }
+      
+      const { error: deleteError } = await supabase
+        .from('proveedores')
+        .update({ activo: false })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (deleteError) throw deleteError;
+
+      return { error: null };
+    } catch (err: any) {
+      console.error('Error deleting proveedor:', err);
+      return { error: err.message || 'Error al eliminar proveedor' };
+    }
+  };
+
   return { 
     proveedores, 
     loading, 
     error, 
     refetch: fetchProveedores,
-    createProveedor 
+    createProveedor,
+    updateProveedor,
+    deleteProveedor
   };
 };
