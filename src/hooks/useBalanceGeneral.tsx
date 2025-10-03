@@ -1,0 +1,115 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+interface SaldosBalance {
+  // Activos
+  caja: number;
+  bancos: number;
+  cuentasPorCobrar: number;
+  inventario: number;
+  
+  // Pasivos
+  proveedores: number;
+  
+  // Resultados
+  ingresos: number;
+  costos: number;
+  gastos: number;
+  utilidad: number;
+}
+
+export const useBalanceGeneral = () => {
+  return useQuery({
+    queryKey: ["balance-general-completo"],
+    queryFn: async (): Promise<SaldosBalance> => {
+      // 1. CAJA (1001) - Pagos en efectivo
+      const { data: ingresosEfectivo } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_pagado')
+        .eq('metodo_pago', 'efectivo');
+
+      const { data: egresosEfectivo } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_pagado')
+        .eq('metodo_pago', 'efectivo');
+
+      const caja = (ingresosEfectivo?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) -
+                   (egresosEfectivo?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0);
+
+      // 2. BANCOS (1002) - Pagos por transferencia/tarjeta
+      const { data: ingresosBanco } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_pagado')
+        .in('metodo_pago', ['transferencia', 'tarjeta']);
+
+      const { data: egresosBanco } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_pagado')
+        .in('metodo_pago', ['transferencia', 'tarjeta', 'tarjeta-transferencia']);
+
+      const bancos = (ingresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) -
+                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0);
+
+      // 3. CUENTAS POR COBRAR (1003) - Monto pendiente de ingresos
+      const { data: cuentasCobrar } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_pendiente')
+        .gt('monto_pendiente', 0);
+
+      const cuentasPorCobrar = cuentasCobrar?.reduce((sum, t) => sum + (t.monto_pendiente || 0), 0) || 0;
+
+      // 4. INVENTARIO (1005) - Valor total del inventario
+      const { data: inventarioData } = await supabase
+        .from('productos')
+        .select('valor_total_inventario');
+
+      const inventario = inventarioData?.reduce((sum, p) => sum + (p.valor_total_inventario || 0), 0) || 0;
+
+      // 5. PROVEEDORES/CUENTAS POR PAGAR (2001) - Monto pendiente de egresos
+      const { data: cuentasPagar } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_pendiente')
+        .gt('monto_pendiente', 0);
+
+      const proveedores = cuentasPagar?.reduce((sum, t) => sum + (t.monto_pendiente || 0), 0) || 0;
+
+      // 6. INGRESOS (4xxx) - Total de ingresos
+      const { data: ingresosData } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_neto');
+
+      const ingresos = ingresosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
+
+      // 7. COSTOS (5001-5099) - Total de costos
+      const { data: costosData } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total')
+        .eq('tipo_egreso', 'costo');
+
+      const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+
+      // 8. GASTOS (5100-5999) - Total de gastos
+      const { data: gastosData } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total')
+        .eq('tipo_egreso', 'gasto');
+
+      const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+
+      // 9. UTILIDAD DEL EJERCICIO
+      const utilidad = ingresos - (costos + gastos);
+
+      return {
+        caja,
+        bancos,
+        cuentasPorCobrar,
+        inventario,
+        proveedores,
+        ingresos,
+        costos,
+        gastos,
+        utilidad
+      };
+    }
+  });
+};

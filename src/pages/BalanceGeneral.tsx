@@ -1,8 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
+import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SaldoCuenta {
   cuenta_codigo: string;
@@ -13,8 +15,10 @@ interface SaldoCuenta {
 
 const BalanceGeneral = () => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
+  const { data: saldosAutomaticos, isLoading: saldosAutomaticosLoading } = useBalanceGeneral();
 
-  const { data: saldos, isLoading: saldosLoading } = useQuery({
+  // Saldos de asientos contables manuales
+  const { data: saldosAsientos, isLoading: saldosLoading } = useQuery({
     queryKey: ["saldos-cuentas-balance"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -55,21 +59,13 @@ const BalanceGeneral = () => {
         else if (codigo.startsWith("3")) {
           cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
         }
-        // Ingresos (4000-4999): Haber - Debe (para utilidad del ejercicio)
-        else if (codigo.startsWith("4")) {
-          cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
-        }
-        // Gastos (5000-5999): Debe - Haber (para utilidad del ejercicio)
-        else if (codigo.startsWith("5")) {
-          cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
-        }
       });
 
       return saldosPorCuenta;
     },
   });
 
-  if (cuentasLoading || saldosLoading) {
+  if (cuentasLoading || saldosLoading || saldosAutomaticosLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -79,6 +75,37 @@ const BalanceGeneral = () => {
 
   const cuentasFlat = cuentasData?.cuentasFlat || [];
   
+  // Función para obtener el saldo de una cuenta (combinando asientos manuales y automáticos)
+  const obtenerSaldo = (codigoCuenta: string): number => {
+    const saldoAsiento = saldosAsientos?.[codigoCuenta]?.saldo || 0;
+    let saldoAutomatico = 0;
+
+    if (!saldosAutomaticos) return saldoAsiento;
+
+    // Mapear saldos automáticos a cuentas específicas
+    switch(codigoCuenta) {
+      case '1001': // Caja
+        saldoAutomatico = saldosAutomaticos.caja;
+        break;
+      case '1002': // Bancos
+        saldoAutomatico = saldosAutomaticos.bancos;
+        break;
+      case '1003': // Cuentas por Cobrar
+        saldoAutomatico = saldosAutomaticos.cuentasPorCobrar;
+        break;
+      case '1005': // Inventario
+        saldoAutomatico = saldosAutomaticos.inventario;
+        break;
+      case '2001': // Proveedores
+        saldoAutomatico = saldosAutomaticos.proveedores;
+        break;
+      default:
+        saldoAutomatico = 0;
+    }
+
+    return saldoAsiento + saldoAutomatico;
+  };
+
   // Filtrar cuentas del balance general
   const cuentasActivos = cuentasFlat.filter(cuenta => 
     cuenta.codigo.startsWith("1") && cuenta.estado_financiero === "Balance General"
@@ -94,49 +121,35 @@ const BalanceGeneral = () => {
 
   const calcularTotalActivos = () => {
     return cuentasActivos.reduce((total, cuenta) => {
-      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+      const saldo = obtenerSaldo(cuenta.codigo);
       return total + saldo;
     }, 0);
   };
 
   const calcularTotalPasivos = () => {
     return cuentasPasivos.reduce((total, cuenta) => {
-      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+      const saldo = obtenerSaldo(cuenta.codigo);
       return total + saldo;
     }, 0);
   };
 
   const calcularTotalPatrimonio = () => {
     return cuentasPatrimonio.reduce((total, cuenta) => {
-      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+      const saldo = obtenerSaldo(cuenta.codigo);
       return total + saldo;
     }, 0);
   };
 
-  // Calcular utilidad del ejercicio (resultado del estado de resultados)
-  const calcularUtilidadEjercicio = () => {
-    // Filtrar cuentas de ingresos y gastos
-    const cuentasIngresos = cuentasFlat.filter(cuenta => cuenta.codigo.startsWith("4"));
-    const cuentasGastos = cuentasFlat.filter(cuenta => cuenta.codigo.startsWith("5"));
-    
-    const totalIngresos = cuentasIngresos.reduce((total, cuenta) => {
-      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
-      return total + saldo;
-    }, 0);
-    
-    const totalGastos = cuentasGastos.reduce((total, cuenta) => {
-      const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
-      return total + saldo;
-    }, 0);
-    
-    return totalIngresos - totalGastos;
-  };
+  // Utilidad del ejercicio desde transacciones reales
+  const utilidadEjercicio = saldosAutomaticos?.utilidad || 0;
 
   const totalActivos = calcularTotalActivos();
   const totalPasivos = calcularTotalPasivos();
   const totalPatrimonio = calcularTotalPatrimonio();
-  const utilidadEjercicio = calcularUtilidadEjercicio();
   const totalPatrimonioConUtilidad = totalPatrimonio + utilidadEjercicio;
+
+  const diferencia = totalActivos - (totalPasivos + totalPatrimonioConUtilidad);
+  const balanceCuadrado = Math.abs(diferencia) < 0.01; // Tolerancia de $0.01 por redondeo
 
   return (
     <div className="container mx-auto p-6">
@@ -144,6 +157,15 @@ const BalanceGeneral = () => {
         <h1 className="text-3xl font-bold text-foreground">Balance General</h1>
         <p className="text-muted-foreground">Estado de la situación financiera</p>
       </div>
+
+      {/* Alerta informativa */}
+      <Alert className="mb-6">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Este Balance General refleja automáticamente todas las transacciones registradas: ingresos, egresos, 
+          inventario, cuentas por cobrar/pagar, y movimientos de caja y bancos.
+        </AlertDescription>
+      </Alert>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Activos */}
@@ -155,7 +177,11 @@ const BalanceGeneral = () => {
             <CardContent>
               <div className="space-y-2">
                 {cuentasActivos.map((cuenta) => {
-                  const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+                  const saldo = obtenerSaldo(cuenta.codigo);
+                  // Solo mostrar cuentas con saldo diferente de cero
+                  if (saldo === 0 && !['1001', '1002', '1003', '1005'].includes(cuenta.codigo)) {
+                    return null;
+                  }
                   return (
                     <div key={cuenta.codigo} className="flex justify-between items-center">
                       <span className="text-sm">
@@ -188,7 +214,11 @@ const BalanceGeneral = () => {
             <CardContent>
               <div className="space-y-2">
                 {cuentasPasivos.map((cuenta) => {
-                  const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+                  const saldo = obtenerSaldo(cuenta.codigo);
+                  // Solo mostrar cuentas con saldo diferente de cero
+                  if (saldo === 0 && cuenta.codigo !== '2001') {
+                    return null;
+                  }
                   return (
                     <div key={cuenta.codigo} className="flex justify-between items-center">
                       <span className="text-sm">
@@ -218,7 +248,8 @@ const BalanceGeneral = () => {
             <CardContent>
               <div className="space-y-2">
                 {cuentasPatrimonio.map((cuenta) => {
-                  const saldo = saldos?.[cuenta.codigo]?.saldo || 0;
+                  const saldo = obtenerSaldo(cuenta.codigo);
+                  if (saldo === 0) return null;
                   return (
                     <div key={cuenta.codigo} className="flex justify-between items-center">
                       <span className="text-sm">
@@ -237,6 +268,11 @@ const BalanceGeneral = () => {
                     <span className={`font-medium ${utilidadEjercicio >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       ${utilidadEjercicio.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Ingresos: ${saldosAutomaticos?.ingresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
+                    Costos: ${saldosAutomaticos?.costos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
+                    Gastos: ${saldosAutomaticos?.gastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
                 <div className="border-t pt-2 mt-4">
@@ -260,14 +296,45 @@ const BalanceGeneral = () => {
                 <span>${(totalPasivos + totalPatrimonioConUtilidad).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="mt-2 text-sm text-muted-foreground">
-                {totalActivos === (totalPasivos + totalPatrimonioConUtilidad) ? (
+                {balanceCuadrado ? (
                   <span className="text-green-600">✓ Balance cuadrado</span>
                 ) : (
-                  <span className="text-red-600">⚠ Balance no cuadra (diferencia: ${(totalActivos - (totalPasivos + totalPatrimonioConUtilidad)).toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                  <span className="text-red-600">
+                    ⚠ Balance no cuadra (diferencia: ${diferencia.toLocaleString('es-CO', { minimumFractionDigits: 2 })})
+                  </span>
                 )}
               </div>
             </CardContent>
           </Card>
+
+          {/* Resumen de Transacciones */}
+          {saldosAutomaticos && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Resumen de Transacciones</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Efectivo en Caja:</span>
+                    <span>${saldosAutomaticos.caja.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Saldo en Bancos:</span>
+                    <span>${saldosAutomaticos.bancos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Por Cobrar:</span>
+                    <span>${saldosAutomaticos.cuentasPorCobrar.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Por Pagar:</span>
+                    <span>${saldosAutomaticos.proveedores.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
