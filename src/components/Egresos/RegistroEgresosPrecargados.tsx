@@ -257,14 +257,14 @@ const RegistroEgresosPrecargados = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="px-6 pb-6">
-          <Alert className="mb-6">
+          <Alert className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               Los productos deben estar registrados en el catálogo para poder seleccionarlos aquí.
             </AlertDescription>
           </Alert>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
           {/* Selección de Tipo */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Tipo de Egreso</h3>
