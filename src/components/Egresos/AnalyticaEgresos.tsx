@@ -243,21 +243,12 @@ const AnalyticaEgresos = () => {
 
   return (
     <div className="space-y-6">
-      {/* Selector de Período */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Analítica de Egresos</h3>
-          <p className="text-sm text-muted-foreground">
-            Análisis detallado de costos y gastos
-          </p>
-        </div>
-        <Tabs value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)}>
-          <TabsList>
-            <TabsTrigger value="diario">Día</TabsTrigger>
-            <TabsTrigger value="mensual">Mes</TabsTrigger>
-            <TabsTrigger value="anual">Año</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Título */}
+      <div>
+        <h3 className="text-lg font-semibold">Analítica de Egresos</h3>
+        <p className="text-sm text-muted-foreground">
+          Análisis detallado de costos y gastos
+        </p>
       </div>
 
       {/* Resúmenes por Período */}
@@ -345,6 +336,17 @@ const AnalyticaEgresos = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Selector de Período */}
+      <div className="flex justify-center">
+        <Tabs value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)}>
+          <TabsList>
+            <TabsTrigger value="diario">Día</TabsTrigger>
+            <TabsTrigger value="mensual">Mes</TabsTrigger>
+            <TabsTrigger value="anual">Año</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Gráficas */}
