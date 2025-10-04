@@ -1347,13 +1347,23 @@ const RegistroIngresos = () => {
                     <div className="space-y-3">
                        {transacciones.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
                            <div className="flex items-start gap-3 mb-2">
-                             {/* Imagen del producto si es precargado */}
-                             {transaccion.tipo_ingreso === 'precargados' && (() => {
-                         const producto = productos.find(p => p.nombre === transaccion.descripcion);
-                         return producto?.imagen_url ? <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                                   <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" />
-                               </div> : null;
-                       })()}
+                              {/* Imagen del producto si es precargado o inventariado */}
+                              {(transaccion.tipo_ingreso === 'precargados' || transaccion.tipo_ingreso === 'inventariados') && (() => {
+                          // Buscar producto en la lista (precargados o inventario)
+                          const descripcionSinPrefijo = transaccion.descripcion.replace('Venta de ', '').replace('Venta: ', '');
+                          const producto = productos.find(p => 
+                            p.nombre === transaccion.descripcion || 
+                            p.nombre === descripcionSinPrefijo ||
+                            transaccion.descripcion.includes(p.nombre)
+                          );
+                          return producto?.imagen_url ? <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                                    <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" />
+                                </div> : (
+                                  <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                                    <Package className="w-5 h-5 text-muted-foreground" />
+                                  </div>
+                                );
+                        })()}
                              
                              <div className="flex justify-between items-start flex-1">
                                <div className="flex-1">
