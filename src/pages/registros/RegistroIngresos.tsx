@@ -1764,9 +1764,9 @@ const RegistroIngresos = () => {
                         <YAxis />
                         <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, '']} />
                         <Legend />
-                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 65% 55%)" name="Ventas Brutas" strokeWidth={2} />
-                        <Line type="monotone" dataKey="descuentos" stroke="hsl(340 75% 55%)" name="Descuentos" strokeWidth={2} />
-                        <Line type="monotone" dataKey="neto" stroke="hsl(142 70% 50%)" name="Ventas Netas" strokeWidth={2} />
+                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2} />
+                        <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2} />
+                        <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -1816,10 +1816,10 @@ const RegistroIngresos = () => {
                               return acc;
                             }, {} as Record<string, boolean>)).map((entry, index) => {
                               const colors = [
-                                "hsl(180 65% 55%)", // Teal vibrante
-                                "hsl(142 70% 50%)", // Verde
-                                "hsl(262 80% 65%)", // Púrpura
-                                "hsl(32 95% 60%)"   // Naranja
+                                "hsl(180 50% 55%)", // Teal medio
+                                "hsl(180 45% 45%)", // Teal oscuro
+                                "hsl(180 55% 65%)", // Teal claro
+                                "hsl(180 40% 40%)"  // Teal más oscuro
                               ];
                               return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
                             })}
@@ -1878,9 +1878,9 @@ const RegistroIngresos = () => {
                             fill="#8884d8"
                             dataKey="monto"
                           >
-                            <Cell fill="hsl(142 70% 50%)" />
-                            <Cell fill="hsl(32 95% 60%)" />
-                            <Cell fill="hsl(340 75% 55%)" />
+                            <Cell fill="hsl(180 50% 55%)" />
+                            <Cell fill="hsl(180 55% 65%)" />
+                            <Cell fill="hsl(180 45% 45%)" />
                           </Pie>
                           <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
                         </PieChart>
@@ -1926,7 +1926,7 @@ const RegistroIngresos = () => {
                           <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} />
                           <YAxis />
                           <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
-                          <Bar dataKey="monto" fill="hsl(180 65% 55%)" />
+                          <Bar dataKey="monto" fill="hsl(180 50% 55%)" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
