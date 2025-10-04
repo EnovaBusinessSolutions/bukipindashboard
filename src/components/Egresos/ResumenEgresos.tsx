@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Calendar, User, DollarSign, CreditCard } from "lucide-react";
+import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -87,6 +87,7 @@ const ResumenEgresos = () => {
                     <TableHead>Monto Total</TableHead>
                     <TableHead>Tipo de Pago</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Comprobante</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -137,6 +138,20 @@ const ResumenEgresos = () => {
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             Pagado
                           </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {transaccion.imagen_comprobante ? (
+                          <a 
+                            href={transaccion.imagen_comprobante} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center text-primary hover:text-primary/80"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">Sin imagen</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -313,6 +328,31 @@ const ResumenEgresos = () => {
                   <div className="text-sm bg-muted p-3 rounded-md">
                     {selectedTransaction.comentarios}
                   </div>
+                </div>
+              )}
+
+              {/* Comprobante fotográfico */}
+              {selectedTransaction.imagen_comprobante && (
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4" />
+                    Comprobante Fotográfico
+                  </h4>
+                  <div className="rounded-lg overflow-hidden border">
+                    <img 
+                      src={selectedTransaction.imagen_comprobante} 
+                      alt="Comprobante" 
+                      className="w-full h-auto max-h-96 object-contain bg-muted"
+                    />
+                  </div>
+                  <a 
+                    href={selectedTransaction.imagen_comprobante} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline mt-2 inline-block"
+                  >
+                    Ver imagen completa
+                  </a>
                 </div>
               )}
             </div>

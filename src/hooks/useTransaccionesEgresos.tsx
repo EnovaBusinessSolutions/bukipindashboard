@@ -18,6 +18,7 @@ interface TransaccionEgreso {
   created_at: string;
   comentarios: string | null;
   fecha_vencimiento: string | null;
+  imagen_comprobante: string | null;
 }
 
 export const useTransaccionesEgresos = (limit: number = 10) => {

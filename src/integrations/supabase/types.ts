@@ -467,6 +467,7 @@ export type Database = {
           descripcion: string
           fecha_vencimiento: string | null
           id: string
+          imagen_comprobante: string | null
           metodo_pago: string | null
           monto_pagado: number
           monto_pendiente: number | null
@@ -494,6 +495,7 @@ export type Database = {
           descripcion: string
           fecha_vencimiento?: string | null
           id?: string
+          imagen_comprobante?: string | null
           metodo_pago?: string | null
           monto_pagado?: number
           monto_pendiente?: number | null
@@ -521,6 +523,7 @@ export type Database = {
           descripcion?: string
           fecha_vencimiento?: string | null
           id?: string
+          imagen_comprobante?: string | null
           metodo_pago?: string | null
           monto_pagado?: number
           monto_pendiente?: number | null
