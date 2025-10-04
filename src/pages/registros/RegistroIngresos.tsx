@@ -77,10 +77,18 @@ const RegistroIngresos = () => {
   const [availableStock, setAvailableStock] = useState(0);
   const [usePrecioRegistrado, setUsePrecioRegistrado] = useState(true);
 
-  // Estados para productos precargados
+  // Estados para productos precargados - ahora manejando múltiples productos
   const [selectedProductId, setSelectedProductId] = useState("");
   const [productUnitPrice, setProductUnitPrice] = useState("");
   const [productQuantity, setProductQuantity] = useState("1");
+  const [selectedProducts, setSelectedProducts] = useState<Array<{
+    id: string;
+    nombre: string;
+    precio: number;
+    cantidad: number;
+    subtotal: number;
+    imagen_url?: string;
+  }>>([]);
 
   // Estados para el catálogo de productos
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -136,17 +144,63 @@ const RegistroIngresos = () => {
     }
   };
 
-  // Función para manejar selección de producto precargado
+  // Función para agregar producto precargado a la lista
+  const handleAddProductToList = () => {
+    if (!selectedProductId) return;
+    
+    const selectedProduct = productos.find(p => p.id === selectedProductId);
+    if (!selectedProduct) return;
+
+    const cantidad = parseFloat(productQuantity) || 1;
+    const subtotal = selectedProduct.precio * cantidad;
+
+    // Verificar si el producto ya está en la lista
+    const existingProductIndex = selectedProducts.findIndex(p => p.id === selectedProductId);
+    
+    if (existingProductIndex !== -1) {
+      // Si ya existe, actualizar la cantidad
+      const updatedProducts = [...selectedProducts];
+      updatedProducts[existingProductIndex].cantidad += cantidad;
+      updatedProducts[existingProductIndex].subtotal = updatedProducts[existingProductIndex].precio * updatedProducts[existingProductIndex].cantidad;
+      setSelectedProducts(updatedProducts);
+    } else {
+      // Si no existe, agregarlo a la lista
+      setSelectedProducts([...selectedProducts, {
+        id: selectedProduct.id,
+        nombre: selectedProduct.nombre,
+        precio: selectedProduct.precio,
+        cantidad: cantidad,
+        subtotal: subtotal,
+        imagen_url: selectedProduct.imagen_url
+      }]);
+    }
+
+    // Limpiar selección
+    setSelectedProductId("");
+    setProductQuantity("1");
+    setProductUnitPrice("");
+  };
+
+  // Función para remover producto de la lista
+  const handleRemoveProductFromList = (productId: string) => {
+    setSelectedProducts(selectedProducts.filter(p => p.id !== productId));
+  };
+
+  // Calcular total de productos precargados
+  useEffect(() => {
+    if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
+      const total = selectedProducts.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2);
+      setMontoTotal(total);
+      setDescripcion(`Venta de ${selectedProducts.length} producto(s)`);
+    }
+  }, [selectedProducts, selectedIncomeType]);
+
+  // Función para manejar selección de producto precargado (para actualizar precio)
   const handleProductSelection = (productId: string) => {
     setSelectedProductId(productId);
     const selectedProduct = productos.find(p => p.id === productId);
     if (selectedProduct) {
       setProductUnitPrice(selectedProduct.precio.toString());
-      // Autocompletar descripción requerida por el backend
-      setDescripcion(selectedProduct.nombre);
-      // Calcular monto total automáticamente
-      const total = (selectedProduct.precio * parseFloat(productQuantity)).toFixed(2);
-      setMontoTotal(total);
     }
   };
 
@@ -166,8 +220,7 @@ const RegistroIngresos = () => {
 
     // Validación específica por tipo de ingreso
     if (selectedIncomeType === 'precargados') {
-      if (!selectedProductId) errors.push('Producto Precargado');
-      if (!productQuantity || parseFloat(productQuantity) <= 0) errors.push('Cantidad');
+      if (selectedProducts.length === 0) errors.push('Debe agregar al menos un producto');
     } else if (selectedIncomeType === 'inventariados') {
       if (!selectedInventoryProductId) errors.push('Producto de Inventario');
       if (!inventoryQuantity || parseFloat(inventoryQuantity) <= 0) errors.push('Cantidad');
@@ -281,15 +334,17 @@ const RegistroIngresos = () => {
         clienteId = clienteSeleccionado;
       }
       // Derivar valores por seguridad
-      const selectedProduct = productos.find(p => p.id === selectedProductId);
       const selectedInventoryProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
       let descripcionToSend = descripcion;
       let montoTotalDerived = Number(montoTotal || '0');
       let subcuentaToSend = null;
-      if (selectedIncomeType === 'precargados' && selectedProduct) {
-        descripcionToSend = selectedProduct.nombre;
-        montoTotalDerived = Number((Number(selectedProduct.precio) * Number(productQuantity || '1')).toFixed(2));
-        subcuentaToSend = selectedProduct.subcuenta_id || null;
+      
+      if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
+        // Para múltiples productos, usar la primera subcuenta o null
+        const firstProduct = productos.find(p => p.id === selectedProducts[0].id);
+        subcuentaToSend = firstProduct?.subcuenta_id || null;
+        montoTotalDerived = selectedProducts.reduce((sum, p) => sum + p.subtotal, 0);
+        descripcionToSend = `Venta: ${selectedProducts.map(p => `${p.nombre} (x${p.cantidad})`).join(', ')}`;
       } else if (selectedIncomeType === 'inventariados' && selectedInventoryProduct) {
         descripcionToSend = `Venta de ${selectedInventoryProduct.nombre}`;
         montoTotalDerived = Number((Number(inventoryProductPrice || '0') * Number(inventoryQuantity || '1')).toFixed(2));
@@ -388,6 +443,7 @@ const RegistroIngresos = () => {
       setSelectedProductId("");
       setProductUnitPrice("");
       setProductQuantity("1");
+      setSelectedProducts([]); // Limpiar lista de productos
       setSelectedInventoryProductId("");
       setInventoryProductPrice("");
       setInventoryQuantity("1");
@@ -413,51 +469,142 @@ const RegistroIngresos = () => {
                 <strong>Recordatorio:</strong> Para registrar ventas de productos precargados, primero debes agregar los productos al catálogo desde la pestaña "Catálogo de Productos".
               </AlertDescription>
             </Alert>
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="producto-precargado">Seleccionar Producto Precargado</Label>
-                {hasFieldError('Producto Precargado') && <div className="flex items-center text-destructive">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Requerido</span>
-                  </div>}
-              </div>
-              <Select value={selectedProductId} onValueChange={handleProductSelection}>
-                <SelectTrigger className={hasFieldError('Producto Precargado') ? 'border-destructive' : ''}>
-                  <SelectValue placeholder={loadingProductosServicios ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
-                </SelectTrigger>
-                <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
-                  {loadingProductosServicios ? <SelectItem value="loading" disabled>Cargando productos...</SelectItem> : productosServicios.length === 0 ? <SelectItem value="empty" disabled>No hay productos de servicios registrados</SelectItem> : productosServicios.map(producto => <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
-                         <div className="flex items-center space-x-3 w-full">
-                           <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                             {producto.imagen_url ? <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-muted flex items-center justify-center">
-                                 <Package className="w-5 h-5 text-muted-foreground" />
-                               </div>}
-                           </div>
-                           <div className="flex-1 min-w-0">
-                             <p className="font-medium text-sm truncate mb-1">{producto.nombre}</p>
-                             <p className="text-xs text-muted-foreground">${producto.precio}</p>
-                           </div>
-                         </div>
-                       </SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Label htmlFor="cantidad">Cantidad</Label>
-                  {hasFieldError('Cantidad') && <div className="flex items-center text-destructive">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      <span className="text-xs">Requerido</span>
-                    </div>}
+            
+            {/* Formulario para agregar productos */}
+            <Card className="bg-muted/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Agregar Productos a la Venta</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="producto-precargado">Seleccionar Producto</Label>
+                  <Select value={selectedProductId} onValueChange={handleProductSelection}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingProductosServicios ? "Cargando productos..." : "Seleccionar producto del catálogo"} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
+                      {loadingProductosServicios ? <SelectItem value="loading" disabled>Cargando productos...</SelectItem> : productosServicios.length === 0 ? <SelectItem value="empty" disabled>No hay productos de servicios registrados</SelectItem> : productosServicios.map(producto => <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
+                             <div className="flex items-center space-x-3 w-full">
+                               <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                                 {producto.imagen_url ? <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-muted flex items-center justify-center">
+                                     <Package className="w-5 h-5 text-muted-foreground" />
+                                   </div>}
+                               </div>
+                               <div className="flex-1 min-w-0">
+                                 <p className="font-medium text-sm truncate mb-1">{producto.nombre}</p>
+                                 <p className="text-xs text-muted-foreground">${producto.precio.toFixed(2)}</p>
+                               </div>
+                             </div>
+                           </SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Input id="cantidad" type="number" placeholder="1" value={productQuantity} onChange={e => handleQuantityChange(e.target.value)} className={hasFieldError('Cantidad') ? 'border-destructive' : ''} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="precio-unitario">Precio Unitario</Label>
-                <Input id="precio-unitario" type="number" placeholder="0.00" value={productUnitPrice} readOnly className="bg-muted" />
-              </div>
-            </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cantidad">Cantidad</Label>
+                    <Input 
+                      id="cantidad" 
+                      type="number" 
+                      placeholder="1" 
+                      min="1"
+                      value={productQuantity} 
+                      onChange={e => setProductQuantity(e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="precio-unitario">Precio Unitario</Label>
+                    <Input 
+                      id="precio-unitario" 
+                      type="number" 
+                      placeholder="0.00" 
+                      value={productUnitPrice} 
+                      readOnly 
+                      className="bg-muted" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Subtotal</Label>
+                    <Input 
+                      type="text" 
+                      value={selectedProductId && productUnitPrice ? `$${(parseFloat(productUnitPrice) * parseFloat(productQuantity || "1")).toFixed(2)}` : "$0.00"} 
+                      readOnly 
+                      className="bg-muted font-medium" 
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  type="button"
+                  onClick={handleAddProductToList}
+                  disabled={!selectedProductId}
+                  className="w-full"
+                  variant="secondary"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Producto
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Lista de productos agregados */}
+            {selectedProducts.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Productos en la Venta ({selectedProducts.length})</span>
+                    <span className="text-primary">${selectedProducts.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2)}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {selectedProducts.map((producto, index) => (
+                      <div 
+                        key={`${producto.id}-${index}`} 
+                        className="flex items-center justify-between p-3 rounded-lg border bg-background"
+                      >
+                        <div className="flex items-center space-x-3 flex-1">
+                          <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                            {producto.imagen_url ? (
+                              <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-muted flex items-center justify-center">
+                                <Package className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{producto.nombre}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>{producto.cantidad} x ${producto.precio.toFixed(2)}</span>
+                              <span className="text-primary font-medium">${producto.subtotal.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveProductFromList(producto.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {hasFieldError('Debe agregar al menos un producto') && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Debes agregar al menos un producto a la venta
+                </AlertDescription>
+              </Alert>
+            )}
           </div>;
       case "inventariados":
         return <div className="space-y-4">
