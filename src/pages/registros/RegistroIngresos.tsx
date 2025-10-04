@@ -81,11 +81,13 @@ const RegistroIngresos = () => {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [productUnitPrice, setProductUnitPrice] = useState("");
   const [productQuantity, setProductQuantity] = useState("1");
+  const [productDiscount, setProductDiscount] = useState("0");
   const [selectedProducts, setSelectedProducts] = useState<Array<{
     id: string;
     nombre: string;
     precio: number;
     cantidad: number;
+    descuento: number;
     subtotal: number;
     imagen_url?: string;
   }>>([]);
@@ -152,16 +154,20 @@ const RegistroIngresos = () => {
     if (!selectedProduct) return;
 
     const cantidad = parseFloat(productQuantity) || 1;
-    const subtotal = selectedProduct.precio * cantidad;
+    const descuento = parseFloat(productDiscount) || 0;
+    const subtotalSinDescuento = selectedProduct.precio * cantidad;
+    const subtotal = Math.max(0, subtotalSinDescuento - descuento);
 
     // Verificar si el producto ya está en la lista
     const existingProductIndex = selectedProducts.findIndex(p => p.id === selectedProductId);
     
     if (existingProductIndex !== -1) {
-      // Si ya existe, actualizar la cantidad
+      // Si ya existe, actualizar la cantidad y recalcular
       const updatedProducts = [...selectedProducts];
       updatedProducts[existingProductIndex].cantidad += cantidad;
-      updatedProducts[existingProductIndex].subtotal = updatedProducts[existingProductIndex].precio * updatedProducts[existingProductIndex].cantidad;
+      updatedProducts[existingProductIndex].descuento += descuento;
+      const nuevoSubtotalSinDescuento = updatedProducts[existingProductIndex].precio * updatedProducts[existingProductIndex].cantidad;
+      updatedProducts[existingProductIndex].subtotal = Math.max(0, nuevoSubtotalSinDescuento - updatedProducts[existingProductIndex].descuento);
       setSelectedProducts(updatedProducts);
     } else {
       // Si no existe, agregarlo a la lista
@@ -170,6 +176,7 @@ const RegistroIngresos = () => {
         nombre: selectedProduct.nombre,
         precio: selectedProduct.precio,
         cantidad: cantidad,
+        descuento: descuento,
         subtotal: subtotal,
         imagen_url: selectedProduct.imagen_url
       }]);
@@ -179,6 +186,7 @@ const RegistroIngresos = () => {
     setSelectedProductId("");
     setProductQuantity("1");
     setProductUnitPrice("");
+    setProductDiscount("0");
   };
 
   // Función para remover producto de la lista
@@ -500,7 +508,7 @@ const RegistroIngresos = () => {
                   </Select>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="cantidad">Cantidad</Label>
                     <Input 
@@ -523,11 +531,27 @@ const RegistroIngresos = () => {
                       className="bg-muted" 
                     />
                   </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Subtotal</Label>
+                    <Label htmlFor="descuento-producto">Descuento (opcional)</Label>
+                    <Input 
+                      id="descuento-producto" 
+                      type="number" 
+                      placeholder="0.00" 
+                      min="0"
+                      step="0.01"
+                      value={productDiscount} 
+                      onChange={e => setProductDiscount(e.target.value)} 
+                    />
+                    <p className="text-xs text-muted-foreground">Descuento individual para este producto</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Subtotal con Descuento</Label>
                     <Input 
                       type="text" 
-                      value={selectedProductId && productUnitPrice ? `$${(parseFloat(productUnitPrice) * parseFloat(productQuantity || "1")).toFixed(2)}` : "$0.00"} 
+                      value={selectedProductId && productUnitPrice ? `$${Math.max(0, (parseFloat(productUnitPrice) * parseFloat(productQuantity || "1")) - parseFloat(productDiscount || "0")).toFixed(2)}` : "$0.00"} 
                       readOnly 
                       className="bg-muted font-medium" 
                     />
@@ -575,9 +599,12 @@ const RegistroIngresos = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{producto.nombre}</p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span>{producto.cantidad} x ${producto.precio.toFixed(2)}</span>
-                              <span className="text-primary font-medium">${producto.subtotal.toFixed(2)}</span>
+                            <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                              <span>{producto.cantidad} x ${producto.precio.toFixed(2)} = ${(producto.cantidad * producto.precio).toFixed(2)}</span>
+                              {producto.descuento > 0 && (
+                                <span className="text-orange-600">Descuento: -${producto.descuento.toFixed(2)}</span>
+                              )}
+                              <span className="text-primary font-medium">Total: ${producto.subtotal.toFixed(2)}</span>
                             </div>
                           </div>
                         </div>
