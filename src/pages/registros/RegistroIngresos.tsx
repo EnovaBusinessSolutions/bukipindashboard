@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
@@ -69,6 +69,9 @@ const RegistroIngresos = () => {
   const [montoAbonado, setMontoAbonado] = useState("");
   const [comentarios, setComentarios] = useState(""); // New comments field
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]); // Advertencias de duplicados
+  
+  // Estado para el período de análisis
+  const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
 
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
@@ -1609,331 +1612,442 @@ const RegistroIngresos = () => {
               </Card>
             </div>
 
+            {/* Selector de Período */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Período de Análisis</CardTitle>
+                <CardDescription>Selecciona el período para analizar las ventas en detalle</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex gap-4">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="diario" id="period-daily" />
+                    <Label htmlFor="period-daily" className="cursor-pointer">Diario</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="mensual" id="period-monthly" />
+                    <Label htmlFor="period-monthly" className="cursor-pointer">Mensual</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="anual" id="period-annual" />
+                    <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+
+            {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Evolución de Ventas</CardTitle>
+                <CardDescription>
+                  Ventas brutas, descuentos y ventas netas - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="h-80 flex items-center justify-center text-muted-foreground">
+                    Cargando datos...
+                  </div>
+                ) : transacciones.length === 0 ? (
+                  <div className="h-80 flex items-center justify-center text-muted-foreground">
+                    No hay datos para mostrar
+                  </div>
+                ) : (
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={(() => {
+                        const today = new Date();
+                        const currentMonth = today.getMonth();
+                        const currentYear = today.getFullYear();
+
+                        if (periodFilter === "diario") {
+                          // Para diario: un solo punto con los totales del día
+                          const todayStr = today.toISOString().split('T')[0];
+                          const todayTransactions = transacciones.filter(t => 
+                            new Date(t.created_at).toISOString().split('T')[0] === todayStr
+                          );
+                          const totalVentas = todayTransactions.reduce((sum, t) => sum + t.monto_total, 0);
+                          const totalDescuentos = todayTransactions.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
+                          const totalNeto = totalVentas - totalDescuentos;
+                          
+                          return [{
+                            periodo: "Hoy",
+                            ventas: totalVentas,
+                            descuentos: totalDescuentos,
+                            neto: totalNeto
+                          }];
+                        } else if (periodFilter === "mensual") {
+                          // Para mensual: ventas por día del mes actual
+                          const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                          const dailyData: Record<string, {ventas: number, descuentos: number}> = {};
+                          
+                          // Filtrar transacciones del mes actual
+                          const monthTransactions = transacciones.filter(t => {
+                            const tDate = new Date(t.created_at);
+                            return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+                          });
+                          
+                          // Agrupar por día
+                          monthTransactions.forEach(t => {
+                            const day = new Date(t.created_at).getDate();
+                            const dayKey = `${day}`;
+                            if (!dailyData[dayKey]) {
+                              dailyData[dayKey] = { ventas: 0, descuentos: 0 };
+                            }
+                            dailyData[dayKey].ventas += t.monto_total;
+                            dailyData[dayKey].descuentos += t.monto_descuento || 0;
+                          });
+                          
+                          // Crear array con todos los días del mes
+                          return Array.from({ length: daysInMonth }, (_, i) => {
+                            const day = i + 1;
+                            const data = dailyData[`${day}`] || { ventas: 0, descuentos: 0 };
+                            return {
+                              periodo: `Día ${day}`,
+                              ventas: data.ventas,
+                              descuentos: data.descuentos,
+                              neto: data.ventas - data.descuentos
+                            };
+                          });
+                        } else {
+                          // Para anual: ventas por mes del año actual
+                          const monthlyData: Record<number, {ventas: number, descuentos: number}> = {};
+                          
+                          // Filtrar transacciones del año actual
+                          const yearTransactions = transacciones.filter(t => {
+                            const tDate = new Date(t.created_at);
+                            return tDate.getFullYear() === currentYear;
+                          });
+                          
+                          // Agrupar por mes
+                          yearTransactions.forEach(t => {
+                            const month = new Date(t.created_at).getMonth();
+                            if (!monthlyData[month]) {
+                              monthlyData[month] = { ventas: 0, descuentos: 0 };
+                            }
+                            monthlyData[month].ventas += t.monto_total;
+                            monthlyData[month].descuentos += t.monto_descuento || 0;
+                          });
+                          
+                          // Crear array con los 12 meses
+                          const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+                          return meses.map((mes, i) => {
+                            const data = monthlyData[i] || { ventas: 0, descuentos: 0 };
+                            return {
+                              periodo: mes,
+                              ventas: data.ventas,
+                              descuentos: data.descuentos,
+                              neto: data.ventas - data.descuentos
+                            };
+                          });
+                        }
+                      })()}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="periodo" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, '']} />
+                        <Legend />
+                        <Line type="monotone" dataKey="ventas" stroke="hsl(var(--primary))" name="Ventas Brutas" strokeWidth={2} />
+                        <Line type="monotone" dataKey="descuentos" stroke="hsl(var(--destructive))" name="Descuentos" strokeWidth={2} />
+                        <Line type="monotone" dataKey="neto" stroke="hsl(var(--chart-2))" name="Ventas Netas" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico de barras - Ventas por día */}
+              {/* Gráfico de Ventas por Tipo */}
               <Card>
                 <CardHeader>
                   <CardTitle>Ventas por Tipo</CardTitle>
                   <CardDescription>Distribución de ingresos por categoría</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
-                    </div> : transacciones.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
-                    </div> : <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={Object.entries(transacciones.reduce((acc, t) => {
-                      acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
-                      return acc;
-                    }, {} as Record<string, number>)).map(([tipo, monto]) => ({
-                      tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
-                      monto
-                    }))}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="tipo" />
-                          <YAxis />
-                          <Tooltip formatter={value => [`$${Number(value).toFixed(2)}`, 'Monto']} />
-                          <Bar dataKey="monto" fill="hsl(var(--primary))" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>}
-                </CardContent>
-              </Card>
-
-              {/* Gráfico circular - Métodos de pago */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Métodos de Pago</CardTitle>
-                  <CardDescription>Distribución por forma de pago</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      Cargando gráfico...
-                    </div> : transacciones.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay datos para mostrar
-                    </div> : <div className="h-64">
+                    </div>
+                  ) : (
+                    <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={Object.entries(transacciones.reduce((acc, t) => {
-                        // Manejar métodos de pago vacíos o nulos
-                        const metodo = t.metodo_pago || 'Sin método definido';
-                        acc[metodo] = (acc[metodo] || 0) + t.monto_total;
-                        return acc;
-                      }, {} as Record<string, number>)).map(([metodo, monto]) => ({
-                        metodo: metodo === 'efectivo' ? 'Efectivo' : metodo === 'tarjeta' ? 'Tarjeta' : metodo === 'Sin método definido' ? 'A Crédito' : metodo.charAt(0).toUpperCase() + metodo.slice(1),
-                        monto,
-                        porcentaje: (monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
-                      }))} cx="50%" cy="50%" labelLine={false} label={({
-                        metodo,
-                        porcentaje,
-                        x,
-                        y
-                      }) => <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > 150 ? 'start' : 'end'} dominantBaseline="central" className="font-bold text-sm" style={{
-                        fontWeight: '700',
-                        fontSize: '14px'
-                      }}>
-                                {`${metodo} ${porcentaje}%`}
-                              </text>} outerRadius={80} fill="#8884d8" dataKey="monto">
-                            {Object.entries(transacciones.reduce((acc, t) => {
-                          acc[t.metodo_pago] = (acc[t.metodo_pago] || 0) + t.monto_total;
-                          return acc;
-                        }, {} as Record<string, number>)).map((entry, index) => <Cell key={`cell-${index}`} fill={index === 0 ? "hsl(var(--primary))" : "hsl(var(--secondary))"} />)}
+                          <Pie
+                            data={Object.entries(transacciones.reduce((acc, t) => {
+                              acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
+                              return acc;
+                            }, {} as Record<string, number>)).map(([tipo, monto]) => ({
+                              tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
+                              monto,
+                              porcentaje: (monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ tipo, porcentaje }) => `${tipo} ${porcentaje}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="monto"
+                          >
+                            {Object.keys(transacciones.reduce((acc, t) => {
+                              acc[t.tipo_ingreso] = true;
+                              return acc;
+                            }, {} as Record<string, boolean>)).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"][index % 4]} />
+                            ))}
                           </Pie>
-                          <Tooltip formatter={value => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
                         </PieChart>
                       </ResponsiveContainer>
-                    </div>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Gráfico de Estado de Pago */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Estado de Pagos</CardTitle>
+                  <CardDescription>Pagados, parciales y por cobrar</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      Cargando gráfico...
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={(() => {
+                              const estadoPagos = transacciones.reduce((acc, t: any) => {
+                                let estado = "Por Cobrar";
+                                if (t.tipo_pago === "contado" || (t.monto_pagado && t.monto_pendiente === 0)) {
+                                  estado = "Pagado Total";
+                                } else if (t.tipo_pago === "parcial" || (t.monto_pagado > 0 && t.monto_pendiente > 0)) {
+                                  estado = "Pago Parcial";
+                                }
+                                acc[estado] = (acc[estado] || 0) + t.monto_total;
+                                return acc;
+                              }, {} as Record<string, number>);
+                              
+                              return Object.entries(estadoPagos).map(([estado, monto]) => ({
+                                estado,
+                                monto,
+                                porcentaje: (monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                              }));
+                            })()}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ estado, porcentaje }) => `${estado} ${porcentaje}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="monto"
+                          >
+                            <Cell fill="hsl(var(--chart-2))" />
+                            <Cell fill="hsl(var(--chart-3))" />
+                            <Cell fill="hsl(var(--destructive))" />
+                          </Pie>
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Gráfico por Subcuenta Contable */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Ventas por Subcuenta</CardTitle>
+                  <CardDescription>Distribución por subcuentas contables</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      Cargando gráfico...
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={(() => {
+                          const subcuentaData = transacciones.reduce((acc, t) => {
+                            const subcuentaNombre = t.subcuenta_id 
+                              ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
+                              : "Sin subcuenta asignada";
+                            acc[subcuentaNombre] = (acc[subcuentaNombre] || 0) + t.monto_total;
+                            return acc;
+                          }, {} as Record<string, number>);
+                          
+                          return Object.entries(subcuentaData).map(([subcuenta, monto]) => ({
+                            subcuenta,
+                            monto
+                          }));
+                        })()}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Bar dataKey="monto" fill="hsl(var(--chart-2))" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Analytics adicionales */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-              {/* Número de ventas por tipo */}
+            {/* Tablas de análisis */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+              {/* Tabla de Ventas por Producto */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Transacciones por Tipo</CardTitle>
-                  <CardDescription>Cantidad y monto promedio por categoría</CardDescription>
+                  <CardTitle>Ventas por Producto</CardTitle>
+                  <CardDescription>Ranking de productos más vendidos</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? <div className="space-y-3">
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                    </div> : transacciones.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos disponibles</p> : <div className="space-y-4">
-                      {Object.entries(transacciones.reduce((acc, t) => {
-                    if (!acc[t.tipo_ingreso]) {
-                      acc[t.tipo_ingreso] = {
-                        count: 0,
-                        total: 0
-                      };
-                    }
-                    acc[t.tipo_ingreso].count += 1;
-                    acc[t.tipo_ingreso].total += t.monto_total;
-                    return acc;
-                  }, {} as Record<string, {
-                    count: number;
-                    total: number;
-                  }>)).map(([tipo, stats]) => <div key={tipo} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium capitalize">{tipo}</span>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold">{stats.count} ventas</div>
-                              <div className="text-xs text-muted-foreground">
-                                Promedio: ${(stats.total / stats.count).toLocaleString()}
+                  {loadingTransacciones ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Cargando datos...
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(() => {
+                        const productosVentas = transacciones.reduce((acc, t) => {
+                          if (t.tipo_ingreso === "precargados" || t.tipo_ingreso === "inventariados") {
+                            const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
+                            const producto = productos.find(p => 
+                              p.nombre === t.descripcion || 
+                              p.nombre === descripcionSinPrefijo ||
+                              t.descripcion.includes(p.nombre)
+                            );
+                            
+                            const productoKey = producto?.nombre || descripcionSinPrefijo;
+                            if (!acc[productoKey]) {
+                              acc[productoKey] = {
+                                nombre: productoKey,
+                                transacciones: 0,
+                                monto: 0,
+                                imagen: producto?.imagen_url
+                              };
+                            }
+                            acc[productoKey].transacciones += 1;
+                            acc[productoKey].monto += t.monto_total;
+                          }
+                          return acc;
+                        }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string }>);
+                        
+                        return Object.values(productosVentas)
+                          .sort((a, b) => b.monto - a.monto)
+                          .slice(0, 10)
+                          .map((producto) => (
+                            <div key={producto.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
+                              {producto.imagen ? (
+                                <img 
+                                  src={producto.imagen} 
+                                  alt={producto.nombre} 
+                                  className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                                  <Package className="w-5 h-5 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{producto.nombre}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {producto.transacciones} {producto.transacciones === 1 ? 'transacción' : 'transacciones'}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-primary">${producto.monto.toLocaleString()}</p>
                               </div>
                             </div>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-2">
-                            <div className="bg-primary h-2 rounded-full" style={{
-                        width: `${stats.count / transacciones.length * 100}%`
-                      }}></div>
-                          </div>
-                        </div>)}
-                    </div>}
+                          ));
+                      })()}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Análisis por cuenta */}
+              {/* Tabla de Ventas por Cliente */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Por Cuenta Principal</CardTitle>
-                  <CardDescription>Distribución de ingresos por cuenta contable</CardDescription>
+                  <CardTitle>Ventas por Cliente</CardTitle>
+                  <CardDescription>Ranking de mejores clientes</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingTransacciones ? <div className="space-y-3">
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                    </div> : transacciones.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos disponibles</p> : <div className="space-y-4">
-                      {Object.entries(transacciones.reduce((acc, t) => {
-                    if (!acc[t.cuenta_principal_codigo]) {
-                      acc[t.cuenta_principal_codigo] = {
-                        count: 0,
-                        total: 0
-                      };
-                    }
-                    acc[t.cuenta_principal_codigo].count += 1;
-                    acc[t.cuenta_principal_codigo].total += t.monto_total;
-                    return acc;
-                  }, {} as Record<string, {
-                    count: number;
-                    total: number;
-                  }>)).slice(0, 5).map(([cuenta, stats]) => <div key={cuenta} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium">{cuenta}</span>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold">${stats.total.toLocaleString()}</div>
-                              <div className="text-xs text-muted-foreground">{stats.count} trans.</div>
+                  {loadingTransacciones ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Cargando datos...
+                    </div>
+                  ) : transacciones.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(() => {
+                        const clientesVentas = transacciones.reduce((acc, t: any) => {
+                          const clienteNombre = t.cliente_nombre || "Sin cliente asignado";
+                          if (!acc[clienteNombre]) {
+                            acc[clienteNombre] = {
+                              nombre: clienteNombre,
+                              transacciones: 0,
+                              monto: 0,
+                              email: t.cliente_email,
+                              telefono: t.cliente_telefono
+                            };
+                          }
+                          acc[clienteNombre].transacciones += 1;
+                          acc[clienteNombre].monto += t.monto_total;
+                          return acc;
+                        }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
+                        
+                        return Object.values(clientesVentas)
+                          .sort((a, b) => b.monto - a.monto)
+                          .slice(0, 10)
+                          .map((cliente) => (
+                            <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
+                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <Users className="w-6 h-6 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{cliente.nombre}</p>
+                                <div className="text-sm text-muted-foreground space-y-0.5">
+                                  <p>{cliente.transacciones} {cliente.transacciones === 1 ? 'compra' : 'compras'}</p>
+                                  {cliente.telefono && <p className="text-xs">{cliente.telefono}</p>}
+                                  {cliente.email && <p className="text-xs truncate">{cliente.email}</p>}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-primary">${cliente.monto.toLocaleString()}</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-2">
-                            <div className="bg-chart-2 h-2 rounded-full" style={{
-                        width: `${stats.total / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100}%`
-                      }}></div>
-                          </div>
-                        </div>)}
-                    </div>}
-                </CardContent>
-              </Card>
-
-              {/* Métricas de rendimiento */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Métricas Clave</CardTitle>
-                  <CardDescription>Indicadores de rendimiento</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? <div className="space-y-4">
-                      <div className="h-8 bg-muted rounded animate-pulse"></div>
-                      <div className="h-8 bg-muted rounded animate-pulse"></div>
-                      <div className="h-8 bg-muted rounded animate-pulse"></div>
-                    </div> : transacciones.length === 0 ? <p className="text-muted-foreground text-sm">No hay datos disponibles</p> : <div className="space-y-4">
-                      <div className="text-center p-3 bg-primary/5 rounded-lg">
-                        <div className="text-2xl font-bold text-primary">
-                          {transacciones.length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Total Transacciones</div>
-                      </div>
-                      
-                      <div className="text-center p-3 bg-chart-2/5 rounded-lg">
-                        <div className="text-2xl font-bold text-chart-2">
-                          ${(transacciones.reduce((sum, t) => sum + t.monto_total, 0) / transacciones.length).toLocaleString()}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Ticket Promedio</div>
-                      </div>
-                      
-                      <div className="text-center p-3 bg-destructive/5 rounded-lg">
-                        <div className="text-2xl font-bold text-destructive">
-                          {(transacciones.reduce((sum, t) => sum + (t.monto_descuento || 0), 0) / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)}%
-                        </div>
-                        <div className="text-sm text-muted-foreground">% Descuento Promedio</div>
-                      </div>
-                    </div>}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Gráficos de ventas históricas */}
-            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Ventas diarias por día */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Ventas Diarias</CardTitle>
-                  <CardDescription>Evolución de ventas día a día</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? <div className="h-80 flex items-center justify-center">
-                      <div className="text-muted-foreground">Cargando datos diarios...</div>
-                    </div> : transacciones.length === 0 ? <div className="h-80 flex items-center justify-center">
-                      <div className="text-muted-foreground">No hay datos para mostrar</div>
-                    </div> : <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={Object.entries(transacciones.reduce((acc, t) => {
-                      const fecha = new Date(t.created_at).toLocaleDateString('es-ES', {
-                        day: '2-digit',
-                        month: '2-digit'
-                      });
-                      if (!acc[fecha]) {
-                        acc[fecha] = {
-                          ventas: 0,
-                          descuentos: 0,
-                          neto: 0,
-                          transacciones: 0
-                        };
-                      }
-                      acc[fecha].ventas += t.monto_total;
-                      acc[fecha].descuentos += t.monto_descuento || 0;
-                      acc[fecha].neto += t.monto_neto;
-                      acc[fecha].transacciones += 1;
-                      return acc;
-                    }, {} as Record<string, {
-                      ventas: number;
-                      descuentos: number;
-                      neto: number;
-                      transacciones: number;
-                    }>)).map(([fecha, data]) => ({
-                      fecha,
-                      ventas: data.ventas,
-                      descuentos: data.descuentos,
-                      neto: data.neto,
-                      transacciones: data.transacciones
-                    })).sort((a, b) => {
-                      const [diaA, mesA] = a.fecha.split('/').map(Number);
-                      const [diaB, mesB] = b.fecha.split('/').map(Number);
-                      return mesA !== mesB ? mesA - mesB : diaA - diaB;
-                    }).slice(-15) // Últimos 15 días con datos
-                    }>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="fecha" angle={-45} textAnchor="end" height={80} fontSize={12} />
-                          <YAxis />
-                          <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]} labelFormatter={label => `Fecha: ${label}`} />
-                          <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
-                          <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
-                          <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Ventas Netas" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>}
-                </CardContent>
-              </Card>
-
-              {/* Ventas mensuales por mes */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Ventas Mensuales</CardTitle>
-                  <CardDescription>Evolución de ventas mes a mes</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? <div className="h-80 flex items-center justify-center">
-                      <div className="text-muted-foreground">Cargando datos mensuales...</div>
-                    </div> : transacciones.length === 0 ? <div className="h-80 flex items-center justify-center">
-                      <div className="text-muted-foreground">No hay datos para mostrar</div>
-                    </div> : <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={Object.entries(transacciones.reduce((acc, t) => {
-                      const fecha = new Date(t.created_at);
-                      const mesAno = `${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`;
-                      if (!acc[mesAno]) {
-                        acc[mesAno] = {
-                          ventas: 0,
-                          descuentos: 0,
-                          neto: 0,
-                          transacciones: 0
-                        };
-                      }
-                      acc[mesAno].ventas += t.monto_total;
-                      acc[mesAno].descuentos += t.monto_descuento || 0;
-                      acc[mesAno].neto += t.monto_neto;
-                      acc[mesAno].transacciones += 1;
-                      return acc;
-                    }, {} as Record<string, {
-                      ventas: number;
-                      descuentos: number;
-                      neto: number;
-                      transacciones: number;
-                    }>)).map(([mesAno, data]) => ({
-                      mes: mesAno,
-                      ventas: data.ventas,
-                      descuentos: data.descuentos,
-                      neto: data.neto,
-                      transacciones: data.transacciones
-                    })).sort((a, b) => {
-                      const [mesA, anoA] = a.mes.split('/').map(Number);
-                      const [mesB, anoB] = b.mes.split('/').map(Number);
-                      return anoA !== anoB ? anoA - anoB : mesA - mesB;
-                    }).slice(-12) // Últimos 12 meses con datos
-                    }>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} fontSize={12} />
-                          <YAxis />
-                          <Tooltip formatter={(value, name) => [`$${Number(value).toLocaleString()}`, name]} labelFormatter={label => `Mes: ${label}`} />
-                          <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
-                          <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
-                          <Bar dataKey="neto" fill="hsl(var(--chart-2))" name="Ventas Netas" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>}
+                          ));
+                      })()}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
