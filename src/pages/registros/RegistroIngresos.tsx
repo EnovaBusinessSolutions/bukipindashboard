@@ -1525,8 +1525,40 @@ const RegistroIngresos = () => {
 
           {/* TAB 3: ANALÍTICA DE VENTAS - GRÁFICAS Y DESTACADOS */}
           <TabsContent value="analitica" className="mt-6">
-            {/* Resumen de Ventas, Descuentos e Ingreso Neto */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* Función para filtrar transacciones según el período */}
+            {(() => {
+              const getFilteredTransactions = () => {
+                const today = new Date();
+                const currentMonth = today.getMonth();
+                const currentYear = today.getFullYear();
+
+                if (periodFilter === "diario") {
+                  // Filtrar solo del día actual
+                  const todayStr = today.toISOString().split('T')[0];
+                  return transacciones.filter(t => 
+                    new Date(t.created_at).toISOString().split('T')[0] === todayStr
+                  );
+                } else if (periodFilter === "mensual") {
+                  // Filtrar solo del mes actual
+                  return transacciones.filter(t => {
+                    const tDate = new Date(t.created_at);
+                    return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+                  });
+                } else {
+                  // Filtrar solo del año actual
+                  return transacciones.filter(t => {
+                    const tDate = new Date(t.created_at);
+                    return tDate.getFullYear() === currentYear;
+                  });
+                }
+              };
+
+              const filteredTransactions = getFilteredTransactions();
+
+              return (
+                <>
+                  {/* Resumen de Ventas, Descuentos e Ingreso Neto */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               {/* Día */}
               <Card>
                 <CardHeader className="pb-3">
@@ -1649,7 +1681,7 @@ const RegistroIngresos = () => {
                   <div className="h-80 flex items-center justify-center text-muted-foreground">
                     Cargando datos...
                   </div>
-                ) : transacciones.length === 0 ? (
+                ) : filteredTransactions.length === 0 ? (
                   <div className="h-80 flex items-center justify-center text-muted-foreground">
                     No hay datos para mostrar
                   </div>
@@ -1663,12 +1695,8 @@ const RegistroIngresos = () => {
 
                         if (periodFilter === "diario") {
                           // Para diario: un solo punto con los totales del día
-                          const todayStr = today.toISOString().split('T')[0];
-                          const todayTransactions = transacciones.filter(t => 
-                            new Date(t.created_at).toISOString().split('T')[0] === todayStr
-                          );
-                          const totalVentas = todayTransactions.reduce((sum, t) => sum + t.monto_total, 0);
-                          const totalDescuentos = todayTransactions.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
+                          const totalVentas = filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0);
+                          const totalDescuentos = filteredTransactions.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
                           const totalNeto = totalVentas - totalDescuentos;
                           
                           return [{
@@ -1682,14 +1710,8 @@ const RegistroIngresos = () => {
                           const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
                           const dailyData: Record<string, {ventas: number, descuentos: number}> = {};
                           
-                          // Filtrar transacciones del mes actual
-                          const monthTransactions = transacciones.filter(t => {
-                            const tDate = new Date(t.created_at);
-                            return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
-                          });
-                          
-                          // Agrupar por día
-                          monthTransactions.forEach(t => {
+                          // Agrupar por día (ya filtradas por mes)
+                          filteredTransactions.forEach(t => {
                             const day = new Date(t.created_at).getDate();
                             const dayKey = `${day}`;
                             if (!dailyData[dayKey]) {
@@ -1714,14 +1736,8 @@ const RegistroIngresos = () => {
                           // Para anual: ventas por mes del año actual
                           const monthlyData: Record<number, {ventas: number, descuentos: number}> = {};
                           
-                          // Filtrar transacciones del año actual
-                          const yearTransactions = transacciones.filter(t => {
-                            const tDate = new Date(t.created_at);
-                            return tDate.getFullYear() === currentYear;
-                          });
-                          
-                          // Agrupar por mes
-                          yearTransactions.forEach(t => {
+                          // Agrupar por mes (ya filtradas por año)
+                          filteredTransactions.forEach(t => {
                             const month = new Date(t.created_at).getMonth();
                             if (!monthlyData[month]) {
                               monthlyData[month] = { ventas: 0, descuentos: 0 };
@@ -1770,7 +1786,7 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
                     </div>
-                  ) : transacciones.length === 0 ? (
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
@@ -1779,13 +1795,13 @@ const RegistroIngresos = () => {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={Object.entries(transacciones.reduce((acc, t) => {
+                            data={Object.entries(filteredTransactions.reduce((acc, t) => {
                               acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
                               return acc;
                             }, {} as Record<string, number>)).map(([tipo, monto]) => ({
                               tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
                               monto,
-                              porcentaje: (monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                              porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
                             }))}
                             cx="50%"
                             cy="50%"
@@ -1795,7 +1811,7 @@ const RegistroIngresos = () => {
                             fill="#8884d8"
                             dataKey="monto"
                           >
-                            {Object.keys(transacciones.reduce((acc, t) => {
+                            {Object.keys(filteredTransactions.reduce((acc, t) => {
                               acc[t.tipo_ingreso] = true;
                               return acc;
                             }, {} as Record<string, boolean>)).map((entry, index) => (
@@ -1821,7 +1837,7 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
                     </div>
-                  ) : transacciones.length === 0 ? (
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
@@ -1831,7 +1847,7 @@ const RegistroIngresos = () => {
                         <PieChart>
                           <Pie
                             data={(() => {
-                              const estadoPagos = transacciones.reduce((acc, t: any) => {
+                              const estadoPagos = filteredTransactions.reduce((acc, t: any) => {
                                 let estado = "Por Cobrar";
                                 if (t.tipo_pago === "contado" || (t.monto_pagado && t.monto_pendiente === 0)) {
                                   estado = "Pagado Total";
@@ -1845,7 +1861,7 @@ const RegistroIngresos = () => {
                               return Object.entries(estadoPagos).map(([estado, monto]) => ({
                                 estado,
                                 monto,
-                                porcentaje: (monto / transacciones.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                                porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
                               }));
                             })()}
                             cx="50%"
@@ -1879,7 +1895,7 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
                     </div>
-                  ) : transacciones.length === 0 ? (
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
@@ -1887,7 +1903,7 @@ const RegistroIngresos = () => {
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={(() => {
-                          const subcuentaData = transacciones.reduce((acc, t) => {
+                          const subcuentaData = filteredTransactions.reduce((acc, t) => {
                             const subcuentaNombre = t.subcuenta_id 
                               ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
                               : "Sin subcuenta asignada";
@@ -1926,14 +1942,14 @@ const RegistroIngresos = () => {
                     <div className="text-center py-8 text-muted-foreground">
                       Cargando datos...
                     </div>
-                  ) : transacciones.length === 0 ? (
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       No hay datos para mostrar
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {(() => {
-                        const productosVentas = transacciones.reduce((acc, t) => {
+                        const productosVentas = filteredTransactions.reduce((acc, t) => {
                           if (t.tipo_ingreso === "precargados" || t.tipo_ingreso === "inventariados") {
                             const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
                             const producto = productos.find(p => 
@@ -2001,14 +2017,14 @@ const RegistroIngresos = () => {
                     <div className="text-center py-8 text-muted-foreground">
                       Cargando datos...
                     </div>
-                  ) : transacciones.length === 0 ? (
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       No hay datos para mostrar
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {(() => {
-                        const clientesVentas = transacciones.reduce((acc, t: any) => {
+                        const clientesVentas = filteredTransactions.reduce((acc, t: any) => {
                           const clienteNombre = t.cliente_nombre || "Sin cliente asignado";
                           if (!acc[clienteNombre]) {
                             acc[clienteNombre] = {
@@ -2051,6 +2067,9 @@ const RegistroIngresos = () => {
                 </CardContent>
               </Card>
             </div>
+          </>
+        );
+      })()}
           </TabsContent>
 
           {/* TAB 4: CATÁLOGO DE PRODUCTOS */}
