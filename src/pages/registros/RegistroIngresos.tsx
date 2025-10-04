@@ -1764,9 +1764,9 @@ const RegistroIngresos = () => {
                         <YAxis />
                         <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, '']} />
                         <Legend />
-                        <Line type="monotone" dataKey="ventas" stroke="hsl(var(--primary))" name="Ventas Brutas" strokeWidth={2} />
-                        <Line type="monotone" dataKey="descuentos" stroke="hsl(var(--destructive))" name="Descuentos" strokeWidth={2} />
-                        <Line type="monotone" dataKey="neto" stroke="hsl(var(--chart-2))" name="Ventas Netas" strokeWidth={2} />
+                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 65% 55%)" name="Ventas Brutas" strokeWidth={2} />
+                        <Line type="monotone" dataKey="descuentos" stroke="hsl(340 75% 55%)" name="Descuentos" strokeWidth={2} />
+                        <Line type="monotone" dataKey="neto" stroke="hsl(142 70% 50%)" name="Ventas Netas" strokeWidth={2} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -1814,9 +1814,15 @@ const RegistroIngresos = () => {
                             {Object.keys(filteredTransactions.reduce((acc, t) => {
                               acc[t.tipo_ingreso] = true;
                               return acc;
-                            }, {} as Record<string, boolean>)).map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"][index % 4]} />
-                            ))}
+                            }, {} as Record<string, boolean>)).map((entry, index) => {
+                              const colors = [
+                                "hsl(180 65% 55%)", // Teal vibrante
+                                "hsl(142 70% 50%)", // Verde
+                                "hsl(262 80% 65%)", // Púrpura
+                                "hsl(32 95% 60%)"   // Naranja
+                              ];
+                              return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
+                            })}
                           </Pie>
                           <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
                         </PieChart>
@@ -1872,9 +1878,9 @@ const RegistroIngresos = () => {
                             fill="#8884d8"
                             dataKey="monto"
                           >
-                            <Cell fill="hsl(var(--chart-2))" />
-                            <Cell fill="hsl(var(--chart-3))" />
-                            <Cell fill="hsl(var(--destructive))" />
+                            <Cell fill="hsl(142 70% 50%)" />
+                            <Cell fill="hsl(32 95% 60%)" />
+                            <Cell fill="hsl(340 75% 55%)" />
                           </Pie>
                           <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
                         </PieChart>
@@ -1920,7 +1926,7 @@ const RegistroIngresos = () => {
                           <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} />
                           <YAxis />
                           <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
-                          <Bar dataKey="monto" fill="hsl(var(--chart-2))" />
+                          <Bar dataKey="monto" fill="hsl(180 65% 55%)" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>

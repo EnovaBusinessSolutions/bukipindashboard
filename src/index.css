@@ -26,6 +26,12 @@ All colors MUST be HSL.
     --finance-success: 180 25% 50%;
     --finance-warning: 180 25% 50%;
 
+    --chart-1: 180 65% 55%;
+    --chart-2: 142 70% 50%;
+    --chart-3: 262 80% 65%;
+    --chart-4: 32 95% 60%;
+    --chart-5: 340 75% 55%;
+
     --secondary: 180 10% 92%;
     --secondary-foreground: 0 0% 15%;
 
@@ -78,6 +84,12 @@ All colors MUST be HSL.
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+
+    --chart-1: 180 65% 55%;
+    --chart-2: 142 70% 50%;
+    --chart-3: 262 80% 65%;
+    --chart-4: 32 95% 60%;
+    --chart-5: 340 75% 55%;
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
