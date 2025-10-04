@@ -13,6 +13,11 @@ const ResumenEgresos = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Filtrar solo costos y gastos, excluyendo inventario
+  const transaccionesFiltradas = transacciones.filter(
+    (t) => t.tipo_egreso === 'costo' || t.tipo_egreso === 'gasto'
+  );
+
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
       'costo': 'destructive',
@@ -60,15 +65,15 @@ const ResumenEgresos = () => {
         <CardHeader>
           <CardTitle>Resumen de Egresos</CardTitle>
           <CardDescription>
-            Historial completo de todos los egresos registrados ({transacciones.length} transacciones)
+            Historial de costos y gastos registrados ({transaccionesFiltradas.length} transacciones)
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {transacciones.length === 0 ? (
+          {transaccionesFiltradas.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No hay egresos registrados aún</p>
-              <p className="text-sm mt-2">Los egresos que registres aparecerán aquí</p>
+              <p>No hay costos o gastos registrados aún</p>
+              <p className="text-sm mt-2">Los costos y gastos que registres aparecerán aquí</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -86,7 +91,7 @@ const ResumenEgresos = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transacciones.map((transaccion) => (
+                  {transaccionesFiltradas.map((transaccion) => (
                     <TableRow key={transaccion.id}>
                       <TableCell className="whitespace-nowrap">
                         {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
