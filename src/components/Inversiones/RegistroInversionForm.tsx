@@ -22,6 +22,8 @@ const RegistroInversionForm = () => {
   const [anosDepreciacion, setAnosDepreciacion] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [imagenUrl, setImagenUrl] = useState<string>("");
+  const [valorTotalDisplay, setValorTotalDisplay] = useState<string>("");
+  const [montoPagadoDisplay, setMontoPagadoDisplay] = useState<string>("");
 
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>();
   const [formData, setFormData] = useState({
@@ -62,13 +64,35 @@ const RegistroInversionForm = () => {
   const handleValorTotalChange = (value: string) => {
     // Permitir solo números y punto decimal
     const cleanValue = value.replace(/[^\d.]/g, '');
+    setValorTotalDisplay(cleanValue);
     setFormData({ ...formData, valor_total: cleanValue });
+  };
+
+  const handleValorTotalBlur = () => {
+    if (formData.valor_total) {
+      setValorTotalDisplay(formatNumber(formData.valor_total));
+    }
+  };
+
+  const handleValorTotalFocus = () => {
+    setValorTotalDisplay(formData.valor_total);
   };
 
   const handleMontoPagadoChange = (value: string) => {
     // Permitir solo números y punto decimal
     const cleanValue = value.replace(/[^\d.]/g, '');
+    setMontoPagadoDisplay(cleanValue);
     setFormData({ ...formData, monto_pagado: cleanValue });
+  };
+
+  const handleMontoPagadoBlur = () => {
+    if (formData.monto_pagado) {
+      setMontoPagadoDisplay(formatNumber(formData.monto_pagado));
+    }
+  };
+
+  const handleMontoPagadoFocus = () => {
+    setMontoPagadoDisplay(formData.monto_pagado);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,6 +184,8 @@ const RegistroInversionForm = () => {
     setAnosDepreciacion(null);
     setImagenUrl("");
     setFechaVencimiento(undefined);
+    setValorTotalDisplay("");
+    setMontoPagadoDisplay("");
   };
 
   return (
@@ -222,9 +248,11 @@ const RegistroInversionForm = () => {
                     <Input
                       id="valor_total"
                       type="text"
-                      value={formData.valor_total ? formatNumber(formData.valor_total) : ''}
+                      value={valorTotalDisplay || formData.valor_total}
                       onChange={(e) => handleValorTotalChange(e.target.value)}
-                      placeholder="Ej: 25,000.00"
+                      onBlur={handleValorTotalBlur}
+                      onFocus={handleValorTotalFocus}
+                      placeholder="Ej: 25000.00"
                       required
                     />
                   </div>
@@ -344,9 +372,11 @@ const RegistroInversionForm = () => {
                         <Input
                           id="monto_pagado"
                           type="text"
-                          value={formData.monto_pagado ? formatNumber(formData.monto_pagado) : ''}
+                          value={montoPagadoDisplay || formData.monto_pagado}
                           onChange={(e) => handleMontoPagadoChange(e.target.value)}
-                          placeholder="Cantidad pagada hasta ahora"
+                          onBlur={handleMontoPagadoBlur}
+                          onFocus={handleMontoPagadoFocus}
+                          placeholder="Ej: 10000.00"
                           required
                         />
                       </div>
