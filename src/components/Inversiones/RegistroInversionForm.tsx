@@ -42,12 +42,32 @@ const RegistroInversionForm = () => {
     (r) => r.categoria_activo === categoriaActivo
   );
 
+  // Función para formatear números con separador de miles
+  const formatNumber = (value: string) => {
+    if (!value) return "";
+    const num = parseFloat(value.replace(/,/g, ''));
+    if (isNaN(num)) return "";
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const handleCategoriaChange = (value: string) => {
     setCategoriaActivo(value);
     const rec = recomendaciones.find((r) => r.categoria_activo === value);
     if (rec) {
       setAnosDepreciacion(rec.anos_recomendados);
     }
+  };
+
+  const handleValorTotalChange = (value: string) => {
+    // Permitir solo números y punto decimal
+    const cleanValue = value.replace(/[^\d.]/g, '');
+    setFormData({ ...formData, valor_total: cleanValue });
+  };
+
+  const handleMontoPagadoChange = (value: string) => {
+    // Permitir solo números y punto decimal
+    const cleanValue = value.replace(/[^\d.]/g, '');
+    setFormData({ ...formData, monto_pagado: cleanValue });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,13 +207,10 @@ const RegistroInversionForm = () => {
                     <Label htmlFor="valor_total">Valor Total del Activo *</Label>
                     <Input
                       id="valor_total"
-                      type="number"
-                      step="0.01"
-                      value={formData.valor_total}
-                      onChange={(e) =>
-                        setFormData({ ...formData, valor_total: e.target.value })
-                      }
-                      placeholder="Ej: 25000.00"
+                      type="text"
+                      value={formData.valor_total ? formatNumber(formData.valor_total) : ''}
+                      onChange={(e) => handleValorTotalChange(e.target.value)}
+                      placeholder="Ej: 25,000.00"
                       required
                     />
                   </div>
@@ -326,12 +343,9 @@ const RegistroInversionForm = () => {
                         <Label htmlFor="monto_pagado">Monto Pagado *</Label>
                         <Input
                           id="monto_pagado"
-                          type="number"
-                          step="0.01"
-                          value={formData.monto_pagado}
-                          onChange={(e) =>
-                            setFormData({ ...formData, monto_pagado: e.target.value })
-                          }
+                          type="text"
+                          value={formData.monto_pagado ? formatNumber(formData.monto_pagado) : ''}
+                          onChange={(e) => handleMontoPagadoChange(e.target.value)}
                           placeholder="Cantidad pagada hasta ahora"
                           required
                         />
