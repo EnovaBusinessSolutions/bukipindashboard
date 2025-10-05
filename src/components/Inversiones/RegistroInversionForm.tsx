@@ -23,6 +23,7 @@ const RegistroInversionForm = () => {
   const [uploading, setUploading] = useState(false);
   const [imagenUrl, setImagenUrl] = useState<string>("");
 
+  const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>();
   const [formData, setFormData] = useState({
     producto_nombre: "",
     descripcion: "",
@@ -106,11 +107,22 @@ const RegistroInversionForm = () => {
     }
   };
 
+  const calcularMontoPendiente = () => {
+    const valorTotal = parseFloat(formData.valor_total) || 0;
+    const montoPagado = parseFloat(formData.monto_pagado) || 0;
+    return valorTotal - montoPagado;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const valorTotal = parseFloat(formData.valor_total);
-    const montoPagado = parseFloat(formData.monto_pagado);
+    const montoPagado = formData.tipo_pago === "total" 
+      ? valorTotal 
+      : formData.tipo_pago === "credito" 
+        ? 0 
+        : parseFloat(formData.monto_pagado);
+    
     const valorDepreciacionAnual = valorTotal / (anosDepreciacion || 1);
     const valorDepreciacionMensual = valorDepreciacionAnual / 12;
 
@@ -125,6 +137,7 @@ const RegistroInversionForm = () => {
       valor_depreciacion_mensual: valorDepreciacionMensual,
       fecha_adquisicion: format(fecha, "yyyy-MM-dd"),
       fecha_inicio_depreciacion: format(fecha, "yyyy-MM-dd"),
+      fecha_vencimiento: fechaVencimiento ? format(fechaVencimiento, "yyyy-MM-dd") : null,
       imagen_url: imagenUrl,
     });
 
@@ -146,6 +159,7 @@ const RegistroInversionForm = () => {
     setCategoriaActivo("");
     setAnosDepreciacion(null);
     setImagenUrl("");
+    setFechaVencimiento(undefined);
   };
 
   return (
@@ -301,27 +315,30 @@ const RegistroInversionForm = () => {
                   </Select>
                 </div>
 
-                {(formData.tipo_pago === "total" || formData.tipo_pago === "parcial") && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="metodo_pago">Método de Pago</Label>
-                      <Select
-                        value={formData.metodo_pago}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, metodo_pago: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar método" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
-                          <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                {formData.tipo_pago === "total" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="metodo_pago">Método de Pago *</Label>
+                    <Select
+                      value={formData.metodo_pago}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, metodo_pago: value })
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar método" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
+                        <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-                    {formData.tipo_pago === "parcial" && (
+                {formData.tipo_pago === "parcial" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="monto_pagado">Monto Pagado *</Label>
                         <Input
@@ -333,7 +350,98 @@ const RegistroInversionForm = () => {
                           required
                         />
                       </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="metodo_pago">Método de Pago *</Label>
+                        <Select
+                          value={formData.metodo_pago}
+                          onValueChange={(value) =>
+                            setFormData({ ...formData, metodo_pago: value })
+                          }
+                          required
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar método" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
+                            <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {formData.monto_pagado && formData.valor_total && (
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm font-medium">
+                          Monto Pendiente: ${formatNumber(calcularMontoPendiente().toString())}
+                        </p>
+                      </div>
                     )}
+
+                    <div className="space-y-2">
+                      <Label>Fecha de Vencimiento *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !fechaVencimiento && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {fechaVencimiento ? format(fechaVencimiento, "PPP") : <span>Selecciona fecha</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={fechaVencimiento}
+                            onSelect={setFechaVencimiento}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                )}
+
+                {formData.tipo_pago === "credito" && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm font-medium">
+                        Monto Total a Crédito: ${formData.valor_total ? formatNumber(formData.valor_total) : '0.00'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Fecha de Vencimiento *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !fechaVencimiento && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {fechaVencimiento ? format(fechaVencimiento, "PPP") : <span>Selecciona fecha</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={fechaVencimiento}
+                            onSelect={setFechaVencimiento}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                 )}
               </div>
