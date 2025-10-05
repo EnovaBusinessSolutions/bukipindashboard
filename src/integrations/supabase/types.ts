@@ -188,6 +188,90 @@ export type Database = {
           },
         ]
       }
+      inversiones_capex: {
+        Row: {
+          anos_depreciacion: number
+          categoria_activo: string
+          comentarios: string | null
+          created_at: string
+          cuenta_codigo: string | null
+          descripcion: string | null
+          fecha_adquisicion: string
+          fecha_inicio_depreciacion: string | null
+          id: string
+          imagen_url: string | null
+          metodo_pago: string | null
+          monto_pagado: number
+          monto_pendiente: number | null
+          producto_nombre: string
+          proveedor_email: string | null
+          proveedor_nombre: string | null
+          proveedor_rfc: string | null
+          proveedor_telefono: string | null
+          subcuenta_id: string | null
+          tipo_pago: string
+          updated_at: string
+          user_id: string
+          valor_depreciacion_anual: number | null
+          valor_depreciacion_mensual: number | null
+          valor_total: number
+        }
+        Insert: {
+          anos_depreciacion: number
+          categoria_activo: string
+          comentarios?: string | null
+          created_at?: string
+          cuenta_codigo?: string | null
+          descripcion?: string | null
+          fecha_adquisicion?: string
+          fecha_inicio_depreciacion?: string | null
+          id?: string
+          imagen_url?: string | null
+          metodo_pago?: string | null
+          monto_pagado?: number
+          monto_pendiente?: number | null
+          producto_nombre: string
+          proveedor_email?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rfc?: string | null
+          proveedor_telefono?: string | null
+          subcuenta_id?: string | null
+          tipo_pago: string
+          updated_at?: string
+          user_id: string
+          valor_depreciacion_anual?: number | null
+          valor_depreciacion_mensual?: number | null
+          valor_total: number
+        }
+        Update: {
+          anos_depreciacion?: number
+          categoria_activo?: string
+          comentarios?: string | null
+          created_at?: string
+          cuenta_codigo?: string | null
+          descripcion?: string | null
+          fecha_adquisicion?: string
+          fecha_inicio_depreciacion?: string | null
+          id?: string
+          imagen_url?: string | null
+          metodo_pago?: string | null
+          monto_pagado?: number
+          monto_pendiente?: number | null
+          producto_nombre?: string
+          proveedor_email?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rfc?: string | null
+          proveedor_telefono?: string | null
+          subcuenta_id?: string | null
+          tipo_pago?: string
+          updated_at?: string
+          user_id?: string
+          valor_depreciacion_anual?: number | null
+          valor_depreciacion_mensual?: number | null
+          valor_total?: number
+        }
+        Relationships: []
+      }
       movimientos_inventario: {
         Row: {
           cantidad: number
@@ -419,6 +503,36 @@ export type Database = {
           telefono?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      recomendaciones_depreciacion: {
+        Row: {
+          anos_maximos: number
+          anos_minimos: number
+          anos_recomendados: number
+          categoria_activo: string
+          created_at: string
+          descripcion: string | null
+          id: string
+        }
+        Insert: {
+          anos_maximos: number
+          anos_minimos: number
+          anos_recomendados: number
+          categoria_activo: string
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+        }
+        Update: {
+          anos_maximos?: number
+          anos_minimos?: number
+          anos_recomendados?: number
+          categoria_activo?: string
+          created_at?: string
+          descripcion?: string | null
+          id?: string
         }
         Relationships: []
       }
