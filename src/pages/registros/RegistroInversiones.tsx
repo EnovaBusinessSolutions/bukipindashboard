@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import RegistroInversionForm from "@/components/Inversiones/RegistroInversionForm";
-import TablaRecomendaciones from "@/components/Inversiones/TablaRecomendaciones";
-import ResumenInversiones from "@/components/Inversiones/ResumenInversiones";
-import AnalyticaInversiones from "@/components/Inversiones/AnalyticaInversiones";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const RegistroInversionForm = lazy(() => import("@/components/Inversiones/RegistroInversionForm"));
+const TablaRecomendaciones = lazy(() => import("@/components/Inversiones/TablaRecomendaciones"));
+const ResumenInversiones = lazy(() => import("@/components/Inversiones/ResumenInversiones"));
+const AnalyticaInversiones = lazy(() => import("@/components/Inversiones/AnalyticaInversiones"));
 
 const RegistroInversiones = () => {
   return (
@@ -24,21 +26,23 @@ const RegistroInversiones = () => {
             <TabsTrigger value="analitica">Analítica</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="registro" className="space-y-6">
-            <RegistroInversionForm />
-          </TabsContent>
+          <Suspense fallback={<Skeleton className="h-96 w-full mt-6" />}>
+            <TabsContent value="registro" className="space-y-6">
+              <RegistroInversionForm />
+            </TabsContent>
 
-          <TabsContent value="recomendaciones">
-            <TablaRecomendaciones />
-          </TabsContent>
+            <TabsContent value="recomendaciones">
+              <TablaRecomendaciones />
+            </TabsContent>
 
-          <TabsContent value="resumen">
-            <ResumenInversiones />
-          </TabsContent>
+            <TabsContent value="resumen">
+              <ResumenInversiones />
+            </TabsContent>
 
-          <TabsContent value="analitica">
-            <AnalyticaInversiones />
-          </TabsContent>
+            <TabsContent value="analitica">
+              <AnalyticaInversiones />
+            </TabsContent>
+          </Suspense>
         </Tabs>
       </div>
     </div>
