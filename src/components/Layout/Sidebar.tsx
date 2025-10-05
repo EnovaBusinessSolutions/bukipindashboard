@@ -65,9 +65,9 @@ const Sidebar = () => {
     path: "/registros/egresos",
     active: location.pathname === "/registros/egresos"
   }, {
-    name: "Registro de Asientos",
-    path: "/registros/asientos",
-    active: location.pathname === "/registros/asientos"
+    name: "Registro de Inversiones",
+    path: "/registros/inversiones",
+    active: location.pathname === "/registros/inversiones"
   }, {
     name: "Registro de Inventario",
     path: "/registros/inventario",

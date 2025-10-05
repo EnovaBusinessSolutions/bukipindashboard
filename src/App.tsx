@@ -16,7 +16,7 @@ import BalanceGeneral from "./pages/BalanceGeneral";
 import Sidebar from "./components/Layout/Sidebar";
 import RegistroIngresos from "./pages/registros/RegistroIngresos";
 import RegistroEgresos from "./pages/registros/RegistroEgresos";
-import RegistroAsientos from "./pages/registros/RegistroAsientos";
+import RegistroInversiones from "./pages/registros/RegistroInversiones";
 import CuentasPorCobrar from "./pages/cobros-pagos/CuentasPorCobrar";
 import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
 import Clientes from "./pages/Clientes";
@@ -48,7 +48,7 @@ const App = () => (
                         <Route path="/estados-financieros/balance" element={<BalanceGeneral />} />
                         <Route path="/registros/ingresos" element={<RegistroIngresos />} />
                         <Route path="/registros/egresos" element={<RegistroEgresos />} />
-                        <Route path="/registros/asientos" element={<RegistroAsientos />} />
+                        <Route path="/registros/inversiones" element={<RegistroInversiones />} />
                         <Route path="/registros/inventario" element={<Inventario />} />
                         <Route path="/cobros-pagos/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
                         <Route path="/cobros-pagos/cuentas-por-pagar" element={<CuentasPorPagar />} />
