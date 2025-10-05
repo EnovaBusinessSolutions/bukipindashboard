@@ -198,6 +198,7 @@ export type Database = {
           descripcion: string | null
           fecha_adquisicion: string
           fecha_inicio_depreciacion: string | null
+          fecha_vencimiento: string | null
           id: string
           imagen_url: string | null
           metodo_pago: string | null
@@ -225,6 +226,7 @@ export type Database = {
           descripcion?: string | null
           fecha_adquisicion?: string
           fecha_inicio_depreciacion?: string | null
+          fecha_vencimiento?: string | null
           id?: string
           imagen_url?: string | null
           metodo_pago?: string | null
@@ -252,6 +254,7 @@ export type Database = {
           descripcion?: string | null
           fecha_adquisicion?: string
           fecha_inicio_depreciacion?: string | null
+          fecha_vencimiento?: string | null
           id?: string
           imagen_url?: string | null
           metodo_pago?: string | null
