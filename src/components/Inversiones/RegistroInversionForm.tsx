@@ -163,7 +163,7 @@ const RegistroInversionForm = () => {
       fecha_inicio_depreciacion: format(fecha, "yyyy-MM-dd"),
       fecha_vencimiento: fechaVencimiento ? format(fechaVencimiento, "yyyy-MM-dd") : null,
       imagen_url: imagenUrl,
-    });
+    } as any);
 
     // Reset form
     setFormData({
