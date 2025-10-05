@@ -221,16 +221,13 @@ const RegistroInversionForm = () => {
                       id="anos_depreciacion"
                       type="number"
                       value={anosDepreciacion || ""}
-                      onChange={(e) => setAnosDepreciacion(parseInt(e.target.value))}
-                      placeholder="Años de vida útil"
+                      disabled
+                      className="bg-muted"
                       required
                     />
-                    {recomendacion && (
-                      <p className="text-xs text-muted-foreground">
-                        Recomendado: {recomendacion.anos_recomendados} años (Rango:{" "}
-                        {recomendacion.anos_minimos}-{recomendacion.anos_maximos})
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Establecido automáticamente según la categoría del activo
+                    </p>
                   </div>
 
                   <div className="space-y-2">
