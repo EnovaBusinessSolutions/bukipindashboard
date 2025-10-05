@@ -317,7 +317,6 @@ const RegistroInversionForm = () => {
                         <SelectContent>
                           <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
                           <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
-                          <SelectItem value="cheque">Cheque</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
