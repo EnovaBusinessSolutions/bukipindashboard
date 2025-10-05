@@ -234,30 +234,17 @@ const RegistroInversionForm = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Fecha de Adquisición *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !fecha && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fecha ? format(fecha, "PPP") : <span>Selecciona fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={fecha}
-                          onSelect={(date) => date && setFecha(date)}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Label htmlFor="fecha_adquisicion">Fecha de Adquisición *</Label>
+                    <Input
+                      id="fecha_adquisicion"
+                      type="text"
+                      value={format(fecha, "PPP")}
+                      disabled
+                      className="bg-muted"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Se registrará automáticamente con la fecha de hoy
+                    </p>
                   </div>
                 </div>
 
