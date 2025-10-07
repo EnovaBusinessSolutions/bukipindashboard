@@ -108,8 +108,9 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         };
       });
 
-      // Análisis de aging detallado con 6 categorías
+      // Análisis de aging detallado con 7 categorías
       const agingRangesDetailed = [
+        { rango: 'Sin vencimiento', min: null, max: null },
         { rango: 'No vencido', min: -Infinity, max: -1 },
         { rango: 'Vencido 1-15 días', min: 1, max: 15 },
         { rango: 'Vencido 16-30 días', min: 16, max: 30 },
@@ -120,7 +121,13 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
 
       const agingAnalysisDetailed = agingRangesDetailed.map(range => {
         const cuentasEnRango = cuentasConDias.filter(c => {
+          // Caso especial: sin vencimiento
+          if (range.min === null && range.max === null) {
+            return c.dias_vencimiento === null;
+          }
+          // Si la cuenta no tiene días de vencimiento, no entra en rangos con fecha
           if (c.dias_vencimiento === null) return false;
+          
           const dias = c.dias_vencimiento;
           return dias >= range.min && dias <= range.max;
         });
