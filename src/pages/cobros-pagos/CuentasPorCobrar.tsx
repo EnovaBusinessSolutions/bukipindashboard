@@ -671,7 +671,6 @@ const CuentasPorCobrar = () => {
                         <SelectContent>
                           <SelectItem value="todos">Todos</SelectItem>
                           <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
-                          <SelectItem value="noVencido">No vencido</SelectItem>
                           <SelectItem value="vencido1_15">Vencido 1-15 días</SelectItem>
                           <SelectItem value="vencido16_30">Vencido 16-30 días</SelectItem>
                           <SelectItem value="vencido31_60">Vencido 31-60 días</SelectItem>
@@ -726,7 +725,6 @@ const CuentasPorCobrar = () => {
                           formatter={(value: number, name: string) => {
                             const labels: Record<string, string> = {
                               sinVencimiento: "Sin vencimiento",
-                              noVencido: "No vencido",
                               vencido1_15: "Vencido 1-15 días",
                               vencido16_30: "Vencido 16-30 días",
                               vencido31_60: "Vencido 31-60 días",
@@ -769,8 +767,7 @@ const CuentasPorCobrar = () => {
                             return null;
                           }}
                         />
-                        <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--muted-foreground))" name="Sin vencimiento" />
-                        <Bar dataKey="noVencido" stackId="a" fill={COLORS.success} name="No vencido" />
+                        <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--success))" name="Sin vencimiento" />
                         <Bar dataKey="vencido1_15" stackId="a" fill={COLORS.primary} name="Vencido 1-15 días" />
                         <Bar dataKey="vencido16_30" stackId="a" fill={COLORS.secondary} name="Vencido 16-30 días" />
                         <Bar dataKey="vencido31_60" stackId="a" fill={COLORS.warning} name="Vencido 31-60 días" />

@@ -28,13 +28,12 @@ interface AnalyticsCuentasPorCobrar {
   historicoCxC: { fecha: string; saldo: number }[];
   cxcPorClienteApilado: {
     cliente: string;
-    noVencido: number;
+    sinVencimiento: number;
     vencido1_15: number;
     vencido16_30: number;
     vencido31_60: number;
     vencido61_90: number;
     vencidoMas90: number;
-    sinVencimiento: number;
     total: number;
   }[];
 }
@@ -108,10 +107,9 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         };
       });
 
-      // Análisis de aging detallado con 7 categorías
+      // Análisis de aging detallado con 6 categorías
       const agingRangesDetailed = [
         { rango: 'Sin vencimiento', min: null, max: null },
-        { rango: 'No vencido', min: -Infinity, max: -1 },
         { rango: 'Vencido 1-15 días', min: 1, max: 15 },
         { rango: 'Vencido 16-30 días', min: 16, max: 30 },
         { rango: 'Vencido 31-60 días', min: 31, max: 60 },
@@ -121,9 +119,9 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
 
       const agingAnalysisDetailed = agingRangesDetailed.map(range => {
         const cuentasEnRango = cuentasConDias.filter(c => {
-          // Caso especial: sin vencimiento
+          // Caso especial: sin vencimiento (incluye cuentas sin fecha y las que aún no vencen)
           if (range.min === null && range.max === null) {
-            return c.dias_vencimiento === null;
+            return c.dias_vencimiento === null || (c.dias_vencimiento !== null && c.dias_vencimiento < 0);
           }
           // Si la cuenta no tiene días de vencimiento, no entra en rangos con fecha
           if (c.dias_vencimiento === null) return false;
@@ -199,26 +197,24 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         const cliente = cuenta.cliente_nombre || 'Sin nombre';
         if (!acc[cliente]) {
           acc[cliente] = {
-            noVencido: 0,
+            sinVencimiento: 0,
             vencido1_15: 0,
             vencido16_30: 0,
             vencido31_60: 0,
             vencido61_90: 0,
             vencidoMas90: 0,
-            sinVencimiento: 0,
             total: 0
           };
         }
         
         const monto = cuenta.monto_pendiente;
         
-        // Si no tiene fecha de vencimiento
-        if (cuenta.dias_vencimiento === null) {
+        // Si no tiene fecha de vencimiento o si aún no ha vencido
+        if (cuenta.dias_vencimiento === null || cuenta.dias_vencimiento < 0) {
           acc[cliente].sinVencimiento += monto;
         } else {
           const dias = cuenta.dias_vencimiento;
-          if (dias < 0) acc[cliente].noVencido += monto;
-          else if (dias >= 1 && dias <= 15) acc[cliente].vencido1_15 += monto;
+          if (dias >= 1 && dias <= 15) acc[cliente].vencido1_15 += monto;
           else if (dias >= 16 && dias <= 30) acc[cliente].vencido16_30 += monto;
           else if (dias >= 31 && dias <= 60) acc[cliente].vencido31_60 += monto;
           else if (dias >= 61 && dias <= 90) acc[cliente].vencido61_90 += monto;
