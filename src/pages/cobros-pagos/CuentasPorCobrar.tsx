@@ -548,7 +548,7 @@ const CuentasPorCobrar = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-destructive">
-                        {analytics.agingAnalysisDetailed
+                        {(analytics?.agingAnalysisDetailed || [])
                           .filter(a => a.min >= 1)
                           .reduce((sum, a) => sum + a.cantidad, 0)}
                       </div>
@@ -563,7 +563,7 @@ const CuentasPorCobrar = () => {
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
-                      <BarChart data={analytics.agingAnalysisDetailed}>
+                      <BarChart data={analytics?.agingAnalysisDetailed || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis 
                           dataKey="rango" 
@@ -600,7 +600,7 @@ const CuentasPorCobrar = () => {
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
-                      <LineChart data={analytics.historicoCxC}>
+                      <LineChart data={analytics?.historicoCxC || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis 
                           dataKey="fecha" 
