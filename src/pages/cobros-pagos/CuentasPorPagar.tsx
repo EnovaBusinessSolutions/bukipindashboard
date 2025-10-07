@@ -48,7 +48,7 @@ import {
   Area,
   AreaChart
 } from "recharts";
-import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
+import { useCuentasPorPagarConsolidadas, useAnalyticsCuentasPorPagarConsolidadas } from "@/hooks/useCuentasPorPagarConsolidadas";
 
 const COLORS = {
   primary: "hsl(var(--primary))",
@@ -69,23 +69,11 @@ const CuentasPorPagar = () => {
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
 
-  const { data: cuentasPorPagar, isLoading } = useQuery({
-    queryKey: ["cuentas-por-pagar"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gt("monto_pendiente", 0)
-        .order("fecha_vencimiento", { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
+  const { data: cuentasPorPagar, isLoading } = useCuentasPorPagarConsolidadas();
 
   const queryClient = useQueryClient();
 
-  // Real-time updates
+  // Real-time updates para las 3 tablas
   useEffect(() => {
     const channel = supabase
       .channel('cuentas-por-pagar-changes')
@@ -96,9 +84,33 @@ const CuentasPorPagar = () => {
           schema: 'public',
           table: 'transacciones_egresos'
         },
-        (payload) => {
-          console.log('Real-time update received:', payload);
-          queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar"] });
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inversiones_capex'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'movimientos_inventario'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
         }
       )
       .subscribe();
@@ -108,34 +120,49 @@ const CuentasPorPagar = () => {
     };
   }, [queryClient]);
 
-  // Hooks para analíticas
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
-  const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
+  // Hook para analíticas consolidadas
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagarConsolidadas();
 
-  // Mutación para registrar pago
+  // Mutación para registrar pago (maneja tanto egresos como inversiones)
   const registrarPagoMutation = useMutation({
-    mutationFn: async ({ cuentaId, monto, metodo }: { cuentaId: string; monto: number; metodo: string }) => {
+    mutationFn: async ({ cuentaId, monto, metodo, tipo }: { cuentaId: string; monto: number; metodo: string; tipo: 'egreso' | 'capex' | 'inventario' }) => {
       const cuenta = cuentasPorPagar?.find(c => c.id === cuentaId);
       if (!cuenta) throw new Error("Cuenta no encontrada");
 
       const nuevoMontoPendiente = (cuenta.monto_pendiente || 0) - monto;
       const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
 
-      const { error } = await supabase
-        .from('transacciones_egresos')
-        .update({
-          monto_pendiente: Math.max(0, nuevoMontoPendiente),
-          monto_pagado: nuevoMontoPagado,
-          tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
-        })
-        .eq('id', cuentaId);
+      let error;
+      
+      if (tipo === 'egreso') {
+        const result = await supabase
+          .from('transacciones_egresos')
+          .update({
+            monto_pendiente: Math.max(0, nuevoMontoPendiente),
+            monto_pagado: nuevoMontoPagado,
+            tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
+          })
+          .eq('id', cuentaId);
+        error = result.error;
+      } else if (tipo === 'capex') {
+        const result = await supabase
+          .from('inversiones_capex')
+          .update({
+            monto_pendiente: Math.max(0, nuevoMontoPendiente),
+            monto_pagado: nuevoMontoPagado,
+            tipo_pago: nuevoMontoPendiente <= 0 ? 'total' : 'parcial'
+          })
+          .eq('id', cuentaId);
+        error = result.error;
+      }
 
       if (error) throw error;
       
-      return { cuentaId, monto, metodo };
+      return { cuentaId, monto, metodo, tipo };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar"] });
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();
@@ -195,7 +222,8 @@ const CuentasPorPagar = () => {
     registrarPagoMutation.mutate({
       cuentaId: selectedCuenta.id,
       monto: monto,
-      metodo: metodoPago
+      metodo: metodoPago,
+      tipo: selectedCuenta.tipo_transaccion
     });
   };
 
@@ -337,6 +365,7 @@ const CuentasPorPagar = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead>Tipo</TableHead>
                           <TableHead>Proveedor</TableHead>
                           <TableHead>Información de Contacto</TableHead>
                           <TableHead>Descripción</TableHead>
@@ -350,6 +379,20 @@ const CuentasPorPagar = () => {
                       <TableBody>
                         {filteredCuentas.map((cuenta) => (
                           <TableRow key={cuenta.id}>
+                            <TableCell>
+                              <Badge variant={
+                                cuenta.tipo_transaccion === 'egreso' ? 'secondary' :
+                                cuenta.tipo_transaccion === 'capex' ? 'default' : 'outline'
+                              }>
+                                {cuenta.tipo_transaccion === 'egreso' ? '💰 Egreso' :
+                                 cuenta.tipo_transaccion === 'capex' ? '🏭 CAPEX' : '📦 Inventario'}
+                              </Badge>
+                              {cuenta.producto_nombre && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {cuenta.producto_nombre}
+                                </div>
+                              )}
+                            </TableCell>
                             <TableCell className="font-medium">
                               {cuenta.proveedor_nombre || "Sin especificar"}
                             </TableCell>
@@ -460,11 +503,11 @@ const CuentasPorPagar = () => {
 
           {/* Tab 2: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
-            {loadingAnalytics || loadingDetalles ? (
+            {loadingAnalytics ? (
               <div className="text-center py-12">
                 <div className="text-muted-foreground">Cargando analíticas...</div>
               </div>
-            ) : analytics && detalles ? (
+            ) : analytics ? (
               <>
                 {/* Métricas Principales */}
                 <div className="grid gap-4 md:grid-cols-4">
@@ -508,12 +551,38 @@ const CuentasPorPagar = () => {
                       <Clock className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{detalles.length}</div>
+                      <div className="text-2xl font-bold">{filteredCuentas.length}</div>
                     </CardContent>
                   </Card>
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
+                  {/* Distribución por Tipo de Transacción */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Distribución por Tipo de Transacción</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={analytics.distribucionPorTipo}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="tipo" />
+                          <YAxis />
+                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
+                          <Bar dataKey="monto" fill={COLORS.accent} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 space-y-2">
+                        {analytics.distribucionPorTipo.map((item: any, index: number) => (
+                          <div key={index} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{item.tipo}:</span>
+                            <span className="font-medium">{item.cantidad} cuenta{item.cantidad !== 1 ? 's' : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   {/* Top Proveedores */}
                   <Card>
                     <CardHeader>
