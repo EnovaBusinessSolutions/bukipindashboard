@@ -8,7 +8,7 @@ interface CuentaPorCobrar {
   fecha_vencimiento: string | null;
   created_at: string;
   descripcion: string;
-  dias_vencimiento?: number;
+  dias_vencimiento?: number | null;
 }
 
 interface AnalyticsCuentasPorCobrar {
@@ -34,6 +34,7 @@ interface AnalyticsCuentasPorCobrar {
     vencido31_60: number;
     vencido61_90: number;
     vencidoMas90: number;
+    sinVencimiento: number;
     total: number;
   }[];
 }
@@ -54,15 +55,12 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
       
       // Calcular días de vencimiento
       const cuentasConDias: CuentaPorCobrar[] = (cuentas || []).map(cuenta => {
-        let diasVencimiento = 0;
+        let diasVencimiento = null;
         if (cuenta.fecha_vencimiento) {
           const fechaVenc = new Date(cuenta.fecha_vencimiento);
           diasVencimiento = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
-        } else {
-          // Si no hay fecha de vencimiento, calcular desde la fecha de creación
-          const fechaCreacion = new Date(cuenta.created_at);
-          diasVencimiento = Math.floor((today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
         }
+        // Si no hay fecha de vencimiento, dejamos diasVencimiento como null
         
         return {
           ...cuenta,
@@ -101,7 +99,7 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
 
       const agingAnalysis = agingRanges.map(range => {
         const cuentasEnRango = cuentasConDias.filter(c => 
-          (c.dias_vencimiento || 0) >= range.min && (c.dias_vencimiento || 0) <= range.max
+          c.dias_vencimiento !== null && c.dias_vencimiento >= range.min && c.dias_vencimiento <= range.max
         );
         return {
           rango: range.rango,
@@ -122,7 +120,8 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
 
       const agingAnalysisDetailed = agingRangesDetailed.map(range => {
         const cuentasEnRango = cuentasConDias.filter(c => {
-          const dias = c.dias_vencimiento || 0;
+          if (c.dias_vencimiento === null) return false;
+          const dias = c.dias_vencimiento;
           return dias >= range.min && dias <= range.max;
         });
         return {
@@ -199,19 +198,25 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
             vencido31_60: 0,
             vencido61_90: 0,
             vencidoMas90: 0,
+            sinVencimiento: 0,
             total: 0
           };
         }
         
-        const dias = cuenta.dias_vencimiento || 0;
         const monto = cuenta.monto_pendiente;
         
-        if (dias < 0) acc[cliente].noVencido += monto;
-        else if (dias >= 1 && dias <= 15) acc[cliente].vencido1_15 += monto;
-        else if (dias >= 16 && dias <= 30) acc[cliente].vencido16_30 += monto;
-        else if (dias >= 31 && dias <= 60) acc[cliente].vencido31_60 += monto;
-        else if (dias >= 61 && dias <= 90) acc[cliente].vencido61_90 += monto;
-        else acc[cliente].vencidoMas90 += monto;
+        // Si no tiene fecha de vencimiento
+        if (cuenta.dias_vencimiento === null) {
+          acc[cliente].sinVencimiento += monto;
+        } else {
+          const dias = cuenta.dias_vencimiento;
+          if (dias < 0) acc[cliente].noVencido += monto;
+          else if (dias >= 1 && dias <= 15) acc[cliente].vencido1_15 += monto;
+          else if (dias >= 16 && dias <= 30) acc[cliente].vencido16_30 += monto;
+          else if (dias >= 31 && dias <= 60) acc[cliente].vencido31_60 += monto;
+          else if (dias >= 61 && dias <= 90) acc[cliente].vencido61_90 += monto;
+          else acc[cliente].vencidoMas90 += monto;
+        }
         
         acc[cliente].total += monto;
         return acc;
@@ -285,9 +290,8 @@ export const useCuentasPorCobrarDetalle = () => {
           else if (diasVencimiento >= 1) estado = 'Vencida';
           else if (diasVencimiento < 0) estado = 'Por vencer';
         } else {
-          // Si no hay fecha de vencimiento, calcular desde la fecha de creación
-          const fechaCreacion = new Date(cuenta.created_at);
-          diasVencimiento = Math.floor((today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
+          // Si no hay fecha de vencimiento
+          diasVencimiento = 0;
           estado = 'Sin fecha límite';
         }
         
