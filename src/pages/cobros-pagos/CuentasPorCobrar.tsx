@@ -68,6 +68,7 @@ const CuentasPorCobrar = () => {
   const [selectedCuenta, setSelectedCuenta] = useState<any>(null);
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
+  const [filtroAntiguedad, setFiltroAntiguedad] = useState<string>("todos");
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -490,6 +491,227 @@ const CuentasPorCobrar = () => {
 
           {/* Tab 2: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
+            {loadingAnalytics ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-muted-foreground">Cargando analíticas...</div>
+              </div>
+            ) : !analytics ? (
+              <Card>
+                <CardContent className="py-10">
+                  <p className="text-center text-muted-foreground">
+                    No hay datos disponibles para mostrar analíticas.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* KPIs Principales */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total por Cobrar</CardTitle>
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        ${analytics.totalPendiente.toLocaleString('es-CO')}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analytics.totalClientes}</div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Promedio por Cliente</CardTitle>
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        ${analytics.promedioDeuda.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
+                      <Clock className="h-4 w-4 text-destructive" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-destructive">
+                        {analytics.agingAnalysisDetailed
+                          .filter(a => a.min >= 1)
+                          .reduce((sum, a) => sum + a.cantidad, 0)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Gráfico A: Análisis de Antigüedad (Barras Verticales) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Análisis de Antigüedad de Cuentas por Cobrar</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart data={analytics.agingAnalysisDetailed}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="rango" 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={100}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--background))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Monto']}
+                          labelFormatter={(label) => `${label}`}
+                        />
+                        <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico B: Histórico de CxC (Líneas) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Histórico de Cuentas por Cobrar (Últimos 30 días)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <LineChart data={analytics.historicoCxC}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="fecha" 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--background))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Saldo CxC']}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="saldo" 
+                          stroke={COLORS.primary}
+                          strokeWidth={3}
+                          dot={{ fill: COLORS.primary, r: 4 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico C: CxC por Cliente (Barras Horizontales Apiladas) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Cuentas por Cobrar por Cliente (Apilado por Antigüedad)</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Filtro de antigüedad */}
+                    <div className="flex items-center gap-4">
+                      <Label htmlFor="filtro-antiguedad">Filtrar por antigüedad:</Label>
+                      <Select value={filtroAntiguedad} onValueChange={setFiltroAntiguedad}>
+                        <SelectTrigger id="filtro-antiguedad" className="w-[240px]">
+                          <SelectValue placeholder="Selecciona categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="noVencido">No vencido</SelectItem>
+                          <SelectItem value="vencido1_15">Vencido 1-15 días</SelectItem>
+                          <SelectItem value="vencido16_30">Vencido 16-30 días</SelectItem>
+                          <SelectItem value="vencido31_60">Vencido 31-60 días</SelectItem>
+                          <SelectItem value="vencido61_90">Vencido 61-90 días</SelectItem>
+                          <SelectItem value="vencidoMas90">Vencido +90 días</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <ResponsiveContainer 
+                      width="100%" 
+                      height={Math.max(
+                        400, 
+                        (filtroAntiguedad === "todos" 
+                          ? analytics.cxcPorClienteApilado 
+                          : analytics.cxcPorClienteApilado.filter(c => (c as any)[filtroAntiguedad] > 0)
+                        ).length * 40
+                      )}
+                    >
+                      <BarChart 
+                        data={
+                          filtroAntiguedad === "todos" 
+                            ? analytics.cxcPorClienteApilado 
+                            : analytics.cxcPorClienteApilado
+                                .filter(c => (c as any)[filtroAntiguedad] > 0)
+                                .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0))
+                        }
+                        layout="vertical"
+                        margin={{ left: 100 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          type="number"
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                        />
+                        <YAxis 
+                          type="category"
+                          dataKey="cliente" 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          width={90}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--background))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                          formatter={(value: number) => `$${value.toLocaleString('es-CO')}`}
+                        />
+                        <Bar dataKey="noVencido" stackId="a" fill={COLORS.success} name="No vencido" />
+                        <Bar dataKey="vencido1_15" stackId="a" fill={COLORS.primary} name="Vencido 1-15 días" />
+                        <Bar dataKey="vencido16_30" stackId="a" fill={COLORS.secondary} name="Vencido 16-30 días" />
+                        <Bar dataKey="vencido31_60" stackId="a" fill={COLORS.warning} name="Vencido 31-60 días" />
+                        <Bar dataKey="vencido61_90" stackId="a" fill={COLORS.accent} name="Vencido 61-90 días" />
+                        <Bar dataKey="vencidoMas90" stackId="a" fill={COLORS.destructive} name="Vencido +90 días" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </>
+            )}
             {loadingAnalytics || loadingDetalles ? (
               <div className="animate-pulse space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

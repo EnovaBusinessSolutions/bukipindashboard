@@ -18,6 +18,24 @@ interface AnalyticsCuentasPorCobrar {
   cuentasPorCliente: { cliente: string; monto: number; cantidad: number }[];
   agingAnalysis: { rango: string; monto: number; cantidad: number }[];
   tendenciaMensual: { mes: string; monto: number }[];
+  agingAnalysisDetailed: { 
+    rango: string; 
+    monto: number; 
+    cantidad: number;
+    min: number;
+    max: number;
+  }[];
+  historicoCxC: { fecha: string; saldo: number }[];
+  cxcPorClienteApilado: {
+    cliente: string;
+    noVencido: number;
+    vencido1_15: number;
+    vencido16_30: number;
+    vencido31_60: number;
+    vencido61_90: number;
+    vencidoMas90: number;
+    total: number;
+  }[];
 }
 
 export const useAnalyticsCuentasPorCobrar = () => {
@@ -92,6 +110,81 @@ export const useAnalyticsCuentasPorCobrar = () => {
         };
       });
 
+      // Análisis de aging detallado con 6 categorías
+      const agingRangesDetailed = [
+        { rango: 'No vencido', min: -Infinity, max: -1 },
+        { rango: 'Vencido 1-15 días', min: 1, max: 15 },
+        { rango: 'Vencido 16-30 días', min: 16, max: 30 },
+        { rango: 'Vencido 31-60 días', min: 31, max: 60 },
+        { rango: 'Vencido 61-90 días', min: 61, max: 90 },
+        { rango: 'Vencido +90 días', min: 91, max: Infinity }
+      ];
+
+      const agingAnalysisDetailed = agingRangesDetailed.map(range => {
+        const cuentasEnRango = cuentasConDias.filter(c => {
+          const dias = c.dias_vencimiento || 0;
+          return dias >= range.min && dias <= range.max;
+        });
+        return {
+          rango: range.rango,
+          monto: cuentasEnRango.reduce((sum, c) => sum + c.monto_pendiente, 0),
+          cantidad: cuentasEnRango.length,
+          min: range.min,
+          max: range.max
+        };
+      });
+
+      // Histórico de CxC (saldo al cierre por día - últimos 30 días)
+      const historicoCxC = [];
+      for (let i = 29; i >= 0; i--) {
+        const fecha = new Date();
+        fecha.setDate(fecha.getDate() - i);
+        fecha.setHours(23, 59, 59, 999);
+        
+        // Calcular el saldo de CxC al cierre de ese día
+        const saldo = cuentasConDias
+          .filter(c => new Date(c.created_at) <= fecha)
+          .reduce((sum, c) => sum + c.monto_pendiente, 0);
+        
+        historicoCxC.push({
+          fecha: fecha.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+          saldo
+        });
+      }
+
+      // CxC por cliente apilado con categorías de antigüedad
+      const clientesMap = cuentasConDias.reduce((acc, cuenta) => {
+        const cliente = cuenta.cliente_nombre || 'Sin nombre';
+        if (!acc[cliente]) {
+          acc[cliente] = {
+            noVencido: 0,
+            vencido1_15: 0,
+            vencido16_30: 0,
+            vencido31_60: 0,
+            vencido61_90: 0,
+            vencidoMas90: 0,
+            total: 0
+          };
+        }
+        
+        const dias = cuenta.dias_vencimiento || 0;
+        const monto = cuenta.monto_pendiente;
+        
+        if (dias < 0) acc[cliente].noVencido += monto;
+        else if (dias <= 15) acc[cliente].vencido1_15 += monto;
+        else if (dias <= 30) acc[cliente].vencido16_30 += monto;
+        else if (dias <= 60) acc[cliente].vencido31_60 += monto;
+        else if (dias <= 90) acc[cliente].vencido61_90 += monto;
+        else acc[cliente].vencidoMas90 += monto;
+        
+        acc[cliente].total += monto;
+        return acc;
+      }, {} as Record<string, any>);
+
+      const cxcPorClienteApilado = Object.entries(clientesMap)
+        .map(([cliente, data]) => ({ cliente, ...data }))
+        .sort((a, b) => b.total - a.total);
+
       // Tendencia por mes (últimos 6 meses)
       const mesesPasados = 6;
       const tendenciaMensual = [];
@@ -120,7 +213,10 @@ export const useAnalyticsCuentasPorCobrar = () => {
         promedioDeuda,
         cuentasPorCliente,
         agingAnalysis,
-        tendenciaMensual
+        tendenciaMensual,
+        agingAnalysisDetailed,
+        historicoCxC,
+        cxcPorClienteApilado
       };
     }
   });
