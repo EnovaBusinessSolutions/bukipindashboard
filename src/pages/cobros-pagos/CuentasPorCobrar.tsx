@@ -51,9 +51,9 @@ import {
 import { useAnalyticsCuentasPorCobrar, useCuentasPorCobrarDetalle } from "@/hooks/useAnalyticsCuentasPorCobrar";
 
 const COLORS = {
-  primary: "hsl(var(--primary))",
-  secondary: "hsl(var(--secondary))",
-  accent: "hsl(var(--accent))",
+  primary: "hsl(var(--chart-1))",
+  secondary: "hsl(var(--chart-2))",
+  accent: "hsl(var(--chart-3))",
   destructive: "hsl(var(--destructive))",
   warning: "hsl(var(--warning))",
   success: "hsl(var(--success))"
@@ -767,12 +767,12 @@ const CuentasPorCobrar = () => {
                             return null;
                           }}
                         />
-                        <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--success))" name="Sin vencimiento" />
-                        <Bar dataKey="vencido1_15" stackId="a" fill={COLORS.primary} name="Vencido 1-15 días" />
-                        <Bar dataKey="vencido16_30" stackId="a" fill={COLORS.secondary} name="Vencido 16-30 días" />
-                        <Bar dataKey="vencido31_60" stackId="a" fill={COLORS.warning} name="Vencido 31-60 días" />
-                        <Bar dataKey="vencido61_90" stackId="a" fill={COLORS.accent} name="Vencido 61-90 días" />
-                        <Bar dataKey="vencidoMas90" stackId="a" fill={COLORS.destructive} name="Vencido +90 días" />
+                        <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--chart-1))" name="Sin vencimiento" />
+                        <Bar dataKey="vencido1_15" stackId="a" fill="hsl(var(--chart-2))" name="Vencido 1-15 días" />
+                        <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días" />
+                        <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días" />
+                        <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días" />
+                        <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días" />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>

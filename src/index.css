@@ -43,6 +43,12 @@ All colors MUST be HSL.
 
     --destructive: 0 70% 55%;
     --destructive-foreground: 40 20% 98%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 40 20% 98%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 15%;
 
     --border: 180 10% 85%;
     --input: 180 10% 85%;
@@ -84,6 +90,12 @@ All colors MUST be HSL.
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 210 40% 98%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 222.2 47.4% 11.2%;
 
     --chart-1: 180 50% 55%;
     --chart-2: 180 45% 45%;
