@@ -635,7 +635,17 @@ const CuentasPorCobrar = () => {
                 {/* Gráfico C: CxC por Cliente (Barras Horizontales Apiladas) */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Cuentas por Cobrar por Cliente (Apilado por Antigüedad)</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Cuentas por Cobrar por Cliente (Apilado por Antigüedad)</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Total Deuda:</span>
+                        <Badge variant="default" className="text-lg px-3 py-1">
+                          ${(analytics?.cxcPorClienteApilado || [])
+                            .reduce((sum, c) => sum + c.total, 0)
+                            .toLocaleString('es-CO')}
+                        </Badge>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Filtro de antigüedad */}
@@ -696,9 +706,31 @@ const CuentasPorCobrar = () => {
                           contentStyle={{
                             backgroundColor: 'hsl(var(--background))',
                             border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
+                            borderRadius: '8px',
+                            padding: '12px'
                           }}
-                          formatter={(value: number) => `$${value.toLocaleString('es-CO')}`}
+                          formatter={(value: number, name: string) => {
+                            const labels: Record<string, string> = {
+                              noVencido: "No vencido",
+                              vencido1_15: "Vencido 1-15 días",
+                              vencido16_30: "Vencido 16-30 días",
+                              vencido31_60: "Vencido 31-60 días",
+                              vencido61_90: "Vencido 61-90 días",
+                              vencidoMas90: "Vencido +90 días"
+                            };
+                            return [`$${value.toLocaleString('es-CO')}`, labels[name] || name];
+                          }}
+                          labelFormatter={(label) => {
+                            const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
+                            return (
+                              <div className="font-bold border-b border-border pb-2 mb-2">
+                                <div>{label}</div>
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  Total: ${cliente?.total.toLocaleString('es-CO') || 0}
+                                </div>
+                              </div>
+                            );
+                          }}
                         />
                         <Bar dataKey="noVencido" stackId="a" fill={COLORS.success} name="No vencido" />
                         <Bar dataKey="vencido1_15" stackId="a" fill={COLORS.primary} name="Vencido 1-15 días" />
