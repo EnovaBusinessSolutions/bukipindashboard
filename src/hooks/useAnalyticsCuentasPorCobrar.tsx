@@ -38,9 +38,9 @@ interface AnalyticsCuentasPorCobrar {
   }[];
 }
 
-export const useAnalyticsCuentasPorCobrar = () => {
+export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "anual" = "mensual") => {
   return useQuery({
-    queryKey: ["analytics-cuentas-por-cobrar"],
+    queryKey: ["analytics-cuentas-por-cobrar", periodo],
     queryFn: async (): Promise<AnalyticsCuentasPorCobrar> => {
       const { data: cuentas, error } = await supabase
         .from("transacciones_ingresos")
@@ -134,22 +134,58 @@ export const useAnalyticsCuentasPorCobrar = () => {
         };
       });
 
-      // Histórico de CxC (saldo al cierre por día - últimos 30 días)
+      // Histórico de CxC (saldo al cierre)
       const historicoCxC = [];
-      for (let i = 29; i >= 0; i--) {
-        const fecha = new Date();
-        fecha.setDate(fecha.getDate() - i);
-        fecha.setHours(23, 59, 59, 999);
-        
-        // Calcular el saldo de CxC al cierre de ese día
-        const saldo = cuentasConDias
-          .filter(c => new Date(c.created_at) <= fecha)
-          .reduce((sum, c) => sum + c.monto_pendiente, 0);
-        
+      
+      if (periodo === "diario") {
+        // Mostrar solo el día de hoy
+        const hoy = new Date();
+        const saldo = cuentasConDias.reduce((sum, c) => sum + c.monto_pendiente, 0);
         historicoCxC.push({
-          fecha: fecha.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+          fecha: hoy.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
           saldo
         });
+      } else if (periodo === "mensual") {
+        // Mostrar todos los días del mes actual
+        const hoy = new Date();
+        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const diasDelMes = hoy.getDate(); // Solo hasta hoy
+        
+        for (let dia = 1; dia <= diasDelMes; dia++) {
+          const fecha = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
+          fecha.setHours(23, 59, 59, 999);
+          
+          // Calcular el saldo de CxC al cierre de ese día
+          const saldo = cuentasConDias
+            .filter(c => new Date(c.created_at) <= fecha)
+            .reduce((sum, c) => sum + c.monto_pendiente, 0);
+          
+          historicoCxC.push({
+            fecha: fecha.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+            saldo
+          });
+        }
+      } else if (periodo === "anual") {
+        // Mostrar enero a diciembre del año actual (solo hasta el mes actual)
+        const hoy = new Date();
+        const anioActual = hoy.getFullYear();
+        const mesActual = hoy.getMonth(); // 0-11
+        
+        for (let mes = 0; mes <= mesActual; mes++) {
+          // Último día del mes
+          const ultimoDiaMes = new Date(anioActual, mes + 1, 0);
+          ultimoDiaMes.setHours(23, 59, 59, 999);
+          
+          // Calcular el saldo de CxC al cierre de ese mes
+          const saldo = cuentasConDias
+            .filter(c => new Date(c.created_at) <= ultimoDiaMes)
+            .reduce((sum, c) => sum + c.monto_pendiente, 0);
+          
+          historicoCxC.push({
+            fecha: ultimoDiaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
+            saldo
+          });
+        }
       }
 
       // CxC por cliente apilado con categorías de antigüedad

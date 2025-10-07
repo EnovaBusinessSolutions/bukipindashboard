@@ -69,6 +69,7 @@ const CuentasPorCobrar = () => {
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
   const [filtroAntiguedad, setFiltroAntiguedad] = useState<string>("todos");
+  const [periodoCxC, setPeriodoCxC] = useState<"diario" | "mensual" | "anual">("mensual");
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -110,7 +111,7 @@ const CuentasPorCobrar = () => {
   }, [queryClient]);
 
   // Hooks para analíticas
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar();
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC);
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
 
   // Mutación para registrar pago
@@ -596,7 +597,19 @@ const CuentasPorCobrar = () => {
                 {/* Gráfico B: Histórico de CxC (Líneas) */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Histórico de Cuentas por Cobrar (Últimos 30 días)</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Histórico de Cuentas por Cobrar</CardTitle>
+                      <Select value={periodoCxC} onValueChange={(value: any) => setPeriodoCxC(value)}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Selecciona período" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="diario">Diario (Hoy)</SelectItem>
+                          <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
+                          <SelectItem value="anual">Anual (Año actual)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={350}>
