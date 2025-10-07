@@ -207,10 +207,10 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         const monto = cuenta.monto_pendiente;
         
         if (dias < 0) acc[cliente].noVencido += monto;
-        else if (dias <= 15) acc[cliente].vencido1_15 += monto;
-        else if (dias <= 30) acc[cliente].vencido16_30 += monto;
-        else if (dias <= 60) acc[cliente].vencido31_60 += monto;
-        else if (dias <= 90) acc[cliente].vencido61_90 += monto;
+        else if (dias >= 1 && dias <= 15) acc[cliente].vencido1_15 += monto;
+        else if (dias >= 16 && dias <= 30) acc[cliente].vencido16_30 += monto;
+        else if (dias >= 31 && dias <= 60) acc[cliente].vencido31_60 += monto;
+        else if (dias >= 61 && dias <= 90) acc[cliente].vencido61_90 += monto;
         else acc[cliente].vencidoMas90 += monto;
         
         acc[cliente].total += monto;
@@ -282,7 +282,8 @@ export const useCuentasPorCobrarDetalle = () => {
           
           if (diasVencimiento > 90) estado = 'Muy vencida';
           else if (diasVencimiento > 30) estado = 'Vencida';
-          else if (diasVencimiento > 0) estado = 'Por vencer';
+          else if (diasVencimiento >= 1) estado = 'Vencida';
+          else if (diasVencimiento < 0) estado = 'Por vencer';
         } else {
           // Si no hay fecha de vencimiento, calcular desde la fecha de creación
           const fechaCreacion = new Date(cuenta.created_at);
