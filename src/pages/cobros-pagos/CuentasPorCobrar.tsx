@@ -722,14 +722,36 @@ const CuentasPorCobrar = () => {
                           }}
                           labelFormatter={(label) => {
                             const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
-                            return (
-                              <div className="font-bold border-b border-border pb-2 mb-2">
-                                <div>{label}</div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  Total: ${cliente?.total.toLocaleString('es-CO') || 0}
+                            return label;
+                          }}
+                          content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                              const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
+                              return (
+                                <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                                  <div className="font-bold mb-2 pb-2 border-b border-border">{label}</div>
+                                  {payload.map((entry: any, index: number) => (
+                                    entry.value > 0 && (
+                                      <div key={index} className="flex justify-between gap-4 py-1">
+                                        <span className="flex items-center gap-2">
+                                          <div 
+                                            className="w-3 h-3 rounded-sm" 
+                                            style={{ backgroundColor: entry.color }}
+                                          />
+                                          {entry.name}:
+                                        </span>
+                                        <span className="font-medium">${entry.value.toLocaleString('es-CO')}</span>
+                                      </div>
+                                    )
+                                  ))}
+                                  <div className="flex justify-between gap-4 pt-2 mt-2 border-t border-border font-bold text-primary">
+                                    <span>TOTAL:</span>
+                                    <span>${cliente?.total.toLocaleString('es-CO') || 0}</span>
+                                  </div>
                                 </div>
-                              </div>
-                            );
+                              );
+                            }
+                            return null;
                           }}
                         />
                         <Bar dataKey="noVencido" stackId="a" fill={COLORS.success} name="No vencido" />
