@@ -101,6 +101,8 @@ const CuentasPorCobrar = () => {
         (payload) => {
           console.log('Real-time update received:', payload);
           queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
         }
       )
       .subscribe();
@@ -138,6 +140,8 @@ const CuentasPorCobrar = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();
