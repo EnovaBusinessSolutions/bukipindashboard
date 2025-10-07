@@ -662,16 +662,16 @@ const CuentasPorCobrar = () => {
                       height={Math.max(
                         400, 
                         (filtroAntiguedad === "todos" 
-                          ? analytics.cxcPorClienteApilado 
-                          : analytics.cxcPorClienteApilado.filter(c => (c as any)[filtroAntiguedad] > 0)
+                          ? (analytics?.cxcPorClienteApilado || [])
+                          : (analytics?.cxcPorClienteApilado || []).filter(c => (c as any)[filtroAntiguedad] > 0)
                         ).length * 40
                       )}
                     >
                       <BarChart 
                         data={
                           filtroAntiguedad === "todos" 
-                            ? analytics.cxcPorClienteApilado 
-                            : analytics.cxcPorClienteApilado
+                            ? (analytics?.cxcPorClienteApilado || [])
+                            : (analytics?.cxcPorClienteApilado || [])
                                 .filter(c => (c as any)[filtroAntiguedad] > 0)
                                 .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0))
                         }
