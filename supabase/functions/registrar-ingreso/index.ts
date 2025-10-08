@@ -103,17 +103,37 @@ serve(async (req) => {
 
       const stockActual = producto.cantidad_stock || 0
       
+      // Determinar el costo a usar para valorar el inventario
+      // Si el producto no tiene costo registrado, usar el precio de venta actual
+      let costoParaInventario = producto.costo_unitario || 0
+      let debeActualizarCosto = false
+      
+      if (costoParaInventario === 0 && requestData.precioVenta && requestData.precioVenta > 0) {
+        costoParaInventario = requestData.precioVenta
+        debeActualizarCosto = true
+        console.log(`Producto sin costo registrado. Usando precio de venta ${requestData.precioVenta} como referencia para valorar inventario negativo`)
+      }
+      
       // Permitir inventario negativo - actualizar stock y valor del inventario
       const nuevoStock = stockActual - requestData.cantidadVendida
-      const nuevoValorInventario = nuevoStock * (producto.costo_unitario || 0)
+      const nuevoValorInventario = nuevoStock * costoParaInventario
       
-      console.log(`Procesando venta - Stock actual: ${stockActual}, Cantidad vendida: ${requestData.cantidadVendida}, Nuevo stock: ${nuevoStock}${nuevoStock < 0 ? ' (NEGATIVO)' : ''}, Valor inventario: ${nuevoValorInventario}`)
+      console.log(`Procesando venta - Stock actual: ${stockActual}, Cantidad vendida: ${requestData.cantidadVendida}, Nuevo stock: ${nuevoStock}${nuevoStock < 0 ? ' (NEGATIVO)' : ''}, Costo: ${costoParaInventario}, Valor inventario: ${nuevoValorInventario}`)
+      
+      const updateData: any = { 
+        cantidad_stock: nuevoStock,
+        valor_total_inventario: nuevoValorInventario
+      }
+      
+      // Si el producto no tenía costo y ahora usamos el precio de venta, actualizar el costo_unitario
+      if (debeActualizarCosto) {
+        updateData.costo_unitario = costoParaInventario
+        console.log(`Actualizando costo_unitario del producto a ${costoParaInventario}`)
+      }
+      
       const { error: updateStockError } = await supabaseClient
         .from('productos')
-        .update({ 
-          cantidad_stock: nuevoStock,
-          valor_total_inventario: nuevoValorInventario
-        })
+        .update(updateData)
         .eq('id', requestData.productoId)
 
       if (updateStockError) {
