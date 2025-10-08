@@ -34,17 +34,22 @@ const ControlInventario = () => {
   ) || [];
 
   // Usar datos reales de inventario
-  const inventoryData = productosInventario.map(producto => ({
-    ...producto,
-    stock_actual: producto.cantidad_stock || 0,
-    stock_minimo: 10, // Puede ser configurable en el futuro
-    stock_maximo: 100, // Puede ser configurable en el futuro
-    costo_promedio: producto.costo_unitario || 0,
-    valor_total: producto.valor_total_inventario || 0,
-    entradas_mes: producto.cantidad_comprada || 0, // Total comprado
-    salidas_mes: Math.max(0, (producto.cantidad_comprada || 0) - (producto.cantidad_stock || 0)), // Vendido/usado
-    precio_venta: (producto as any).precio_venta || 0
-  }));
+  const inventoryData = productosInventario.map(producto => {
+    const valorTotal = producto.valor_total_inventario ?? 0;
+    console.log(`Producto ${producto.nombre}: stock=${producto.cantidad_stock}, valor_total_inventario=${producto.valor_total_inventario}, valorTotal=${valorTotal}`);
+    
+    return {
+      ...producto,
+      stock_actual: producto.cantidad_stock || 0,
+      stock_minimo: 10, // Puede ser configurable en el futuro
+      stock_maximo: 100, // Puede ser configurable en el futuro
+      costo_promedio: producto.costo_unitario || 0,
+      valor_total: valorTotal, // Permitir valores negativos
+      entradas_mes: producto.cantidad_comprada || 0, // Total comprado
+      salidas_mes: Math.max(0, (producto.cantidad_comprada || 0) - (producto.cantidad_stock || 0)), // Vendido/usado
+      precio_venta: (producto as any).precio_venta || 0
+    };
+  });
 
   const getAvailabilityStatus = (actual: number): InventoryStatus => {
     return actual > 0 ? "disponible" : "agotado";
@@ -348,7 +353,7 @@ const ControlInventario = () => {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-semibold">
+                      <TableCell className={`font-semibold ${producto.valor_total < 0 ? 'text-red-600' : ''}`}>
                         {new Intl.NumberFormat('es-CO', {
                           style: 'currency',
                           currency: 'COP',
