@@ -103,13 +103,17 @@ serve(async (req) => {
 
       const stockActual = producto.cantidad_stock || 0
       
-      // Permitir inventario negativo - simplemente actualizar el stock
+      // Permitir inventario negativo - actualizar stock y valor del inventario
       const nuevoStock = stockActual - requestData.cantidadVendida
+      const nuevoValorInventario = nuevoStock * (producto.costo_unitario || 0)
       
-      console.log(`Procesando venta - Stock actual: ${stockActual}, Cantidad vendida: ${requestData.cantidadVendida}, Nuevo stock: ${nuevoStock}${nuevoStock < 0 ? ' (NEGATIVO)' : ''}`)
+      console.log(`Procesando venta - Stock actual: ${stockActual}, Cantidad vendida: ${requestData.cantidadVendida}, Nuevo stock: ${nuevoStock}${nuevoStock < 0 ? ' (NEGATIVO)' : ''}, Valor inventario: ${nuevoValorInventario}`)
       const { error: updateStockError } = await supabaseClient
         .from('productos')
-        .update({ cantidad_stock: nuevoStock })
+        .update({ 
+          cantidad_stock: nuevoStock,
+          valor_total_inventario: nuevoValorInventario
+        })
         .eq('id', requestData.productoId)
 
       if (updateStockError) {
