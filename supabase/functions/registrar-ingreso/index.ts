@@ -104,14 +104,42 @@ serve(async (req) => {
       const stockActual = producto.cantidad_stock || 0
       
       // Determinar el costo a usar para valorar el inventario
-      // Si el producto no tiene costo registrado, usar el precio de venta actual
       let costoParaInventario = producto.costo_unitario || 0
       let debeActualizarCosto = false
       
-      if (costoParaInventario === 0 && requestData.precioVenta && requestData.precioVenta > 0) {
-        costoParaInventario = requestData.precioVenta
-        debeActualizarCosto = true
-        console.log(`Producto sin costo registrado. Usando precio de venta ${requestData.precioVenta} como referencia para valorar inventario negativo`)
+      // Si el producto no tiene costo registrado, calcular el costo promedio histórico desde movimientos
+      if (costoParaInventario === 0) {
+        console.log(`Producto sin costo registrado. Buscando costo promedio histórico...`)
+        
+        const { data: movimientos, error: movimientosError } = await supabaseClient
+          .from('movimientos_inventario')
+          .select('costo_unitario, cantidad, tipo_movimiento')
+          .eq('producto_id', requestData.productoId)
+          .eq('tipo_movimiento', 'compra')
+          .order('created_at', { ascending: false })
+        
+        if (!movimientosError && movimientos && movimientos.length > 0) {
+          // Calcular costo promedio ponderado de las compras históricas
+          let totalCosto = 0
+          let totalCantidad = 0
+          
+          for (const mov of movimientos) {
+            if (mov.costo_unitario > 0 && mov.cantidad > 0) {
+              totalCosto += mov.costo_unitario * mov.cantidad
+              totalCantidad += mov.cantidad
+            }
+          }
+          
+          if (totalCantidad > 0) {
+            costoParaInventario = totalCosto / totalCantidad
+            debeActualizarCosto = true
+            console.log(`Costo promedio histórico calculado: ${costoParaInventario} (basado en ${movimientos.length} movimientos, ${totalCantidad} unidades)`)
+          } else {
+            console.warn(`No se encontraron movimientos con costo válido. Usando costo 0 - REQUIERE ATENCIÓN`)
+          }
+        } else {
+          console.warn(`No se encontraron movimientos de compra históricos para calcular costo promedio. Usando costo 0 - REQUIERE ATENCIÓN`)
+        }
       }
       
       // Permitir inventario negativo - actualizar stock y valor del inventario
@@ -125,7 +153,7 @@ serve(async (req) => {
         valor_total_inventario: nuevoValorInventario
       }
       
-      // Si el producto no tenía costo y ahora usamos el precio de venta, actualizar el costo_unitario
+      // Si calculamos un costo promedio histórico, actualizar el costo_unitario del producto
       if (debeActualizarCosto) {
         updateData.costo_unitario = costoParaInventario
         console.log(`Actualizando costo_unitario del producto a ${costoParaInventario}`)
