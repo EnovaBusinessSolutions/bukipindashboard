@@ -102,12 +102,11 @@ serve(async (req) => {
       }
 
       const stockActual = producto.cantidad_stock || 0
-      if (stockActual < requestData.cantidadVendida) {
-        throw new Error(`Stock insuficiente. Disponible: ${stockActual}, Solicitado: ${requestData.cantidadVendida}`)
-      }
-
-      // Actualizar stock del producto
+      
+      // Permitir inventario negativo - simplemente actualizar el stock
       const nuevoStock = stockActual - requestData.cantidadVendida
+      
+      console.log(`Procesando venta - Stock actual: ${stockActual}, Cantidad vendida: ${requestData.cantidadVendida}, Nuevo stock: ${nuevoStock}${nuevoStock < 0 ? ' (NEGATIVO)' : ''}`)
       const { error: updateStockError } = await supabaseClient
         .from('productos')
         .update({ cantidad_stock: nuevoStock })
