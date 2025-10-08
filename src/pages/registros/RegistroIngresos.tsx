@@ -70,6 +70,10 @@ const RegistroIngresos = () => {
   const [comentarios, setComentarios] = useState(""); // New comments field
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]); // Advertencias de duplicados
   
+  // Estados para alerta de inventario negativo
+  const [showNegativeStockDialog, setShowNegativeStockDialog] = useState(false);
+  const [negativeStockData, setNegativeStockData] = useState<{productName: string; requested: number; available: number} | null>(null);
+  
   // Estado para el período de análisis
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
 
@@ -235,7 +239,7 @@ const RegistroIngresos = () => {
     } else if (selectedIncomeType === 'inventariados') {
       if (!selectedInventoryProductId) errors.push('Producto de Inventario');
       if (!inventoryQuantity || parseFloat(inventoryQuantity) <= 0) errors.push('Cantidad');
-      if (parseFloat(inventoryQuantity) > availableStock) errors.push('Cantidad excede stock disponible');
+      // Removida validación de stock - ahora permitimos inventario negativo
     } else if (selectedIncomeType === 'general' || selectedIncomeType === 'otros') {
       if (!descripcion.trim()) errors.push('Descripción');
     }
@@ -310,6 +314,21 @@ const RegistroIngresos = () => {
       return;
     }
 
+    // Verificar stock negativo para productos inventariados
+    if (selectedIncomeType === 'inventariados' && selectedInventoryProductId) {
+      const cantidadSolicitada = parseFloat(inventoryQuantity || '1');
+      if (cantidadSolicitada > availableStock) {
+        const selectedProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
+        setNegativeStockData({
+          productName: selectedProduct?.nombre || 'Producto',
+          requested: cantidadSolicitada,
+          available: availableStock
+        });
+        setShowNegativeStockDialog(true);
+        return;
+      }
+    }
+
     // Advertir sobre duplicados pero permitir continuar
     if (tipoCliente === "nuevo" && duplicateWarnings.length > 0) {
       const continuar = confirm(`Se detectaron posibles duplicados:\n\n${duplicateWarnings.join('\n')}\n\n¿Deseas continuar registrando este cliente de todas formas?`);
@@ -317,6 +336,12 @@ const RegistroIngresos = () => {
         return;
       }
     }
+    
+    await processIngreso();
+  };
+
+  // Función separada para procesar el ingreso
+  const processIngreso = async () => {
     setIsSubmitting(true);
     try {
       // Crear cliente si es nuevo y si hay información del cliente
@@ -693,12 +718,8 @@ const RegistroIngresos = () => {
                       <AlertCircle className="h-4 w-4 mr-1" />
                       <span className="text-xs">Requerido</span>
                     </div>}
-                  {hasFieldError('Cantidad excede stock disponible') && <div className="flex items-center text-destructive">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      <span className="text-xs">Excede stock</span>
-                    </div>}
                 </div>
-                <Input id="cantidad-inv" type="number" placeholder="1" min="1" max={availableStock} value={inventoryQuantity} onChange={e => handleInventoryQuantityChange(e.target.value)} className={hasFieldError('Cantidad') || hasFieldError('Cantidad excede stock disponible') ? 'border-destructive' : ''} />
+                <Input id="cantidad-inv" type="number" placeholder="1" min="1" value={inventoryQuantity} onChange={e => handleInventoryQuantityChange(e.target.value)} className={hasFieldError('Cantidad') ? 'border-destructive' : ''} />
               </div>
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
@@ -888,6 +909,71 @@ const RegistroIngresos = () => {
     }
   };
   return <div className="h-full overflow-hidden flex flex-col">
+      {/* Diálogo de confirmación de inventario negativo */}
+      <Dialog open={showNegativeStockDialog} onOpenChange={setShowNegativeStockDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertCircle className="h-5 w-5" />
+              Advertencia: Inventario Insuficiente
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-4">
+              <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <p className="font-medium mb-2">Estás a punto de vender un producto sin suficiente inventario:</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Producto:</span>
+                    <span className="font-medium">{negativeStockData?.productName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Cantidad solicitada:</span>
+                    <span className="font-medium">{negativeStockData?.requested}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Stock disponible:</span>
+                    <span className="font-medium">{negativeStockData?.available}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-orange-600">
+                    <span className="font-medium">Faltante:</span>
+                    <span className="font-bold">{(negativeStockData?.requested || 0) - (negativeStockData?.available || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm">
+                Si continúas, el inventario quedará en <strong className="text-destructive">negativo ({(negativeStockData?.available || 0) - (negativeStockData?.requested || 0)} unidades)</strong>. 
+                Esto se reflejará en tu control de inventario.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                ¿Deseas continuar con la venta de todas formas?
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowNegativeStockDialog(false);
+                setNegativeStockData(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="default"
+              className="bg-orange-600 hover:bg-orange-700"
+              onClick={async () => {
+                setShowNegativeStockDialog(false);
+                setNegativeStockData(null);
+                await processIngreso();
+              }}
+            >
+              Continuar con la Venta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Registro de Ingresos</h1>
         <p className="text-muted-foreground mt-2">
