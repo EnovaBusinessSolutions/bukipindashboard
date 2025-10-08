@@ -960,14 +960,14 @@ const RegistroIngresos = () => {
               Cancelar
             </Button>
             <Button 
-              variant="default"
-              className="bg-orange-600 hover:bg-orange-700"
+              variant="destructive"
               onClick={async () => {
                 setShowNegativeStockDialog(false);
                 setNegativeStockData(null);
                 await processIngreso();
               }}
             >
+              <AlertCircle className="mr-2 h-4 w-4" />
               Continuar con la Venta
             </Button>
           </DialogFooter>
