@@ -28,6 +28,7 @@ interface RegistroIngresoRequest {
   productoId?: string
   cantidadVendida?: number
   precioVenta?: number
+  costoPersonalizado?: number
 }
 
 serve(async (req) => {
@@ -107,8 +108,14 @@ serve(async (req) => {
       let costoParaInventario = producto.costo_unitario || 0
       let debeActualizarCosto = false
       
-      // Si el producto no tiene costo registrado, calcular el costo promedio histórico desde movimientos
-      if (costoParaInventario === 0) {
+      // Prioridad 1: Si el usuario proporcionó un costo personalizado, usarlo
+      if (requestData.costoPersonalizado && requestData.costoPersonalizado > 0) {
+        costoParaInventario = requestData.costoPersonalizado
+        debeActualizarCosto = true
+        console.log(`Usando costo personalizado del usuario: ${costoParaInventario}`)
+      }
+      // Prioridad 2: Si el producto no tiene costo registrado, calcular el costo promedio histórico desde movimientos
+      else if (costoParaInventario === 0) {
         console.log(`Producto sin costo registrado. Buscando costo promedio histórico...`)
         
         const { data: movimientos, error: movimientosError } = await supabaseClient

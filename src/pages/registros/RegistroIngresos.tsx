@@ -73,6 +73,8 @@ const RegistroIngresos = () => {
   // Estados para alerta de inventario negativo
   const [showNegativeStockDialog, setShowNegativeStockDialog] = useState(false);
   const [negativeStockData, setNegativeStockData] = useState<{productName: string; requested: number; available: number; costoPorUnidad: number; costoTotal: number} | null>(null);
+  const [tipoCostoInventarioNegativo, setTipoCostoInventarioNegativo] = useState<"historico" | "personalizado">("historico");
+  const [costoPersonalizado, setCostoPersonalizado] = useState("");
   
   // Estado para el período de análisis
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
@@ -472,7 +474,8 @@ const RegistroIngresos = () => {
           ...(selectedIncomeType === 'inventariados' && selectedInventoryProduct && {
             productoId: selectedInventoryProduct.id,
             cantidadVendida: Number(inventoryQuantity || '1'),
-            precioVenta: Number(inventoryProductPrice || '0')
+            precioVenta: Number(inventoryProductPrice || '0'),
+            costoPersonalizado: tipoCostoInventarioNegativo === 'personalizado' && costoPersonalizado ? Number(costoPersonalizado) : undefined
           })
         }
       });
@@ -976,28 +979,109 @@ const RegistroIngresos = () => {
                 </div>
               </div>
               <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="font-medium mb-2 text-blue-700 dark:text-blue-400">Impacto en el inventario:</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Costo por unidad:</span>
-                    <span className="font-medium">
-                      {negativeStockData?.costoPorUnidad && negativeStockData.costoPorUnidad > 0 
-                        ? `$${negativeStockData.costoPorUnidad.toFixed(2)}`
-                        : 'Sin costo registrado'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Valor inventario negativo:</span>
-                    <span className="font-bold text-destructive">
-                      -${(negativeStockData?.costoTotal || 0).toFixed(2)}
-                    </span>
-                  </div>
-                  {negativeStockData?.costoPorUnidad === 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                      ⚠️ Este producto no tiene costo registrado. Se mostrará sin valor en inventario hasta que registres una compra.
+                <p className="font-medium mb-3 text-blue-700 dark:text-blue-400">Impacto en el inventario:</p>
+                
+                {negativeStockData?.costoPorUnidad && negativeStockData.costoPorUnidad > 0 ? (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      💡 El costo mostrado es el <strong>promedio histórico</strong> calculado de tus compras anteriores de este producto.
                     </p>
-                  )}
-                </div>
+                    
+                    <RadioGroup 
+                      value={tipoCostoInventarioNegativo} 
+                      onValueChange={(value: "historico" | "personalizado") => {
+                        setTipoCostoInventarioNegativo(value);
+                        if (value === "historico") {
+                          setCostoPersonalizado("");
+                        }
+                      }}
+                      className="space-y-3 mb-3"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="historico" id="costo-historico" />
+                        <Label htmlFor="costo-historico" className="text-sm cursor-pointer">
+                          Usar costo histórico: <strong className="text-blue-700 dark:text-blue-400">${negativeStockData.costoPorUnidad.toFixed(2)}</strong> por unidad
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="personalizado" id="costo-personalizado" />
+                        <Label htmlFor="costo-personalizado" className="text-sm cursor-pointer">
+                          Ingresar costo personalizado
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                    
+                    {tipoCostoInventarioNegativo === "personalizado" && (
+                      <div className="mb-3">
+                        <Label htmlFor="costo-custom" className="text-xs">Costo unitario personalizado</Label>
+                        <Input
+                          id="costo-custom"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={costoPersonalizado}
+                          onChange={(e) => setCostoPersonalizado(e.target.value)}
+                          className="mt-1"
+                        />
+                      </div>
+                    )}
+                    
+                    <Separator className="my-3" />
+                    
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Costo por unidad aplicado:</span>
+                        <span className="font-medium">
+                          ${tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado 
+                            ? Number(costoPersonalizado).toFixed(2)
+                            : negativeStockData.costoPorUnidad.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Valor inventario negativo:</span>
+                        <span className="font-bold text-destructive">
+                          -${(
+                            (tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado 
+                              ? Number(costoPersonalizado) 
+                              : negativeStockData.costoPorUnidad) * 
+                            ((negativeStockData?.requested || 0) - (negativeStockData?.available || 0))
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      ⚠️ Este producto no tiene costo histórico registrado.
+                    </p>
+                    <div>
+                      <Label htmlFor="costo-requerido" className="text-xs">Ingresa el costo unitario para esta transacción</Label>
+                      <Input
+                        id="costo-requerido"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={costoPersonalizado}
+                        onChange={(e) => setCostoPersonalizado(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    {costoPersonalizado && Number(costoPersonalizado) > 0 && (
+                      <>
+                        <Separator />
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Valor inventario negativo:</span>
+                          <span className="font-bold text-destructive">
+                            -${(Number(costoPersonalizado) * ((negativeStockData?.requested || 0) - (negativeStockData?.available || 0))).toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <p className="text-sm">
                 Si continúas, el inventario quedará en <strong className="text-destructive">negativo ({(negativeStockData?.available || 0) - (negativeStockData?.requested || 0)} unidades)</strong>. 
@@ -1014,6 +1098,8 @@ const RegistroIngresos = () => {
               onClick={() => {
                 setShowNegativeStockDialog(false);
                 setNegativeStockData(null);
+                setTipoCostoInventarioNegativo("historico");
+                setCostoPersonalizado("");
               }}
             >
               Cancelar
@@ -1021,9 +1107,22 @@ const RegistroIngresos = () => {
             <Button 
               variant="destructive"
               onClick={async () => {
+                // Validar que si no hay costo histórico, se haya ingresado uno personalizado
+                if ((!negativeStockData?.costoPorUnidad || negativeStockData.costoPorUnidad === 0) && (!costoPersonalizado || Number(costoPersonalizado) <= 0)) {
+                  toast({
+                    title: "Costo requerido",
+                    description: "Debes ingresar un costo unitario para continuar",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                
                 setShowNegativeStockDialog(false);
                 setNegativeStockData(null);
                 await processIngreso();
+                // Limpiar después de procesar
+                setTipoCostoInventarioNegativo("historico");
+                setCostoPersonalizado("");
               }}
             >
               <AlertCircle className="mr-2 h-4 w-4" />
