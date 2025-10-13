@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type InventoryStatus = "disponible" | "agotado";
+type InventoryStatus = "disponible" | "agotado" | "negativo";
 type StockLevel = "alto" | "medio" | "bajo";
 
 const ControlInventario = () => {
@@ -52,7 +52,9 @@ const ControlInventario = () => {
   });
 
   const getAvailabilityStatus = (actual: number): InventoryStatus => {
-    return actual > 0 ? "disponible" : "agotado";
+    if (actual > 0) return "disponible";
+    if (actual < 0) return "negativo";
+    return "agotado";
   };
 
   const getStockLevel = (actual: number, minimo: number, maximo: number): StockLevel => {
@@ -65,8 +67,10 @@ const ControlInventario = () => {
     switch (status) {
       case "disponible":
         return <Badge className="bg-green-100 text-green-800">Disponible</Badge>;
+      case "negativo":
+        return <Badge className="bg-red-100 text-red-800">Vendido sin Stock</Badge>;
       case "agotado":
-        return <Badge className="bg-red-100 text-red-800">Agotado</Badge>;
+        return <Badge className="bg-orange-100 text-orange-800">Agotado</Badge>;
     }
   };
 
@@ -226,14 +230,15 @@ const ControlInventario = () => {
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filtrar por estado" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los estados</SelectItem>
-                <SelectItem value="disponible">Disponible</SelectItem>
-                <SelectItem value="agotado">Agotado</SelectItem>
-                <SelectItem value="alto">Alto Stock</SelectItem>
-                <SelectItem value="medio">Medio Stock</SelectItem>
-                <SelectItem value="bajo">Bajo Stock</SelectItem>
-              </SelectContent>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los estados</SelectItem>
+                  <SelectItem value="disponible">Disponible</SelectItem>
+                  <SelectItem value="negativo">Vendido sin Stock</SelectItem>
+                  <SelectItem value="agotado">Agotado</SelectItem>
+                  <SelectItem value="alto">Alto Stock</SelectItem>
+                  <SelectItem value="medio">Medio Stock</SelectItem>
+                  <SelectItem value="bajo">Bajo Stock</SelectItem>
+                </SelectContent>
             </Select>
           </div>
 
@@ -261,6 +266,11 @@ const ControlInventario = () => {
                     <TableRow key={producto.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
+                          {availability === "negativo" && (
+                            <div className="flex-shrink-0" title="¡Atención! Debes comprar para compensar el inventario negativo">
+                              <AlertTriangle className="h-5 w-5 text-red-600" />
+                            </div>
+                          )}
                           {producto.imagen_url ? (
                             <img
                               src={producto.imagen_url}
