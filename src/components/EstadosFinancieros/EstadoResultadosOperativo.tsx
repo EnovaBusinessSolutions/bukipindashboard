@@ -526,52 +526,91 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
+              {/* Header */}
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
+              
+              {/* Ingresos Totales */}
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Ingresos Totales</span>
-                <span>${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right font-medium">100.00%</span>
               </div>
-              <div className="flex justify-between items-center">
+              
+              {/* Costos de Ventas */}
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Costos de Ventas</span>
-                <span>(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center font-medium">
+              
+              {/* Utilidad Bruta */}
+              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
                 <span>Utilidad Bruta</span>
-                <span>${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center">
+              
+              {/* Gastos Operativos */}
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Gastos Operativos</span>
-                <span>(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center font-medium">
+              
+              {/* EBITDA */}
+              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
                 <span>EBITDA</span>
-                <span>${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center">
+              
+              {/* Depreciaciones */}
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Depreciaciones</span>
-                <span>(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center font-medium">
+              
+              {/* EBIT */}
+              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
                 <span>EBIT</span>
-                <span>${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center">
+              
+              {/* Costo Financiero */}
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Costo Financiero</span>
-                <span>(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center font-medium">
+              
+              {/* Utilidad Antes de Impuestos */}
+              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
                 <span>Utilidad Antes de Impuestos</span>
-                <span>${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
-              <div className="flex justify-between items-center">
+              
+              {/* Impuestos */}
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Impuestos</span>
-                <span>(${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
+              
+              {/* Utilidad Neta */}
               <div className="border-t-2 pt-3 mt-4">
-                <div className={`flex justify-between items-center font-bold text-xl ${
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold text-xl ${
                   utilidadNeta >= 0 ? "text-green-600" : "text-red-600"
                 }`}>
-                  <span>{utilidadNeta >= 0 ? "Utilidad Neta del Ejercicio" : "Pérdida Neta del Ejercicio"}</span>
-                  <span>${utilidadNeta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span>{utilidadNeta >= 0 ? "Utilidad Neta" : "Pérdida Neta"}</span>
+                  <span className="text-right">${utilidadNeta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadNeta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
