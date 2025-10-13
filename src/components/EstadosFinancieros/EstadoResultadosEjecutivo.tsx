@@ -77,19 +77,14 @@ const EstadoResultadosEjecutivo = () => {
   };
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            Estado de Resultados Ejecutivo
-            {utilidadNeta >= 0 ? (
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            ) : (
-              <TrendingDown className="h-8 w-8 text-red-600" />
-            )}
-          </h1>
-          <p className="text-muted-foreground">Vista ejecutiva consolidada del período</p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        {utilidadNeta >= 0 ? (
+          <TrendingUp className="h-8 w-8 text-green-600" />
+        ) : (
+          <TrendingDown className="h-8 w-8 text-red-600" />
+        )}
+        <p className="text-muted-foreground">Vista ejecutiva consolidada del período</p>
       </div>
 
       <Card className="border-2">

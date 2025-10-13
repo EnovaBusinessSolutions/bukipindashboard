@@ -51,10 +51,6 @@ const Sidebar = () => {
     path: "/estados-financieros/resultados",
     active: location.pathname === "/estados-financieros/resultados"
   }, {
-    name: "Estado de Resultados Ejecutivo",
-    path: "/estados-financieros/resultados-ejecutivo",
-    active: location.pathname === "/estados-financieros/resultados-ejecutivo"
-  }, {
     name: "Balance General",
     path: "/estados-financieros/balance",
     active: location.pathname === "/estados-financieros/balance"
