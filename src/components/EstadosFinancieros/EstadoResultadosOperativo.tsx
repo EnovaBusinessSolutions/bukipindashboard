@@ -118,10 +118,28 @@ const EstadoResultadosOperativo = () => {
     return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  // Filtrar cuentas de gastos (5100-5999)
-  const cuentasGastos = cuentasFlat.filter(cuenta => {
+  // Filtrar cuentas de gastos operativos (5100-5108)
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
     const codigo = parseInt(cuenta.codigo);
-    return codigo >= 5100 && cuenta.estado_financiero === "Estado de Resultados";
+    return codigo >= 5100 && codigo <= 5108 && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  // Filtrar cuentas de depreciaciones y amortizaciones (5109)
+  const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return codigo === 5109 && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  // Filtrar cuentas de costo financiero (5110-5199)
+  const cuentasCostoFinanciero = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return codigo >= 5110 && codigo <= 5199 && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  // Filtrar cuentas de impuestos (5200-5999)
+  const cuentasImpuestos = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return codigo >= 5200 && cuenta.estado_financiero === "Estado de Resultados";
   });
 
   const calcularTotalIngresos = () => {
@@ -138,8 +156,29 @@ const EstadoResultadosOperativo = () => {
     }, 0);
   };
 
-  const calcularTotalGastos = () => {
-    return cuentasGastos.reduce((total, cuenta) => {
+  const calcularTotalGastosOperativos = () => {
+    return cuentasGastosOperativos.reduce((total, cuenta) => {
+      const saldo = obtenerSaldo(cuenta.codigo);
+      return total + saldo;
+    }, 0);
+  };
+
+  const calcularTotalDepreciaciones = () => {
+    return cuentasDepreciaciones.reduce((total, cuenta) => {
+      const saldo = obtenerSaldo(cuenta.codigo);
+      return total + saldo;
+    }, 0);
+  };
+
+  const calcularTotalCostoFinanciero = () => {
+    return cuentasCostoFinanciero.reduce((total, cuenta) => {
+      const saldo = obtenerSaldo(cuenta.codigo);
+      return total + saldo;
+    }, 0);
+  };
+
+  const calcularTotalImpuestos = () => {
+    return cuentasImpuestos.reduce((total, cuenta) => {
       const saldo = obtenerSaldo(cuenta.codigo);
       return total + saldo;
     }, 0);
@@ -147,9 +186,16 @@ const EstadoResultadosOperativo = () => {
 
   const totalIngresos = calcularTotalIngresos();
   const totalCostos = calcularTotalCostos();
-  const totalGastos = calcularTotalGastos();
+  const totalGastosOperativos = calcularTotalGastosOperativos();
+  const totalDepreciaciones = calcularTotalDepreciaciones();
+  const totalCostoFinanciero = calcularTotalCostoFinanciero();
+  const totalImpuestos = calcularTotalImpuestos();
+  
   const utilidadBruta = totalIngresos - totalCostos;
-  const utilidadNeta = utilidadBruta - totalGastos;
+  const ebitda = utilidadBruta - totalGastosOperativos;
+  const ebit = ebitda - totalDepreciaciones;
+  const utilidadAntesImpuestos = ebit - totalCostoFinanciero;
+  const utilidadNeta = utilidadAntesImpuestos - totalImpuestos;
   
   // Utilidad del ejercicio desde transacciones automáticas (debe coincidir con Balance General)
   const utilidadEjercicio = saldosAutomaticos?.utilidad || 0;
@@ -262,7 +308,7 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {cuentasGastos.map((cuenta) => {
+              {cuentasGastosOperativos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
                   <div key={cuenta.codigo} className="flex justify-between items-center">
@@ -278,7 +324,193 @@ const EstadoResultadosOperativo = () => {
               <div className="border-t pt-2 mt-4">
                 <div className="flex justify-between items-center font-bold text-red-600">
                   <span>Total Gastos Operativos</span>
-                  <span>${totalGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span>${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* EBITDA */}
+        <Card>
+          <CardHeader>
+            <CardTitle className={ebitda >= 0 ? "text-blue-600" : "text-red-600"}>
+              EBITDA
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span>Utilidad Bruta</span>
+                <span>${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>(-) Gastos Operativos</span>
+                <span>(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+              </div>
+              <div className="border-t pt-2 mt-4">
+                <div className={`flex justify-between items-center font-bold ${
+                  ebitda >= 0 ? "text-blue-600" : "text-red-600"
+                }`}>
+                  <span>EBITDA</span>
+                  <span>${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Depreciaciones y Amortizaciones */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-purple-600">Depreciaciones y Amortizaciones</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {cuentasDepreciaciones.map((cuenta) => {
+                const saldo = obtenerSaldo(cuenta.codigo);
+                return (
+                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                    <span className="text-sm">
+                      {cuenta.codigo} - {cuenta.nombre}
+                    </span>
+                    <span className="font-medium">
+                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                );
+              })}
+              {cuentasDepreciaciones.length === 0 && (
+                <div className="text-sm text-muted-foreground">No hay depreciaciones registradas</div>
+              )}
+              <div className="border-t pt-2 mt-4">
+                <div className="flex justify-between items-center font-bold text-purple-600">
+                  <span>Total Depreciaciones</span>
+                  <span>${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* EBIT */}
+        <Card>
+          <CardHeader>
+            <CardTitle className={ebit >= 0 ? "text-blue-600" : "text-red-600"}>
+              EBIT (Utilidad Operativa)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span>EBITDA</span>
+                <span>${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>(-) Depreciaciones</span>
+                <span>(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+              </div>
+              <div className="border-t pt-2 mt-4">
+                <div className={`flex justify-between items-center font-bold ${
+                  ebit >= 0 ? "text-blue-600" : "text-red-600"
+                }`}>
+                  <span>EBIT</span>
+                  <span>${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Costo Financiero */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-amber-600">Costo Financiero</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {cuentasCostoFinanciero.map((cuenta) => {
+                const saldo = obtenerSaldo(cuenta.codigo);
+                return (
+                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                    <span className="text-sm">
+                      {cuenta.codigo} - {cuenta.nombre}
+                    </span>
+                    <span className="font-medium">
+                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                );
+              })}
+              {cuentasCostoFinanciero.length === 0 && (
+                <div className="text-sm text-muted-foreground">No hay costos financieros registrados</div>
+              )}
+              <div className="border-t pt-2 mt-4">
+                <div className="flex justify-between items-center font-bold text-amber-600">
+                  <span>Total Costo Financiero</span>
+                  <span>${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Utilidad Antes de Impuestos */}
+        <Card>
+          <CardHeader>
+            <CardTitle className={utilidadAntesImpuestos >= 0 ? "text-blue-600" : "text-red-600"}>
+              Utilidad Antes de Impuestos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span>EBIT</span>
+                <span>${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>(-) Costo Financiero</span>
+                <span>(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+              </div>
+              <div className="border-t pt-2 mt-4">
+                <div className={`flex justify-between items-center font-bold ${
+                  utilidadAntesImpuestos >= 0 ? "text-blue-600" : "text-red-600"
+                }`}>
+                  <span>Utilidad Antes de Impuestos</span>
+                  <span>${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Impuestos */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-rose-600">Impuestos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {cuentasImpuestos.map((cuenta) => {
+                const saldo = obtenerSaldo(cuenta.codigo);
+                return (
+                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                    <span className="text-sm">
+                      {cuenta.codigo} - {cuenta.nombre}
+                    </span>
+                    <span className="font-medium">
+                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                );
+              })}
+              {cuentasImpuestos.length === 0 && (
+                <div className="text-sm text-muted-foreground">No hay impuestos registrados</div>
+              )}
+              <div className="border-t pt-2 mt-4">
+                <div className="flex justify-between items-center font-bold text-rose-600">
+                  <span>Total Impuestos</span>
+                  <span>${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -288,7 +520,7 @@ const EstadoResultadosOperativo = () => {
         {/* Utilidad Neta del Período */}
         <Card className="border-2 border-primary">
           <CardHeader>
-            <CardTitle className={utilidadEjercicio >= 0 ? "text-green-600" : "text-red-600"}>
+            <CardTitle className={utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}>
               Resultado del Período
             </CardTitle>
           </CardHeader>
@@ -308,24 +540,40 @@ const EstadoResultadosOperativo = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span>(-) Gastos Operativos</span>
-                <span>(${totalGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span>(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+              </div>
+              <div className="flex justify-between items-center font-medium">
+                <span>EBITDA</span>
+                <span>${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>(-) Depreciaciones</span>
+                <span>(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+              </div>
+              <div className="flex justify-between items-center font-medium">
+                <span>EBIT</span>
+                <span>${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>(-) Costo Financiero</span>
+                <span>(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+              </div>
+              <div className="flex justify-between items-center font-medium">
+                <span>Utilidad Antes de Impuestos</span>
+                <span>${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>(-) Impuestos</span>
+                <span>(${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
               </div>
               <div className="border-t-2 pt-3 mt-4">
                 <div className={`flex justify-between items-center font-bold text-xl ${
-                  utilidadEjercicio >= 0 ? "text-green-600" : "text-red-600"
+                  utilidadNeta >= 0 ? "text-green-600" : "text-red-600"
                 }`}>
-                  <span>{utilidadEjercicio >= 0 ? "Utilidad Neta del Ejercicio" : "Pérdida Neta del Ejercicio"}</span>
-                  <span>${utilidadEjercicio.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span>{utilidadNeta >= 0 ? "Utilidad Neta del Ejercicio" : "Pérdida Neta del Ejercicio"}</span>
+                  <span>${utilidadNeta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
-              {saldosAutomaticos && (
-                <div className="text-xs text-muted-foreground mt-2 pt-2 border-t">
-                  Transacciones: Ingresos ${saldosAutomaticos.ingresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
-                  Costos ${saldosAutomaticos.costos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} - 
-                  Gastos ${saldosAutomaticos.gastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })} = 
-                  ${saldosAutomaticos.utilidad.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
