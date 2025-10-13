@@ -124,16 +124,16 @@ const EstadoResultadosOperativo = () => {
     return ((codigo >= 5100 && codigo <= 5108) || codigo === 5202 || codigo === 5203) && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  // Filtrar cuentas de depreciaciones y amortizaciones (5109)
+  // Filtrar cuentas de depreciaciones y amortizaciones (5109, 5110)
   const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
     const codigo = parseInt(cuenta.codigo);
-    return codigo === 5109 && cuenta.estado_financiero === "Estado de Resultados";
+    return (codigo === 5109 || codigo === 5110) && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  // Filtrar cuentas de costo financiero (5110-5199, 5201)
+  // Filtrar cuentas de costo financiero (5111-5199, 5201)
   const cuentasCostoFinanciero = cuentasFlat.filter(cuenta => {
     const codigo = parseInt(cuenta.codigo);
-    return ((codigo >= 5110 && codigo <= 5199) || codigo === 5201) && cuenta.estado_financiero === "Estado de Resultados";
+    return ((codigo >= 5111 && codigo <= 5199) || codigo === 5201) && cuenta.estado_financiero === "Estado de Resultados";
   });
   
   // Filtrar cuentas de impuestos (5200, 5204+)
