@@ -72,7 +72,7 @@ const RegistroIngresos = () => {
   
   // Estados para alerta de inventario negativo
   const [showNegativeStockDialog, setShowNegativeStockDialog] = useState(false);
-  const [negativeStockData, setNegativeStockData] = useState<{productName: string; requested: number; available: number} | null>(null);
+  const [negativeStockData, setNegativeStockData] = useState<{productName: string; requested: number; available: number; costoPorUnidad: number; costoTotal: number} | null>(null);
   
   // Estado para el período de análisis
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
@@ -319,10 +319,45 @@ const RegistroIngresos = () => {
       const cantidadSolicitada = parseFloat(inventoryQuantity || '1');
       if (cantidadSolicitada > availableStock) {
         const selectedProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
+        
+        // Calcular el costo que se usará para valorar el inventario negativo
+        let costoParaInventario = selectedProduct?.costo_unitario || 0;
+        
+        // Si el producto no tiene costo, calcular el costo promedio histórico
+        if (costoParaInventario === 0) {
+          const { data: movimientos } = await supabase
+            .from('movimientos_inventario')
+            .select('costo_unitario, cantidad, tipo_movimiento')
+            .eq('producto_id', selectedInventoryProductId)
+            .eq('tipo_movimiento', 'compra')
+            .order('created_at', { ascending: false });
+          
+          if (movimientos && movimientos.length > 0) {
+            let totalCosto = 0;
+            let totalCantidad = 0;
+            
+            for (const mov of movimientos) {
+              if (mov.costo_unitario > 0 && mov.cantidad > 0) {
+                totalCosto += mov.costo_unitario * mov.cantidad;
+                totalCantidad += mov.cantidad;
+              }
+            }
+            
+            if (totalCantidad > 0) {
+              costoParaInventario = totalCosto / totalCantidad;
+            }
+          }
+        }
+        
+        const cantidadNegativa = cantidadSolicitada - availableStock;
+        const costoTotal = costoParaInventario * cantidadNegativa;
+        
         setNegativeStockData({
           productName: selectedProduct?.nombre || 'Producto',
           requested: cantidadSolicitada,
-          available: availableStock
+          available: availableStock,
+          costoPorUnidad: costoParaInventario,
+          costoTotal: costoTotal
         });
         setShowNegativeStockDialog(true);
         return;
@@ -940,9 +975,33 @@ const RegistroIngresos = () => {
                   </div>
                 </div>
               </div>
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="font-medium mb-2 text-blue-700 dark:text-blue-400">Impacto en el inventario:</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Costo por unidad:</span>
+                    <span className="font-medium">
+                      {negativeStockData?.costoPorUnidad && negativeStockData.costoPorUnidad > 0 
+                        ? `$${negativeStockData.costoPorUnidad.toFixed(2)}`
+                        : 'Sin costo registrado'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Valor inventario negativo:</span>
+                    <span className="font-bold text-destructive">
+                      -${(negativeStockData?.costoTotal || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  {negativeStockData?.costoPorUnidad === 0 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                      ⚠️ Este producto no tiene costo registrado. Se mostrará sin valor en inventario hasta que registres una compra.
+                    </p>
+                  )}
+                </div>
+              </div>
               <p className="text-sm">
                 Si continúas, el inventario quedará en <strong className="text-destructive">negativo ({(negativeStockData?.available || 0) - (negativeStockData?.requested || 0)} unidades)</strong>. 
-                Esto se reflejará en tu control de inventario.
+                Esto se reflejará en tu control de inventario con el valor mostrado arriba.
               </p>
               <p className="text-sm text-muted-foreground">
                 ¿Deseas continuar con la venta de todas formas?
