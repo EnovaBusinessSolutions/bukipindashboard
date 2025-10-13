@@ -10,18 +10,18 @@ const EstadoResultados = () => {
         <p className="text-muted-foreground">Análisis de ingresos y gastos del período</p>
       </div>
 
-      <Tabs defaultValue="operativo" className="w-full">
+      <Tabs defaultValue="ejecutivo" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
+          <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="operativo" className="mt-6">
-          <EstadoResultadosOperativo />
-        </TabsContent>
         
         <TabsContent value="ejecutivo" className="mt-6">
           <EstadoResultadosEjecutivo />
+        </TabsContent>
+        
+        <TabsContent value="operativo" className="mt-6">
+          <EstadoResultadosOperativo />
         </TabsContent>
       </Tabs>
     </div>

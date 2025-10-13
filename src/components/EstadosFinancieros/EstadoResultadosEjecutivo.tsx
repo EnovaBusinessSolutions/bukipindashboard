@@ -155,36 +155,6 @@ const EstadoResultadosEjecutivo = () => {
             />
           </div>
 
-          {/* Métricas Adicionales */}
-          <div className="mt-8 pt-6 border-t-2 border-slate-300 dark:border-slate-600">
-            <h3 className="text-lg font-semibold mb-4 text-slate-700 dark:text-slate-300">Métricas Clave</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen Bruto</p>
-                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
-                  {ventas > 0 ? ((utilidadBruta / ventas) * 100).toFixed(1) : '0.0'}%
-                </p>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen EBITDA</p>
-                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
-                  {ventas > 0 ? ((ebitda / ventas) * 100).toFixed(1) : '0.0'}%
-                </p>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen EBIT</p>
-                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
-                  {ventas > 0 ? ((ebit / ventas) * 100).toFixed(1) : '0.0'}%
-                </p>
-              </div>
-              <div className={`p-4 rounded-lg border ${utilidadNeta >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800'}`}>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen Neto</p>
-                <p className={`text-lg font-bold ${utilidadNeta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                  {ventas > 0 ? ((utilidadNeta / ventas) * 100).toFixed(1) : '0.0'}%
-                </p>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>
