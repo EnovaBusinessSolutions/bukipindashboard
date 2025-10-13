@@ -219,23 +219,32 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
               {cuentasIngresos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
-                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm">
                       {cuenta.codigo} - {cuenta.nombre}
                     </span>
-                    <span className="font-medium">
+                    <span className="font-medium text-right">
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
               })}
               <div className="border-t pt-2 mt-4">
-                <div className="flex justify-between items-center font-bold text-green-600">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-green-600">
                   <span>Total Ingresos</span>
-                  <span>${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">100.00%</span>
                 </div>
               </div>
             </div>
@@ -249,23 +258,32 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
               {cuentasCostos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
-                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm">
                       {cuenta.codigo} - {cuenta.nombre}
                     </span>
-                    <span className="font-medium">
+                    <span className="font-medium text-right">
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
               })}
               <div className="border-t pt-2 mt-4">
-                <div className="flex justify-between items-center font-bold text-orange-600">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-orange-600">
                   <span>Total Costos</span>
-                  <span>${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalCostos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -281,20 +299,28 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span>Ingresos</span>
-                <span>${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <span>Ingresos</span>
+                <span className="text-right">${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">100.00%</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Costos de Ventas</span>
-                <span>(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
-                <div className={`flex justify-between items-center font-bold ${
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
                   utilidadBruta >= 0 ? "text-blue-600" : "text-red-600"
                 }`}>
                   <span>Utilidad Bruta</span>
-                  <span>${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -308,23 +334,32 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
               {cuentasGastosOperativos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
-                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm">
                       {cuenta.codigo} - {cuenta.nombre}
                     </span>
-                    <span className="font-medium">
+                    <span className="font-medium text-right">
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
               })}
               <div className="border-t pt-2 mt-4">
-                <div className="flex justify-between items-center font-bold text-red-600">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-red-600">
                   <span>Total Gastos Operativos</span>
-                  <span>${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -340,20 +375,28 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span>Utilidad Bruta</span>
-                <span>${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <span>Utilidad Bruta</span>
+                <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Gastos Operativos</span>
-                <span>(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
-                <div className={`flex justify-between items-center font-bold ${
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
                   ebitda >= 0 ? "text-blue-600" : "text-red-600"
                 }`}>
                   <span>EBITDA</span>
-                  <span>${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -367,26 +410,35 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
               {cuentasDepreciaciones.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
-                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm">
                       {cuenta.codigo} - {cuenta.nombre}
                     </span>
-                    <span className="font-medium">
+                    <span className="font-medium text-right">
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
               })}
               {cuentasDepreciaciones.length === 0 && (
-                <div className="text-sm text-muted-foreground">No hay depreciaciones registradas</div>
+                <div className="text-sm text-muted-foreground col-span-3">No hay depreciaciones registradas</div>
               )}
               <div className="border-t pt-2 mt-4">
-                <div className="flex justify-between items-center font-bold text-purple-600">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-purple-600">
                   <span>Total Depreciaciones</span>
-                  <span>${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -402,20 +454,28 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span>EBITDA</span>
-                <span>${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <span>EBITDA</span>
+                <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Depreciaciones</span>
-                <span>(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
-                <div className={`flex justify-between items-center font-bold ${
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
                   ebit >= 0 ? "text-blue-600" : "text-red-600"
                 }`}>
                   <span>EBIT</span>
-                  <span>${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -429,26 +489,35 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
               {cuentasCostoFinanciero.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
-                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm">
                       {cuenta.codigo} - {cuenta.nombre}
                     </span>
-                    <span className="font-medium">
+                    <span className="font-medium text-right">
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
               })}
               {cuentasCostoFinanciero.length === 0 && (
-                <div className="text-sm text-muted-foreground">No hay costos financieros registrados</div>
+                <div className="text-sm text-muted-foreground col-span-3">No hay costos financieros registrados</div>
               )}
               <div className="border-t pt-2 mt-4">
-                <div className="flex justify-between items-center font-bold text-amber-600">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-amber-600">
                   <span>Total Costo Financiero</span>
-                  <span>${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -464,20 +533,28 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span>EBIT</span>
-                <span>${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <span>EBIT</span>
+                <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Costo Financiero</span>
-                <span>(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
-                <div className={`flex justify-between items-center font-bold ${
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
                   utilidadAntesImpuestos >= 0 ? "text-blue-600" : "text-red-600"
                 }`}>
                   <span>Utilidad Antes de Impuestos</span>
-                  <span>${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -491,26 +568,35 @@ const EstadoResultadosOperativo = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
               {cuentasImpuestos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
                 return (
-                  <div key={cuenta.codigo} className="flex justify-between items-center">
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm">
                       {cuenta.codigo} - {cuenta.nombre}
                     </span>
-                    <span className="font-medium">
+                    <span className="font-medium text-right">
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
               })}
               {cuentasImpuestos.length === 0 && (
-                <div className="text-sm text-muted-foreground">No hay impuestos registrados</div>
+                <div className="text-sm text-muted-foreground col-span-3">No hay impuestos registrados</div>
               )}
               <div className="border-t pt-2 mt-4">
-                <div className="flex justify-between items-center font-bold text-rose-600">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-rose-600">
                   <span>Total Impuestos</span>
-                  <span>${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -521,89 +607,29 @@ const EstadoResultadosOperativo = () => {
         <Card className="border-2 border-primary">
           <CardHeader>
             <CardTitle className={utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}>
-              Resultado del Período
+              Utilidad Neta del Período
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {/* Header */}
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Concepto</span>
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ventas</span>
               </div>
               
-              {/* Ingresos Totales */}
               <div className="grid grid-cols-3 gap-4 items-center">
-                <span>Ingresos Totales</span>
-                <span className="text-right">${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right font-medium">100.00%</span>
-              </div>
-              
-              {/* Costos de Ventas */}
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Costos de Ventas</span>
-                <span className="text-right">(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
-              </div>
-              
-              {/* Utilidad Bruta */}
-              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
-                <span>Utilidad Bruta</span>
-                <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-              </div>
-              
-              {/* Gastos Operativos */}
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Gastos Operativos</span>
-                <span className="text-right">(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
-              </div>
-              
-              {/* EBITDA */}
-              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
-                <span>EBITDA</span>
-                <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-              </div>
-              
-              {/* Depreciaciones */}
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Depreciaciones</span>
-                <span className="text-right">(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
-              </div>
-              
-              {/* EBIT */}
-              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
-                <span>EBIT</span>
-                <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-              </div>
-              
-              {/* Costo Financiero */}
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Costo Financiero</span>
-                <span className="text-right">(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
-              </div>
-              
-              {/* Utilidad Antes de Impuestos */}
-              <div className="grid grid-cols-3 gap-4 items-center font-medium bg-blue-50 dark:bg-blue-950/20 px-2 py-1 rounded">
                 <span>Utilidad Antes de Impuestos</span>
                 <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
                 <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
               
-              {/* Impuestos */}
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Impuestos</span>
                 <span className="text-right">(${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
                 <span className="text-right">{totalIngresos !== 0 ? `(${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               
-              {/* Utilidad Neta */}
               <div className="border-t-2 pt-3 mt-4">
                 <div className={`grid grid-cols-3 gap-4 items-center font-bold text-xl ${
                   utilidadNeta >= 0 ? "text-green-600" : "text-red-600"
