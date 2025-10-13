@@ -1,10 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
-import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PeriodType } from "@/pages/EstadoResultados";
+
+interface EstadoResultadosOperativoProps {
+  startDate: Date;
+  endDate: Date;
+  periodType: PeriodType;
+}
 
 interface SaldoCuenta {
   cuenta_codigo: string;
@@ -13,17 +19,70 @@ interface SaldoCuenta {
   saldo: number;
 }
 
-const EstadoResultadosOperativo = () => {
+const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOperativoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
-  const { data: saldosAutomaticos, isLoading: saldosAutomaticosLoading } = useBalanceGeneral();
+
+  // Saldos automáticos de transacciones
+  const { data: saldosAutomaticos, isLoading: saldosAutomaticosLoading } = useQuery({
+    queryKey: ["saldos-automaticos-operativo", startDate, endDate],
+    queryFn: async () => {
+      const startDateStr = startDate.toISOString();
+      const endDateStr = endDate.toISOString();
+
+      // Ingresos
+      const { data: ingresosData } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_neto')
+        .gte('created_at', startDateStr)
+        .lte('created_at', endDateStr);
+
+      const ingresos = ingresosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
+
+      // Costos
+      const { data: costosData } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total')
+        .eq('tipo_egreso', 'costo')
+        .gte('created_at', startDateStr)
+        .lte('created_at', endDateStr);
+
+      const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+
+      // Gastos
+      const { data: gastosData } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total')
+        .eq('tipo_egreso', 'gasto')
+        .gte('created_at', startDateStr)
+        .lte('created_at', endDateStr);
+
+      const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+
+      return { ingresos, costos, gastos };
+    },
+  });
 
   // Saldos de asientos contables manuales
   const { data: saldosAsientos, isLoading: saldosLoading } = useQuery({
-    queryKey: ["saldos-cuentas"],
+    queryKey: ["saldos-asientos-operativo", startDate, endDate],
     queryFn: async () => {
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      const { data: asientos } = await supabase
+        .from("asientos_contables")
+        .select("id")
+        .gte('fecha', startDateStr)
+        .lte('fecha', endDateStr);
+
+      if (!asientos || asientos.length === 0) return {};
+
+      const asientoIds = asientos.map(a => a.id);
+
       const { data, error } = await supabase
         .from("detalle_asientos")
-        .select("cuenta_codigo, debe, haber");
+        .select("cuenta_codigo, debe, haber")
+        .in("asiento_id", asientoIds);
 
       if (error) throw error;
 
@@ -196,9 +255,6 @@ const EstadoResultadosOperativo = () => {
   const ebit = ebitda - totalDepreciaciones;
   const utilidadAntesImpuestos = ebit - totalCostoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - totalImpuestos;
-  
-  // Utilidad del ejercicio desde transacciones automáticas (debe coincidir con Balance General)
-  const utilidadEjercicio = saldosAutomaticos?.utilidad || 0;
 
   return (
     <div className="space-y-6">

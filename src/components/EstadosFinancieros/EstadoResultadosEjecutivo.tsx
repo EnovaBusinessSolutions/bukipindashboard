@@ -1,11 +1,122 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
+import { useCuentas } from "@/hooks/useCuentas";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { PeriodType } from "@/pages/EstadoResultados";
 
-const EstadoResultadosEjecutivo = () => {
-  const { data: saldosAutomaticos, isLoading } = useBalanceGeneral();
+interface EstadoResultadosEjecutivoProps {
+  startDate: Date;
+  endDate: Date;
+  periodType: PeriodType;
+}
 
-  if (isLoading) {
+interface SaldoCuenta {
+  cuenta_codigo: string;
+  debe_total: number;
+  haber_total: number;
+  saldo: number;
+}
+
+const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecutivoProps) => {
+  const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
+
+  // Saldos automáticos de transacciones
+  const { data: saldosAutomaticos, isLoading: saldosAutomaticosLoading } = useQuery({
+    queryKey: ["saldos-automaticos-ejecutivo", startDate, endDate],
+    queryFn: async () => {
+      const startDateStr = startDate.toISOString();
+      const endDateStr = endDate.toISOString();
+
+      // Ingresos
+      const { data: ingresosData } = await supabase
+        .from('transacciones_ingresos')
+        .select('monto_neto')
+        .gte('created_at', startDateStr)
+        .lte('created_at', endDateStr);
+
+      const ingresos = ingresosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
+
+      // Costos
+      const { data: costosData } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total')
+        .eq('tipo_egreso', 'costo')
+        .gte('created_at', startDateStr)
+        .lte('created_at', endDateStr);
+
+      const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+
+      // Gastos
+      const { data: gastosData } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total')
+        .eq('tipo_egreso', 'gasto')
+        .gte('created_at', startDateStr)
+        .lte('created_at', endDateStr);
+
+      const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+
+      return { ingresos, costos, gastos };
+    },
+  });
+
+  // Saldos de asientos contables manuales
+  const { data: saldosAsientos, isLoading: saldosLoading } = useQuery({
+    queryKey: ["saldos-asientos-ejecutivo", startDate, endDate],
+    queryFn: async () => {
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      const { data: asientos } = await supabase
+        .from("asientos_contables")
+        .select("id")
+        .gte('fecha', startDateStr)
+        .lte('fecha', endDateStr);
+
+      if (!asientos || asientos.length === 0) return {};
+
+      const asientoIds = asientos.map(a => a.id);
+
+      const { data, error } = await supabase
+        .from("detalle_asientos")
+        .select("cuenta_codigo, debe, haber")
+        .in("asiento_id", asientoIds);
+
+      if (error) throw error;
+
+      const saldosPorCuenta: { [key: string]: SaldoCuenta } = {};
+
+      data?.forEach((detalle) => {
+        const codigo = detalle.cuenta_codigo;
+        if (!saldosPorCuenta[codigo]) {
+          saldosPorCuenta[codigo] = {
+            cuenta_codigo: codigo,
+            debe_total: 0,
+            haber_total: 0,
+            saldo: 0,
+          };
+        }
+        saldosPorCuenta[codigo].debe_total += Number(detalle.debe || 0);
+        saldosPorCuenta[codigo].haber_total += Number(detalle.haber || 0);
+      });
+
+      // Calcular saldos finales según naturaleza de la cuenta
+      Object.values(saldosPorCuenta).forEach((cuenta) => {
+        const codigo = cuenta.cuenta_codigo;
+        
+        if (codigo.startsWith("4")) {
+          cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
+        } else if (codigo.startsWith("5")) {
+          cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
+        }
+      });
+
+      return saldosPorCuenta;
+    },
+  });
+
+  if (cuentasLoading || saldosLoading || saldosAutomaticosLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -13,17 +124,76 @@ const EstadoResultadosEjecutivo = () => {
     );
   }
 
-  const ventas = saldosAutomaticos?.ingresos || 0;
-  const costoVentas = saldosAutomaticos?.costos || 0;
-  const gastos = saldosAutomaticos?.gastos || 0;
+  const cuentasFlat = cuentasData?.cuentasFlat || [];
+
+  // Función para obtener el saldo de una cuenta (combinando asientos manuales y automáticos)
+  const obtenerSaldo = (codigoCuenta: string): number => {
+    const saldoAsiento = saldosAsientos?.[codigoCuenta]?.saldo || 0;
+    let saldoAutomatico = 0;
+
+    if (!saldosAutomaticos) return saldoAsiento;
+
+    // Mapear saldos automáticos a cuentas específicas
+    if (codigoCuenta.startsWith("4")) {
+      if (codigoCuenta === "4001") {
+        saldoAutomatico = saldosAutomaticos.ingresos;
+      }
+    } else if (codigoCuenta.startsWith("5")) {
+      const codigoNum = parseInt(codigoCuenta);
+      if (codigoNum >= 5001 && codigoNum <= 5099) {
+        if (codigoCuenta === "5001") {
+          saldoAutomatico = saldosAutomaticos.costos;
+        }
+      } else if (codigoNum >= 5100) {
+        if (codigoCuenta === "5100") {
+          saldoAutomatico = saldosAutomaticos.gastos;
+        }
+      }
+    }
+
+    return saldoAsiento + saldoAutomatico;
+  };
+
+  // Filtrar y calcular totales
+  const cuentasIngresos = cuentasFlat.filter(cuenta => 
+    cuenta.codigo.startsWith("4") && cuenta.estado_financiero === "Estado de Resultados"
+  );
   
+  const cuentasCostos = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return ((codigo >= 5100 && codigo <= 5108) || codigo === 5202 || codigo === 5203) && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return (codigo === 5109 || codigo === 5110) && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  const cuentasCostoFinanciero = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return ((codigo >= 5111 && codigo <= 5199) || codigo === 5201) && cuenta.estado_financiero === "Estado de Resultados";
+  });
+  
+  const cuentasImpuestos = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return (codigo === 5200 || codigo >= 5204) && cuenta.estado_financiero === "Estado de Resultados";
+  });
+
+  const ventas = cuentasIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const costoVentas = cuentasCostos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const gastosOperativos = cuentasGastosOperativos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const utilidadBruta = ventas - costoVentas;
-  const ebitda = utilidadBruta - gastos;
-  const depreciaciones = 0; // Por implementar con inversiones CAPEX
+  const ebitda = utilidadBruta - gastosOperativos;
+  const depreciaciones = cuentasDepreciaciones.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const ebit = ebitda - depreciaciones;
-  const costoFinanciero = 0; // Por implementar con gastos financieros
+  const costoFinanciero = cuentasCostoFinanciero.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const utilidadAntesImpuestos = ebit - costoFinanciero;
-  const impuestos = 0; // Por implementar cálculo de impuestos
+  const impuestos = cuentasImpuestos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
   const formatCurrency = (value: number) => {
@@ -115,7 +285,7 @@ const EstadoResultadosEjecutivo = () => {
             <LineItem label="Utilidad Bruta" value={utilidadBruta} isSubtotal />
 
             {/* Gastos Operativos */}
-            <LineItem label="(-) Gastos Operativos" value={gastos} isNegative />
+            <LineItem label="(-) Gastos Operativos" value={gastosOperativos} isNegative />
 
             {/* EBITDA */}
             <LineItem 
