@@ -208,7 +208,14 @@ const AnalyticaInventario = () => {
                   />
                   <YAxis tickFormatter={(value) => formatPrice(value)} />
                   <Tooltip formatter={(value) => [formatPrice(Number(value)), "Valor"]} />
-                  <Bar dataKey="valor" fill={chartColors.primary} />
+                  <Bar dataKey="valor">
+                    {datosValorPorProducto.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.valor < 0 ? chartColors.warning : chartColors.primary} 
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
