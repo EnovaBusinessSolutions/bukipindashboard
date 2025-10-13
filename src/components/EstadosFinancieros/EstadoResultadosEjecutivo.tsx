@@ -48,10 +48,10 @@ const EstadoResultadosEjecutivo = () => {
     indent?: number;
   }) => {
     const getColor = () => {
-      if (isTotal) return value >= 0 ? "text-green-600" : "text-red-600";
-      if (isSubtotal) return value >= 0 ? "text-blue-600" : "text-red-600";
-      if (isNegative) return "text-orange-600";
-      return "text-foreground";
+      if (isTotal) return value >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400";
+      if (isSubtotal) return value >= 0 ? "text-blue-700 dark:text-blue-400" : "text-rose-700 dark:text-rose-400";
+      if (isNegative) return "text-slate-600 dark:text-slate-400";
+      return "text-slate-700 dark:text-slate-300";
     };
 
     const getFontWeight = () => {
@@ -61,16 +61,21 @@ const EstadoResultadosEjecutivo = () => {
       return "";
     };
 
+    const percentage = ventas > 0 ? ((value / ventas) * 100).toFixed(2) : '0.00';
+
     return (
       <div 
-        className={`flex justify-between items-center py-3 ${indent > 0 ? `ml-${indent * 4}` : ''}`}
+        className={`grid grid-cols-3 gap-4 items-center py-3 ${isSubtotal || isTotal ? 'border-t-2 border-slate-300 dark:border-slate-600 pt-4' : ''}`}
         style={{ marginLeft: indent > 0 ? `${indent * 1}rem` : '0' }}
       >
         <span className={`${getFontWeight()} ${getColor()}`}>
           {label}
         </span>
-        <span className={`${getFontWeight()} ${getColor()}`}>
+        <span className={`${getFontWeight()} ${getColor()} text-right`}>
           {isNegative && value !== 0 ? `(${formatCurrency(value)})` : formatCurrency(value)}
+        </span>
+        <span className={`${getFontWeight()} ${getColor()} text-right`}>
+          {isNegative && value !== 0 ? `(${percentage}%)` : `${percentage}%`}
         </span>
       </div>
     );
@@ -93,21 +98,24 @@ const EstadoResultadosEjecutivo = () => {
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-1">
+            {/* Header */}
+            <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
+              <span>Concepto</span>
+              <span className="text-right">Monto</span>
+              <span className="text-right">% Ventas</span>
+            </div>
+
             {/* Ventas */}
             <LineItem label="Ventas" value={ventas} isHeader />
-            <div className="border-b border-border my-2" />
 
             {/* Costo de Ventas */}
             <LineItem label="(-) Costo de Ventas" value={costoVentas} isNegative />
-            <div className="border-b border-border my-2" />
 
             {/* Utilidad Bruta */}
             <LineItem label="Utilidad Bruta" value={utilidadBruta} isSubtotal />
-            <div className="border-b-2 border-border my-3" />
 
             {/* Gastos Operativos */}
             <LineItem label="(-) Gastos Operativos" value={gastos} isNegative />
-            <div className="border-b border-border my-2" />
 
             {/* EBITDA */}
             <LineItem 
@@ -115,11 +123,9 @@ const EstadoResultadosEjecutivo = () => {
               value={ebitda} 
               isSubtotal 
             />
-            <div className="border-b-2 border-border my-3" />
 
             {/* Depreciaciones */}
             <LineItem label="(-) Depreciaciones y Amortizaciones" value={depreciaciones} isNegative />
-            <div className="border-b border-border my-2" />
 
             {/* EBIT */}
             <LineItem 
@@ -127,11 +133,9 @@ const EstadoResultadosEjecutivo = () => {
               value={ebit} 
               isSubtotal 
             />
-            <div className="border-b-2 border-border my-3" />
 
             {/* Costo Financiero */}
             <LineItem label="(-) Costo Financiero" value={costoFinanciero} isNegative />
-            <div className="border-b border-border my-2" />
 
             {/* Utilidad Antes de Impuestos */}
             <LineItem 
@@ -139,11 +143,9 @@ const EstadoResultadosEjecutivo = () => {
               value={utilidadAntesImpuestos} 
               isSubtotal 
             />
-            <div className="border-b-2 border-border my-3" />
 
             {/* Impuestos */}
             <LineItem label="(-) Impuestos" value={impuestos} isNegative />
-            <div className="border-b-2 border-primary my-4" />
 
             {/* Utilidad Neta */}
             <LineItem 
@@ -154,30 +156,30 @@ const EstadoResultadosEjecutivo = () => {
           </div>
 
           {/* Métricas Adicionales */}
-          <div className="mt-8 pt-6 border-t-2 border-border">
-            <h3 className="text-lg font-semibold mb-4 text-muted-foreground">Métricas Clave</h3>
+          <div className="mt-8 pt-6 border-t-2 border-slate-300 dark:border-slate-600">
+            <h3 className="text-lg font-semibold mb-4 text-slate-700 dark:text-slate-300">Métricas Clave</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Margen Bruto</p>
-                <p className="text-lg font-bold text-blue-600">
+              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen Bruto</p>
+                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
                   {ventas > 0 ? ((utilidadBruta / ventas) * 100).toFixed(1) : '0.0'}%
                 </p>
               </div>
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Margen EBITDA</p>
-                <p className="text-lg font-bold text-blue-600">
+              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen EBITDA</p>
+                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
                   {ventas > 0 ? ((ebitda / ventas) * 100).toFixed(1) : '0.0'}%
                 </p>
               </div>
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Margen EBIT</p>
-                <p className="text-lg font-bold text-blue-600">
+              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen EBIT</p>
+                <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
                   {ventas > 0 ? ((ebit / ventas) * 100).toFixed(1) : '0.0'}%
                 </p>
               </div>
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Margen Neto</p>
-                <p className={`text-lg font-bold ${utilidadNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`p-4 rounded-lg border ${utilidadNeta >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800'}`}>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Margen Neto</p>
+                <p className={`text-lg font-bold ${utilidadNeta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                   {ventas > 0 ? ((utilidadNeta / ventas) * 100).toFixed(1) : '0.0'}%
                 </p>
               </div>
