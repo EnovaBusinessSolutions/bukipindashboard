@@ -379,17 +379,19 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   ];
 
   const treemapData = [
-    { name: 'Ventas', size: ventas, fill: '#10b981' },
-    { name: 'Costos', size: costoVentas, fill: '#ef4444' },
-    { name: 'Gastos Op.', size: gastosOperativos, fill: '#f97316' },
-    { name: 'Deprec.', size: depreciaciones, fill: '#f59e0b' },
-    { name: 'Costo Fin.', size: costoFinanciero, fill: '#eab308' },
-    { name: 'Impuestos', size: impuestos, fill: '#84cc16' },
-    { name: 'Utilidad Neta', size: Math.abs(utilidadNeta), fill: utilidadNeta >= 0 ? '#059669' : '#dc2626' },
-  ];
+    { name: 'Ventas', size: Math.max(ventas, 0), fill: '#10b981' },
+    { name: 'Costos', size: Math.max(costoVentas, 0), fill: '#ef4444' },
+    { name: 'Gastos Op.', size: Math.max(gastosOperativos, 0), fill: '#f97316' },
+    { name: 'Deprec.', size: Math.max(depreciaciones, 0), fill: '#f59e0b' },
+    { name: 'Costo Fin.', size: Math.max(costoFinanciero, 0), fill: '#eab308' },
+    { name: 'Impuestos', size: Math.max(impuestos, 0), fill: '#84cc16' },
+    { name: 'Utilidad Neta', size: Math.max(Math.abs(utilidadNeta), 1), fill: utilidadNeta >= 0 ? '#059669' : '#dc2626' },
+  ].filter(item => item.size > 0);
 
   const CustomTreemapContent = (props: any) => {
     const { x, y, width, height, name, size } = props;
+    
+    if (!size || isNaN(size) || size <= 0) return null;
     
     return (
       <g>
@@ -404,14 +406,14 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
             strokeWidth: 2,
           }}
         />
-        {width > 50 && height > 30 && (
+        {width > 60 && height > 40 && (
           <>
             <text
               x={x + width / 2}
               y={y + height / 2 - 10}
               textAnchor="middle"
               fill="#fff"
-              fontSize={12}
+              fontSize={13}
               fontWeight="bold"
             >
               {name}
@@ -421,9 +423,9 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
               y={y + height / 2 + 10}
               textAnchor="middle"
               fill="#fff"
-              fontSize={11}
+              fontSize={12}
             >
-              {formatCurrency(size)}
+              {formatCurrency(Number(size) || 0)}
             </text>
           </>
         )}
