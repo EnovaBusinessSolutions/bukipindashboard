@@ -376,14 +376,14 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     { name: 'UTILIDAD NETA', valor: utilidadNeta, tipo: 'final' },
   ];
 
-  // Datos para Funnel Chart (solo valores positivos descendentes)
+  // Datos para Funnel Chart (solo valores positivos descendentes) - Paleta armónica
   const funnelData = [
-    { name: 'Ventas', value: ventas, fill: '#10b981' },
-    { name: 'Utilidad Bruta', value: utilidadBruta, fill: '#3b82f6' },
+    { name: 'Ventas', value: ventas, fill: '#3b82f6' },
+    { name: 'Utilidad Bruta', value: utilidadBruta, fill: '#6366f1' },
     { name: 'EBITDA', value: ebitda, fill: '#8b5cf6' },
-    { name: 'EBIT', value: ebit, fill: '#f59e0b' },
-    { name: 'Util. Antes Imp.', value: utilidadAntesImpuestos, fill: '#ec4899' },
-    { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: utilidadNeta >= 0 ? '#059669' : '#dc2626' },
+    { name: 'EBIT', value: ebit, fill: '#a855f7' },
+    { name: 'Util. Antes Imp.', value: utilidadAntesImpuestos, fill: '#c026d3' },
+    { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: utilidadNeta >= 0 ? '#d946ef' : '#dc2626' },
   ];
 
   // Datos para Pie Chart
