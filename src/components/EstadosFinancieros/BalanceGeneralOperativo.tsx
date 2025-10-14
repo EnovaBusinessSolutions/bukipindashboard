@@ -246,7 +246,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
         </AlertDescription>
       </Alert>
 
-        {/* Activo Circulante */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Lado Izquierdo - Activos */}
+        <div className="space-y-6">
+          {/* Activo Circulante */}
         <Card className="border-2">
           <CardHeader className="bg-blue-50 dark:bg-blue-950">
             <CardTitle className="text-blue-700">Activo Circulante</CardTitle>
@@ -357,21 +360,24 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
           </CardContent>
         </Card>
 
-        {/* Total Activos */}
-        <Card className="border-2 border-blue-400 dark:border-blue-500">
-          <CardHeader className="bg-blue-100 dark:bg-blue-900">
-            <CardTitle className="text-blue-800">Total Activo</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl text-blue-800">
-              <span>Total Activos</span>
-              <span className="text-right">${totalActivos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-              <span className="text-right">100.00%</span>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Total Activos */}
+          <Card className="border-2 border-blue-400 dark:border-blue-500">
+            <CardHeader className="bg-blue-100 dark:bg-blue-900">
+              <CardTitle className="text-blue-800">Total Activo</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl text-blue-800">
+                <span>Total Activos</span>
+                <span className="text-right">${totalActivos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">100.00%</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Pasivo Corto Plazo */}
+        {/* Lado Derecho - Pasivos y Capital Contable */}
+        <div className="space-y-6">
+          {/* Pasivo Corto Plazo */}
         <Card className="border-2">
           <CardHeader className="bg-red-50 dark:bg-red-950">
             <CardTitle className="text-red-700">Pasivo Corto Plazo</CardTitle>
@@ -502,28 +508,32 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
           </CardContent>
         </Card>
 
-        {/* Total Pasivo + Capital Contable */}
-        <Card className="border-2 border-slate-400 dark:border-slate-500">
-          <CardHeader className="bg-slate-100 dark:bg-slate-800">
-            <CardTitle>Total Pasivo + Capital Contable</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl">
-              <span>Total</span>
-              <span className="text-right">${totalPasivoMasCapital.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-              <span className="text-right">{totalActivos > 0 ? ((totalPasivoMasCapital / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
-            </div>
-            <div className="mt-4 text-center">
-              <div className={`font-semibold ${balanceCuadrado ? 'text-green-600' : 'text-amber-600'}`}>
-                {balanceCuadrado ? (
-                  '✓ Balance Cuadrado'
-                ) : (
-                  `⚠ Diferencia: $${Math.abs(totalActivos - totalPasivoMasCapital).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`
-                )}
+          {/* Total Pasivo + Capital Contable */}
+          <Card className="border-2 border-slate-400 dark:border-slate-500">
+            <CardHeader className="bg-slate-100 dark:bg-slate-800">
+              <CardTitle>Total Pasivo + Capital Contable</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl">
+                <span>Total</span>
+                <span className="text-right">${totalPasivoMasCapital.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalActivos > 0 ? ((totalPasivoMasCapital / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Balance Status */}
+      <div className="mt-6 text-center">
+        <div className={`font-semibold text-lg ${balanceCuadrado ? 'text-green-600' : 'text-amber-600'}`}>
+          {balanceCuadrado ? (
+            '✓ Balance Cuadrado'
+          ) : (
+            `⚠ Diferencia: $${Math.abs(totalActivos - totalPasivoMasCapital).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`
+          )}
+        </div>
+      </div>
     </div>
   );
 };

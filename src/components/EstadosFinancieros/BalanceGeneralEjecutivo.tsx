@@ -294,51 +294,71 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
         </p>
       </div>
 
-      <Card className="border-2">
-        <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">Balance General</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="space-y-1">
-            {/* Header */}
-            <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
-              <span>Concepto</span>
-              <span className="text-right">Monto</span>
-              <span className="text-right">% Activos</span>
-            </div>
-
-            {/* Activos */}
-            <LineItem label="Activo Circulante" value={totalActivoCirculante} />
-            <LineItem label="Activo Fijo" value={totalActivoFijo} />
-            <LineItem label="Activo Diferido / Largo Plazo" value={totalActivoDiferido} />
-            <LineItem label="Total Activo" value={totalActivos} isSubtotal />
-
-            {/* Pasivos */}
-            <LineItem label="Pasivo Corto Plazo" value={totalPasivoCortoPlazo} />
-            <LineItem label="Pasivo Largo Plazo" value={totalPasivoLargoPlazo} />
-            <LineItem label="Total Pasivo" value={totalPasivos} isSubtotal />
-
-            {/* Capital Contable */}
-            <LineItem label="Capital Contable" value={totalCapitalContable} />
-            <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
-            <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
-
-            {/* Total Pasivo + Capital Contable */}
-            <LineItem label="Total Pasivo + Capital Contable" value={totalPasivoMasCapital} isTotal />
-
-            {/* Balance Status */}
-            <div className="mt-6 pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-              <div className={`text-center font-semibold ${balanceCuadrado ? 'text-green-600' : 'text-amber-600'}`}>
-                {balanceCuadrado ? (
-                  '✓ Balance Cuadrado'
-                ) : (
-                  `⚠ Diferencia: ${formatCurrency(totalActivos - totalPasivoMasCapital)}`
-                )}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Lado Izquierdo - Activos */}
+        <Card className="border-2">
+          <CardHeader className="bg-blue-50 dark:bg-blue-950">
+            <CardTitle className="text-2xl text-blue-700">Activos</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-1">
+              {/* Header */}
+              <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">%</span>
               </div>
+
+              {/* Activos */}
+              <LineItem label="Activo Circulante" value={totalActivoCirculante} />
+              <LineItem label="Activo Fijo" value={totalActivoFijo} />
+              <LineItem label="Activo Diferido / Largo Plazo" value={totalActivoDiferido} />
+              <LineItem label="Total Activo" value={totalActivos} isTotal />
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Lado Derecho - Pasivos y Capital Contable */}
+        <Card className="border-2">
+          <CardHeader className="bg-red-50 dark:bg-red-950">
+            <CardTitle className="text-2xl text-red-700">Pasivo y Capital Contable</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-1">
+              {/* Header */}
+              <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
+                <span>Concepto</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">%</span>
+              </div>
+
+              {/* Pasivos */}
+              <LineItem label="Pasivo Corto Plazo" value={totalPasivoCortoPlazo} />
+              <LineItem label="Pasivo Largo Plazo" value={totalPasivoLargoPlazo} />
+              <LineItem label="Total Pasivo" value={totalPasivos} isSubtotal />
+
+              {/* Capital Contable */}
+              <LineItem label="Capital Contable" value={totalCapitalContable} />
+              <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
+              <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
+
+              {/* Total Pasivo + Capital Contable */}
+              <LineItem label="Total Pasivo + Capital Contable" value={totalPasivoMasCapital} isTotal />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Balance Status */}
+      <div className="mt-6 pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+        <div className={`text-center font-semibold text-lg ${balanceCuadrado ? 'text-green-600' : 'text-amber-600'}`}>
+          {balanceCuadrado ? (
+            '✓ Balance Cuadrado'
+          ) : (
+            `⚠ Diferencia: ${formatCurrency(totalActivos - totalPasivoMasCapital)}`
+          )}
+        </div>
+      </div>
     </div>
   );
 };
