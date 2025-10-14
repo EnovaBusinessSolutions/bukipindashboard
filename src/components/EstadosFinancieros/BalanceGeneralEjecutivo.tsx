@@ -192,27 +192,48 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
     return saldoAsiento + saldoAutomatico;
   };
 
-  // Filtrar cuentas
-  const cuentasActivos = cuentasFlat.filter(cuenta => 
-    cuenta.codigo.startsWith("1") && cuenta.estado_financiero === "Balance General"
+  // Filtrar cuentas por agrupación
+  const activoCirculante = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Activo Circulante" && cuenta.estado_financiero === "Balance General"
   );
   
-  const cuentasPasivos = cuentasFlat.filter(cuenta => 
-    cuenta.codigo.startsWith("2") && cuenta.estado_financiero === "Balance General"
+  const activoFijo = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Activo No Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
-  const cuentasPatrimonio = cuentasFlat.filter(cuenta => 
+  const activoDiferido = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Activo Diferido" && cuenta.estado_financiero === "Balance General"
+  );
+
+  const pasivoCortoPlazo = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Pasivo Circulante" && cuenta.estado_financiero === "Balance General"
+  );
+
+  const pasivoLargoPlazo = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Pasivo No Circulante" && cuenta.estado_financiero === "Balance General"
+  );
+
+  const capitalContable = cuentasFlat.filter(cuenta => 
     cuenta.codigo.startsWith("3") && cuenta.estado_financiero === "Balance General"
   );
 
-  const totalActivos = cuentasActivos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalPasivos = cuentasPasivos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalPatrimonio = cuentasPatrimonio.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const utilidadEjercicio = saldosAutomaticos?.utilidad || 0;
-  const totalPatrimonioConUtilidad = totalPatrimonio + utilidadEjercicio;
-  const totalPasivosMasPatrimonio = totalPasivos + totalPatrimonioConUtilidad;
+  // Calcular totales
+  const totalActivoCirculante = activoCirculante.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoFijo = activoFijo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoDiferido = activoDiferido.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivos = totalActivoCirculante + totalActivoFijo + totalActivoDiferido;
 
-  const balanceCuadrado = Math.abs(totalActivos - totalPasivosMasPatrimonio) < 0.01;
+  const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalPasivos = totalPasivoCortoPlazo + totalPasivoLargoPlazo;
+
+  const totalCapitalContable = capitalContable.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const utilidadEjercicio = saldosAutomaticos?.utilidad || 0;
+  const totalCapitalContableConUtilidad = totalCapitalContable + utilidadEjercicio;
+  
+  const totalPasivoMasCapital = totalPasivos + totalCapitalContableConUtilidad;
+
+  const balanceCuadrado = Math.abs(totalActivos - totalPasivoMasCapital) < 0.01;
 
   const formatCurrency = (value: number) => {
     return `$${Math.abs(value).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
@@ -287,20 +308,23 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
             </div>
 
             {/* Activos */}
-            <LineItem label="Total Activos" value={totalActivos} isSubtotal />
+            <LineItem label="Activo Circulante" value={totalActivoCirculante} />
+            <LineItem label="Activo Fijo" value={totalActivoFijo} />
+            <LineItem label="Activo Diferido / Largo Plazo" value={totalActivoDiferido} />
+            <LineItem label="Total Activo" value={totalActivos} isSubtotal />
 
             {/* Pasivos */}
-            <LineItem label="Total Pasivos" value={totalPasivos} />
+            <LineItem label="Pasivo Corto Plazo" value={totalPasivoCortoPlazo} />
+            <LineItem label="Pasivo Largo Plazo" value={totalPasivoLargoPlazo} />
+            <LineItem label="Total Pasivo" value={totalPasivos} isSubtotal />
 
-            {/* Patrimonio */}
-            <LineItem label="Patrimonio" value={totalPatrimonio} />
+            {/* Capital Contable */}
+            <LineItem label="Capital Contable" value={totalCapitalContable} />
             <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
-            
-            {/* Total Patrimonio */}
-            <LineItem label="Total Patrimonio" value={totalPatrimonioConUtilidad} isSubtotal />
+            <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
 
-            {/* Total Pasivos + Patrimonio */}
-            <LineItem label="Total Pasivo + Patrimonio" value={totalPasivosMasPatrimonio} isTotal />
+            {/* Total Pasivo + Capital Contable */}
+            <LineItem label="Total Pasivo + Capital Contable" value={totalPasivoMasCapital} isTotal />
 
             {/* Balance Status */}
             <div className="mt-6 pt-4 border-t-2 border-slate-300 dark:border-slate-600">
@@ -308,7 +332,7 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
                 {balanceCuadrado ? (
                   '✓ Balance Cuadrado'
                 ) : (
-                  `⚠ Diferencia: ${formatCurrency(totalActivos - totalPasivosMasPatrimonio)}`
+                  `⚠ Diferencia: ${formatCurrency(totalActivos - totalPasivoMasCapital)}`
                 )}
               </div>
             </div>
