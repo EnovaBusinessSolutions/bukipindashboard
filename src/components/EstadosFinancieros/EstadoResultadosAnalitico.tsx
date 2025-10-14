@@ -558,9 +558,23 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                   stroke="none"
                   fontSize={12}
                   fontWeight={600}
-                  formatter={(value: number, entry: any) => 
-                    `${entry.name}: ${formatCurrency(value)}`
-                  }
+                  content={({ x, y, width, height, value, index }: any) => {
+                    const item = funnelData[index];
+                    if (!item) return null;
+                    return (
+                      <text
+                        x={Number(x) + Number(width) + 10}
+                        y={Number(y) + Number(height) / 2}
+                        fill="hsl(var(--foreground))"
+                        textAnchor="start"
+                        dominantBaseline="middle"
+                        fontSize={12}
+                        fontWeight={600}
+                      >
+                        {`${item.name}: ${formatCurrency(value)}`}
+                      </text>
+                    );
+                  }}
                 />
                 {funnelData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
