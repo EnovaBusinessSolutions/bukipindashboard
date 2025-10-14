@@ -223,6 +223,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     isTotal: false
   });
 
+  // Utilidad Bruta (subtotal - azul)
+  waterfallData.push({
+    name: "= Utilidad Bruta",
+    value: 0, // Transparente (posiciona)
+    start: utilidadBruta, // Con color (visible)
+    fill: "#3b82f6", // blue-500
+    isTotal: true
+  });
+
   // Gastos Operativos (negativo - rojo)
   const despuesGastos = despuesCostos - gastosOperativos;
   waterfallData.push({
@@ -231,6 +240,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     start: gastosOperativos, // Con color (visible)
     fill: "#ef4444",
     isTotal: false
+  });
+
+  // EBITDA (subtotal - azul)
+  waterfallData.push({
+    name: "= EBITDA",
+    value: 0, // Transparente (posiciona)
+    start: ebitda, // Con color (visible)
+    fill: "#3b82f6", // blue-500
+    isTotal: true
   });
 
   // Depreciaciones (negativo - rojo)
@@ -243,6 +261,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     isTotal: false
   });
 
+  // EBIT (subtotal - azul)
+  waterfallData.push({
+    name: "= EBIT",
+    value: 0, // Transparente (posiciona)
+    start: ebit, // Con color (visible)
+    fill: "#3b82f6", // blue-500
+    isTotal: true
+  });
+
   // Costo Financiero (negativo - rojo)
   const despuesCostoFin = despuesDepreciaciones - costoFinanciero;
   waterfallData.push({
@@ -251,6 +278,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     start: costoFinanciero, // Con color (visible)
     fill: "#ef4444",
     isTotal: false
+  });
+
+  // Utilidad Antes de Impuestos (subtotal - azul)
+  waterfallData.push({
+    name: "= Util. A. Imp.",
+    value: 0, // Transparente (posiciona)
+    start: utilidadAntesImpuestos, // Con color (visible)
+    fill: "#3b82f6", // blue-500
+    isTotal: true
   });
 
   // Impuestos (negativo - rojo)
@@ -392,7 +428,11 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 radius={[6, 6, 6, 6]}
                 label={{
                   position: 'top',
-                  formatter: (value: number) => formatCurrency(Math.abs(value)),
+                  formatter: (value: number, entry: any) => {
+                    // Usar el valor de 'start' que es el valor real del rubro
+                    const realValue = entry.start;
+                    return formatCurrency(Math.abs(realValue));
+                  },
                   fill: 'hsl(var(--foreground))',
                   fontSize: 10,
                   fontWeight: 'bold'
