@@ -428,11 +428,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 radius={[6, 6, 6, 6]}
                 label={{
                   position: 'top',
-                  formatter: (value: number, entry: any) => {
-                    // Usar el valor de 'start' que es el valor real del rubro
-                    const realValue = entry.start;
-                    return formatCurrency(Math.abs(realValue));
-                  },
+                  formatter: (value: number) => formatCurrency(Math.abs(value)),
                   fill: 'hsl(var(--foreground))',
                   fontSize: 10,
                   fontWeight: 'bold'
