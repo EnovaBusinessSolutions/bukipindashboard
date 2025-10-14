@@ -203,8 +203,9 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const utilidadAntesImpuestos = ebit - costoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
-  // Construir datos para waterfall con mejor visualización
+  // Construir datos para waterfall sin subtotales intermedios
   const waterfallData: WaterfallData[] = [];
+  let acumulado = 0;
 
   // Ventas (inicio - verde brillante)
   waterfallData.push({
@@ -216,105 +217,67 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     fill: "#10b981", // green-500
     isTotal: false
   });
+  acumulado = ventas;
 
   // Costo de Ventas (negativo - rojo)
   waterfallData.push({
     name: "(-) Costo Ventas",
     value: costoVentas,
     displayValue: -costoVentas,
-    start: ventas - costoVentas,
-    end: ventas,
+    start: acumulado - costoVentas,
+    end: acumulado,
     fill: "#ef4444", // red-500
     isTotal: false
   });
-
-  // Utilidad Bruta (subtotal - azul)
-  waterfallData.push({
-    name: "= Util. Bruta",
-    value: utilidadBruta,
-    displayValue: utilidadBruta,
-    start: 0,
-    end: utilidadBruta,
-    fill: "#3b82f6", // blue-500
-    isTotal: true
-  });
+  acumulado -= costoVentas;
 
   // Gastos Operativos (negativo - rojo)
   waterfallData.push({
     name: "(-) Gastos Op.",
     value: gastosOperativos,
     displayValue: -gastosOperativos,
-    start: utilidadBruta - gastosOperativos,
-    end: utilidadBruta,
+    start: acumulado - gastosOperativos,
+    end: acumulado,
     fill: "#ef4444",
     isTotal: false
   });
-
-  // EBITDA (subtotal - azul)
-  waterfallData.push({
-    name: "= EBITDA",
-    value: ebitda,
-    displayValue: ebitda,
-    start: 0,
-    end: ebitda,
-    fill: "#3b82f6",
-    isTotal: true
-  });
+  acumulado -= gastosOperativos;
 
   // Depreciaciones (negativo - rojo)
   waterfallData.push({
     name: "(-) Deprec.",
     value: depreciaciones,
     displayValue: -depreciaciones,
-    start: ebitda - depreciaciones,
-    end: ebitda,
+    start: acumulado - depreciaciones,
+    end: acumulado,
     fill: "#ef4444",
     isTotal: false
   });
-
-  // EBIT (subtotal - azul)
-  waterfallData.push({
-    name: "= EBIT",
-    value: ebit,
-    displayValue: ebit,
-    start: 0,
-    end: ebit,
-    fill: "#3b82f6",
-    isTotal: true
-  });
+  acumulado -= depreciaciones;
 
   // Costo Financiero (negativo - rojo)
   waterfallData.push({
     name: "(-) Costo Fin.",
     value: costoFinanciero,
     displayValue: -costoFinanciero,
-    start: ebit - costoFinanciero,
-    end: ebit,
+    start: acumulado - costoFinanciero,
+    end: acumulado,
     fill: "#ef4444",
     isTotal: false
   });
-
-  // Utilidad antes de Impuestos (subtotal - azul)
-  waterfallData.push({
-    name: "= Util. antes Imp.",
-    value: utilidadAntesImpuestos,
-    displayValue: utilidadAntesImpuestos,
-    start: 0,
-    end: utilidadAntesImpuestos,
-    fill: "#3b82f6",
-    isTotal: true
-  });
+  acumulado -= costoFinanciero;
 
   // Impuestos (negativo - rojo)
   waterfallData.push({
     name: "(-) Impuestos",
     value: impuestos,
     displayValue: -impuestos,
-    start: utilidadAntesImpuestos - impuestos,
-    end: utilidadAntesImpuestos,
+    start: acumulado - impuestos,
+    end: acumulado,
     fill: "#ef4444",
     isTotal: false
   });
+  acumulado -= impuestos;
 
   // Utilidad Neta (final - verde o rojo según resultado)
   waterfallData.push({
