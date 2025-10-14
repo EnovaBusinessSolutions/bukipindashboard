@@ -5,8 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { PeriodType } from "@/pages/EstadoResultados";
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine,
-  AreaChart, Area, Treemap, ComposedChart, Line, PieChart, Pie, Sector
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from "recharts";
 
 interface EstadoResultadosAnaliticoProps {
@@ -346,16 +345,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     return null;
   };
 
-  // Datos para otros tipos de gráficos
-  const pieData = [
-    { name: 'Ventas', value: ventas, fill: '#10b981' },
-    { name: 'Costo Ventas', value: costoVentas, fill: '#ef4444' },
-    { name: 'Gastos Op.', value: gastosOperativos, fill: '#f97316' },
-    { name: 'Deprec.', value: depreciaciones, fill: '#f59e0b' },
-    { name: 'Costo Fin.', value: costoFinanciero, fill: '#eab308' },
-    { name: 'Impuestos', value: impuestos, fill: '#84cc16' },
-  ];
-
+  // Datos para gráfico de barras horizontales
   const simpleData = [
     { name: 'Ventas', valor: ventas, tipo: 'positivo' },
     { name: 'Costo Ventas', valor: -costoVentas, tipo: 'negativo' },
@@ -370,77 +360,14 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     { name: 'UTILIDAD NETA', valor: utilidadNeta, tipo: 'final' },
   ];
 
-  const areaData = [
-    { name: 'Inicio', ventas: ventas, costos: 0, gastos: 0, otros: 0, neto: ventas },
-    { name: 'Post Costos', ventas: ventas, costos: costoVentas, gastos: 0, otros: 0, neto: utilidadBruta },
-    { name: 'Post Gastos', ventas: ventas, costos: costoVentas, gastos: gastosOperativos, otros: 0, neto: ebitda },
-    { name: 'Post Deprec', ventas: ventas, costos: costoVentas, gastos: gastosOperativos, otros: depreciaciones, neto: ebit },
-    { name: 'Final', ventas: ventas, costos: costoVentas, gastos: gastosOperativos, otros: depreciaciones + costoFinanciero + impuestos, neto: utilidadNeta },
-  ];
-
-  const treemapData = [
-    { name: 'Ventas', size: Math.max(ventas, 0), fill: '#10b981' },
-    { name: 'Costos', size: Math.max(costoVentas, 0), fill: '#ef4444' },
-    { name: 'Gastos Op.', size: Math.max(gastosOperativos, 0), fill: '#f97316' },
-    { name: 'Deprec.', size: Math.max(depreciaciones, 0), fill: '#f59e0b' },
-    { name: 'Costo Fin.', size: Math.max(costoFinanciero, 0), fill: '#eab308' },
-    { name: 'Impuestos', size: Math.max(impuestos, 0), fill: '#84cc16' },
-    { name: 'Utilidad Neta', size: Math.max(Math.abs(utilidadNeta), 1), fill: utilidadNeta >= 0 ? '#059669' : '#dc2626' },
-  ].filter(item => item.size > 0);
-
-  const CustomTreemapContent = (props: any) => {
-    const { x, y, width, height, name, size } = props;
-    
-    if (!size || isNaN(size) || size <= 0) return null;
-    
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          style={{
-            fill: props.fill,
-            stroke: '#fff',
-            strokeWidth: 2,
-          }}
-        />
-        {width > 60 && height > 40 && (
-          <>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 - 10}
-              textAnchor="middle"
-              fill="#fff"
-              fontSize={13}
-              fontWeight="bold"
-            >
-              {name}
-            </text>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 + 10}
-              textAnchor="middle"
-              fill="#fff"
-              fontSize={12}
-            >
-              {formatCurrency(Number(size) || 0)}
-            </text>
-          </>
-        )}
-      </g>
-    );
-  };
-
   return (
     <div className="space-y-8">
-      {/* 1. Gráfico de Cascada Original */}
+      {/* 1. Gráfico de Cascada */}
       <Card className="border-2">
         <CardHeader className="bg-muted/50">
           <CardTitle className="text-2xl">1. Gráfico de Cascada (Waterfall Chart)</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Visualización del flujo de ingresos a utilidad neta
+            Visualización del flujo de ingresos a utilidad neta - Formato Ejecutivo
           </p>
         </CardHeader>
         <CardContent className="p-6">
@@ -491,6 +418,27 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Ventas</p>
+              <p className="font-semibold text-lg">{formatCurrency(ventas)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Utilidad Bruta</p>
+              <p className="font-semibold text-lg">{formatCurrency(utilidadBruta)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">EBITDA</p>
+              <p className="font-semibold text-lg">{formatCurrency(ebitda)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Utilidad Neta</p>
+              <p className={`font-semibold text-lg ${utilidadNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(utilidadNeta)}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -499,7 +447,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
         <CardHeader className="bg-muted/50">
           <CardTitle className="text-2xl">2. Barras Horizontales (Horizontal Bar Chart)</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Comparación clara de ingresos vs costos/gastos
+            Comparación clara de ingresos, costos, gastos y resultados - Formato Ejecutivo
           </p>
         </CardHeader>
         <CardContent className="p-6">
@@ -546,154 +494,6 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 3. Gráfico de Áreas */}
-      <Card className="border-2">
-        <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">3. Gráfico de Áreas Apiladas (Stacked Area Chart)</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Evolución acumulada de costos y gastos sobre ventas
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={450}>
-            <AreaChart
-              data={areaData}
-              margin={{ top: 20, right: 30, left: 60, bottom: 20 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="name"
-                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-              />
-              <YAxis 
-                tickFormatter={(value) => formatCurrency(value)}
-                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-              />
-              <Tooltip 
-                formatter={(value: number) => formatCurrency(value)}
-                contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
-              />
-              <Legend />
-              <Area type="monotone" dataKey="otros" stackId="1" stroke="#eab308" fill="#eab308" name="Otros" />
-              <Area type="monotone" dataKey="gastos" stackId="1" stroke="#f97316" fill="#f97316" name="Gastos" />
-              <Area type="monotone" dataKey="costos" stackId="1" stroke="#ef4444" fill="#ef4444" name="Costos" />
-              <Area type="monotone" dataKey="neto" stackId="2" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Neto" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 4. Treemap */}
-      <Card className="border-2">
-        <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">4. Mapa de Árbol (Treemap)</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Proporción visual de cada componente
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={450}>
-            <Treemap
-              data={treemapData}
-              dataKey="size"
-              aspectRatio={4 / 3}
-              stroke="#fff"
-              content={<CustomTreemapContent />}
-            />
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 5. Gráfico Compuesto */}
-      <Card className="border-2">
-        <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">5. Gráfico Compuesto (Composed Chart)</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Barras para valores + línea para tendencia acumulada
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={500}>
-            <ComposedChart
-              data={simpleData}
-              margin={{ top: 20, right: 30, left: 60, bottom: 80 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={100}
-                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-              />
-              <YAxis 
-                tickFormatter={(value) => formatCurrency(value)}
-                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
-              <Bar 
-                dataKey="valor" 
-                name="Valor"
-                radius={[6, 6, 0, 0]}
-              >
-                {simpleData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={
-                      entry.tipo === 'positivo' ? '#10b981' :
-                      entry.tipo === 'negativo' ? '#ef4444' :
-                      entry.tipo === 'subtotal' ? '#3b82f6' :
-                      entry.valor >= 0 ? '#059669' : '#dc2626'
-                    }
-                  />
-                ))}
-              </Bar>
-              <Line 
-                type="monotone" 
-                dataKey="valor" 
-                stroke="#8b5cf6" 
-                strokeWidth={3}
-                dot={{ fill: '#8b5cf6', r: 5 }}
-                name="Tendencia"
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 6. Gráfico de Embudo (Funnel usando Pie) */}
-      <Card className="border-2">
-        <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">6. Distribución Circular (Pie Chart)</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Proporción de cada componente sobre el total
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={450}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                labelLine={true}
-                label={({ name, value }) => `${name}: ${formatCurrency(value)}`}
-                outerRadius={140}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-            </PieChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
