@@ -363,15 +363,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   // Datos para gráfico de barras horizontales
   const simpleData = [
     { name: 'Ventas', valor: ventas, tipo: 'positivo' },
-    { name: 'Costo Ventas', valor: -costoVentas, tipo: 'negativo' },
+    { name: 'Costo Ventas', valor: costoVentas, tipo: 'negativo' },
     { name: 'Util. Bruta', valor: utilidadBruta, tipo: 'subtotal' },
-    { name: 'Gastos Op.', valor: -gastosOperativos, tipo: 'negativo' },
+    { name: 'Gastos Op.', valor: gastosOperativos, tipo: 'negativo' },
     { name: 'EBITDA', valor: ebitda, tipo: 'subtotal' },
-    { name: 'Deprec.', valor: -depreciaciones, tipo: 'negativo' },
+    { name: 'Deprec.', valor: depreciaciones, tipo: 'negativo' },
     { name: 'EBIT', valor: ebit, tipo: 'subtotal' },
-    { name: 'Costo Fin.', valor: -costoFinanciero, tipo: 'negativo' },
+    { name: 'Costo Fin.', valor: costoFinanciero, tipo: 'negativo' },
     { name: 'Util. A. Imp.', valor: utilidadAntesImpuestos, tipo: 'subtotal' },
-    { name: 'Impuestos', valor: -impuestos, tipo: 'negativo' },
+    { name: 'Impuestos', valor: impuestos, tipo: 'negativo' },
     { name: 'UTILIDAD NETA', valor: utilidadNeta, tipo: 'final' },
   ];
 
@@ -466,34 +466,35 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={500}>
+          <ResponsiveContainer width="100%" height={600}>
             <BarChart
               data={simpleData}
-              layout="horizontal"
-              margin={{ top: 20, right: 30, left: 100, bottom: 20 }}
+              layout="vertical"
+              margin={{ top: 20, right: 100, left: 120, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis 
                 type="number" 
                 tickFormatter={(value) => formatCurrency(value)}
-                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
               />
               <YAxis 
                 type="category" 
                 dataKey="name"
-                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-                width={90}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 12, fontWeight: 500 }}
+                width={110}
               />
               <Tooltip content={<CustomTooltipBar />} />
               <ReferenceLine x={0} stroke="#374151" strokeWidth={2} />
               <Bar 
                 dataKey="valor" 
-                radius={[0, 6, 6, 0]}
+                radius={[0, 8, 8, 0]}
                 label={{
                   position: 'right',
                   formatter: (value: number) => formatCurrency(value),
                   fill: 'hsl(var(--foreground))',
-                  fontSize: 10
+                  fontSize: 11,
+                  fontWeight: 600
                 }}
               >
                 {simpleData.map((entry, index) => (
