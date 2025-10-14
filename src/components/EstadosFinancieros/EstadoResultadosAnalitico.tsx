@@ -378,7 +378,14 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
               <Tooltip content={<CustomTooltipWaterfall />} />
               <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
               
-              <Bar dataKey="value" stackId="stack" fill="transparent" />
+              <Bar dataKey="value" stackId="stack">
+                {waterfallData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-value-${index}`} 
+                    fill="transparent"
+                  />
+                ))}
+              </Bar>
               <Bar 
                 dataKey="start" 
                 stackId="stack" 
@@ -393,7 +400,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
               >
                 {waterfallData.map((entry, index) => (
                   <Cell 
-                    key={`cell-${index}`} 
+                    key={`cell-start-${index}`} 
                     fill={entry.fill}
                     stroke={entry.isTotal ? "#000" : "transparent"}
                     strokeWidth={entry.isTotal ? 2 : 0}
