@@ -319,34 +319,63 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
         </Card>
 
         {/* Lado Derecho - Pasivos y Capital Contable */}
-        <Card className="border-2">
-          <CardHeader className="bg-red-50 dark:bg-red-950">
-            <CardTitle className="text-2xl text-red-700">Pasivo y Capital Contable</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-1">
-              {/* Header */}
-              <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
-                <span>Concepto</span>
-                <span className="text-right">Monto</span>
-                <span className="text-right">%</span>
+        <div className="space-y-6">
+          {/* Pasivos */}
+          <Card className="border-2">
+            <CardHeader className="bg-red-50 dark:bg-red-950">
+              <CardTitle className="text-2xl text-red-700">Pasivo</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-1">
+                {/* Header */}
+                <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
+                  <span>Concepto</span>
+                  <span className="text-right">Monto</span>
+                  <span className="text-right">%</span>
+                </div>
+
+                {/* Pasivos */}
+                <LineItem label="Pasivo Corto Plazo" value={totalPasivoCortoPlazo} />
+                <LineItem label="Pasivo Largo Plazo" value={totalPasivoLargoPlazo} />
+                <LineItem label="Total Pasivo" value={totalPasivos} isSubtotal />
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Pasivos */}
-              <LineItem label="Pasivo Corto Plazo" value={totalPasivoCortoPlazo} />
-              <LineItem label="Pasivo Largo Plazo" value={totalPasivoLargoPlazo} />
-              <LineItem label="Total Pasivo" value={totalPasivos} isSubtotal />
+          {/* Capital Contable */}
+          <Card className="border-2">
+            <CardHeader className="bg-green-50 dark:bg-green-950">
+              <CardTitle className="text-2xl text-green-700">Capital Contable</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-1">
+                {/* Header */}
+                <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
+                  <span>Concepto</span>
+                  <span className="text-right">Monto</span>
+                  <span className="text-right">%</span>
+                </div>
 
-              {/* Capital Contable */}
-              <LineItem label="Capital Contable" value={totalCapitalContable} />
-              <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
-              <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
+                {/* Capital Contable */}
+                <LineItem label="Capital Contable" value={totalCapitalContable} />
+                <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
+                <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Total Pasivo + Capital Contable */}
-              <LineItem label="Total Pasivo + Capital Contable" value={totalPasivoMasCapital} isTotal />
-            </div>
-          </CardContent>
-        </Card>
+          {/* Total Pasivo + Capital Contable */}
+          <Card className="border-2 border-slate-400 dark:border-slate-500">
+            <CardHeader className="bg-slate-100 dark:bg-slate-800">
+              <CardTitle className="text-xl">Total Pasivo + Capital Contable</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-1">
+                <LineItem label="Total Pasivo + Capital Contable" value={totalPasivoMasCapital} isTotal />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Balance Status */}

@@ -377,6 +377,13 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
 
         {/* Lado Derecho - Pasivos y Capital Contable */}
         <div className="space-y-6">
+          {/* Card de Pasivos */}
+          <Card className="border-2">
+            <CardHeader className="bg-red-50 dark:bg-red-950">
+              <CardTitle className="text-xl text-red-700">Pasivo</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-6">
           {/* Pasivo Corto Plazo */}
         <Card className="border-2">
           <CardHeader className="bg-red-50 dark:bg-red-950">
@@ -451,21 +458,31 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
           </CardContent>
         </Card>
 
-        {/* Total Pasivo */}
-        <Card className="border-2 border-red-400 dark:border-red-500">
-          <CardHeader className="bg-red-100 dark:bg-red-900">
-            <CardTitle className="text-red-800">Total Pasivo</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl text-red-800">
-              <span>Total Pasivo</span>
-              <span className="text-right">${totalPasivos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-              <span className="text-right">{totalActivos > 0 ? ((totalPasivos / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Total Pasivo */}
+          <Card className="border-2 border-red-400 dark:border-red-500">
+            <CardHeader className="bg-red-100 dark:bg-red-900">
+              <CardTitle className="text-red-800">Total Pasivo</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl text-red-800">
+                <span>Total Pasivo</span>
+                <span className="text-right">${totalPasivos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalActivos > 0 ? ((totalPasivos / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
+              </div>
+            </CardContent>
+          </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Capital Contable */}
+          {/* Card de Capital Contable */}
+          <Card className="border-2">
+            <CardHeader className="bg-green-50 dark:bg-green-950">
+              <CardTitle className="text-xl text-green-700">Capital Contable</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-6">
+          {/* Capital Contable */}
         <Card className="border-2">
           <CardHeader className="bg-green-50 dark:bg-green-950">
             <CardTitle className="text-green-700">Capital Contable</CardTitle>
@@ -507,8 +524,11 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             </div>
           </CardContent>
         </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Total Pasivo + Capital Contable */}
+          {/* Card Total Pasivo + Capital Contable */}
           <Card className="border-2 border-slate-400 dark:border-slate-500">
             <CardHeader className="bg-slate-100 dark:bg-slate-800">
               <CardTitle>Total Pasivo + Capital Contable</CardTitle>
