@@ -264,7 +264,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             <div className="space-y-1">
               {activoCirculante.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
-                if (saldo === 0) return null;
                 
                 const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
                 
@@ -301,7 +300,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             <div className="space-y-1">
               {activoFijo.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
-                if (saldo === 0) return null;
                 
                 const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
                 
@@ -338,7 +336,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             <div className="space-y-1">
               {activoDiferido.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
-                if (saldo === 0) return null;
                 
                 const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
                 
@@ -399,7 +396,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             <div className="space-y-1">
               {pasivoCortoPlazo.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
-                if (saldo === 0) return null;
                 
                 const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
                 
@@ -436,7 +432,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             <div className="space-y-1">
               {pasivoLargoPlazo.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
-                if (saldo === 0) return null;
                 
                 const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
                 
@@ -497,7 +492,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             <div className="space-y-1">
               {capitalContable.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
-                if (saldo === 0) return null;
                 
                 const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
                 
