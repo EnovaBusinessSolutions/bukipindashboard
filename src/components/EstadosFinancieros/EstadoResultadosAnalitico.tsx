@@ -364,15 +364,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   // Datos para gráfico de barras horizontales
   const simpleData = [
     { name: 'Ventas', valor: ventas, tipo: 'positivo' },
-    { name: 'Costo Ventas', valor: costoVentas, tipo: 'negativo' },
+    { name: 'Costo Ventas', valor: -costoVentas, tipo: 'negativo' },
     { name: 'Util. Bruta', valor: utilidadBruta, tipo: 'subtotal' },
-    { name: 'Gastos Op.', valor: gastosOperativos, tipo: 'negativo' },
+    { name: 'Gastos Op.', valor: -gastosOperativos, tipo: 'negativo' },
     { name: 'EBITDA', valor: ebitda, tipo: 'subtotal' },
-    { name: 'Deprec.', valor: depreciaciones, tipo: 'negativo' },
+    { name: 'Deprec.', valor: -depreciaciones, tipo: 'negativo' },
     { name: 'EBIT', valor: ebit, tipo: 'subtotal' },
-    { name: 'Costo Fin.', valor: costoFinanciero, tipo: 'negativo' },
+    { name: 'Costo Fin.', valor: -costoFinanciero, tipo: 'negativo' },
     { name: 'Util. A. Imp.', valor: utilidadAntesImpuestos, tipo: 'subtotal' },
-    { name: 'Impuestos', valor: impuestos, tipo: 'negativo' },
+    { name: 'Impuestos', valor: -impuestos, tipo: 'negativo' },
     { name: 'UTILIDAD NETA', valor: utilidadNeta, tipo: 'final' },
   ];
 
