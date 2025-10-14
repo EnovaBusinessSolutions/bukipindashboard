@@ -330,7 +330,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     return `$${Math.abs(value).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   };
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltipWaterfall = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -338,6 +338,21 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
           <p className="font-semibold text-foreground mb-1">{data.name}</p>
           <p className={`text-sm ${data.displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatCurrency(data.displayValue)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomTooltipBar = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
+          <p className="font-semibold text-foreground mb-1">{data.name}</p>
+          <p className={`text-sm font-semibold ${data.valor >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(data.valor)}
           </p>
         </div>
       );
@@ -391,7 +406,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
                 width={80}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltipWaterfall />} />
               <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
               
               <Bar dataKey="start" stackId="stack" fill="transparent" />
@@ -469,7 +484,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
                 width={90}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltipBar />} />
               <ReferenceLine x={0} stroke="#374151" strokeWidth={2} />
               <Bar 
                 dataKey="valor" 
