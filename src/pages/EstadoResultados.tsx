@@ -9,6 +9,7 @@ import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, en
 import { es } from "date-fns/locale";
 import EstadoResultadosOperativo from "@/components/EstadosFinancieros/EstadoResultadosOperativo";
 import EstadoResultadosEjecutivo from "@/components/EstadosFinancieros/EstadoResultadosEjecutivo";
+import EstadoResultadosAnalitico from "@/components/EstadosFinancieros/EstadoResultadosAnalitico";
 import { cn } from "@/lib/utils";
 
 export type PeriodType = "diario" | "mensual" | "anual";
@@ -105,9 +106,10 @@ const EstadoResultados = () => {
       </div>
 
       <Tabs defaultValue="ejecutivo" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3 max-w-2xl">
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
           <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
+          <TabsTrigger value="analitico">Formato Analítico</TabsTrigger>
         </TabsList>
         
         <TabsContent value="ejecutivo" className="mt-6">
@@ -120,6 +122,14 @@ const EstadoResultados = () => {
         
         <TabsContent value="operativo" className="mt-6">
           <EstadoResultadosOperativo 
+            startDate={dateRange.startDate} 
+            endDate={dateRange.endDate}
+            periodType={periodType}
+          />
+        </TabsContent>
+        
+        <TabsContent value="analitico" className="mt-6">
+          <EstadoResultadosAnalitico 
             startDate={dateRange.startDate} 
             endDate={dateRange.endDate}
             periodType={periodType}
