@@ -25,9 +25,7 @@ interface SaldoCuenta {
 interface WaterfallData {
   name: string;
   value: number;
-  displayValue: number;
   start: number;
-  end: number;
   fill: string;
   isTotal: boolean;
 }
@@ -210,9 +208,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "Ventas",
     value: ventas,
-    displayValue: ventas,
     start: 0,
-    end: ventas,
     fill: "#10b981", // green-500
     isTotal: false
   });
@@ -222,9 +218,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "(-) Costo Ventas",
     value: costoVentas,
-    displayValue: -costoVentas,
     start: despuesCostos,
-    end: ventas,
     fill: "#ef4444", // red-500
     isTotal: false
   });
@@ -234,9 +228,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "(-) Gastos Op.",
     value: gastosOperativos,
-    displayValue: -gastosOperativos,
     start: despuesGastos,
-    end: despuesCostos,
     fill: "#ef4444",
     isTotal: false
   });
@@ -246,9 +238,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "(-) Deprec.",
     value: depreciaciones,
-    displayValue: -depreciaciones,
     start: despuesDepreciaciones,
-    end: despuesGastos,
     fill: "#ef4444",
     isTotal: false
   });
@@ -258,9 +248,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "(-) Costo Fin.",
     value: costoFinanciero,
-    displayValue: -costoFinanciero,
     start: despuesCostoFin,
-    end: despuesDepreciaciones,
     fill: "#ef4444",
     isTotal: false
   });
@@ -270,9 +258,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "(-) Impuestos",
     value: impuestos,
-    displayValue: -impuestos,
     start: despuesImpuestos,
-    end: despuesCostoFin,
     fill: "#ef4444",
     isTotal: false
   });
@@ -281,9 +267,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "= UTILIDAD NETA",
     value: utilidadNeta,
-    displayValue: utilidadNeta,
     start: 0,
-    end: utilidadNeta,
     fill: utilidadNeta >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
     isTotal: true
   });
@@ -295,11 +279,13 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const CustomTooltipWaterfall = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      // Para egresos, mostrar el valor como negativo en el tooltip
+      const displayValue = data.isTotal ? data.value : (data.name.includes("(-)") ? -data.value : data.value);
       return (
         <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
           <p className="font-semibold text-foreground mb-1">{data.name}</p>
-          <p className={`text-sm ${data.displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {formatCurrency(data.displayValue)}
+          <p className={`text-sm ${displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(displayValue)}
           </p>
         </div>
       );
