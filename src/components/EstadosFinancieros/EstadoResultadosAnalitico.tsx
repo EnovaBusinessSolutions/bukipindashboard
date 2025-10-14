@@ -207,18 +207,18 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   // Ventas (inicio - verde brillante)
   waterfallData.push({
     name: "Ventas",
-    value: ventas,
-    start: 0,
+    value: 0, // Transparente (posiciona)
+    start: ventas, // Con color (visible)
     fill: "#10b981", // green-500
     isTotal: false
   });
 
-  // Costo de Ventas (negativo - rojo) - start es donde termina después de restar
+  // Costo de Ventas (negativo - rojo) - start tiene color, value transparente
   const despuesCostos = ventas - costoVentas;
   waterfallData.push({
     name: "(-) Costo Ventas",
-    value: costoVentas,
-    start: despuesCostos,
+    value: despuesCostos, // Transparente (posiciona)
+    start: costoVentas, // Con color (visible)
     fill: "#ef4444", // red-500
     isTotal: false
   });
@@ -227,8 +227,8 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const despuesGastos = despuesCostos - gastosOperativos;
   waterfallData.push({
     name: "(-) Gastos Op.",
-    value: gastosOperativos,
-    start: despuesGastos,
+    value: despuesGastos, // Transparente (posiciona)
+    start: gastosOperativos, // Con color (visible)
     fill: "#ef4444",
     isTotal: false
   });
@@ -237,8 +237,8 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const despuesDepreciaciones = despuesGastos - depreciaciones;
   waterfallData.push({
     name: "(-) Deprec.",
-    value: depreciaciones,
-    start: despuesDepreciaciones,
+    value: despuesDepreciaciones, // Transparente (posiciona)
+    start: depreciaciones, // Con color (visible)
     fill: "#ef4444",
     isTotal: false
   });
@@ -247,8 +247,8 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const despuesCostoFin = despuesDepreciaciones - costoFinanciero;
   waterfallData.push({
     name: "(-) Costo Fin.",
-    value: costoFinanciero,
-    start: despuesCostoFin,
+    value: despuesCostoFin, // Transparente (posiciona)
+    start: costoFinanciero, // Con color (visible)
     fill: "#ef4444",
     isTotal: false
   });
@@ -257,8 +257,8 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const despuesImpuestos = despuesCostoFin - impuestos;
   waterfallData.push({
     name: "(-) Impuestos",
-    value: impuestos,
-    start: despuesImpuestos,
+    value: despuesImpuestos, // Transparente (posiciona)
+    start: impuestos, // Con color (visible)
     fill: "#ef4444",
     isTotal: false
   });
@@ -266,8 +266,8 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   // Utilidad Neta (final - verde o rojo según resultado)
   waterfallData.push({
     name: "= UTILIDAD NETA",
-    value: utilidadNeta,
-    start: 0,
+    value: 0, // Transparente (posiciona)
+    start: utilidadNeta, // Con color (visible)
     fill: utilidadNeta >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
     isTotal: true
   });
@@ -280,7 +280,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       // Para egresos, mostrar el valor como negativo en el tooltip
-      const displayValue = data.isTotal ? data.value : (data.name.includes("(-)") ? -data.value : data.value);
+      const displayValue = data.isTotal ? data.start : (data.name.includes("(-)") ? -data.start : data.start);
       return (
         <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
           <p className="font-semibold text-foreground mb-1">{data.name}</p>
@@ -378,9 +378,9 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
               <Tooltip content={<CustomTooltipWaterfall />} />
               <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
               
-              <Bar dataKey="start" stackId="stack" fill="transparent" />
+              <Bar dataKey="value" stackId="stack" fill="transparent" />
               <Bar 
-                dataKey="value" 
+                dataKey="start" 
                 stackId="stack" 
                 radius={[6, 6, 6, 6]}
                 label={{
