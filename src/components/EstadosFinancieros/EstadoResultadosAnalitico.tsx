@@ -386,14 +386,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: utilidadNeta >= 0 ? '#d946ef' : '#dc2626' },
   ];
 
-  // Datos para Pie Chart
+  // Datos para Donut Chart - Ingresos, Egresos desglosados y Utilidad Neta
   const pieData = [
-    { name: 'Costo de Ventas', value: costoVentas, fill: '#ef4444' },
-    { name: 'Gastos Operativos', value: gastosOperativos, fill: '#f97316' },
-    { name: 'Depreciaciones', value: depreciaciones, fill: '#f59e0b' },
-    { name: 'Costo Financiero', value: costoFinanciero, fill: '#eab308' },
-    { name: 'Impuestos', value: impuestos, fill: '#84cc16' },
-    { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: '#10b981' },
+    { name: 'Ingresos', value: ventas, fill: '#10b981', category: 'ingreso' },
+    { name: 'Costo de Ventas', value: costoVentas, fill: '#ef4444', category: 'egreso' },
+    { name: 'Gastos Operativos', value: gastosOperativos, fill: '#f97316', category: 'egreso' },
+    { name: 'Depreciaciones', value: depreciaciones, fill: '#f59e0b', category: 'egreso' },
+    { name: 'Costo Financiero', value: costoFinanciero, fill: '#eab308', category: 'egreso' },
+    { name: 'Impuestos', value: impuestos, fill: '#84cc16', category: 'egreso' },
+    { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: '#06b6d4', category: 'resultado' },
   ].filter(item => item.value > 0);
 
   return (
@@ -585,26 +586,33 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
         </CardContent>
       </Card>
 
-      {/* 4. Pie Chart */}
+      {/* 4. Donut Chart */}
       <Card className="border-2">
         <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">4. Gráfica de Pastel (Pie Chart)</CardTitle>
+          <CardTitle className="text-2xl">4. Gráfica de Dona (Donut Chart)</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Distribución de costos, gastos y utilidad neta - Formato Ejecutivo
+            Distribución de Ingresos, Egresos y Utilidad Neta - Formato Ejecutivo
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={500}>
+          <ResponsiveContainer width="100%" height={550}>
             <PieChart>
               <Pie
                 data={pieData}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                outerRadius={150}
+                labelLine={{
+                  stroke: 'hsl(var(--foreground))',
+                  strokeWidth: 1,
+                }}
+                label={({ name, percent, value }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                outerRadius={180}
+                innerRadius={110}
                 fill="#8884d8"
                 dataKey="value"
+                paddingAngle={2}
+                stroke="hsl(var(--background))"
+                strokeWidth={3}
               >
                 {pieData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -615,16 +623,51 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 contentStyle={{
                   backgroundColor: 'hsl(var(--background))',
                   border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px'
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  padding: '12px'
+                }}
+                itemStyle={{
+                  color: 'hsl(var(--foreground))',
+                  fontWeight: 500
                 }}
               />
               <Legend 
                 verticalAlign="bottom" 
-                height={36}
-                formatter={(value) => <span style={{ color: 'hsl(var(--foreground))' }}>{value}</span>}
+                height={60}
+                iconType="circle"
+                formatter={(value, entry: any) => (
+                  <span style={{ 
+                    color: 'hsl(var(--foreground))',
+                    fontWeight: 500,
+                    fontSize: '13px'
+                  }}>
+                    {value}
+                  </span>
+                )}
+                wrapperStyle={{
+                  paddingTop: '20px'
+                }}
               />
             </PieChart>
           </ResponsiveContainer>
+          
+          <div className="mt-6 grid grid-cols-3 gap-4 text-center">
+            <div className="space-y-1 p-4 rounded-lg bg-green-50 dark:bg-green-950/20">
+              <p className="text-sm text-muted-foreground font-medium">Total Ingresos</p>
+              <p className="font-bold text-xl text-green-600">{formatCurrency(ventas)}</p>
+            </div>
+            <div className="space-y-1 p-4 rounded-lg bg-red-50 dark:bg-red-950/20">
+              <p className="text-sm text-muted-foreground font-medium">Total Egresos</p>
+              <p className="font-bold text-xl text-red-600">{formatCurrency(costoVentas + gastosOperativos + depreciaciones + costoFinanciero + impuestos)}</p>
+            </div>
+            <div className="space-y-1 p-4 rounded-lg bg-cyan-50 dark:bg-cyan-950/20">
+              <p className="text-sm text-muted-foreground font-medium">Utilidad Neta</p>
+              <p className={`font-bold text-xl ${utilidadNeta >= 0 ? 'text-cyan-600' : 'text-red-600'}`}>
+                {formatCurrency(utilidadNeta)}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
