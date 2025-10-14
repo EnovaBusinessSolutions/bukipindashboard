@@ -200,134 +200,127 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const utilidadAntesImpuestos = ebit - costoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
-  // Construir datos para waterfall
+  // Construir datos para waterfall con mejor visualización
   const waterfallData: WaterfallData[] = [];
-  let runningTotal = 0;
 
-  // Ventas (inicio)
+  // Ventas (inicio - verde brillante)
   waterfallData.push({
     name: "Ventas",
     value: ventas,
     displayValue: ventas,
     start: 0,
     end: ventas,
-    fill: "hsl(var(--chart-1))",
+    fill: "#10b981", // green-500
     isTotal: false
   });
-  runningTotal = ventas;
 
-  // Costo de Ventas (negativo)
+  // Costo de Ventas (negativo - rojo)
   waterfallData.push({
-    name: "Costo Ventas",
+    name: "(-) Costo Ventas",
     value: costoVentas,
     displayValue: -costoVentas,
-    start: runningTotal - costoVentas,
-    end: runningTotal,
-    fill: "hsl(var(--chart-5))",
+    start: ventas - costoVentas,
+    end: ventas,
+    fill: "#ef4444", // red-500
     isTotal: false
   });
-  runningTotal -= costoVentas;
 
-  // Utilidad Bruta (subtotal)
+  // Utilidad Bruta (subtotal - azul)
   waterfallData.push({
-    name: "Utilidad Bruta",
+    name: "= Util. Bruta",
     value: utilidadBruta,
     displayValue: utilidadBruta,
     start: 0,
     end: utilidadBruta,
-    fill: "hsl(var(--chart-2))",
+    fill: "#3b82f6", // blue-500
     isTotal: true
   });
 
-  // Gastos Operativos (negativo)
+  // Gastos Operativos (negativo - rojo)
   waterfallData.push({
-    name: "Gastos Op.",
+    name: "(-) Gastos Op.",
     value: gastosOperativos,
     displayValue: -gastosOperativos,
-    start: runningTotal - gastosOperativos,
-    end: runningTotal,
-    fill: "hsl(var(--chart-5))",
+    start: utilidadBruta - gastosOperativos,
+    end: utilidadBruta,
+    fill: "#ef4444",
     isTotal: false
   });
-  runningTotal -= gastosOperativos;
 
-  // EBITDA (subtotal)
+  // EBITDA (subtotal - azul)
   waterfallData.push({
-    name: "EBITDA",
+    name: "= EBITDA",
     value: ebitda,
     displayValue: ebitda,
     start: 0,
     end: ebitda,
-    fill: "hsl(var(--chart-2))",
+    fill: "#3b82f6",
     isTotal: true
   });
 
-  // Depreciaciones (negativo)
+  // Depreciaciones (negativo - rojo)
   waterfallData.push({
-    name: "Deprec.",
+    name: "(-) Deprec.",
     value: depreciaciones,
     displayValue: -depreciaciones,
-    start: runningTotal - depreciaciones,
-    end: runningTotal,
-    fill: "hsl(var(--chart-5))",
+    start: ebitda - depreciaciones,
+    end: ebitda,
+    fill: "#ef4444",
     isTotal: false
   });
-  runningTotal -= depreciaciones;
 
-  // EBIT (subtotal)
+  // EBIT (subtotal - azul)
   waterfallData.push({
-    name: "EBIT",
+    name: "= EBIT",
     value: ebit,
     displayValue: ebit,
     start: 0,
     end: ebit,
-    fill: "hsl(var(--chart-2))",
+    fill: "#3b82f6",
     isTotal: true
   });
 
-  // Costo Financiero (negativo)
+  // Costo Financiero (negativo - rojo)
   waterfallData.push({
-    name: "Costo Fin.",
+    name: "(-) Costo Fin.",
     value: costoFinanciero,
     displayValue: -costoFinanciero,
-    start: runningTotal - costoFinanciero,
-    end: runningTotal,
-    fill: "hsl(var(--chart-5))",
+    start: ebit - costoFinanciero,
+    end: ebit,
+    fill: "#ef4444",
     isTotal: false
   });
-  runningTotal -= costoFinanciero;
 
-  // Utilidad antes de Impuestos (subtotal)
+  // Utilidad antes de Impuestos (subtotal - azul)
   waterfallData.push({
-    name: "Util. antes Imp.",
+    name: "= Util. antes Imp.",
     value: utilidadAntesImpuestos,
     displayValue: utilidadAntesImpuestos,
     start: 0,
     end: utilidadAntesImpuestos,
-    fill: "hsl(var(--chart-2))",
+    fill: "#3b82f6",
     isTotal: true
   });
 
-  // Impuestos (negativo)
+  // Impuestos (negativo - rojo)
   waterfallData.push({
-    name: "Impuestos",
+    name: "(-) Impuestos",
     value: impuestos,
     displayValue: -impuestos,
-    start: runningTotal - impuestos,
-    end: runningTotal,
-    fill: "hsl(var(--chart-5))",
+    start: utilidadAntesImpuestos - impuestos,
+    end: utilidadAntesImpuestos,
+    fill: "#ef4444",
     isTotal: false
   });
-  runningTotal -= impuestos;
 
-  // Utilidad Neta (final)
+  // Utilidad Neta (final - verde o rojo según resultado)
   waterfallData.push({
-    name: "Utilidad Neta",
+    name: "= UTILIDAD NETA",
     value: utilidadNeta,
     displayValue: utilidadNeta,
     start: 0,
     end: utilidadNeta,
-    fill: utilidadNeta >= 0 ? "hsl(var(--chart-3))" : "hsl(var(--chart-5))",
+    fill: utilidadNeta >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
     isTotal: true
   });
 
@@ -360,56 +353,80 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={500}>
+          <ResponsiveContainer width="100%" height={550}>
             <BarChart
               data={waterfallData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+              margin={{ top: 20, right: 30, left: 60, bottom: 100 }}
+              barGap={8}
             >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis 
                 dataKey="name" 
                 angle={-45}
                 textAnchor="end"
-                height={100}
-                className="text-xs"
+                height={120}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 500 }}
+                interval={0}
               />
               <YAxis 
                 tickFormatter={(value) => formatCurrency(value)}
-                className="text-xs"
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                width={80}
               />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={2} />
+              <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
               
-              {/* Barra invisible para posicionar */}
-              <Bar dataKey="start" stackId="a" fill="transparent" />
+              {/* Barra invisible para posicionar (base) */}
+              <Bar dataKey="start" stackId="stack" fill="transparent" />
               
-              {/* Barra visible con valores */}
-              <Bar dataKey="value" stackId="a" radius={[4, 4, 0, 0]}>
+              {/* Barra visible con valores y labels */}
+              <Bar 
+                dataKey="value" 
+                stackId="stack" 
+                radius={[6, 6, 6, 6]}
+                label={{
+                  position: 'top',
+                  formatter: (value: number) => formatCurrency(Math.abs(value)),
+                  fill: 'hsl(var(--foreground))',
+                  fontSize: 10,
+                  fontWeight: 'bold'
+                }}
+              >
                 {waterfallData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.fill}
+                    stroke={entry.isTotal ? "#000" : "transparent"}
+                    strokeWidth={entry.isTotal ? 2 : 0}
+                  />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
 
-          {/* Leyenda personalizada */}
-          <div className="flex flex-wrap gap-4 justify-center mt-6 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: "hsl(var(--chart-1))" }}></div>
-              <span>Ingresos</span>
+          {/* Leyenda personalizada y clara */}
+          <div className="mt-8 space-y-4">
+            <div className="flex flex-wrap gap-6 justify-center text-sm font-medium">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded" style={{ backgroundColor: "#10b981" }}></div>
+                <span>Ventas Iniciales</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded" style={{ backgroundColor: "#ef4444" }}></div>
+                <span>(-) Costos y Gastos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded border-2 border-black" style={{ backgroundColor: "#3b82f6" }}></div>
+                <span>(=) Subtotales</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded border-2 border-black" style={{ backgroundColor: "#059669" }}></div>
+                <span>(=) Utilidad Neta Final</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: "hsl(var(--chart-5))" }}></div>
-              <span>Costos/Gastos</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: "hsl(var(--chart-2))" }}></div>
-              <span>Subtotales</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: "hsl(var(--chart-3))" }}></div>
-              <span>Utilidad Final</span>
-            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Las barras con borde negro representan totales y subtotales que inician desde cero
+            </p>
           </div>
         </CardContent>
       </Card>
