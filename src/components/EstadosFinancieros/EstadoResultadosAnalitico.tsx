@@ -203,9 +203,8 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const utilidadAntesImpuestos = ebit - costoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
-  // Construir datos para waterfall sin subtotales intermedios
+  // Construir datos para waterfall - el "start" es la barra invisible que posiciona cada elemento
   const waterfallData: WaterfallData[] = [];
-  let acumulado = 0;
 
   // Ventas (inicio - verde brillante)
   waterfallData.push({
@@ -217,67 +216,66 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     fill: "#10b981", // green-500
     isTotal: false
   });
-  acumulado = ventas;
 
-  // Costo de Ventas (negativo - rojo)
+  // Costo de Ventas (negativo - rojo) - start es donde termina después de restar
+  const despuesCostos = ventas - costoVentas;
   waterfallData.push({
     name: "(-) Costo Ventas",
     value: costoVentas,
     displayValue: -costoVentas,
-    start: acumulado - costoVentas,
-    end: acumulado,
+    start: despuesCostos,
+    end: ventas,
     fill: "#ef4444", // red-500
     isTotal: false
   });
-  acumulado -= costoVentas;
 
   // Gastos Operativos (negativo - rojo)
+  const despuesGastos = despuesCostos - gastosOperativos;
   waterfallData.push({
     name: "(-) Gastos Op.",
     value: gastosOperativos,
     displayValue: -gastosOperativos,
-    start: acumulado - gastosOperativos,
-    end: acumulado,
+    start: despuesGastos,
+    end: despuesCostos,
     fill: "#ef4444",
     isTotal: false
   });
-  acumulado -= gastosOperativos;
 
   // Depreciaciones (negativo - rojo)
+  const despuesDepreciaciones = despuesGastos - depreciaciones;
   waterfallData.push({
     name: "(-) Deprec.",
     value: depreciaciones,
     displayValue: -depreciaciones,
-    start: acumulado - depreciaciones,
-    end: acumulado,
+    start: despuesDepreciaciones,
+    end: despuesGastos,
     fill: "#ef4444",
     isTotal: false
   });
-  acumulado -= depreciaciones;
 
   // Costo Financiero (negativo - rojo)
+  const despuesCostoFin = despuesDepreciaciones - costoFinanciero;
   waterfallData.push({
     name: "(-) Costo Fin.",
     value: costoFinanciero,
     displayValue: -costoFinanciero,
-    start: acumulado - costoFinanciero,
-    end: acumulado,
+    start: despuesCostoFin,
+    end: despuesDepreciaciones,
     fill: "#ef4444",
     isTotal: false
   });
-  acumulado -= costoFinanciero;
 
   // Impuestos (negativo - rojo)
+  const despuesImpuestos = despuesCostoFin - impuestos;
   waterfallData.push({
     name: "(-) Impuestos",
     value: impuestos,
     displayValue: -impuestos,
-    start: acumulado - impuestos,
-    end: acumulado,
+    start: despuesImpuestos,
+    end: despuesCostoFin,
     fill: "#ef4444",
     isTotal: false
   });
-  acumulado -= impuestos;
 
   // Utilidad Neta (final - verde o rojo según resultado)
   waterfallData.push({
