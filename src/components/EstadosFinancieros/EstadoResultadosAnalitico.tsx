@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { PeriodType } from "@/pages/EstadoResultados";
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+  PieChart, Pie, Legend, Funnel, FunnelChart, LabelList
 } from "recharts";
 
 interface EstadoResultadosAnaliticoProps {
@@ -375,6 +376,26 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     { name: 'UTILIDAD NETA', valor: utilidadNeta, tipo: 'final' },
   ];
 
+  // Datos para Funnel Chart (solo valores positivos descendentes)
+  const funnelData = [
+    { name: 'Ventas', value: ventas, fill: '#10b981' },
+    { name: 'Utilidad Bruta', value: utilidadBruta, fill: '#3b82f6' },
+    { name: 'EBITDA', value: ebitda, fill: '#8b5cf6' },
+    { name: 'EBIT', value: ebit, fill: '#f59e0b' },
+    { name: 'Util. Antes Imp.', value: utilidadAntesImpuestos, fill: '#ec4899' },
+    { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: utilidadNeta >= 0 ? '#059669' : '#dc2626' },
+  ];
+
+  // Datos para Pie Chart
+  const pieData = [
+    { name: 'Costo de Ventas', value: costoVentas, fill: '#ef4444' },
+    { name: 'Gastos Operativos', value: gastosOperativos, fill: '#f97316' },
+    { name: 'Depreciaciones', value: depreciaciones, fill: '#f59e0b' },
+    { name: 'Costo Financiero', value: costoFinanciero, fill: '#eab308' },
+    { name: 'Impuestos', value: impuestos, fill: '#84cc16' },
+    { name: 'Utilidad Neta', value: Math.max(0, utilidadNeta), fill: '#10b981' },
+  ].filter(item => item.value > 0);
+
   return (
     <div className="space-y-8">
       {/* 1. Gráfico de Cascada */}
@@ -510,6 +531,85 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 ))}
               </Bar>
             </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* 3. Funnel Chart */}
+      <Card className="border-2">
+        <CardHeader className="bg-muted/50">
+          <CardTitle className="text-2xl">3. Gráfico de Embudo (Funnel Chart)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Visualización del flujo de conversión desde ventas hasta utilidad neta - Formato Ejecutivo
+          </p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <ResponsiveContainer width="100%" height={500}>
+            <FunnelChart>
+              <Tooltip content={<CustomTooltipBar />} />
+              <Funnel
+                dataKey="value"
+                data={funnelData}
+                isAnimationActive
+              >
+                <LabelList 
+                  position="right" 
+                  fill="hsl(var(--foreground))"
+                  stroke="none"
+                  fontSize={12}
+                  fontWeight={600}
+                  formatter={(value: number, entry: any) => 
+                    `${entry.name}: ${formatCurrency(value)}`
+                  }
+                />
+                {funnelData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Funnel>
+            </FunnelChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* 4. Pie Chart */}
+      <Card className="border-2">
+        <CardHeader className="bg-muted/50">
+          <CardTitle className="text-2xl">4. Gráfica de Pastel (Pie Chart)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Distribución de costos, gastos y utilidad neta - Formato Ejecutivo
+          </p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <ResponsiveContainer width="100%" height={500}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                outerRadius={150}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Pie>
+              <Tooltip 
+                formatter={(value: number) => formatCurrency(value)}
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }}
+              />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                formatter={(value) => <span style={{ color: 'hsl(var(--foreground))' }}>{value}</span>}
+              />
+            </PieChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
