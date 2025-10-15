@@ -414,11 +414,12 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
               <Tooltip content={<CustomTooltipWaterfall />} />
               <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
               
-              <Bar dataKey="value" stackId="stack">
+              <Bar dataKey="value" stackId="stack" isAnimationActive={false} legendType="none">
                 {waterfallData.map((entry, index) => (
                   <Cell 
                     key={`cell-value-${index}`} 
                     fill="transparent"
+                    style={{ pointerEvents: 'none' }}
                   />
                 ))}
               </Bar>
