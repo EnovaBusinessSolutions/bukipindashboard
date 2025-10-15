@@ -77,6 +77,13 @@ const AnalyticaInversiones = () => {
     value: item.montoTotal,
   }));
 
+  // Data para TreeMap de depreciaciones acumuladas por categoría
+  const treeMapDepreciacionData = dataPorCategoria.map((item: any) => ({
+    name: item.name,
+    size: item.depreciacionAcumulada,
+    value: item.depreciacionAcumulada,
+  }));
+
   // Data para TreeMap de activo fijo neto (inversión - depreciación)
   const treeMapActivoNetoData = dataPorCategoria.map((item: any) => ({
     name: item.name,
@@ -266,11 +273,11 @@ const AnalyticaInversiones = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>TreeMap - Inversiones por Categoría</CardTitle>
-            <CardDescription>Visualización proporcional del monto total invertido por tipo de activo</CardDescription>
+            <CardTitle>Inversiones por Categoría</CardTitle>
+            <CardDescription>Monto total invertido por tipo de activo</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={400}>
@@ -287,8 +294,26 @@ const AnalyticaInversiones = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>TreeMap - Activo Fijo Neto</CardTitle>
-            <CardDescription>Valor en libros (inversión menos depreciación acumulada) por categoría</CardDescription>
+            <CardTitle>Depreciaciones por Categoría</CardTitle>
+            <CardDescription>Depreciación acumulada por tipo de activo</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <Treemap
+                data={treeMapDepreciacionData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="#fff"
+                content={<CustomTreemapContent />}
+              />
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Activo Fijo Neto</CardTitle>
+            <CardDescription>Valor en libros por categoría</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={400}>
