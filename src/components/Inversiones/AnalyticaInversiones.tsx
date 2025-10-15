@@ -142,13 +142,26 @@ const AnalyticaInversiones = () => {
   const calcularDepreciacionesFuturas = () => {
     const periodos = periodoDepreciacion === "mensual" ? 12 : 20;
     const data: any[] = [];
+    const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
     // Crear estructura de periodos
     for (let i = 0; i < periodos; i++) {
+      let nombrePeriodo: string;
+      
+      if (periodoDepreciacion === "mensual") {
+        // Calcular el mes real
+        const mesActual = hoy.getMonth();
+        const anoActual = hoy.getFullYear();
+        const mesIndex = (mesActual + i) % 12;
+        const anoOffset = Math.floor((mesActual + i) / 12);
+        nombrePeriodo = `${mesesNombres[mesIndex]} ${anoActual + anoOffset}`;
+      } else {
+        // Años reales
+        nombrePeriodo = `${hoy.getFullYear() + i}`;
+      }
+
       const periodo: any = {
-        periodo: periodoDepreciacion === "mensual" 
-          ? `Mes ${i + 1}`
-          : `Año ${i + 1}`,
+        periodo: nombrePeriodo,
       };
       
       // Inicializar cada categoría en 0
