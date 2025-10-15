@@ -14,6 +14,7 @@ import { CalendarIcon, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const RegistroInversionForm = () => {
   const { crearInversion, recomendaciones } = useInversiones();
@@ -188,16 +189,31 @@ const RegistroInversionForm = () => {
     setMontoPagadoDisplay("");
   };
 
+  const getCategoriaLabel = (categoria: string) => {
+    const labels: Record<string, string> = {
+      equipo_computo: "Equipo de Cómputo",
+      maquinaria: "Maquinaria",
+      vehiculos: "Vehículos",
+      mobiliario: "Mobiliario",
+      edificios: "Edificios",
+      equipo_oficina: "Equipo de Oficina",
+      otro: "Otro",
+    };
+    return labels[categoria] || categoria;
+  };
+
   return (
-    <Card className="max-w-5xl mx-auto border-0 shadow-none">
-      <CardHeader>
-        <CardTitle>Registro de Inversión CAPEX</CardTitle>
-        <CardDescription>
-          Registra un nuevo activo fijo y configura su depreciación
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-6 pb-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Formulario - 2/3 del ancho */}
+      <Card className="lg:col-span-2 border-0 shadow-none">
+        <CardHeader>
+          <CardTitle>Registro de Inversión CAPEX</CardTitle>
+          <CardDescription>
+            Registra un nuevo activo fijo y configura su depreciación
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
           {/* Selección de Categoría del Activo */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Categoría del Activo</h3>
@@ -555,9 +571,62 @@ const RegistroInversionForm = () => {
               </Button>
             </>
           )}
-        </form>
-      </CardContent>
-    </Card>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Recomendaciones - 1/3 del ancho */}
+      <Card className="border-0 shadow-none">
+        <CardHeader>
+          <CardTitle className="text-lg">Recomendaciones de Depreciación</CardTitle>
+          <CardDescription className="text-xs">
+            Años recomendados según normativas fiscales mexicanas
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-4">
+          <div className="overflow-auto max-h-[calc(100vh-16rem)]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Categoría</TableHead>
+                  <TableHead className="text-xs text-center">Años</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recomendaciones.map((rec) => (
+                  <TableRow key={rec.id} className={rec.categoria_activo === categoriaActivo ? "bg-muted" : ""}>
+                    <TableCell className="text-xs font-medium py-2">
+                      {getCategoriaLabel(rec.categoria_activo)}
+                    </TableCell>
+                    <TableCell className="text-center py-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary text-primary-foreground">
+                        {rec.anos_recomendados}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          
+          {categoriaActivo && recomendacion && (
+            <div className="mt-4 p-3 bg-muted rounded-lg">
+              <p className="text-xs font-semibold mb-1">
+                {getCategoriaLabel(categoriaActivo)}
+              </p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Rango: {recomendacion.anos_minimos} - {recomendacion.anos_maximos} años
+              </p>
+              {recomendacion.descripcion && (
+                <p className="text-xs text-muted-foreground">
+                  {recomendacion.descripcion}
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
