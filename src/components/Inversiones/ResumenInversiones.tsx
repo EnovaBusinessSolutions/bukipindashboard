@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { Eye, ImageIcon } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const ResumenInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
@@ -122,11 +123,14 @@ const ResumenInversiones = () => {
               {inversiones.map((inversion) => (
                 <TableRow key={inversion.id}>
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {inversion.imagen_url && (
-                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      {inversion.producto_nombre}
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={inversion.imagen_url || ""} alt={inversion.producto_nombre} />
+                        <AvatarFallback>
+                          <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{inversion.producto_nombre}</span>
                     </div>
                   </TableCell>
                   <TableCell>{getCategoriaLabel(inversion.categoria_activo)}</TableCell>
