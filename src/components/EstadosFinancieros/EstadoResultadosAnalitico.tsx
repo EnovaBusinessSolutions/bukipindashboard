@@ -429,10 +429,24 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
                 radius={[6, 6, 6, 6]}
                 label={{
                   position: 'top',
-                  formatter: (value: number) => formatCurrency(Math.abs(value)),
-                  fill: 'hsl(var(--foreground))',
-                  fontSize: 10,
-                  fontWeight: 'bold'
+                  content: ({ x, y, width, value, index }: any) => {
+                    const item = waterfallData[index];
+                    if (!item) return null;
+                    const displayValue = item.name.includes("(-)") ? -item.start : item.start;
+                    return (
+                      <text
+                        x={Number(x) + Number(width) / 2}
+                        y={Number(y) - 5}
+                        fill="hsl(var(--foreground))"
+                        textAnchor="middle"
+                        dominantBaseline="bottom"
+                        fontSize={10}
+                        fontWeight="bold"
+                      >
+                        {formatCurrency(displayValue)}
+                      </text>
+                    );
+                  }
                 }}
               >
                 {waterfallData.map((entry, index) => (
