@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap, Sankey, Rectangle } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap, Sankey, Rectangle, LabelList } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -339,7 +339,16 @@ const AnalyticaInversiones = () => {
                   dataKey={categoria} 
                   stackId="a" 
                   fill={COLORS[index % COLORS.length]}
-                />
+                >
+                  <LabelList 
+                    dataKey={categoria} 
+                    position="center" 
+                    fill="#fff"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: number) => value > 1000 ? `$${(value / 1000).toFixed(0)}k` : value > 0 ? `$${value.toFixed(0)}` : ''}
+                  />
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>
