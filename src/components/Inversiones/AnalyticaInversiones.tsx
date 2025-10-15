@@ -1,13 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap, Sankey, Rectangle } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 const COLORS = ["#10b981", "#059669", "#047857", "#065f46", "#064e3b", "#34d399", "#6ee7b7"];
 
 const AnalyticaInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
+  const [periodoDepreciacion, setPeriodoDepreciacion] = useState<"mensual" | "anual">("mensual");
 
   if (isLoading) {
     return (
@@ -135,6 +138,64 @@ const AnalyticaInversiones = () => {
     );
   };
 
+  // Calcular depreciaciones futuras
+  const calcularDepreciacionesFuturas = () => {
+    const periodos = periodoDepreciacion === "mensual" ? 12 : 20;
+    const data: any[] = [];
+
+    // Crear estructura de periodos
+    for (let i = 0; i < periodos; i++) {
+      const periodo: any = {
+        periodo: periodoDepreciacion === "mensual" 
+          ? `Mes ${i + 1}`
+          : `Año ${i + 1}`,
+      };
+      
+      // Inicializar cada categoría en 0
+      dataPorCategoria.forEach((cat: any) => {
+        periodo[cat.name] = 0;
+      });
+
+      data.push(periodo);
+    }
+
+    // Calcular depreciaciones por inversión
+    inversiones.forEach((inv) => {
+      const categoria = getCategoriaLabel(inv.categoria_activo);
+      const fechaInicio = inv.fecha_inicio_depreciacion ? new Date(inv.fecha_inicio_depreciacion) : new Date(inv.fecha_adquisicion);
+      const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
+      const totalMeses = inv.anos_depreciacion * 12;
+      const mesesRestantes = Math.max(0, totalMeses - mesesTranscurridos);
+
+      if (periodoDepreciacion === "mensual") {
+        // Distribuir en los próximos 12 meses
+        const mesesAMostrar = Math.min(12, mesesRestantes);
+        for (let i = 0; i < mesesAMostrar; i++) {
+          data[i][categoria] += inv.valor_depreciacion_mensual || 0;
+        }
+      } else {
+        // Distribuir en los próximos años
+        const anosRestantes = Math.ceil(mesesRestantes / 12);
+        const anosAMostrar = Math.min(20, anosRestantes);
+        
+        for (let i = 0; i < anosAMostrar; i++) {
+          // Si es el último año, puede ser parcial
+          if (i === anosRestantes - 1) {
+            const mesesEnUltimoAno = mesesRestantes % 12 || 12;
+            data[i][categoria] += (inv.valor_depreciacion_mensual || 0) * mesesEnUltimoAno;
+          } else {
+            data[i][categoria] += inv.valor_depreciacion_anual || 0;
+          }
+        }
+      }
+    });
+
+    return data;
+  };
+
+  const dataDepreciacionesFuturas = calcularDepreciacionesFuturas();
+  const categorias = dataPorCategoria.map((cat: any) => cat.name);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -238,6 +299,52 @@ const AnalyticaInversiones = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Depreciaciones Futuras por Categoría</CardTitle>
+              <CardDescription>
+                Proyección de depreciaciones pendientes {periodoDepreciacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 20 años"}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="periodo">Vista:</Label>
+              <Select value={periodoDepreciacion} onValueChange={(value: "mensual" | "anual") => setPeriodoDepreciacion(value)}>
+                <SelectTrigger id="periodo" className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mensual">Mensual</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={dataDepreciacionesFuturas}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="periodo" />
+              <YAxis />
+              <Tooltip 
+                formatter={(value: number) => `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
+              />
+              <Legend />
+              {categorias.map((categoria: string, index: number) => (
+                <Bar 
+                  key={categoria} 
+                  dataKey={categoria} 
+                  stackId="a" 
+                  fill={COLORS[index % COLORS.length]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 };
