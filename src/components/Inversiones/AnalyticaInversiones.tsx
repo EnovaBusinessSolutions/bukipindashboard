@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap } from "recharts";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d", "#ffc658"];
 
@@ -69,6 +69,64 @@ const AnalyticaInversiones = () => {
   const totalInvertido = inversiones.reduce((acc, inv) => acc + Number(inv.valor_total), 0);
   const totalPagado = inversiones.reduce((acc, inv) => acc + Number(inv.monto_pagado), 0);
   const totalPendiente = inversiones.reduce((acc, inv) => acc + Number(inv.monto_pendiente), 0);
+
+  // Data para TreeMap de inversiones por categoría
+  const treeMapInversionData = dataPorCategoria.map((item: any) => ({
+    name: item.name,
+    size: item.montoTotal,
+    value: item.montoTotal,
+  }));
+
+  // Data para TreeMap de activo fijo neto (inversión - depreciación)
+  const treeMapActivoNetoData = dataPorCategoria.map((item: any) => ({
+    name: item.name,
+    size: item.montoTotal - item.depreciacionAcumulada,
+    value: item.montoTotal - item.depreciacionAcumulada,
+  }));
+
+  // Custom content para el Treemap
+  const CustomTreemapContent = (props: any) => {
+    const { x, y, width, height, index, name, value } = props;
+    
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: COLORS[index % COLORS.length],
+            stroke: "#fff",
+            strokeWidth: 2,
+          }}
+        />
+        {width > 80 && height > 40 && (
+          <>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 - 10}
+              textAnchor="middle"
+              fill="#fff"
+              fontSize={14}
+              fontWeight="bold"
+            >
+              {name}
+            </text>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + 10}
+              textAnchor="middle"
+              fill="#fff"
+              fontSize={12}
+            >
+              ${value.toLocaleString("es-MX")}
+            </text>
+          </>
+        )}
+      </g>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -139,6 +197,44 @@ const AnalyticaInversiones = () => {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>TreeMap - Inversiones por Categoría</CardTitle>
+            <CardDescription>Visualización proporcional del monto total invertido por tipo de activo</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <Treemap
+                data={treeMapInversionData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="#fff"
+                content={<CustomTreemapContent />}
+              />
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>TreeMap - Activo Fijo Neto</CardTitle>
+            <CardDescription>Valor en libros (inversión menos depreciación acumulada) por categoría</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <Treemap
+                data={treeMapActivoNetoData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="#fff"
+                content={<CustomTreemapContent />}
+              />
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
