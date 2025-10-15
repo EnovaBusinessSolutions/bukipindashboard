@@ -72,6 +72,10 @@ const Sidebar = () => {
     name: "Registro de Inventario",
     path: "/registros/inventario",
     active: location.pathname === "/registros/inventario"
+  }, {
+    name: "Registro de Financiamientos",
+    path: "/registros/financiamientos",
+    active: location.pathname === "/registros/financiamientos"
   }];
 
   const cobrosPagosItems = [{
