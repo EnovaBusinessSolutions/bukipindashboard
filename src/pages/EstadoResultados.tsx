@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -7,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { CalendarIcon } from "lucide-react";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { es } from "date-fns/locale";
-import EstadoResultadosOperativo from "@/components/EstadosFinancieros/EstadoResultadosOperativo";
-import EstadoResultadosEjecutivo from "@/components/EstadosFinancieros/EstadoResultadosEjecutivo";
 import EstadoResultadosAnalitico from "@/components/EstadosFinancieros/EstadoResultadosAnalitico";
 import { cn } from "@/lib/utils";
 
@@ -105,37 +102,11 @@ const EstadoResultados = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="ejecutivo" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-2xl">
-          <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
-          <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
-          <TabsTrigger value="analitico">Formato Analítico</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="ejecutivo" className="mt-6">
-          <EstadoResultadosEjecutivo 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
-            periodType={periodType}
-          />
-        </TabsContent>
-        
-        <TabsContent value="operativo" className="mt-6">
-          <EstadoResultadosOperativo 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
-            periodType={periodType}
-          />
-        </TabsContent>
-        
-        <TabsContent value="analitico" className="mt-6">
-          <EstadoResultadosAnalitico 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
-            periodType={periodType}
-          />
-        </TabsContent>
-      </Tabs>
+      <EstadoResultadosAnalitico 
+        startDate={dateRange.startDate} 
+        endDate={dateRange.endDate}
+        periodType={periodType}
+      />
     </div>
   );
 };
