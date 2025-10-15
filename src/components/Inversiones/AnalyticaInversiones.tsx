@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap, Sankey, Rectangle } from "recharts";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d", "#ffc658"];
 
@@ -83,6 +83,61 @@ const AnalyticaInversiones = () => {
     size: item.montoTotal - item.depreciacionAcumulada,
     value: item.montoTotal - item.depreciacionAcumulada,
   }));
+
+  // Data para Sankey - Flujo de inversiones y depreciación
+  const sankeyNodes: any[] = [];
+  const sankeyLinks: any[] = [];
+  
+  // Nodo inicial: Inversión Total
+  sankeyNodes.push({ name: "Inversión Total" });
+  
+  // Nodos para categorías
+  dataPorCategoria.forEach((cat: any) => {
+    sankeyNodes.push({ name: cat.name });
+  });
+  
+  // Nodos finales: Depreciado y Valor en Libros
+  sankeyNodes.push({ name: "Depreciación Acumulada" });
+  sankeyNodes.push({ name: "Valor en Libros" });
+  
+  // Links de Inversión Total a cada categoría
+  dataPorCategoria.forEach((cat: any, index: number) => {
+    sankeyLinks.push({
+      source: 0, // Inversión Total
+      target: index + 1, // Categoría
+      value: cat.montoTotal,
+    });
+  });
+  
+  // Links de cada categoría a Depreciación y Valor en Libros
+  const depreciacionNodeIndex = dataPorCategoria.length + 1;
+  const valorLibrosNodeIndex = dataPorCategoria.length + 2;
+  
+  dataPorCategoria.forEach((cat: any, index: number) => {
+    // Link a depreciación
+    if (cat.depreciacionAcumulada > 0) {
+      sankeyLinks.push({
+        source: index + 1, // Categoría
+        target: depreciacionNodeIndex, // Depreciación Acumulada
+        value: cat.depreciacionAcumulada,
+      });
+    }
+    
+    // Link a valor en libros
+    const valorLibros = cat.montoTotal - cat.depreciacionAcumulada;
+    if (valorLibros > 0) {
+      sankeyLinks.push({
+        source: index + 1, // Categoría
+        target: valorLibrosNodeIndex, // Valor en Libros
+        value: valorLibros,
+      });
+    }
+  });
+
+  const sankeyData = {
+    nodes: sankeyNodes,
+    links: sankeyLinks,
+  };
 
   // Custom content para el Treemap
   const CustomTreemapContent = (props: any) => {
@@ -178,22 +233,35 @@ const AnalyticaInversiones = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Inversión y Depreciación por Categoría</CardTitle>
-          <CardDescription>Monto total invertido vs depreciación acumulada por tipo de activo</CardDescription>
+          <CardTitle>Flujo de Inversiones y Depreciación</CardTitle>
+          <CardDescription>Diagrama Sankey mostrando el flujo desde la inversión total hasta la depreciación y valor en libros por categoría</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={dataPorCategoria}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
+          <ResponsiveContainer width="100%" height={500}>
+            <Sankey
+              data={sankeyData}
+              node={{ fill: "#0088FE", fillOpacity: 1 }}
+              link={{ stroke: "#77c2ff", fillOpacity: 0.5 }}
+              nodePadding={50}
+              margin={{ top: 20, right: 160, bottom: 20, left: 20 }}
+            >
               <Tooltip 
-                formatter={(value: number) => `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
+                content={({ payload }: any) => {
+                  if (!payload || !payload.length) return null;
+                  const data = payload[0].payload;
+                  return (
+                    <div className="bg-background border rounded-lg p-3 shadow-lg">
+                      <p className="font-semibold">{data.source?.name || data.target?.name || data.name}</p>
+                      {data.value && (
+                        <p className="text-sm text-muted-foreground">
+                          ${data.value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
               />
-              <Legend />
-              <Bar dataKey="montoTotal" fill="#0088FE" name="Monto Total Invertido" />
-              <Bar dataKey="depreciacionAcumulada" fill="#FF8042" name="Depreciación Acumulada" />
-            </BarChart>
+            </Sankey>
           </ResponsiveContainer>
         </CardContent>
       </Card>
