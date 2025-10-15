@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
 import { Loader2, TrendingDown, Calendar, DollarSign } from "lucide-react";
-import { format } from "date-fns";
+import { format, lastDayOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 
 const ResumenDepreciaciones = () => {
@@ -27,13 +27,17 @@ const ResumenDepreciaciones = () => {
     const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
     const depreciacionAcumulada = (inv.valor_depreciacion_mensual || 0) * mesesTranscurridos;
     const valorLibros = Math.max(0, inv.valor_total - depreciacionAcumulada);
+    
+    // Calcular próxima fecha de depreciación (último día del mes actual)
+    const proximaFechaDepreciacion = lastDayOfMonth(hoy);
 
     return {
       ...inv,
       mesesTranscurridos,
       depreciacionAcumulada,
       valorLibros,
-      porcentajeDepreciado: inv.valor_total > 0 ? (depreciacionAcumulada / inv.valor_total) * 100 : 0
+      porcentajeDepreciado: inv.valor_total > 0 ? (depreciacionAcumulada / inv.valor_total) * 100 : 0,
+      proximaFechaDepreciacion
     };
   }) || [];
 
@@ -134,7 +138,7 @@ const ResumenDepreciaciones = () => {
                       </div>
 
                       {/* Métricas de Depreciación */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4 border-t">
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 pt-4 border-t">
                         <div>
                           <p className="text-xs text-muted-foreground">Valor Original</p>
                           <p className="font-semibold">{formatCurrency(inversion.valor_total)}</p>
@@ -146,6 +150,10 @@ const ResumenDepreciaciones = () => {
                         <div>
                           <p className="text-xs text-muted-foreground">Meses Transcurridos</p>
                           <p className="font-semibold">{inversion.mesesTranscurridos} meses</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Próxima Depreciación</p>
+                          <p className="font-semibold text-blue-600">{format(inversion.proximaFechaDepreciacion, "dd MMM yyyy", { locale: es })}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Depreciación Acumulada</p>
