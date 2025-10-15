@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator, Users } from "lucide-react";
+import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator, Users, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,11 +36,13 @@ const RegistroIngresos = () => {
   } = useSubcuentas();
   const {
     data: productos = [],
-    isLoading: loadingProductos
+    isLoading: loadingProductos,
+    refetch: refetchProductos
   } = useProductos();
   const {
     data: productosServicios = [],
-    isLoading: loadingProductosServicios
+    isLoading: loadingProductosServicios,
+    refetch: refetchProductosServicios
   } = useProductosServicios();
   const {
     data: clientes = [],
@@ -2328,13 +2330,28 @@ const RegistroIngresos = () => {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   Catálogo de Productos
-                  <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Nuevo Producto
-                      </Button>
-                    </DialogTrigger>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        refetchProductosServicios();
+                        toast({
+                          title: "Actualizado",
+                          description: "La lista de productos se ha actualizado correctamente"
+                        });
+                      }}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Actualizar
+                    </Button>
+                    <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Nuevo Producto
+                        </Button>
+                      </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                       <DialogHeader>
                         <DialogTitle>Agregar Nuevo Producto</DialogTitle>
@@ -2406,6 +2423,7 @@ const RegistroIngresos = () => {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+                  </div>
                 </CardTitle>
                 <CardDescription>
                   Gestiona el catálogo de productos y servicios con cuentas contables asignadas
