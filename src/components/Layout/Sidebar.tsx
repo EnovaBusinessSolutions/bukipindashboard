@@ -100,12 +100,7 @@ const Sidebar = () => {
     <div className="bg-sidebar h-screen w-64 flex flex-col">
       {/* Logo Section */}
       <div className="p-6">
-        <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
-            <span className="text-sidebar-primary-foreground font-bold text-sm">B</span>
-          </div>
-          <h1 className="text-xl font-bold text-sidebar-foreground">Bukipin</h1>
-        </div>
+        <h1 className="text-xl font-bold text-sidebar-foreground">Bukipin</h1>
       </div>
 
       {/* Main Menu */}
