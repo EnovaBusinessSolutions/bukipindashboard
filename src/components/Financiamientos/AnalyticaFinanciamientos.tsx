@@ -1,14 +1,17 @@
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const AnalyticaFinanciamientos = () => {
   const { financiamientos, isLoading } = useFinanciamientos();
+  const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
 
   if (isLoading) {
     return (
@@ -52,6 +55,95 @@ const AnalyticaFinanciamientos = () => {
     { name: "Monto Pagado", valor: totalPagado, color: "#10b981" },
     { name: "Saldo Pendiente", valor: totalDeuda, color: "#ef4444" },
   ];
+
+  // Calcular amortizaciones futuras por crédito
+  const calcularAmortizacionesFuturas = () => {
+    const periodos = periodoAmortizacion === "mensual" ? 12 : 20;
+    const data: any[] = [];
+    const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const hoy = new Date();
+
+    // Crear estructura de periodos
+    for (let i = 0; i < periodos; i++) {
+      let nombrePeriodo: string;
+      
+      if (periodoAmortizacion === "mensual") {
+        const mesActual = hoy.getMonth();
+        const anoActual = hoy.getFullYear();
+        const mesIndex = (mesActual + i) % 12;
+        const anoOffset = Math.floor((mesActual + i) / 12);
+        nombrePeriodo = `${mesesNombres[mesIndex]} ${anoActual + anoOffset}`;
+      } else {
+        nombrePeriodo = `${hoy.getFullYear() + i}`;
+      }
+
+      const periodo: any = { periodo: nombrePeriodo };
+      
+      // Inicializar cada crédito activo en 0
+      financiamientosActivos.forEach((f) => {
+        periodo[f.nombre] = 0;
+      });
+
+      data.push(periodo);
+    }
+
+    // Calcular amortizaciones por cada crédito activo
+    financiamientosActivos.forEach((credito) => {
+      const fechaInicio = new Date(credito.fecha_inicio);
+      const fechaVencimiento = new Date(credito.fecha_vencimiento);
+      const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
+      const totalMeses = credito.plazo_meses;
+      const mesesRestantes = Math.max(0, totalMeses - mesesTranscurridos);
+
+      if (credito.tipo_credito === "simple" || credito.tipo_credito === "arrendamiento") {
+        // Amortizaciones iguales
+        const amortizacionMensual = mesesRestantes > 0 ? credito.saldo_actual / mesesRestantes : 0;
+        
+        if (periodoAmortizacion === "mensual") {
+          const mesesAMostrar = Math.min(12, mesesRestantes);
+          for (let i = 0; i < mesesAMostrar; i++) {
+            data[i][credito.nombre] += amortizacionMensual;
+          }
+        } else {
+          const anosRestantes = Math.ceil(mesesRestantes / 12);
+          const anosAMostrar = Math.min(20, anosRestantes);
+          
+          for (let i = 0; i < anosAMostrar; i++) {
+            if (i === anosRestantes - 1) {
+              const mesesEnUltimoAno = mesesRestantes % 12 || 12;
+              data[i][credito.nombre] += amortizacionMensual * mesesEnUltimoAno;
+            } else {
+              data[i][credito.nombre] += amortizacionMensual * 12;
+            }
+          }
+        }
+      } else if (credito.tipo_credito === "revolvente") {
+        // Se paga en fecha de vencimiento
+        const mesesHastaVencimiento = Math.max(0, (fechaVencimiento.getFullYear() - hoy.getFullYear()) * 12 + (fechaVencimiento.getMonth() - hoy.getMonth()));
+        
+        if (periodoAmortizacion === "mensual" && mesesHastaVencimiento < 12) {
+          data[mesesHastaVencimiento][credito.nombre] += credito.saldo_actual;
+        } else if (periodoAmortizacion === "anual") {
+          const anosHastaVencimiento = Math.floor(mesesHastaVencimiento / 12);
+          if (anosHastaVencimiento < 20) {
+            data[anosHastaVencimiento][credito.nombre] += credito.saldo_actual;
+          }
+        }
+      } else if (credito.tipo_credito === "tarjeta_corporativa") {
+        // Pago al mes siguiente
+        if (periodoAmortizacion === "mensual") {
+          data[0][credito.nombre] += credito.saldo_actual;
+        } else {
+          data[0][credito.nombre] += credito.saldo_actual;
+        }
+      }
+    });
+
+    return data;
+  };
+
+  const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
+  const nombresCreditos = financiamientosActivos.map(f => f.nombre);
 
   return (
     <div className="space-y-6">
@@ -185,6 +277,61 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Amortizaciones Futuras por Crédito</CardTitle>
+              <CardDescription>
+                Proyección de pagos pendientes {periodoAmortizacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 20 años"}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="periodo-amortizacion">Vista:</Label>
+              <Select value={periodoAmortizacion} onValueChange={(value: "mensual" | "anual") => setPeriodoAmortizacion(value)}>
+                <SelectTrigger id="periodo-amortizacion" className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mensual">Mensual</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={dataAmortizacionesFuturas}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="periodo" />
+              <YAxis />
+              <Tooltip 
+                formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+              />
+              <Legend />
+              {nombresCreditos.map((nombre: string, index: number) => (
+                <Bar 
+                  key={nombre} 
+                  dataKey={nombre} 
+                  stackId="a" 
+                  fill={COLORS[index % COLORS.length]}
+                >
+                  <LabelList 
+                    dataKey={nombre} 
+                    position="center" 
+                    fill="#fff"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: number) => value > 1000 ? `$${(value / 1000).toFixed(0)}k` : value > 0 ? `$${value.toFixed(0)}` : ''}
+                  />
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 };
