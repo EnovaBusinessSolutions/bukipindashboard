@@ -188,6 +188,75 @@ export type Database = {
           },
         ]
       }
+      financiamientos: {
+        Row: {
+          condiciones: string | null
+          created_at: string
+          cuenta_codigo: string | null
+          descripcion: string | null
+          estado: string
+          fecha_inicio: string
+          fecha_vencimiento: string
+          id: string
+          institucion_financiera: string
+          monto_total: number
+          nombre: string
+          numero_cuenta: string | null
+          plazo_meses: number
+          saldo_actual: number
+          saldo_inicial: number
+          subcuenta_id: string | null
+          tasa_interes: number
+          tipo_credito: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          condiciones?: string | null
+          created_at?: string
+          cuenta_codigo?: string | null
+          descripcion?: string | null
+          estado?: string
+          fecha_inicio?: string
+          fecha_vencimiento: string
+          id?: string
+          institucion_financiera: string
+          monto_total: number
+          nombre: string
+          numero_cuenta?: string | null
+          plazo_meses: number
+          saldo_actual: number
+          saldo_inicial: number
+          subcuenta_id?: string | null
+          tasa_interes: number
+          tipo_credito: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          condiciones?: string | null
+          created_at?: string
+          cuenta_codigo?: string | null
+          descripcion?: string | null
+          estado?: string
+          fecha_inicio?: string
+          fecha_vencimiento?: string
+          id?: string
+          institucion_financiera?: string
+          monto_total?: number
+          nombre?: string
+          numero_cuenta?: string | null
+          plazo_meses?: number
+          saldo_actual?: number
+          saldo_inicial?: number
+          subcuenta_id?: string | null
+          tasa_interes?: number
+          tipo_credito?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       inversiones_capex: {
         Row: {
           anos_depreciacion: number
@@ -665,6 +734,65 @@ export type Database = {
             columns: ["proveedor_id"]
             isOneToOne: false
             referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transacciones_financiamientos: {
+        Row: {
+          capital_pagado: number | null
+          created_at: string
+          descripcion: string | null
+          fecha: string
+          financiamiento_id: string
+          id: string
+          interes_pagado: number | null
+          metodo_pago: string | null
+          monto: number
+          numero_referencia: string | null
+          saldo_restante: number
+          tipo_transaccion: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          capital_pagado?: number | null
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          financiamiento_id: string
+          id?: string
+          interes_pagado?: number | null
+          metodo_pago?: string | null
+          monto: number
+          numero_referencia?: string | null
+          saldo_restante: number
+          tipo_transaccion: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          capital_pagado?: number | null
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          financiamiento_id?: string
+          id?: string
+          interes_pagado?: number | null
+          metodo_pago?: string | null
+          monto?: number
+          numero_referencia?: string | null
+          saldo_restante?: number
+          tipo_transaccion?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transacciones_financiamientos_financiamiento_id_fkey"
+            columns: ["financiamiento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamientos"
             referencedColumns: ["id"]
           },
         ]

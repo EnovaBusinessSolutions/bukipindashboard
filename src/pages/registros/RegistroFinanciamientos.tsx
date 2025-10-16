@@ -1,5 +1,10 @@
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RegistroFinanciamientoForm from "@/components/Financiamientos/RegistroFinanciamientoForm";
+import RegistroAmortizacionForm from "@/components/Financiamientos/RegistroAmortizacionForm";
+import RegistroCargoInteresForm from "@/components/Financiamientos/RegistroCargoInteresForm";
+import ResumenFinanciamientos from "@/components/Financiamientos/ResumenFinanciamientos";
+import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
 
 const RegistroFinanciamientos = () => {
   return (
@@ -20,21 +25,19 @@ const RegistroFinanciamientos = () => {
           </TabsList>
 
           <TabsContent value="registro" className="space-y-6">
-            <div className="text-center text-muted-foreground py-12">
-              Formulario de registro de financiamientos
+            <RegistroFinanciamientoForm />
+            <div className="grid grid-cols-2 gap-6">
+              <RegistroAmortizacionForm />
+              <RegistroCargoInteresForm />
             </div>
           </TabsContent>
 
           <TabsContent value="resumen">
-            <div className="text-center text-muted-foreground py-12">
-              Resumen de financiamientos
-            </div>
+            <ResumenFinanciamientos />
           </TabsContent>
 
           <TabsContent value="analitica">
-            <div className="text-center text-muted-foreground py-12">
-              Analítica de financiamientos
-            </div>
+            <AnalyticaFinanciamientos />
           </TabsContent>
         </Tabs>
       </div>
