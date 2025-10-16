@@ -75,14 +75,79 @@ export const useFinanciamientos = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      const { data, error } = await supabase
+      // Crear el financiamiento
+      const { data: nuevoFinanciamiento, error: errorFinanciamiento } = await supabase
         .from("financiamientos")
         .insert([{ ...financiamiento, user_id: user.id }])
         .select()
         .single();
 
-      if (error) throw error;
-      return data;
+      if (errorFinanciamiento) throw errorFinanciamiento;
+
+      // Crear transacción de desembolso inicial
+      const { error: errorTransaccion } = await supabase
+        .from("transacciones_financiamientos")
+        .insert([{
+          user_id: user.id,
+          financiamiento_id: nuevoFinanciamiento.id,
+          tipo_transaccion: "desembolso",
+          monto: financiamiento.monto_total,
+          fecha: financiamiento.fecha_inicio,
+          capital_pagado: 0,
+          interes_pagado: 0,
+          saldo_restante: financiamiento.monto_total,
+          descripcion: `Desembolso inicial del financiamiento: ${financiamiento.nombre}`,
+        }]);
+
+      if (errorTransaccion) throw errorTransaccion;
+
+      // Generar número de asiento
+      const { data: numeroAsiento, error: errorNumero } = await supabase
+        .rpc('generate_asiento_number', { p_user_id: user.id });
+
+      if (errorNumero) throw errorNumero;
+
+      // Crear asiento contable (Débito: Bancos, Crédito: Pasivo Bancario)
+      const { data: asiento, error: errorAsiento } = await supabase
+        .from("asientos_contables")
+        .insert([{
+          user_id: user.id,
+          numero_asiento: numeroAsiento,
+          fecha: financiamiento.fecha_inicio,
+          descripcion: `Registro de financiamiento: ${financiamiento.nombre} - ${financiamiento.institucion_financiera}`,
+        }])
+        .select()
+        .single();
+
+      if (errorAsiento) throw errorAsiento;
+
+      // Crear detalles del asiento (Débito a Bancos - cuenta 1001)
+      const { error: errorDebito } = await supabase
+        .from("detalle_asientos")
+        .insert([{
+          asiento_id: asiento.id,
+          cuenta_codigo: "1001",
+          debe: financiamiento.monto_total,
+          haber: 0,
+          descripcion: `Desembolso de ${financiamiento.tipo_credito} - ${financiamiento.institucion_financiera}`,
+        }]);
+
+      if (errorDebito) throw errorDebito;
+
+      // Crear detalles del asiento (Crédito a Pasivo Bancario - cuenta 2101)
+      const { error: errorCredito } = await supabase
+        .from("detalle_asientos")
+        .insert([{
+          asiento_id: asiento.id,
+          cuenta_codigo: "2101",
+          debe: 0,
+          haber: financiamiento.monto_total,
+          descripcion: `Préstamo ${financiamiento.tipo_credito} - ${financiamiento.institucion_financiera}`,
+        }]);
+
+      if (errorCredito) throw errorCredito;
+
+      return nuevoFinanciamiento;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["financiamientos"] });
@@ -105,6 +170,7 @@ export const useFinanciamientos = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
+      // Crear la transacción
       const { data, error } = await supabase
         .from("transacciones_financiamientos")
         .insert([{ ...transaccion, user_id: user.id }])
@@ -119,6 +185,122 @@ export const useFinanciamientos = () => {
           .from("financiamientos")
           .update({ saldo_actual: transaccion.saldo_restante })
           .eq("id", transaccion.financiamiento_id);
+      }
+
+      // Si es una amortización, crear asiento contable
+      if (transaccion.tipo_transaccion === "amortizacion") {
+        // Obtener información del financiamiento
+        const { data: financiamiento } = await supabase
+          .from("financiamientos")
+          .select("*")
+          .eq("id", transaccion.financiamiento_id)
+          .single();
+
+        if (financiamiento) {
+          // Generar número de asiento
+          const { data: numeroAsiento } = await supabase
+            .rpc('generate_asiento_number', { p_user_id: user.id });
+
+          // Crear asiento contable
+          const { data: asiento } = await supabase
+            .from("asientos_contables")
+            .insert([{
+              user_id: user.id,
+              numero_asiento: numeroAsiento,
+              fecha: transaccion.fecha,
+              descripcion: `Pago de amortización: ${financiamiento.nombre}`,
+            }])
+            .select()
+            .single();
+
+          if (asiento) {
+            // Débito a Pasivo Bancario (capital)
+            if (transaccion.capital_pagado > 0) {
+              await supabase
+                .from("detalle_asientos")
+                .insert([{
+                  asiento_id: asiento.id,
+                  cuenta_codigo: "2101",
+                  debe: transaccion.capital_pagado,
+                  haber: 0,
+                  descripcion: `Pago a capital - ${financiamiento.nombre}`,
+                }]);
+            }
+
+            // Débito a Gastos Financieros (intereses)
+            if (transaccion.interes_pagado > 0) {
+              await supabase
+                .from("detalle_asientos")
+                .insert([{
+                  asiento_id: asiento.id,
+                  cuenta_codigo: "5201",
+                  debe: transaccion.interes_pagado,
+                  haber: 0,
+                  descripcion: `Intereses pagados - ${financiamiento.nombre}`,
+                }]);
+            }
+
+            // Crédito a Bancos (total del pago)
+            await supabase
+              .from("detalle_asientos")
+              .insert([{
+                asiento_id: asiento.id,
+                cuenta_codigo: "1001",
+                debe: 0,
+                haber: transaccion.monto,
+                descripcion: `Pago de financiamiento - ${financiamiento.nombre}`,
+              }]);
+          }
+        }
+      }
+
+      // Si es un cargo por interés, crear asiento contable
+      if (transaccion.tipo_transaccion === "cargo_interes") {
+        const { data: financiamiento } = await supabase
+          .from("financiamientos")
+          .select("*")
+          .eq("id", transaccion.financiamiento_id)
+          .single();
+
+        if (financiamiento) {
+          const { data: numeroAsiento } = await supabase
+            .rpc('generate_asiento_number', { p_user_id: user.id });
+
+          const { data: asiento } = await supabase
+            .from("asientos_contables")
+            .insert([{
+              user_id: user.id,
+              numero_asiento: numeroAsiento,
+              fecha: transaccion.fecha,
+              descripcion: `Cargo por intereses: ${financiamiento.nombre}`,
+            }])
+            .select()
+            .single();
+
+          if (asiento) {
+            // Débito a Gastos Financieros
+            await supabase
+              .from("detalle_asientos")
+              .insert([{
+                asiento_id: asiento.id,
+                cuenta_codigo: "5201",
+                debe: transaccion.monto,
+                haber: 0,
+                descripcion: transaccion.descripcion || `Cargo por intereses - ${financiamiento.nombre}`,
+              }]);
+
+            // Crédito a Pasivo Bancario
+            await supabase
+              .from("detalle_asientos")
+              .insert([{
+                asiento_id: asiento.id,
+                cuenta_codigo: "2101",
+                debe: 0,
+                haber: transaccion.monto,
+                descripcion: `Acumulación de intereses - ${financiamiento.nombre}`,
+              }]);
+          }
+        }
       }
 
       return data;
