@@ -302,6 +302,19 @@ const AnalyticaFinanciamientos = () => {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-6 p-4 bg-primary/10 rounded-lg">
+            <div className="text-sm text-muted-foreground mb-1">
+              Total a Pagar {periodoAmortizacion === "mensual" ? "(próximos 12 meses)" : "(próximos 20 años)"}
+            </div>
+            <div className="text-3xl font-bold text-primary">
+              ${dataAmortizacionesFuturas.reduce((acc, periodo) => {
+                nombresCreditos.forEach(nombre => {
+                  acc += periodo[nombre] || 0;
+                });
+                return acc;
+              }, 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={dataAmortizacionesFuturas}>
               <CartesianGrid strokeDasharray="3 3" />
