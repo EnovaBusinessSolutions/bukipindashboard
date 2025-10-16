@@ -9,7 +9,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 const ResumenFinanciamientos = () => {
   const { transacciones, financiamientos, isLoading } = useFinanciamientos();
 
-  const getTipoTransaccionLabel = (tipo: string) => {
+  const getTipoTransaccionLabel = (tipo: string, financiamientoId?: string) => {
+    if (tipo === "desembolso" && financiamientoId) {
+      const financiamiento = financiamientos.find(f => f.id === financiamientoId);
+      if (financiamiento) {
+        const tipoCredito: Record<string, string> = {
+          simple: "Crédito Simple",
+          arrendamiento: "Arrendamiento",
+          revolvente: "Crédito Revolvente",
+          tarjeta_corporativa: "Tarjeta Corporativa",
+        };
+        return tipoCredito[financiamiento.tipo_credito] || financiamiento.tipo_credito;
+      }
+    }
+    
     const labels: Record<string, string> = {
       amortizacion: "Amortización",
       cargo_interes: "Cargo por Interés",
@@ -18,7 +31,7 @@ const ResumenFinanciamientos = () => {
     return labels[tipo] || tipo;
   };
 
-  const getTipoTransaccionVariant = (tipo: string) => {
+  const getTipoTransaccionVariant = (tipo: string): "default" | "secondary" | "destructive" => {
     const variants: Record<string, "default" | "secondary" | "destructive"> = {
       amortizacion: "default",
       cargo_interes: "destructive",
@@ -126,7 +139,7 @@ const ResumenFinanciamientos = () => {
                     </TableCell>
                     <TableCell>
                       <Badge variant={getTipoTransaccionVariant(transaccion.tipo_transaccion)}>
-                        {getTipoTransaccionLabel(transaccion.tipo_transaccion)}
+                        {getTipoTransaccionLabel(transaccion.tipo_transaccion, transaccion.financiamiento_id)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
