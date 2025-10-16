@@ -302,19 +302,6 @@ const AnalyticaFinanciamientos = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 p-4 bg-primary/10 rounded-lg">
-            <div className="text-sm text-muted-foreground mb-1">
-              Total a Pagar {periodoAmortizacion === "mensual" ? "(próximos 12 meses)" : "(próximos 20 años)"}
-            </div>
-            <div className="text-3xl font-bold text-primary">
-              ${dataAmortizacionesFuturas.reduce((acc, periodo) => {
-                nombresCreditos.forEach(nombre => {
-                  acc += periodo[nombre] || 0;
-                });
-                return acc;
-              }, 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-            </div>
-          </div>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={dataAmortizacionesFuturas}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -324,44 +311,27 @@ const AnalyticaFinanciamientos = () => {
                 formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
               />
               <Legend />
-              {nombresCreditos.map((nombre: string, index: number) => {
-                const esUltimaBarra = index === nombresCreditos.length - 1;
-                return (
-                  <Bar 
-                    key={nombre} 
+              {nombresCreditos.map((nombre: string, index: number) => (
+                <Bar 
+                  key={nombre} 
+                  dataKey={nombre} 
+                  stackId="a" 
+                  fill={COLORS[index % COLORS.length]}
+                >
+                  <LabelList 
                     dataKey={nombre} 
-                    stackId="a" 
-                    fill={COLORS[index % COLORS.length]}
-                  >
-                    {esUltimaBarra && (
-                      <LabelList 
-                        content={(props: any) => {
-                          const { x, y, width, index: dataIndex } = props;
-                          if (dataIndex === undefined) return null;
-                          
-                          const periodo = dataAmortizacionesFuturas[dataIndex];
-                          const total = nombresCreditos.reduce((sum, n) => sum + (periodo[n] || 0), 0);
-                          
-                          if (total === 0) return null;
-                          
-                          return (
-                            <text
-                              x={x + width / 2}
-                              y={y - 5}
-                              fill="#000"
-                              textAnchor="middle"
-                              fontSize={12}
-                              fontWeight="bold"
-                            >
-                              ${(total / 1000).toFixed(0)}k
-                            </text>
-                          );
-                        }}
-                      />
-                    )}
-                  </Bar>
-                );
-              })}
+                    position="center" 
+                    fill="#fff"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: number) => {
+                      if (value === 0) return '';
+                      if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+                      return `$${value.toFixed(0)}`;
+                    }}
+                  />
+                </Bar>
+              ))}
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
