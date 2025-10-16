@@ -32,6 +32,9 @@ const ResumenFinanciamientos = () => {
     return financiamiento?.nombre || "N/A";
   };
 
+  console.log("Financiamientos:", financiamientos);
+  console.log("Transacciones:", transacciones);
+
   if (isLoading) {
     return (
       <div className="space-y-4">

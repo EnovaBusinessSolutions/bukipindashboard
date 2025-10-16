@@ -75,6 +75,8 @@ export const useFinanciamientos = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
+      console.log("Iniciando creación de financiamiento:", financiamiento);
+
       // Crear el financiamiento
       const { data: nuevoFinanciamiento, error: errorFinanciamiento } = await supabase
         .from("financiamientos")
@@ -82,30 +84,49 @@ export const useFinanciamientos = () => {
         .select()
         .single();
 
-      if (errorFinanciamiento) throw errorFinanciamiento;
+      if (errorFinanciamiento) {
+        console.error("Error al crear financiamiento:", errorFinanciamiento);
+        throw errorFinanciamiento;
+      }
+
+      console.log("Financiamiento creado:", nuevoFinanciamiento);
 
       // Crear transacción de desembolso inicial
+      const transaccionDesembolso = {
+        user_id: user.id,
+        financiamiento_id: nuevoFinanciamiento.id,
+        tipo_transaccion: "desembolso",
+        monto: financiamiento.monto_total,
+        fecha: financiamiento.fecha_inicio,
+        capital_pagado: 0,
+        interes_pagado: 0,
+        saldo_restante: financiamiento.monto_total,
+        descripcion: `Desembolso inicial del financiamiento: ${financiamiento.nombre}`,
+      };
+
+      console.log("Creando transacción de desembolso:", transaccionDesembolso);
+
       const { error: errorTransaccion } = await supabase
         .from("transacciones_financiamientos")
-        .insert([{
-          user_id: user.id,
-          financiamiento_id: nuevoFinanciamiento.id,
-          tipo_transaccion: "desembolso",
-          monto: financiamiento.monto_total,
-          fecha: financiamiento.fecha_inicio,
-          capital_pagado: 0,
-          interes_pagado: 0,
-          saldo_restante: financiamiento.monto_total,
-          descripcion: `Desembolso inicial del financiamiento: ${financiamiento.nombre}`,
-        }]);
+        .insert([transaccionDesembolso]);
 
-      if (errorTransaccion) throw errorTransaccion;
+      if (errorTransaccion) {
+        console.error("Error al crear transacción:", errorTransaccion);
+        throw errorTransaccion;
+      }
+
+      console.log("Transacción de desembolso creada");
 
       // Generar número de asiento
       const { data: numeroAsiento, error: errorNumero } = await supabase
         .rpc('generate_asiento_number', { p_user_id: user.id });
 
-      if (errorNumero) throw errorNumero;
+      if (errorNumero) {
+        console.error("Error al generar número de asiento:", errorNumero);
+        throw errorNumero;
+      }
+
+      console.log("Número de asiento generado:", numeroAsiento);
 
       // Crear asiento contable (Débito: Bancos, Crédito: Pasivo Bancario)
       const { data: asiento, error: errorAsiento } = await supabase
@@ -119,7 +140,12 @@ export const useFinanciamientos = () => {
         .select()
         .single();
 
-      if (errorAsiento) throw errorAsiento;
+      if (errorAsiento) {
+        console.error("Error al crear asiento:", errorAsiento);
+        throw errorAsiento;
+      }
+
+      console.log("Asiento contable creado:", asiento);
 
       // Crear detalles del asiento (Débito a Bancos - cuenta 1001)
       const { error: errorDebito } = await supabase
@@ -132,7 +158,10 @@ export const useFinanciamientos = () => {
           descripcion: `Desembolso de ${financiamiento.tipo_credito} - ${financiamiento.institucion_financiera}`,
         }]);
 
-      if (errorDebito) throw errorDebito;
+      if (errorDebito) {
+        console.error("Error al crear débito:", errorDebito);
+        throw errorDebito;
+      }
 
       // Crear detalles del asiento (Crédito a Pasivo Bancario - cuenta 2101)
       const { error: errorCredito } = await supabase
@@ -145,7 +174,12 @@ export const useFinanciamientos = () => {
           descripcion: `Préstamo ${financiamiento.tipo_credito} - ${financiamiento.institucion_financiera}`,
         }]);
 
-      if (errorCredito) throw errorCredito;
+      if (errorCredito) {
+        console.error("Error al crear crédito:", errorCredito);
+        throw errorCredito;
+      }
+
+      console.log("Asientos contables completados");
 
       return nuevoFinanciamiento;
     },
