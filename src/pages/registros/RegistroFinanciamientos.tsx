@@ -7,6 +7,7 @@ import RegistroFinanciamientoForm from "@/components/Financiamientos/RegistroFin
 import RegistroAmortizacionForm from "@/components/Financiamientos/RegistroAmortizacionForm";
 import RegistroCargoInteresForm from "@/components/Financiamientos/RegistroCargoInteresForm";
 import ResumenFinanciamientos from "@/components/Financiamientos/ResumenFinanciamientos";
+import DetalleCreditosFinanciamientos from "@/components/Financiamientos/DetalleCreditosFinanciamientos";
 import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
 
 const RegistroFinanciamientos = () => {
@@ -22,9 +23,10 @@ const RegistroFinanciamientos = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="registro">Registro</TabsTrigger>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
+            <TabsTrigger value="detalle">Detalle</TabsTrigger>
             <TabsTrigger value="analitica">Analítica</TabsTrigger>
           </TabsList>
 
@@ -87,6 +89,10 @@ const RegistroFinanciamientos = () => {
 
           <TabsContent value="resumen">
             <ResumenFinanciamientos />
+          </TabsContent>
+
+          <TabsContent value="detalle">
+            <DetalleCreditosFinanciamientos />
           </TabsContent>
 
           <TabsContent value="analitica">

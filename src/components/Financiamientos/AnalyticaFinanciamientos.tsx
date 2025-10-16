@@ -185,61 +185,6 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Detalle de Créditos Activos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {financiamientosActivos.map((f) => (
-              <div key={f.id} className="border rounded-lg p-4 space-y-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-semibold text-lg">{f.nombre}</h4>
-                    <p className="text-sm text-muted-foreground">{f.institucion_financiera}</p>
-                  </div>
-                  <Badge>{getTipoCreditoLabel(f.tipo_credito)}</Badge>
-                </div>
-                <div className="grid grid-cols-4 gap-4 mt-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Monto Original</p>
-                    <p className="font-medium">${f.monto_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Saldo Actual</p>
-                    <p className="font-medium text-red-600">${f.saldo_actual.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Tasa de Interés</p>
-                    <p className="font-medium">{f.tasa_interes}%</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Plazo</p>
-                    <p className="font-medium">{f.plazo_meses} meses</p>
-                  </div>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2 mt-2">
-                  <div
-                    className="bg-primary h-2 rounded-full transition-all"
-                    style={{
-                      width: `${((f.monto_total - f.saldo_actual) / f.monto_total) * 100}%`,
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground text-right">
-                  {((f.monto_total - f.saldo_actual) / f.monto_total * 100).toFixed(1)}% pagado
-                </p>
-              </div>
-            ))}
-            {financiamientosActivos.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                No hay créditos activos
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
