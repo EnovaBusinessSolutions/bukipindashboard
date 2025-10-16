@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { format, addMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 
@@ -27,6 +27,17 @@ const RegistroFinanciamientoForm = () => {
   });
   const [fechaInicio, setFechaInicio] = useState<Date>(new Date());
   const [fechaVencimiento, setFechaVencimiento] = useState<Date>();
+
+  // Calcular automáticamente la fecha de vencimiento
+  useEffect(() => {
+    if (fechaInicio && formData.plazo_meses) {
+      const meses = parseInt(formData.plazo_meses);
+      if (!isNaN(meses) && meses > 0) {
+        const nuevaFechaVencimiento = addMonths(fechaInicio, meses);
+        setFechaVencimiento(nuevaFechaVencimiento);
+      }
+    }
+  }, [fechaInicio, formData.plazo_meses]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,24 +194,13 @@ const RegistroFinanciamientoForm = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Fecha de Vencimiento *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Selecciona fecha"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={fechaVencimiento}
-                    onSelect={setFechaVencimiento}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label>Fecha de Vencimiento (calculada automáticamente)</Label>
+              <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
+                <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará automáticamente"}
+                </span>
+              </div>
             </div>
           </div>
 
