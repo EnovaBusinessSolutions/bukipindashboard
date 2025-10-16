@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -48,9 +48,9 @@ const AnalyticaFinanciamientos = () => {
   };
 
   const dataComparacion = [
-    { name: "Monto Original", valor: totalOriginal },
-    { name: "Monto Pagado", valor: totalPagado },
-    { name: "Saldo Actual", valor: totalDeuda },
+    { name: "Monto Original", valor: totalOriginal, color: "#3b82f6" },
+    { name: "Monto Pagado", valor: totalPagado, color: "#10b981" },
+    { name: "Saldo Pendiente", valor: totalDeuda, color: "#ef4444" },
   ];
 
   return (
@@ -131,28 +131,57 @@ const AnalyticaFinanciamientos = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Comparación de Montos</CardTitle>
+            <CardTitle>Flujo del Financiamiento</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={dataComparacion}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="valor"
-                >
+              <BarChart 
+                data={dataComparacion}
+                layout="vertical"
+                margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="name" width={120} />
+                <Tooltip 
+                  formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                />
+                <Bar dataKey="valor" name="Monto">
                   {dataComparacion.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#3b82f6" }} />
+                  <span className="text-sm">Monto Original:</span>
+                </div>
+                <span className="text-sm font-semibold">
+                  ${totalOriginal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#10b981" }} />
+                  <span className="text-sm">Monto Pagado:</span>
+                </div>
+                <span className="text-sm font-semibold text-green-600">
+                  ${totalPagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#ef4444" }} />
+                  <span className="text-sm">Saldo Pendiente:</span>
+                </div>
+                <span className="text-sm font-semibold text-red-600">
+                  ${totalDeuda.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
