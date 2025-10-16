@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { CreditCard, DollarSign, TrendingDown } from "lucide-react";
 import RegistroFinanciamientoForm from "@/components/Financiamientos/RegistroFinanciamientoForm";
 import RegistroAmortizacionForm from "@/components/Financiamientos/RegistroAmortizacionForm";
 import RegistroCargoInteresForm from "@/components/Financiamientos/RegistroCargoInteresForm";
@@ -7,6 +10,7 @@ import ResumenFinanciamientos from "@/components/Financiamientos/ResumenFinancia
 import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
 
 const RegistroFinanciamientos = () => {
+  const [tipoRegistro, setTipoRegistro] = useState<"" | "financiamiento" | "amortizacion" | "interes">("");
   return (
     <div className="h-full overflow-hidden flex flex-col">
       <div className="p-6 border-b bg-background">
@@ -25,11 +29,60 @@ const RegistroFinanciamientos = () => {
           </TabsList>
 
           <TabsContent value="registro" className="space-y-6">
-            <RegistroFinanciamientoForm />
-            <div className="grid grid-cols-2 gap-6">
-              <RegistroAmortizacionForm />
-              <RegistroCargoInteresForm />
-            </div>
+            {!tipoRegistro ? (
+              <div className="grid grid-cols-3 gap-6">
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("financiamiento")}>
+                  <CardHeader>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="p-3 bg-primary/10 rounded-full">
+                        <CreditCard className="h-8 w-8 text-primary" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-center">Nuevo Financiamiento</CardTitle>
+                    <CardDescription className="text-center">
+                      Registra un nuevo crédito, préstamo o arrendamiento
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("amortizacion")}>
+                  <CardHeader>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="p-3 bg-green-500/10 rounded-full">
+                        <DollarSign className="h-8 w-8 text-green-600" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-center">Amortización</CardTitle>
+                    <CardDescription className="text-center">
+                      Registra el pago de una mensualidad o abono a capital
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("interes")}>
+                  <CardHeader>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="p-3 bg-red-500/10 rounded-full">
+                        <TrendingDown className="h-8 w-8 text-red-600" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-center">Cargo por Intereses</CardTitle>
+                    <CardDescription className="text-center">
+                      Registra intereses ordinarios, moratorios o comisiones
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Button variant="outline" onClick={() => setTipoRegistro("")}>
+                  ← Volver a selección
+                </Button>
+                {tipoRegistro === "financiamiento" && <RegistroFinanciamientoForm />}
+                {tipoRegistro === "amortizacion" && <RegistroAmortizacionForm />}
+                {tipoRegistro === "interes" && <RegistroCargoInteresForm />}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="resumen">
