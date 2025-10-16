@@ -19,10 +19,10 @@ const RegistroInversiones = () => {
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="registro">Registro</TabsTrigger>
-            <TabsTrigger value="resumen">Resumen</TabsTrigger>
-            <TabsTrigger value="analitica">Analítica</TabsTrigger>
-            <TabsTrigger value="depreciaciones">Resumen Depreciaciones</TabsTrigger>
+            <TabsTrigger value="registro">Registro de Inversiones</TabsTrigger>
+            <TabsTrigger value="resumen">Resumen de Inversiones</TabsTrigger>
+            <TabsTrigger value="depreciaciones">Resumen de Depreciaciones</TabsTrigger>
+            <TabsTrigger value="analitica">Analítica de Inversiones</TabsTrigger>
           </TabsList>
 
           <TabsContent value="registro" className="space-y-6">
@@ -33,12 +33,12 @@ const RegistroInversiones = () => {
             <ResumenInversiones />
           </TabsContent>
 
-          <TabsContent value="analitica">
-            <AnalyticaInversiones />
-          </TabsContent>
-
           <TabsContent value="depreciaciones">
             <ResumenDepreciaciones />
+          </TabsContent>
+
+          <TabsContent value="analitica">
+            <AnalyticaInversiones />
           </TabsContent>
         </Tabs>
       </div>
