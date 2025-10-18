@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Minus, Equal } from "lucide-react";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
+} from "recharts";
 
 interface WaterfallData {
   aportaciones: number;
@@ -12,122 +14,164 @@ interface GraficaWaterfallProps {
   accionistaId?: string;
 }
 
+interface ChartData {
+  name: string;
+  value: number;
+  start: number;
+  fill: string;
+  isTotal: boolean;
+}
+
 export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
   const balanceFinal = data.aportaciones + data.utilidades - data.dividendos;
 
-  const formatMonto = (value: number) => {
-    return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  // Construir datos para waterfall - igual que EstadoResultadosAnalitico
+  const waterfallData: ChartData[] = [];
+
+  // Aportaciones (inicio - verde brillante)
+  waterfallData.push({
+    name: "Aportaciones",
+    value: 0, // Transparente (posiciona)
+    start: data.aportaciones, // Con color (visible)
+    fill: "#10b981", // green-500
+    isTotal: false
+  });
+
+  // Utilidades (positivo - azul)
+  waterfallData.push({
+    name: "(+) Utilidades",
+    value: data.aportaciones, // Transparente (posiciona)
+    start: data.utilidades, // Con color (visible)
+    fill: "#3b82f6", // blue-500
+    isTotal: false
+  });
+
+  // Subtotal (antes de dividendos - azul claro)
+  const subtotal = data.aportaciones + data.utilidades;
+  waterfallData.push({
+    name: "= Subtotal",
+    value: 0, // Transparente (posiciona)
+    start: subtotal, // Con color (visible)
+    fill: "#60a5fa", // blue-400
+    isTotal: true
+  });
+
+  // Dividendos (negativo - rojo)
+  const despuesDividendos = subtotal - data.dividendos;
+  waterfallData.push({
+    name: "(-) Dividendos",
+    value: despuesDividendos, // Transparente (posiciona)
+    start: data.dividendos, // Con color (visible)
+    fill: "#ef4444", // red-500
+    isTotal: false
+  });
+
+  // Balance Final (final - verde o rojo según resultado)
+  waterfallData.push({
+    name: "= BALANCE FINAL",
+    value: 0, // Transparente (posiciona)
+    start: balanceFinal, // Con color (visible)
+    fill: balanceFinal >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
+    isTotal: true
+  });
+
+  const formatCurrency = (value: number) => {
+    return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
+  const CustomTooltipWaterfall = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const chartData = payload[0].payload;
+      // Para egresos, mostrar el valor como negativo en el tooltip
+      const displayValue = chartData.isTotal ? chartData.start : (chartData.name.includes("(-)") ? -chartData.start : chartData.start);
+      return (
+        <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
+          <p className="font-semibold text-foreground mb-1">{chartData.name}</p>
+          <p className={`text-sm ${displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(displayValue)}
+          </p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Flujo de Capital (Formato Estado de Resultados)</CardTitle>
+    <Card className="border-2">
+      <CardHeader className="bg-muted/50">
+        <CardTitle className="text-xl">Gráfico de Cascada - Flujo de Capital</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Visualización del flujo de capital desde aportaciones hasta balance final
+        </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Aportaciones Iniciales */}
-        <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border-l-4 border-green-500">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
-              <Plus className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">Aportaciones de Capital</p>
-              <p className="text-xs text-muted-foreground">Capital social inicial</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {formatMonto(data.aportaciones)}
-            </p>
-          </div>
-        </div>
-
-        {/* Más: Utilidades */}
-        <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border-l-4 border-blue-500">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-              <Plus className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">(+) Utilidades Acumuladas</p>
-              <p className="text-xs text-muted-foreground">Ganancias del ejercicio</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {formatMonto(data.utilidades)}
-            </p>
-          </div>
-        </div>
-
-        {/* Subtotal antes de dividendos */}
-        <div className="flex justify-end items-center gap-4 px-4 py-2 border-t border-dashed">
-          <p className="text-sm text-muted-foreground">Subtotal:</p>
-          <p className="text-xl font-semibold text-foreground">
-            {formatMonto(data.aportaciones + data.utilidades)}
-          </p>
-        </div>
-
-        {/* Menos: Dividendos */}
-        <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-950/20 rounded-lg border-l-4 border-red-500">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-              <Minus className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">(-) Dividendos Distribuidos</p>
-              <p className="text-xs text-muted-foreground">Pagos a accionistas</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-              ({formatMonto(data.dividendos)})
-            </p>
-          </div>
-        </div>
-
-        {/* Balance Final */}
-        <div className="flex items-center justify-between p-5 bg-primary/10 rounded-lg border-2 border-primary mt-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-              <Equal className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-foreground">Balance Final de Capital</p>
-              <p className="text-xs text-muted-foreground">Capital contable neto</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold text-primary">
-              {formatMonto(balanceFinal)}
-            </p>
-          </div>
-        </div>
-
-        {/* Resumen de composición */}
-        <div className="grid grid-cols-3 gap-2 pt-4 border-t">
-          <div className="text-center p-3 bg-muted/50 rounded">
-            <p className="text-xs text-muted-foreground">Aportaciones</p>
-            <p className="text-sm font-semibold text-green-600 dark:text-green-400">
-              {balanceFinal > 0 ? ((data.aportaciones / balanceFinal) * 100).toFixed(1) : 0}%
-            </p>
-          </div>
-          <div className="text-center p-3 bg-muted/50 rounded">
-            <p className="text-xs text-muted-foreground">Utilidades</p>
-            <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-              {balanceFinal > 0 ? ((data.utilidades / balanceFinal) * 100).toFixed(1) : 0}%
-            </p>
-          </div>
-          <div className="text-center p-3 bg-muted/50 rounded">
-            <p className="text-xs text-muted-foreground">Distribuido</p>
-            <p className="text-sm font-semibold text-red-600 dark:text-red-400">
-              {data.aportaciones + data.utilidades > 0 
-                ? ((data.dividendos / (data.aportaciones + data.utilidades)) * 100).toFixed(1) 
-                : 0}%
-            </p>
-          </div>
-        </div>
+      <CardContent className="p-6">
+        <ResponsiveContainer width="100%" height={450}>
+          <BarChart
+            data={waterfallData}
+            margin={{ top: 20, right: 30, left: 60, bottom: 80 }}
+            barGap={8}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis 
+              dataKey="name" 
+              angle={-45}
+              textAnchor="end"
+              height={100}
+              tick={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 500 }}
+              interval={0}
+            />
+            <YAxis 
+              tickFormatter={(value) => formatCurrency(value)}
+              tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+              width={80}
+            />
+            <Tooltip content={<CustomTooltipWaterfall />} />
+            <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
+            
+            {/* Barra invisible para posicionar */}
+            <Bar dataKey="value" stackId="stack" isAnimationActive={false} legendType="none">
+              {waterfallData.map((entry, index) => (
+                <Cell 
+                  key={`cell-value-${index}`} 
+                  fill="transparent"
+                  style={{ pointerEvents: 'none' }}
+                />
+              ))}
+            </Bar>
+            
+            {/* Barra visible con colores */}
+            <Bar 
+              dataKey="start" 
+              stackId="stack" 
+              radius={[6, 6, 6, 6]}
+              label={{
+                position: 'top',
+                content: ({ x, y, width, value, index }: any) => {
+                  const item = waterfallData[index];
+                  if (!item) return null;
+                  const displayValue = item.name.includes("(-)") ? -item.start : item.start;
+                  return (
+                    <text
+                      x={Number(x) + Number(width) / 2}
+                      y={Number(y) - 5}
+                      fill="hsl(var(--foreground))"
+                      textAnchor="middle"
+                      dominantBaseline="bottom"
+                      fontSize={10}
+                      fontWeight="bold"
+                    >
+                      {formatCurrency(displayValue)}
+                    </text>
+                  );
+                }
+              }}
+            >
+              {waterfallData.map((entry, index) => (
+                <Cell key={`cell-start-${index}`} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
   );
