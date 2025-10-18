@@ -45,50 +45,63 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       // Actividades Operativas por cuenta
       const { data: ingresos } = await supabase
         .from("transacciones_ingresos")
-        .select("monto_pagado, cuenta_principal_codigo")
+        .select("monto_pagado, metodo_pago")
         .gte("created_at", startDateStr)
         .lte("created_at", endDateStr);
 
       const { data: egresos } = await supabase
         .from("transacciones_egresos")
-        .select("monto_pagado, cuenta_codigo")
+        .select("monto_pagado, metodo_pago")
         .gte("created_at", startDateStr)
         .lte("created_at", endDateStr);
 
       const operativo = { efectivo: 0, bancos: 0, total: 0 };
+      
       ingresos?.forEach(i => {
         const monto = i.monto_pagado || 0;
-        if (i.cuenta_principal_codigo === "1001") operativo.efectivo += monto;
-        else if (i.cuenta_principal_codigo === "1002") operativo.bancos += monto;
+        if (i.metodo_pago === "efectivo") {
+          operativo.efectivo += monto;
+        } else {
+          // transferencia, cheque, tarjeta, etc van a bancos
+          operativo.bancos += monto;
+        }
         operativo.total += monto;
       });
+      
       egresos?.forEach(e => {
         const monto = e.monto_pagado || 0;
-        if (e.cuenta_codigo === "1001") operativo.efectivo -= monto;
-        else if (e.cuenta_codigo === "1002") operativo.bancos -= monto;
+        if (e.metodo_pago === "efectivo") {
+          operativo.efectivo -= monto;
+        } else {
+          // transferencia, cheque, tarjeta, etc van a bancos
+          operativo.bancos -= monto;
+        }
         operativo.total -= monto;
       });
 
       // Actividades de Inversión
       const { data: inversiones } = await supabase
         .from("inversiones_capex")
-        .select("monto_pagado, cuenta_codigo")
+        .select("monto_pagado, metodo_pago")
         .gte("created_at", startDateStr)
         .lte("created_at", endDateStr);
 
       const inversion = { efectivo: 0, bancos: 0, total: 0 };
       inversiones?.forEach(i => {
         const monto = i.monto_pagado || 0;
-        if (i.cuenta_codigo === "1001") inversion.efectivo -= monto;
-        else if (i.cuenta_codigo === "1002") inversion.bancos -= monto;
-        else inversion.efectivo -= monto; // default a efectivo
+        if (i.metodo_pago === "efectivo") {
+          inversion.efectivo -= monto;
+        } else {
+          // transferencia, cheque, etc van a bancos
+          inversion.bancos -= monto;
+        }
         inversion.total -= monto;
       });
 
       // Actividades de Financiamiento  
       const { data: financiamientos } = await supabase
         .from("financiamientos")
-        .select("saldo_inicial, cuenta_codigo")
+        .select("saldo_inicial")
         .gte("created_at", startDateStr)
         .lte("created_at", endDateStr);
 
@@ -100,17 +113,22 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         .lte("created_at", endDateStr);
 
       const financiamiento = { efectivo: 0, bancos: 0, total: 0 };
+      
+      // Los financiamientos siempre van a bancos (disposiciones)
       financiamientos?.forEach(f => {
         const monto = f.saldo_inicial || 0;
-        if (f.cuenta_codigo === "1001") financiamiento.efectivo += monto;
-        else if (f.cuenta_codigo === "1002") financiamiento.bancos += monto;
-        else financiamiento.bancos += monto; // default a bancos
+        financiamiento.bancos += monto;
         financiamiento.total += monto;
       });
+      
+      // Pagos de financiamiento según método de pago
       amortizaciones?.forEach(a => {
         const monto = (a.capital_pagado || 0) + (a.interes_pagado || 0);
-        // Asumiendo que pagos son desde bancos por defecto
-        financiamiento.bancos -= monto;
+        if (a.metodo_pago === "efectivo") {
+          financiamiento.efectivo -= monto;
+        } else {
+          financiamiento.bancos -= monto;
+        }
         financiamiento.total -= monto;
       });
 
