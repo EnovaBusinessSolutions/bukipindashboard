@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
+import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart as RechartsPieChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart as RechartsPieChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ComposedChart } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const AnalisisResultados = () => {
   const { data: saldos, isLoading } = useBalanceGeneral();
+  const { data: resultadosMensuales, isLoading: isLoadingMensual } = useEstadoResultadosMensual();
 
   if (isLoading) {
     return (
@@ -163,13 +166,212 @@ const AnalisisResultados = () => {
         </div>
 
         {/* Tabs de Análisis */}
-        <Tabs defaultValue="margenes" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="mensual" className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="mensual">Estado de Resultados Mensual</TabsTrigger>
             <TabsTrigger value="margenes">Márgenes</TabsTrigger>
             <TabsTrigger value="rentabilidad">Rentabilidad</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
             <TabsTrigger value="distribucion">Distribución</TabsTrigger>
           </TabsList>
+
+          {/* Tab de Estado de Resultados Mensual */}
+          <TabsContent value="mensual" className="space-y-4">
+            {isLoadingMensual ? (
+              <Skeleton className="h-96 w-full" />
+            ) : resultadosMensuales ? (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Estado de Resultados Mensual</CardTitle>
+                    <CardDescription>
+                      Análisis mensual de ingresos, costos, gastos y utilidades del ejercicio actual
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="font-bold">Concepto</TableHead>
+                            {resultadosMensuales.map((r) => (
+                              <TableHead key={r.mes} className="text-right min-w-[100px]">{r.mes}</TableHead>
+                            ))}
+                            <TableHead className="text-right font-bold bg-muted min-w-[120px]">Total Anual</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow className="font-medium">
+                            <TableCell className="font-bold">Ingresos</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right">
+                                {formatCurrency(r.ingresos)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold">Costos</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-red-600">
+                                ({formatCurrency(r.costos)})
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-red-600">
+                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.costos, 0))})
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-2">
+                            <TableCell className="font-bold">Utilidad Bruta</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right font-medium">
+                                {formatCurrency(r.utilidadBruta)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadBruta, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold">Gastos Operativos</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-red-600">
+                                ({formatCurrency(r.gastos)})
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-red-600">
+                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.gastos, 0))})
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-2">
+                            <TableCell className="font-bold">Utilidad Operativa (EBITDA)</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right font-medium">
+                                {formatCurrency(r.utilidadOperativa)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-2 bg-muted/50">
+                            <TableCell className="font-bold">Utilidad Neta</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right font-bold">
+                                {formatCurrency(r.utilidadNeta)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadNeta, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-4">
+                            <TableCell className="font-bold text-muted-foreground">Margen Bruto %</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-muted-foreground">
+                                {formatPercent(r.margenBruto)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-muted-foreground">
+                              {formatPercent(
+                                resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
+                                  ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadBruta, 0) / 
+                                     resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0)) * 100
+                                  : 0
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold text-muted-foreground">Margen EBITDA %</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-muted-foreground">
+                                {formatPercent(r.margenEBITDA)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-muted-foreground">
+                              {formatPercent(
+                                resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
+                                  ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0) / 
+                                     resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0)) * 100
+                                  : 0
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold text-muted-foreground">Margen Neto %</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-muted-foreground">
+                                {formatPercent(r.margenNeto)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-muted-foreground">
+                              {formatPercent(
+                                resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
+                                  ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadNeta, 0) / 
+                                     resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0)) * 100
+                                  : 0
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Evolución Mensual de Ventas y Márgenes</CardTitle>
+                    <CardDescription>
+                      Barras representan ventas mensuales, líneas muestran evolución de márgenes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer 
+                      config={{
+                        ingresos: { label: "Ventas", color: "hsl(var(--chart-1))" },
+                        margenBruto: { label: "Margen Bruto %", color: "hsl(var(--chart-2))" },
+                        margenEBITDA: { label: "Margen EBITDA %", color: "hsl(var(--chart-3))" },
+                        margenNeto: { label: "Margen Neto %", color: "hsl(var(--chart-4))" },
+                      }} 
+                      className="h-[400px]"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={resultadosMensuales}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
+                          <YAxis yAxisId="left" label={{ value: 'Ventas ($)', angle: -90, position: 'insideLeft' }} />
+                          <YAxis yAxisId="right" orientation="right" label={{ value: 'Margen (%)', angle: 90, position: 'insideRight' }} />
+                          <ChartTooltip 
+                            content={({ active, payload }) => {
+                              if (!active || !payload) return null;
+                              return (
+                                <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                  <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                  {payload.map((entry: any, index: number) => (
+                                    <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                      {entry.name}: {entry.name.includes('%') ? formatPercent(entry.value) : formatCurrency(entry.value)}
+                                    </p>
+                                  ))}
+                                </div>
+                              );
+                            }}
+                          />
+                          <Legend />
+                          <Bar yAxisId="left" dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
+                          <Line yAxisId="right" type="monotone" dataKey="margenBruto" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Margen Bruto %" dot={{ r: 4 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenEBITDA" stroke="hsl(var(--chart-3))" strokeWidth={2} name="Margen EBITDA %" dot={{ r: 4 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenNeto" stroke="hsl(var(--chart-4))" strokeWidth={2} name="Margen Neto %" dot={{ r: 4 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+              </>
+            ) : null}
+          </TabsContent>
 
           {/* Tab de Márgenes */}
           <TabsContent value="margenes" className="space-y-4">
