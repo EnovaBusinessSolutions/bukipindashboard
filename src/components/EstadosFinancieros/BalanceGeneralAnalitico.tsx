@@ -26,13 +26,16 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   // Cálculos de totales
   const activosCirculantes = saldos.caja + saldos.bancos + saldos.cuentasPorCobrar + saldos.inventario;
   const activosFijos = saldos.activosFijos;
-  const totalActivos = activosCirculantes + activosFijos;
+  const activosDiferidos = 0; // No implementado aún
+  const totalActivos = activosCirculantes + activosFijos + activosDiferidos;
   
   const pasivosCirculantes = saldos.proveedores;
   const pasivosLargoPlazo = saldos.financiamientos;
   const totalPasivos = pasivosCirculantes + pasivosLargoPlazo;
   
   const capital = totalActivos - totalPasivos;
+  const utilidadEjercicio = saldos.utilidad;
+  const capitalSocial = capital - utilidadEjercicio; // Capital social inicial
 
   // 1. Estructura del Balance (Activos, Pasivos, Capital)
   const estructuraBalanceData = [
@@ -45,7 +48,8 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const estructuraActivosData = [
     { name: "Activos Circulantes", value: activosCirculantes, color: "hsl(var(--chart-1))" },
     { name: "Activos Fijos", value: activosFijos, color: "hsl(var(--chart-3))" },
-  ].filter(item => item.value > 0);
+    { name: "Activos Diferidos", value: activosDiferidos, color: "hsl(var(--chart-4))" },
+  ];
 
   // 3. Desglose de Activos Circulantes
   const activosCirculantesData = [
@@ -53,23 +57,39 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     { name: "Bancos", size: saldos.bancos, color: "hsl(var(--chart-2))" },
     { name: "Cuentas por Cobrar", size: saldos.cuentasPorCobrar, color: "hsl(var(--chart-3))" },
     { name: "Inventario", size: saldos.inventario, color: "hsl(var(--chart-4))" },
-  ].filter(item => item.size > 0);
+  ];
+
+  // 3B. Desglose de Activos Fijos
+  const activosFijosData = [
+    { name: "Activos Fijos Netos", size: activosFijos, color: "hsl(var(--chart-3))" },
+  ];
+
+  // 3C. Desglose de Activos Diferidos
+  const activosDiferidosData = [
+    { name: "Gastos Diferidos", size: activosDiferidos, color: "hsl(var(--chart-4))" },
+  ];
 
   // 4. Estructura de Pasivos por tipo
   const estructuraPasivosData = [
     { name: "Pasivos Circulantes", value: pasivosCirculantes, color: "hsl(var(--chart-5))" },
     { name: "Pasivos Largo Plazo", value: pasivosLargoPlazo, color: "hsl(var(--chart-4))" },
-  ].filter(item => item.value > 0);
+  ];
 
   // 5. Desglose de Pasivos Circulantes
   const pasivosCirculantesData = [
     { name: "Proveedores", size: saldos.proveedores, color: "hsl(var(--chart-5))" },
-  ].filter(item => item.size > 0);
+  ];
+
+  // 5B. Desglose de Pasivos Largo Plazo
+  const pasivosLargoPlazoData = [
+    { name: "Financiamientos", size: pasivosLargoPlazo, color: "hsl(var(--chart-4))" },
+  ];
 
   // 6. Capital Contable
   const capitalData = [
-    { name: "Capital Contable", value: capital, color: "hsl(var(--chart-2))" },
-  ].filter(item => item.value !== 0);
+    { name: "Capital Social", size: capitalSocial, color: "hsl(var(--chart-2))" },
+    { name: "Utilidad del Ejercicio", size: utilidadEjercicio, color: "hsl(var(--chart-1))" },
+  ];
 
 
   const formatCurrency = (value: number) => {
@@ -273,6 +293,72 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Composición de Activos Fijos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composición de Activos Fijos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <Treemap
+                      data={activosFijosData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke="hsl(var(--background))"
+                      fill="hsl(var(--chart-3))"
+                      content={<CustomTreemapContent />}
+                    />
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {activosFijosData.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Composición de Activos Diferidos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composición de Activos Diferidos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <Treemap
+                      data={activosDiferidosData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke="hsl(var(--background))"
+                      fill="hsl(var(--chart-4))"
+                      content={<CustomTreemapContent />}
+                    />
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {activosDiferidosData.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Vista de Pasivos */}
@@ -327,7 +413,7 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición de Pasivos Circulantes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={200}>
                     <Treemap
                       data={pasivosCirculantesData}
                       dataKey="size"
@@ -353,13 +439,46 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Composición de Pasivos Largo Plazo */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composición de Pasivos a Largo Plazo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <Treemap
+                      data={pasivosLargoPlazoData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke="hsl(var(--background))"
+                      fill="hsl(var(--chart-4))"
+                      content={<CustomTreemapContent />}
+                    />
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {pasivosLargoPlazoData.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Vista de Capital */}
             <TabsContent value="capital" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Capital Contable</CardTitle>
+                  <CardTitle>Capital Contable Total</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col items-center justify-center p-8">
@@ -379,6 +498,39 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                         <p className="text-xl font-semibold text-foreground">{formatCurrency(totalPasivos)}</p>
                       </div>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Composición del Capital */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composición del Capital Contable</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <Treemap
+                      data={capitalData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke="hsl(var(--background))"
+                      fill="hsl(var(--chart-2))"
+                      content={<CustomTreemapContent />}
+                    />
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {capitalData.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
