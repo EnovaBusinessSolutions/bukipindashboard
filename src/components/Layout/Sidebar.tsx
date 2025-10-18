@@ -54,6 +54,14 @@ const Sidebar = () => {
     name: "Balance General",
     path: "/estados-financieros/balance",
     active: location.pathname === "/estados-financieros/balance"
+  }, {
+    name: "Flujo de Efectivo",
+    path: "/estados-financieros/flujo-efectivo",
+    active: location.pathname === "/estados-financieros/flujo-efectivo"
+  }, {
+    name: "Balanza",
+    path: "/estados-financieros/balanza",
+    active: location.pathname === "/estados-financieros/balanza"
   }];
 
   const registrosItems = [{

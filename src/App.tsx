@@ -13,6 +13,8 @@ import PlanCuentas from "./pages/PlanCuentas";
 import Inventario from "./pages/Inventario";
 import EstadoResultados from "./pages/EstadoResultados";
 import BalanceGeneral from "./pages/BalanceGeneral";
+import FlujoEfectivo from "./pages/FlujoEfectivo";
+import Balanza from "./pages/Balanza";
 import Sidebar from "./components/Layout/Sidebar";
 import RegistroIngresos from "./pages/registros/RegistroIngresos";
 import RegistroEgresos from "./pages/registros/RegistroEgresos";
@@ -47,6 +49,8 @@ const App = () => (
                         <Route path="/plan-cuentas" element={<PlanCuentas />} />
                         <Route path="/estados-financieros/resultados" element={<EstadoResultados />} />
                         <Route path="/estados-financieros/balance" element={<BalanceGeneral />} />
+                        <Route path="/estados-financieros/flujo-efectivo" element={<FlujoEfectivo />} />
+                        <Route path="/estados-financieros/balanza" element={<Balanza />} />
                         <Route path="/registros/ingresos" element={<RegistroIngresos />} />
                         <Route path="/registros/egresos" element={<RegistroEgresos />} />
                         <Route path="/registros/inversiones" element={<RegistroInversiones />} />
