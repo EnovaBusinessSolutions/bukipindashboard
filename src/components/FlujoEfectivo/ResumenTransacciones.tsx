@@ -265,7 +265,7 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
                 <TableHead>Nombre</TableHead>
                 <TableHead>Institución</TableHead>
                 <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
+                <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -304,7 +304,7 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
                   <TableHead>Método</TableHead>
                   <TableHead className="text-right">Capital</TableHead>
                   <TableHead className="text-right">Interés</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
