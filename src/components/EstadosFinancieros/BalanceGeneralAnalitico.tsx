@@ -33,9 +33,10 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const pasivosLargoPlazo = saldos.financiamientos;
   const totalPasivos = pasivosCirculantes + pasivosLargoPlazo;
   
-  const capital = totalActivos - totalPasivos;
+  const capital = saldos.capitalSocial + saldos.utilidadesRetenidas + saldos.utilidad;
   const utilidadEjercicio = saldos.utilidad;
-  const capitalSocial = capital - utilidadEjercicio; // Capital social inicial
+  const capitalSocialInicial = saldos.capitalSocial;
+  const utilidadesRetenidas = saldos.utilidadesRetenidas;
 
   // 1. Estructura del Balance (Activos, Pasivos, Capital)
   const estructuraBalanceData = [
@@ -87,9 +88,10 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
 
   // 6. Capital Contable
   const capitalData = [
-    { name: "Capital Social", size: capitalSocial, color: "hsl(var(--chart-2))" },
+    { name: "Capital Social", size: capitalSocialInicial, color: "hsl(var(--chart-2))" },
+    { name: "Utilidades Retenidas", size: utilidadesRetenidas, color: "hsl(var(--chart-3))" },
     { name: "Utilidad del Ejercicio", size: utilidadEjercicio, color: "hsl(var(--chart-1))" },
-  ];
+  ].filter(item => item.size > 0);
 
 
   const formatCurrency = (value: number) => {

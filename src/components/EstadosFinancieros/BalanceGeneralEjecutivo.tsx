@@ -53,8 +53,27 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
         .in('metodo_pago', ['transferencia', 'tarjeta', 'tarjeta-transferencia'])
         .lte('created_at', cutoffDateStr);
 
+      // Aportaciones de capital
+      const { data: aportaciones } = await supabase
+        .from('transacciones_capital')
+        .select('monto')
+        .eq('tipo_movimiento', 'aportacion')
+        .lte('created_at', cutoffDateStr);
+
+      const totalAportaciones = aportaciones?.reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0;
+
+      // Dividendos pagados
+      const { data: dividendos } = await supabase
+        .from('transacciones_capital')
+        .select('monto')
+        .eq('tipo_movimiento', 'dividendo')
+        .lte('created_at', cutoffDateStr);
+
+      const totalDividendos = dividendos?.reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0;
+
       const bancos = (ingresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) -
-                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0);
+                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) +
+                     totalAportaciones - totalDividendos;
 
       // Cuentas por Cobrar
       const { data: cuentasCobrar } = await supabase
@@ -107,7 +126,22 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
 
       const utilidad = ingresos - (costos + gastos);
 
-      return { caja, bancos, cuentasPorCobrar, inventario, proveedores, utilidad };
+      // Capital social y utilidades retenidas
+      const capitalSocial = totalAportaciones;
+      const utilidadesRetenidas = utilidad - totalDividendos;
+
+      return { 
+        caja, 
+        bancos, 
+        cuentasPorCobrar, 
+        inventario, 
+        proveedores, 
+        utilidad,
+        capitalSocial,
+        utilidadesRetenidas,
+        totalAportaciones,
+        totalDividendos
+      };
     },
   });
 
@@ -187,6 +221,8 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
       case '1003': saldoAutomatico = saldosAutomaticos.cuentasPorCobrar; break;
       case '1005': saldoAutomatico = saldosAutomaticos.inventario; break;
       case '2001': saldoAutomatico = saldosAutomaticos.proveedores; break;
+      case '3001': saldoAutomatico = saldosAutomaticos.capitalSocial; break;
+      case '3002': saldoAutomatico = saldosAutomaticos.utilidadesRetenidas; break;
     }
 
     return saldoAsiento + saldoAutomatico;
@@ -357,7 +393,8 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
                 </div>
 
                 {/* Capital Contable */}
-                <LineItem label="Capital Contable" value={totalCapitalContable} />
+                <LineItem label="Capital Social" value={saldosAutomaticos?.capitalSocial || 0} />
+                <LineItem label="Utilidades Retenidas" value={saldosAutomaticos?.utilidadesRetenidas || 0} />
                 <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
                 <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
               </div>

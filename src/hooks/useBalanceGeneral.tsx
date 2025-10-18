@@ -17,6 +17,10 @@ interface SaldosBalance {
   // Pasivos Largo Plazo
   financiamientos: number;
   
+  // Capital Contable
+  capitalSocial: number;
+  utilidadesRetenidas: number;
+  
   // Resultados
   ingresos: number;
   costos: number;
@@ -53,8 +57,25 @@ export const useBalanceGeneral = () => {
         .select('monto_pagado')
         .in('metodo_pago', ['transferencia', 'tarjeta', 'tarjeta-transferencia']);
 
+      // Obtener aportaciones de capital (aumentan efectivo/bancos)
+      const { data: aportaciones } = await supabase
+        .from('transacciones_capital')
+        .select('monto')
+        .eq('tipo_movimiento', 'aportacion');
+
+      const totalAportaciones = aportaciones?.reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0;
+
+      // Obtener dividendos pagados (disminuyen efectivo/bancos)
+      const { data: dividendos } = await supabase
+        .from('transacciones_capital')
+        .select('monto')
+        .eq('tipo_movimiento', 'dividendo');
+
+      const totalDividendos = dividendos?.reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0;
+
       const bancos = (ingresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) -
-                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0);
+                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) +
+                     totalAportaciones - totalDividendos;
 
       // 3. CUENTAS POR COBRAR (1003) - Monto pendiente de ingresos
       const { data: cuentasCobrar } = await supabase
@@ -132,6 +153,12 @@ export const useBalanceGeneral = () => {
       // 9. UTILIDAD DEL EJERCICIO
       const utilidad = ingresos - (costos + gastos);
 
+      // 10. CAPITAL SOCIAL - Suma de todas las aportaciones
+      const capitalSocial = totalAportaciones;
+
+      // 11. UTILIDADES RETENIDAS - Utilidad menos dividendos distribuidos
+      const utilidadesRetenidas = utilidad - totalDividendos;
+
       return {
         caja,
         bancos,
@@ -140,6 +167,8 @@ export const useBalanceGeneral = () => {
         activosFijos,
         proveedores,
         financiamientos,
+        capitalSocial,
+        utilidadesRetenidas,
         ingresos,
         costos,
         gastos,

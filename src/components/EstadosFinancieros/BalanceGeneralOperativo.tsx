@@ -54,8 +54,27 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
         .in('metodo_pago', ['transferencia', 'tarjeta', 'tarjeta-transferencia'])
         .lte('created_at', cutoffDateStr);
 
+      // Aportaciones de capital
+      const { data: aportaciones } = await supabase
+        .from('transacciones_capital')
+        .select('monto')
+        .eq('tipo_movimiento', 'aportacion')
+        .lte('created_at', cutoffDateStr);
+
+      const totalAportaciones = aportaciones?.reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0;
+
+      // Dividendos pagados
+      const { data: dividendos } = await supabase
+        .from('transacciones_capital')
+        .select('monto')
+        .eq('tipo_movimiento', 'dividendo')
+        .lte('created_at', cutoffDateStr);
+
+      const totalDividendos = dividendos?.reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0;
+
       const bancos = (ingresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) -
-                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0);
+                     (egresosBanco?.reduce((sum, t) => sum + (t.monto_pagado || 0), 0) || 0) +
+                     totalAportaciones - totalDividendos;
 
       // Cuentas por Cobrar
       const { data: cuentasCobrar } = await supabase
@@ -108,7 +127,22 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
 
       const utilidad = ingresos - (costos + gastos);
 
-      return { caja, bancos, cuentasPorCobrar, inventario, proveedores, utilidad };
+      // Capital social y utilidades retenidas
+      const capitalSocial = totalAportaciones;
+      const utilidadesRetenidas = utilidad - totalDividendos;
+
+      return { 
+        caja, 
+        bancos, 
+        cuentasPorCobrar, 
+        inventario, 
+        proveedores, 
+        utilidad,
+        capitalSocial,
+        utilidadesRetenidas,
+        totalAportaciones,
+        totalDividendos
+      };
     },
   });
 
@@ -503,6 +537,19 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                   </div>
                 );
               })}
+              
+              {/* Mostrar capital social y utilidades retenidas desde transacciones automáticas */}
+              <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
+                <span className="text-sm font-medium">Capital Social (3001)</span>
+                <span className="text-right">${(saldosAutomaticos?.capitalSocial || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalActivos > 0 ? (((saldosAutomaticos?.capitalSocial || 0) / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
+                <span className="text-sm font-medium">Utilidades Retenidas (3002)</span>
+                <span className="text-right">${(saldosAutomaticos?.utilidadesRetenidas || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalActivos > 0 ? (((saldosAutomaticos?.utilidadesRetenidas || 0) / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
+              </div>
               
               <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
                 <span className="text-sm font-medium">Utilidad del Ejercicio</span>

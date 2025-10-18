@@ -191,6 +191,64 @@ const Balanza = () => {
         }
       });
 
+      // Obtener transacciones de capital
+      const { data: capital } = await supabase
+        .from("transacciones_capital")
+        .select("*")
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .order("created_at", { ascending: true });
+
+      capital?.forEach(transaccion => {
+        if (transaccion.tipo_movimiento === 'aportacion') {
+          // Aportación: Debe en Efectivo, Haber en Capital Social
+          movimientos.push({
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Capital",
+            descripcion: `Aportación de ${transaccion.socio}`,
+            cuenta_codigo: "1001",
+            cuenta_nombre: "Efectivo/Bancos",
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `CAP-${transaccion.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Capital",
+            descripcion: `Aportación de ${transaccion.socio}`,
+            cuenta_codigo: "3001",
+            cuenta_nombre: "Capital Social",
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `CAP-${transaccion.id.slice(0, 8)}`
+          });
+        } else if (transaccion.tipo_movimiento === 'dividendo') {
+          // Dividendo: Debe en Utilidades Retenidas, Haber en Efectivo
+          movimientos.push({
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Capital",
+            descripcion: `Dividendo pagado a ${transaccion.socio}`,
+            cuenta_codigo: "3002",
+            cuenta_nombre: "Utilidades Retenidas",
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `DIV-${transaccion.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Capital",
+            descripcion: `Dividendo pagado a ${transaccion.socio}`,
+            cuenta_codigo: "1001",
+            cuenta_nombre: "Efectivo/Bancos",
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `DIV-${transaccion.id.slice(0, 8)}`
+          });
+        }
+      });
+
       // Agrupar movimientos por referencia
       const asientosMap = new Map<string, AsientoAgrupado>();
       
@@ -207,6 +265,8 @@ const Balanza = () => {
             if (mov.tipo === 'Inversión') {
               categoriaFlujo = 'Inversión';
             } else if (mov.tipo === 'Financiamiento') {
+              categoriaFlujo = 'Financiamiento';
+            } else if (mov.tipo === 'Capital') {
               categoriaFlujo = 'Financiamiento';
             } else {
               categoriaFlujo = 'Operativo';
