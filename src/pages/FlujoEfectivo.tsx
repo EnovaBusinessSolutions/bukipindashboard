@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import FlujoEfectivoOperativo from "@/components/FlujoEfectivo/FlujoEfectivoOperativo";
 import FlujoEfectivoEjecutivo from "@/components/FlujoEfectivo/FlujoEfectivoEjecutivo";
 import FlujoEfectivoAnalitico from "@/components/FlujoEfectivo/FlujoEfectivoAnalitico";
+import ResumenFinanciero from "@/components/FlujoEfectivo/ResumenFinanciero";
+import ResumenTransacciones from "@/components/FlujoEfectivo/ResumenTransacciones";
 
 export type PeriodType = "diario" | "mensual" | "anual";
 
@@ -119,9 +121,13 @@ const FlujoEfectivo = () => {
         </div>
       </div>
 
+      {/* Resumen Financiero */}
+      <ResumenFinanciero startDate={dateRange.startDate} endDate={dateRange.endDate} />
+
       <Tabs defaultValue="ejecutivo" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
+          <TabsTrigger value="resumen">Resumen Transacciones</TabsTrigger>
           <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
           <TabsTrigger value="analitico">Formato Analítico</TabsTrigger>
         </TabsList>
@@ -132,6 +138,13 @@ const FlujoEfectivo = () => {
             endDate={dateRange.endDate}
             periodType={periodType}
             vistaColumnas={vistaColumnas}
+          />
+        </TabsContent>
+        
+        <TabsContent value="resumen" className="mt-6">
+          <ResumenTransacciones 
+            startDate={dateRange.startDate} 
+            endDate={dateRange.endDate}
           />
         </TabsContent>
         
