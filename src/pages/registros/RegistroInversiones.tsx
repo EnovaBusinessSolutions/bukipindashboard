@@ -5,6 +5,7 @@ import TablaRecomendaciones from "@/components/Inversiones/TablaRecomendaciones"
 import ResumenInversiones from "@/components/Inversiones/ResumenInversiones";
 import AnalyticaInversiones from "@/components/Inversiones/AnalyticaInversiones";
 import ResumenDepreciaciones from "@/components/Inversiones/ResumenDepreciaciones";
+import BajaActivos from "@/components/Inversiones/BajaActivos";
 
 const RegistroInversiones = () => {
   return (
@@ -18,10 +19,11 @@ const RegistroInversiones = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="registro">Registro de Inversiones</TabsTrigger>
             <TabsTrigger value="resumen">Resumen de Inversiones</TabsTrigger>
             <TabsTrigger value="depreciaciones">Resumen de Depreciaciones</TabsTrigger>
+            <TabsTrigger value="baja">Baja de Activos</TabsTrigger>
             <TabsTrigger value="analitica">Analítica de Inversiones</TabsTrigger>
           </TabsList>
 
@@ -35,6 +37,10 @@ const RegistroInversiones = () => {
 
           <TabsContent value="depreciaciones">
             <ResumenDepreciaciones />
+          </TabsContent>
+
+          <TabsContent value="baja">
+            <BajaActivos />
           </TabsContent>
 
           <TabsContent value="analitica">

@@ -27,6 +27,10 @@ export interface InversionCapex {
   subcuenta_id?: string;
   cuenta_codigo?: string;
   comentarios?: string;
+  estado: string;
+  fecha_baja?: string;
+  valor_venta?: number;
+  motivo_baja?: string;
   created_at: string;
   updated_at: string;
 }
@@ -159,6 +163,52 @@ export const useInversiones = () => {
     },
   });
 
+  const darDeBajaActivo = useMutation({
+    mutationFn: async ({
+      id,
+      fecha_baja,
+      motivo_baja,
+      valor_venta,
+      estado,
+    }: {
+      id: string;
+      fecha_baja: string;
+      motivo_baja: string;
+      valor_venta?: number;
+      estado: 'vendido' | 'dado_de_baja';
+    }) => {
+      const { data, error } = await supabase
+        .from("inversiones_capex")
+        .update({
+          estado,
+          fecha_baja,
+          motivo_baja,
+          valor_venta,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["inversiones"] });
+      const mensaje = variables.estado === 'vendido' ? 'vendido' : 'dado de baja';
+      toast({
+        title: "Activo actualizado",
+        description: `El activo ha sido ${mensaje} correctamente`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo dar de baja el activo",
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     inversiones,
     recomendaciones,
@@ -166,5 +216,6 @@ export const useInversiones = () => {
     crearInversion,
     actualizarInversion,
     eliminarInversion,
+    darDeBajaActivo,
   };
 };

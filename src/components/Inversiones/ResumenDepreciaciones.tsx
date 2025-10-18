@@ -15,13 +15,16 @@ const ResumenDepreciaciones = () => {
     );
   }
 
+  // Filtrar solo activos activos
+  const inversionesActivas = inversiones?.filter(inv => inv.estado === 'activo') || [];
+
   // Calcular totales
-  const totalDepreciacionAnual = inversiones?.reduce((sum, inv) => sum + (inv.valor_depreciacion_anual || 0), 0) || 0;
-  const totalDepreciacionMensual = inversiones?.reduce((sum, inv) => sum + (inv.valor_depreciacion_mensual || 0), 0) || 0;
-  const totalValorActivos = inversiones?.reduce((sum, inv) => sum + inv.valor_total, 0) || 0;
+  const totalDepreciacionAnual = inversionesActivas.reduce((sum, inv) => sum + (inv.valor_depreciacion_anual || 0), 0);
+  const totalDepreciacionMensual = inversionesActivas.reduce((sum, inv) => sum + (inv.valor_depreciacion_mensual || 0), 0);
+  const totalValorActivos = inversionesActivas.reduce((sum, inv) => sum + inv.valor_total, 0);
 
   // Calcular depreciación acumulada para cada inversión
-  const inversionesConDepreciacion = inversiones?.map(inv => {
+  const inversionesConDepreciacion = inversionesActivas.map(inv => {
     const fechaInicio = inv.fecha_inicio_depreciacion ? new Date(inv.fecha_inicio_depreciacion) : new Date(inv.fecha_adquisicion);
     const hoy = new Date();
     const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
@@ -39,7 +42,7 @@ const ResumenDepreciaciones = () => {
       porcentajeDepreciado: inv.valor_total > 0 ? (depreciacionAcumulada / inv.valor_total) * 100 : 0,
       proximaFechaDepreciacion
     };
-  }) || [];
+  });
 
   // Ordenar por fecha de adquisición (más recientes primero)
   const inversionesOrdenadas = [...inversionesConDepreciacion].sort((a, b) => 
@@ -62,7 +65,7 @@ const ResumenDepreciaciones = () => {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalDepreciacionAnual)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Basado en {inversiones?.length || 0} activo(s)
+              Basado en {inversionesActivas.length} activo(s) activo(s)
             </p>
           </CardContent>
         </Card>
@@ -99,7 +102,7 @@ const ResumenDepreciaciones = () => {
         <CardHeader>
           <CardTitle>Historial de Depreciaciones por Activo</CardTitle>
           <CardDescription>
-            Detalle de la depreciación acumulada y valor en libros de cada inversión
+            Detalle de la depreciación acumulada y valor en libros de cada activo activo
           </CardDescription>
         </CardHeader>
         <CardContent>

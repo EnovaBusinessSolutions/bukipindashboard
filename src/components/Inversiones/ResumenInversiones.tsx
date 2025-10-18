@@ -63,6 +63,10 @@ const ResumenInversiones = () => {
     (acc, inv) => acc + Number(inv.valor_depreciacion_anual || 0),
     0
   );
+  
+  const activosActivos = inversiones.filter(inv => inv.estado === 'activo').length;
+  const activosVendidos = inversiones.filter(inv => inv.estado === 'vendido').length;
+  const activosBaja = inversiones.filter(inv => inv.estado === 'dado_de_baja').length;
 
   return (
     <div className="space-y-6">
@@ -83,7 +87,12 @@ const ResumenInversiones = () => {
             <CardTitle className="text-sm font-medium">Activos Registrados</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{inversiones.length}</div>
+            <div className="space-y-1">
+              <div className="text-2xl font-bold">{inversiones.length}</div>
+              <div className="text-xs text-muted-foreground">
+                {activosActivos} activos • {activosVendidos} vendidos • {activosBaja} baja
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -115,6 +124,7 @@ const ResumenInversiones = () => {
                 <TableHead>Valor Total</TableHead>
                 <TableHead>Depreciación</TableHead>
                 <TableHead>Estado Pago</TableHead>
+                <TableHead>Estado Activo</TableHead>
                 <TableHead>Fecha Adquisición</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
@@ -154,6 +164,17 @@ const ResumenInversiones = () => {
                   <TableCell>
                     <Badge variant={getTipoPagoVariant(inversion.tipo_pago)}>
                       {getTipoPagoLabel(inversion.tipo_pago)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={
+                      inversion.estado === 'activo' ? 'default' : 
+                      inversion.estado === 'vendido' ? 'secondary' : 
+                      'destructive'
+                    }>
+                      {inversion.estado === 'activo' ? 'Activo' : 
+                       inversion.estado === 'vendido' ? 'Vendido' : 
+                       'Dado de Baja'}
                     </Badge>
                   </TableCell>
                   <TableCell>

@@ -304,7 +304,9 @@ export type Database = {
           created_at: string
           cuenta_codigo: string | null
           descripcion: string | null
+          estado: string
           fecha_adquisicion: string
+          fecha_baja: string | null
           fecha_inicio_depreciacion: string | null
           fecha_vencimiento: string | null
           id: string
@@ -312,6 +314,7 @@ export type Database = {
           metodo_pago: string | null
           monto_pagado: number
           monto_pendiente: number | null
+          motivo_baja: string | null
           producto_nombre: string
           proveedor_email: string | null
           proveedor_nombre: string | null
@@ -324,6 +327,7 @@ export type Database = {
           valor_depreciacion_anual: number | null
           valor_depreciacion_mensual: number | null
           valor_total: number
+          valor_venta: number | null
         }
         Insert: {
           anos_depreciacion: number
@@ -332,7 +336,9 @@ export type Database = {
           created_at?: string
           cuenta_codigo?: string | null
           descripcion?: string | null
+          estado?: string
           fecha_adquisicion?: string
+          fecha_baja?: string | null
           fecha_inicio_depreciacion?: string | null
           fecha_vencimiento?: string | null
           id?: string
@@ -340,6 +346,7 @@ export type Database = {
           metodo_pago?: string | null
           monto_pagado?: number
           monto_pendiente?: number | null
+          motivo_baja?: string | null
           producto_nombre: string
           proveedor_email?: string | null
           proveedor_nombre?: string | null
@@ -352,6 +359,7 @@ export type Database = {
           valor_depreciacion_anual?: number | null
           valor_depreciacion_mensual?: number | null
           valor_total: number
+          valor_venta?: number | null
         }
         Update: {
           anos_depreciacion?: number
@@ -360,7 +368,9 @@ export type Database = {
           created_at?: string
           cuenta_codigo?: string | null
           descripcion?: string | null
+          estado?: string
           fecha_adquisicion?: string
+          fecha_baja?: string | null
           fecha_inicio_depreciacion?: string | null
           fecha_vencimiento?: string | null
           id?: string
@@ -368,6 +378,7 @@ export type Database = {
           metodo_pago?: string | null
           monto_pagado?: number
           monto_pendiente?: number | null
+          motivo_baja?: string | null
           producto_nombre?: string
           proveedor_email?: string | null
           proveedor_nombre?: string | null
@@ -380,6 +391,7 @@ export type Database = {
           valor_depreciacion_anual?: number | null
           valor_depreciacion_mensual?: number | null
           valor_total?: number
+          valor_venta?: number | null
         }
         Relationships: []
       }
