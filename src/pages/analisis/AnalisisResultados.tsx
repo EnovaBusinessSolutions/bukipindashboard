@@ -192,17 +192,17 @@ const AnalisisResultados = () => {
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="font-bold">Concepto</TableHead>
+                          <TableRow className="bg-primary/10">
+                            <TableHead className="font-bold bg-primary/20">Concepto</TableHead>
                             {resultadosMensuales.map((r) => (
-                              <TableHead key={r.mes} className="text-right min-w-[100px]">{r.mes}</TableHead>
+                              <TableHead key={r.mes} className="text-right min-w-[100px] font-semibold">{r.mes}</TableHead>
                             ))}
-                            <TableHead className="text-right font-bold bg-muted min-w-[120px]">Total Anual</TableHead>
+                            <TableHead className="text-right font-bold bg-primary/20 min-w-[120px]">Total Anual</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           <TableRow className="font-medium">
-                            <TableCell className="font-bold">Ingresos</TableCell>
+                            <TableCell className="font-bold bg-muted/50">Ingresos</TableCell>
                             {resultadosMensuales.map((r) => (
                               <TableCell key={r.mes} className="text-right">
                                 {formatCurrency(r.ingresos)}
@@ -213,7 +213,7 @@ const AnalisisResultados = () => {
                             </TableCell>
                           </TableRow>
                           <TableRow>
-                            <TableCell className="font-bold">Costos</TableCell>
+                            <TableCell className="font-bold bg-muted/50">Costos</TableCell>
                             {resultadosMensuales.map((r) => (
                               <TableCell key={r.mes} className="text-right text-red-600">
                                 ({formatCurrency(r.costos)})
@@ -223,58 +223,25 @@ const AnalisisResultados = () => {
                               ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.costos, 0))})
                             </TableCell>
                           </TableRow>
-                          <TableRow className="border-t-2">
-                            <TableCell className="font-bold">Utilidad Bruta</TableCell>
+                          <TableRow className="border-t-2 bg-blue-50 dark:bg-blue-950">
+                            <TableCell className="font-bold bg-muted/50">Utilidad Bruta</TableCell>
                             {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right font-medium">
+                              <TableCell key={r.mes} className="text-right font-bold">
                                 {formatCurrency(r.utilidadBruta)}
                               </TableCell>
                             ))}
-                            <TableCell className="text-right font-bold bg-muted">
+                            <TableCell className="text-right font-bold bg-blue-100 dark:bg-blue-900">
                               {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadBruta, 0))}
                             </TableCell>
                           </TableRow>
-                          <TableRow>
-                            <TableCell className="font-bold">Gastos Operativos</TableCell>
+                          <TableRow className="bg-blue-50/50 dark:bg-blue-950/50">
+                            <TableCell className="font-bold bg-muted/50 italic text-sm">Margen Bruto %</TableCell>
                             {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right text-red-600">
-                                ({formatCurrency(r.gastos)})
-                              </TableCell>
-                            ))}
-                            <TableCell className="text-right font-bold bg-muted text-red-600">
-                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.gastos, 0))})
-                            </TableCell>
-                          </TableRow>
-                          <TableRow className="border-t-2">
-                            <TableCell className="font-bold">Utilidad Operativa (EBITDA)</TableCell>
-                            {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right font-medium">
-                                {formatCurrency(r.utilidadOperativa)}
-                              </TableCell>
-                            ))}
-                            <TableCell className="text-right font-bold bg-muted">
-                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0))}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow className="border-t-2 bg-muted/50">
-                            <TableCell className="font-bold">Utilidad Neta</TableCell>
-                            {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right font-bold">
-                                {formatCurrency(r.utilidadNeta)}
-                              </TableCell>
-                            ))}
-                            <TableCell className="text-right font-bold bg-muted">
-                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadNeta, 0))}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow className="border-t-4">
-                            <TableCell className="font-bold text-muted-foreground">Margen Bruto %</TableCell>
-                            {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right text-muted-foreground">
+                              <TableCell key={r.mes} className="text-right text-blue-700 dark:text-blue-300 font-semibold italic text-sm">
                                 {formatPercent(r.margenBruto)}
                               </TableCell>
                             ))}
-                            <TableCell className="text-right font-bold bg-muted text-muted-foreground">
+                            <TableCell className="text-right font-bold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 italic text-sm">
                               {formatPercent(
                                 resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
                                   ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadBruta, 0) / 
@@ -284,13 +251,35 @@ const AnalisisResultados = () => {
                             </TableCell>
                           </TableRow>
                           <TableRow>
-                            <TableCell className="font-bold text-muted-foreground">Margen EBITDA %</TableCell>
+                            <TableCell className="font-bold bg-muted/50">Gastos Operativos</TableCell>
                             {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right text-muted-foreground">
+                              <TableCell key={r.mes} className="text-right text-red-600">
+                                ({formatCurrency(r.gastos)})
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-red-600">
+                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.gastos, 0))})
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-2 bg-green-50 dark:bg-green-950">
+                            <TableCell className="font-bold bg-muted/50">Utilidad Operativa (EBITDA)</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right font-bold">
+                                {formatCurrency(r.utilidadOperativa)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-green-100 dark:bg-green-900">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-green-50/50 dark:bg-green-950/50">
+                            <TableCell className="font-bold bg-muted/50 italic text-sm">Margen EBITDA %</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-green-700 dark:text-green-300 font-semibold italic text-sm">
                                 {formatPercent(r.margenEBITDA)}
                               </TableCell>
                             ))}
-                            <TableCell className="text-right font-bold bg-muted text-muted-foreground">
+                            <TableCell className="text-right font-bold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 italic text-sm">
                               {formatPercent(
                                 resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
                                   ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0) / 
@@ -299,14 +288,25 @@ const AnalisisResultados = () => {
                               )}
                             </TableCell>
                           </TableRow>
-                          <TableRow>
-                            <TableCell className="font-bold text-muted-foreground">Margen Neto %</TableCell>
+                          <TableRow className="border-t-2 bg-purple-50 dark:bg-purple-950">
+                            <TableCell className="font-bold bg-muted/50">Utilidad Neta</TableCell>
                             {resultadosMensuales.map((r) => (
-                              <TableCell key={r.mes} className="text-right text-muted-foreground">
+                              <TableCell key={r.mes} className="text-right font-bold">
+                                {formatCurrency(r.utilidadNeta)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-purple-100 dark:bg-purple-900">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadNeta, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-purple-50/50 dark:bg-purple-950/50">
+                            <TableCell className="font-bold bg-muted/50 italic text-sm">Margen Neto %</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-purple-700 dark:text-purple-300 font-semibold italic text-sm">
                                 {formatPercent(r.margenNeto)}
                               </TableCell>
                             ))}
-                            <TableCell className="text-right font-bold bg-muted text-muted-foreground">
+                            <TableCell className="text-right font-bold bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 italic text-sm">
                               {formatPercent(
                                 resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
                                   ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadNeta, 0) / 
