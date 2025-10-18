@@ -336,7 +336,7 @@ const AnalisisResultados = () => {
                         margenEBITDA: { label: "Margen EBITDA %", color: "hsl(var(--chart-3))" },
                         margenNeto: { label: "Margen Neto %", color: "hsl(var(--chart-4))" },
                       }} 
-                      className="h-[400px]"
+                      className="h-[600px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={resultadosMensuales}>
