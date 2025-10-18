@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, Treemap, ResponsiveContainer, Tooltip } from "recharts";
@@ -9,6 +11,7 @@ interface BalanceGeneralAnaliticoProps {
 
 const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) => {
   const { data: saldos, isLoading } = useBalanceGeneral();
+  const [selectedView, setSelectedView] = useState<"activos" | "pasivos" | "capital">("activos");
 
   if (isLoading) {
     return (
@@ -179,184 +182,208 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
         </CardContent>
       </Card>
 
-      {/* 2. Estructura de Activos */}
+      {/* Filtro de Vista Detallada */}
       <Card>
         <CardHeader>
-          <CardTitle>2. Estructura de Activos por Tipo</CardTitle>
+          <CardTitle>Análisis Detallado</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <PieChart>
-              <Pie
-                data={estructuraActivosData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                outerRadius={100}
-                innerRadius={60}
-                fill="#8884d8"
-                dataKey="value"
-                paddingAngle={3}
-              >
-                {estructuraActivosData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip content={(props) => <CustomDonutTooltip {...props} data={estructuraActivosData} />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {estructuraActivosData.map((item, index) => (
-              <div key={index} className="flex flex-col items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-muted-foreground">{item.name}</span>
-                </div>
-                <span className="text-lg font-bold text-foreground">{formatCurrency(item.value)}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+          <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as any)} className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-3 mb-6">
+              <TabsTrigger value="activos">Activos</TabsTrigger>
+              <TabsTrigger value="pasivos">Pasivos</TabsTrigger>
+              <TabsTrigger value="capital">Capital</TabsTrigger>
+            </TabsList>
 
-      {/* 3. Desglose de Activos Circulantes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>3. Composición de Activos Circulantes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <Treemap
-              data={activosCirculantesData}
-              dataKey="size"
-              aspectRatio={4 / 3}
-              stroke="hsl(var(--background))"
-              fill="hsl(var(--chart-1))"
-              content={<CustomTreemapContent />}
-            />
-          </ResponsiveContainer>
-          <div className="mt-4 space-y-2">
-            {activosCirculantesData.map((item, index) => (
-              <div key={index} className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-muted-foreground">{item.name}</span>
-                </div>
-                <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            {/* Vista de Activos */}
+            <TabsContent value="activos" className="space-y-6">
+              {/* Estructura de Activos por Tipo */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Estructura de Activos por Tipo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <PieChart>
+                      <Pie
+                        data={estructuraActivosData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                        outerRadius={100}
+                        innerRadius={60}
+                        fill="#8884d8"
+                        dataKey="value"
+                        paddingAngle={3}
+                      >
+                        {estructuraActivosData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={(props) => <CustomDonutTooltip {...props} data={estructuraActivosData} />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    {estructuraActivosData.map((item, index) => (
+                      <div key={index} className="flex flex-col items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-sm text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{formatCurrency(item.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
 
-      {/* 4. Estructura de Pasivos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>4. Estructura de Pasivos por Tipo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <PieChart>
-              <Pie
-                data={estructuraPasivosData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                outerRadius={100}
-                innerRadius={60}
-                fill="#8884d8"
-                dataKey="value"
-                paddingAngle={3}
-              >
-                {estructuraPasivosData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip content={(props) => <CustomDonutTooltip {...props} data={estructuraPasivosData} />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {estructuraPasivosData.map((item, index) => (
-              <div key={index} className="flex flex-col items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-muted-foreground">{item.name}</span>
-                </div>
-                <span className="text-lg font-bold text-foreground">{formatCurrency(item.value)}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              {/* Composición de Activos Circulantes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composición de Activos Circulantes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <Treemap
+                      data={activosCirculantesData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke="hsl(var(--background))"
+                      fill="hsl(var(--chart-1))"
+                      content={<CustomTreemapContent />}
+                    />
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {activosCirculantesData.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-      {/* 5. Desglose de Pasivos Circulantes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>5. Composición de Pasivos Circulantes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <Treemap
-              data={pasivosCirculantesData}
-              dataKey="size"
-              aspectRatio={4 / 3}
-              stroke="hsl(var(--background))"
-              fill="hsl(var(--chart-5))"
-              content={<CustomTreemapContent />}
-            />
-          </ResponsiveContainer>
-          <div className="mt-4 space-y-2">
-            {pasivosCirculantesData.map((item, index) => (
-              <div key={index} className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-muted-foreground">{item.name}</span>
-                </div>
-                <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            {/* Vista de Pasivos */}
+            <TabsContent value="pasivos" className="space-y-6">
+              {/* Estructura de Pasivos por Tipo */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Estructura de Pasivos por Tipo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <PieChart>
+                      <Pie
+                        data={estructuraPasivosData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                        outerRadius={100}
+                        innerRadius={60}
+                        fill="#8884d8"
+                        dataKey="value"
+                        paddingAngle={3}
+                      >
+                        {estructuraPasivosData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={(props) => <CustomDonutTooltip {...props} data={estructuraPasivosData} />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    {estructuraPasivosData.map((item, index) => (
+                      <div key={index} className="flex flex-col items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-sm text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{formatCurrency(item.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
 
-      {/* 6. Estructura de Capital */}
-      <Card>
-        <CardHeader>
-          <CardTitle>6. Capital Contable</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center p-8">
-            <div className="text-6xl font-bold mb-4" style={{ color: "hsl(var(--chart-2))" }}>
-              {formatCurrency(capital)}
-            </div>
-            <p className="text-muted-foreground text-center">
-              El capital contable representa la diferencia entre activos y pasivos
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-6 w-full max-w-md">
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Total Activos</p>
-                <p className="text-xl font-semibold text-foreground">{formatCurrency(totalActivos)}</p>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Total Pasivos</p>
-                <p className="text-xl font-semibold text-foreground">{formatCurrency(totalPasivos)}</p>
-              </div>
-            </div>
-          </div>
+              {/* Composición de Pasivos Circulantes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composición de Pasivos Circulantes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <Treemap
+                      data={pasivosCirculantesData}
+                      dataKey="size"
+                      aspectRatio={4 / 3}
+                      stroke="hsl(var(--background))"
+                      fill="hsl(var(--chart-5))"
+                      content={<CustomTreemapContent />}
+                    />
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {pasivosCirculantesData.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Vista de Capital */}
+            <TabsContent value="capital" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Capital Contable</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col items-center justify-center p-8">
+                    <div className="text-6xl font-bold mb-4" style={{ color: "hsl(var(--chart-2))" }}>
+                      {formatCurrency(capital)}
+                    </div>
+                    <p className="text-muted-foreground text-center">
+                      El capital contable representa la diferencia entre activos y pasivos
+                    </p>
+                    <div className="mt-6 grid grid-cols-2 gap-6 w-full max-w-md">
+                      <div className="text-center p-4 bg-muted/30 rounded-lg">
+                        <p className="text-sm text-muted-foreground mb-1">Total Activos</p>
+                        <p className="text-xl font-semibold text-foreground">{formatCurrency(totalActivos)}</p>
+                      </div>
+                      <div className="text-center p-4 bg-muted/30 rounded-lg">
+                        <p className="text-sm text-muted-foreground mb-1">Total Pasivos</p>
+                        <p className="text-xl font-semibold text-foreground">{formatCurrency(totalPasivos)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
