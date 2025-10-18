@@ -120,6 +120,7 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
               y={y + height / 2 - 10}
               textAnchor="middle"
               fill="#000000"
+              stroke="none"
               fontSize={14}
               fontWeight="bold"
             >
@@ -130,7 +131,9 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
               y={y + height / 2 + 10}
               textAnchor="middle"
               fill="#000000"
+              stroke="none"
               fontSize={12}
+              fontWeight="600"
             >
               {formatCurrency(size)}
             </text>
