@@ -9,6 +9,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import BalanceGeneralEjecutivo from "@/components/EstadosFinancieros/BalanceGeneralEjecutivo";
 import BalanceGeneralOperativo from "@/components/EstadosFinancieros/BalanceGeneralOperativo";
+import BalanceGeneralAnalitico from "@/components/EstadosFinancieros/BalanceGeneralAnalitico";
 
 const BalanceGeneral = () => {
   const [cutoffDate, setCutoffDate] = useState<Date>(new Date());
@@ -58,9 +59,10 @@ const BalanceGeneral = () => {
       </div>
 
       <Tabs defaultValue="ejecutivo" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
           <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
+          <TabsTrigger value="analitico">Formato Analítico</TabsTrigger>
         </TabsList>
         
         <TabsContent value="ejecutivo" className="mt-6">
@@ -69,6 +71,10 @@ const BalanceGeneral = () => {
         
         <TabsContent value="operativo" className="mt-6">
           <BalanceGeneralOperativo cutoffDate={cutoffDate} />
+        </TabsContent>
+        
+        <TabsContent value="analitico" className="mt-6">
+          <BalanceGeneralAnalitico cutoffDate={cutoffDate} />
         </TabsContent>
       </Tabs>
     </div>
