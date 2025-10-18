@@ -11,9 +11,19 @@ import { CalendarIcon, Plus, TrendingUp, TrendingDown, PieChart, BarChart3 } fro
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { useTransaccionesCapital } from "@/hooks/useTransaccionesCapital";
 
 const RegistroCapital = () => {
+  const {
+    transacciones,
+    isLoading,
+    registrarTransaccion,
+    totalAportaciones,
+    totalDividendos,
+    capitalSocialTotal,
+    resumenPorSocio,
+  } = useTransaccionesCapital();
+
   const [tipoMovimiento, setTipoMovimiento] = useState<"aportacion" | "dividendo">("aportacion");
   const [fecha, setFecha] = useState<Date>(new Date());
   const [monto, setMonto] = useState("");
@@ -23,26 +33,28 @@ const RegistroCapital = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!monto || parseFloat(monto) <= 0) {
-      toast({
-        title: "Error",
-        description: "El monto debe ser mayor a 0",
-        variant: "destructive"
-      });
+    if (!socio.trim()) {
       return;
     }
 
-    // Aquí iría la lógica para guardar en la base de datos
-    toast({
-      title: "Registro exitoso",
-      description: `Se ha registrado ${tipoMovimiento === "aportacion" ? "la aportación de capital" : "el dividendo"} correctamente`,
-    });
+    if (!monto || parseFloat(monto) <= 0) {
+      return;
+    }
 
-    // Limpiar formulario
-    setMonto("");
-    setDescripcion("");
-    setSocio("");
-    setFecha(new Date());
+    registrarTransaccion.mutate({
+      tipo_movimiento: tipoMovimiento,
+      fecha,
+      monto: parseFloat(monto),
+      socio: socio.trim(),
+      descripcion: descripcion.trim(),
+    }, {
+      onSuccess: () => {
+        setMonto("");
+        setDescripcion("");
+        setSocio("");
+        setFecha(new Date());
+      }
+    });
   };
 
   return (
@@ -222,9 +234,29 @@ const RegistroCapital = () => {
               <CardTitle className="text-lg">Historial Reciente</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No hay movimientos registrados
-              </p>
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Cargando...</p>
+              ) : transacciones.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No hay movimientos registrados
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {transacciones.slice(0, 5).map((t) => (
+                    <div key={t.id} className="text-sm border-b pb-2">
+                      <div className="flex justify-between">
+                        <span className="font-medium">{t.socio}</span>
+                        <span className={t.tipo_movimiento === "aportacion" ? "text-green-600" : "text-red-600"}>
+                          ${Number(t.monto).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(t.fecha), "dd/MM/yyyy", { locale: es })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
           </div>
@@ -247,7 +279,9 @@ const RegistroCapital = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-bold text-primary">$0.00</p>
+                    <p className="text-2xl font-bold text-primary">
+                      ${capitalSocialTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">Aportaciones acumuladas</p>
                   </CardContent>
                 </Card>
@@ -259,7 +293,9 @@ const RegistroCapital = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-bold text-green-600">$0.00</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      ${totalAportaciones.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">En el periodo</p>
                   </CardContent>
                 </Card>
@@ -271,7 +307,9 @@ const RegistroCapital = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-bold text-red-600">$0.00</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      ${totalDividendos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">Distribuidos en el periodo</p>
                   </CardContent>
                 </Card>
@@ -282,10 +320,56 @@ const RegistroCapital = () => {
                 <div className="p-4 border-b bg-muted/50">
                   <h3 className="font-semibold">Historial de Transacciones</h3>
                 </div>
-                <div className="p-8 text-center text-muted-foreground">
-                  <p>No hay transacciones registradas</p>
-                  <p className="text-sm mt-2">Las transacciones aparecerán aquí una vez que las registres</p>
-                </div>
+                {isLoading ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <p>Cargando transacciones...</p>
+                  </div>
+                ) : transacciones.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <p>No hay transacciones registradas</p>
+                    <p className="text-sm mt-2">Las transacciones aparecerán aquí una vez que las registres</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="p-3 text-left text-sm font-medium">Fecha</th>
+                          <th className="p-3 text-left text-sm font-medium">Socio</th>
+                          <th className="p-3 text-left text-sm font-medium">Tipo</th>
+                          <th className="p-3 text-right text-sm font-medium">Monto</th>
+                          <th className="p-3 text-left text-sm font-medium">Descripción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transacciones.map((t) => (
+                          <tr key={t.id} className="border-b">
+                            <td className="p-3 text-sm">
+                              {format(new Date(t.fecha), "dd/MM/yyyy", { locale: es })}
+                            </td>
+                            <td className="p-3 text-sm font-medium">{t.socio}</td>
+                            <td className="p-3 text-sm">
+                              <span className={cn(
+                                "px-2 py-1 rounded text-xs",
+                                t.tipo_movimiento === "aportacion"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-700"
+                              )}>
+                                {t.tipo_movimiento === "aportacion" ? "Aportación" : "Dividendo"}
+                              </span>
+                            </td>
+                            <td className="p-3 text-sm text-right font-medium">
+                              ${Number(t.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-3 text-sm text-muted-foreground">
+                              {t.descripcion || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -305,9 +389,30 @@ const RegistroCapital = () => {
                     <div className="text-right">Balance</div>
                   </div>
                 </div>
-                <div className="p-8 text-center text-muted-foreground">
-                  <p>No hay datos disponibles</p>
-                </div>
+                {Object.keys(resumenPorSocio).length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <p>No hay datos disponibles</p>
+                  </div>
+                ) : (
+                  <div>
+                    {Object.entries(resumenPorSocio).map(([socio, datos]) => (
+                      <div key={socio} className="p-4 border-b last:border-b-0 hover:bg-muted/50">
+                        <div className="grid grid-cols-4 gap-4 text-sm">
+                          <div className="font-medium">{socio}</div>
+                          <div className="text-right text-green-600">
+                            ${datos.aportaciones.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </div>
+                          <div className="text-right text-red-600">
+                            ${datos.dividendos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </div>
+                          <div className="text-right font-semibold">
+                            ${datos.balance.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

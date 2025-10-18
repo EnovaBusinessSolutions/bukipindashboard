@@ -643,6 +643,42 @@ export type Database = {
           },
         ]
       }
+      transacciones_capital: {
+        Row: {
+          created_at: string
+          descripcion: string | null
+          fecha: string
+          id: string
+          monto: number
+          socio: string
+          tipo_movimiento: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          monto: number
+          socio: string
+          tipo_movimiento: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          monto?: number
+          socio?: string
+          tipo_movimiento?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transacciones_egresos: {
         Row: {
           cantidad: number | null
