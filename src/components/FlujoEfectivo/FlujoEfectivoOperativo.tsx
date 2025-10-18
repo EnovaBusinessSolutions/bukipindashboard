@@ -107,7 +107,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
     }).format(value);
   };
 
-  if (isLoading) {
+  if (isLoading || !flujoData) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -115,10 +115,10 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
     );
   }
 
-  const totalOperativo = (flujoData?.operativo.ingresos || 0) - (flujoData?.operativo.costos || 0) - (flujoData?.operativo.gastos || 0);
-  const totalInversion = -Object.values(flujoData?.inversion || {}).reduce((sum: number, val) => sum + (val as number), 0);
-  const totalFinanciamiento = (flujoData?.financiamiento.disposiciones || 0) - 
-    (flujoData?.financiamiento.amortizaciones || 0) - (flujoData?.financiamiento.intereses || 0);
+  const totalOperativo = (flujoData.operativo?.ingresos || 0) - (flujoData.operativo?.costos || 0) - (flujoData.operativo?.gastos || 0);
+  const totalInversion = -Object.values(flujoData.inversion || {}).reduce((sum: number, val) => sum + (val as number), 0);
+  const totalFinanciamiento = (flujoData.financiamiento?.disposiciones || 0) - 
+    (flujoData.financiamiento?.amortizaciones || 0) - (flujoData.financiamiento?.intereses || 0);
   const flujoNetoTotal = totalOperativo + totalInversion + totalFinanciamiento;
 
   return (
@@ -147,7 +147,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
                 <span className="font-medium">Cobros por Ventas</span>
               </div>
               <span className="font-bold text-finance-success">
-                {formatCurrency(flujoData?.operativo.ingresos || 0)}
+                {formatCurrency(flujoData.operativo?.ingresos || 0)}
               </span>
             </div>
 
@@ -157,7 +157,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
                 <span className="font-medium">Pagos por Costos</span>
               </div>
               <span className="font-bold text-destructive">
-                -{formatCurrency(flujoData?.operativo.costos || 0)}
+                -{formatCurrency(flujoData.operativo?.costos || 0)}
               </span>
             </div>
 
@@ -167,7 +167,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
                 <span className="font-medium">Pagos por Gastos</span>
               </div>
               <span className="font-bold text-destructive">
-                -{formatCurrency(flujoData?.operativo.gastos || 0)}
+                -{formatCurrency(flujoData.operativo?.gastos || 0)}
               </span>
             </div>
 
@@ -193,8 +193,8 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-3">
-            {Object.entries(flujoData?.inversion || {}).length > 0 ? (
-              Object.entries(flujoData?.inversion || {}).map(([categoria, monto]) => (
+            {Object.entries(flujoData.inversion || {}).length > 0 ? (
+              Object.entries(flujoData.inversion || {}).map(([categoria, monto]) => (
                 <div key={categoria} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-destructive"></div>
@@ -238,7 +238,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-3">
-            {flujoData?.financiamiento.disposiciones ? (
+            {flujoData.financiamiento?.disposiciones ? (
               <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-finance-success"></div>
@@ -250,7 +250,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
               </div>
             ) : null}
 
-            {flujoData?.financiamiento.amortizaciones ? (
+            {flujoData.financiamiento?.amortizaciones ? (
               <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-destructive"></div>
@@ -262,7 +262,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
               </div>
             ) : null}
 
-            {flujoData?.financiamiento.intereses ? (
+            {flujoData.financiamiento?.intereses ? (
               <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-destructive"></div>
@@ -274,9 +274,9 @@ const FlujoEfectivoOperativo = ({ startDate, endDate }: FlujoEfectivoOperativoPr
               </div>
             ) : null}
 
-            {!flujoData?.financiamiento.disposiciones && 
-             !flujoData?.financiamiento.amortizaciones && 
-             !flujoData?.financiamiento.intereses && (
+            {!flujoData.financiamiento?.disposiciones && 
+             !flujoData.financiamiento?.amortizaciones && 
+             !flujoData.financiamiento?.intereses && (
               <div className="text-sm text-muted-foreground text-center py-4">
                 No hay movimientos en este período
               </div>
