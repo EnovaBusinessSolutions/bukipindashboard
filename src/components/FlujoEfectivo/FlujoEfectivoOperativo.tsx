@@ -246,7 +246,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
   const renderValue = (efectivo?: number, bancos?: number, total?: number) => {
     if (isDetallada && efectivo !== undefined && bancos !== undefined) {
       return (
-        <div className="grid grid-cols-3 gap-4 text-right">
+        <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
           <span className="font-bold">{formatCurrency(efectivo)}</span>
           <span className="font-bold">{formatCurrency(bancos)}</span>
           <span className="font-bold">{formatCurrency(total || 0)}</span>
@@ -272,7 +272,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
           <div className="flex justify-between items-center">
             <span className="text-xl font-bold text-foreground">Saldo Inicial de Efectivo y Bancos</span>
             {isDetallada ? (
-              <div className="grid grid-cols-3 gap-4 text-right">
+              <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Efectivo</div>
                   <span className="text-2xl font-bold text-blue-600">{formatCurrency(flujoData.saldoInicial?.efectivo || 0)}</span>
@@ -302,7 +302,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               Actividades Operativas
             </div>
             {isDetallada && (
-              <div className="grid grid-cols-3 gap-4 text-sm font-normal">
+              <div className="grid grid-cols-3 gap-8 text-sm font-normal text-center min-w-[400px]">
                 <span>Efectivo</span>
                 <span>Bancos</span>
                 <span>Total</span>
@@ -330,7 +330,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                 <span className="font-medium">Pagos por Costos</span>
               </div>
               {isDetallada ? (
-                <div className="grid grid-cols-3 gap-4 text-right">
+                <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                   <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo?.costosEfectivo || 0)}</span>
                   <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo?.costosBancos || 0)}</span>
                   <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo?.costos || 0)}</span>
@@ -346,7 +346,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                 <span className="font-medium">Pagos por Gastos</span>
               </div>
               {isDetallada ? (
-                <div className="grid grid-cols-3 gap-4 text-right">
+                <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                   <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo?.gastosEfectivo || 0)}</span>
                   <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo?.gastosBancos || 0)}</span>
                   <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo?.gastos || 0)}</span>
@@ -360,7 +360,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Flujo Neto Operativo</span>
                 {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-4 text-right">
+                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className={`text-lg font-bold ${(operativoData.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
                       {formatCurrency(operativoData.efectivo || 0)}
                     </span>
@@ -391,7 +391,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               Actividades de Inversión
             </div>
             {isDetallada && (
-              <div className="grid grid-cols-3 gap-4 text-sm font-normal">
+              <div className="grid grid-cols-3 gap-8 text-sm font-normal text-center min-w-[400px]">
                 <span>Efectivo</span>
                 <span>Bancos</span>
                 <span>Total</span>
@@ -409,7 +409,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                     <span className="font-medium">Inversiones en Activos</span>
                   </div>
                   {isDetallada ? (
-                    <div className="grid grid-cols-3 gap-4 text-right">
+                    <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                       <span className="font-bold text-destructive">-{formatCurrency(Math.abs(inversionData.efectivo || 0))}</span>
                       <span className="font-bold text-destructive">-{formatCurrency(Math.abs(inversionData.bancos || 0))}</span>
                       <span className="font-bold text-destructive">-{formatCurrency(Math.abs(inversionData.total))}</span>
@@ -428,7 +428,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Flujo Neto de Inversión</span>
                 {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-4 text-right">
+                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className={`text-lg font-bold ${(inversionData.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
                       {formatCurrency(inversionData.efectivo || 0)}
                     </span>
@@ -459,7 +459,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               Actividades de Financiamiento
             </div>
             {isDetallada && (
-              <div className="grid grid-cols-3 gap-4 text-sm font-normal">
+              <div className="grid grid-cols-3 gap-8 text-sm font-normal text-center min-w-[400px]">
                 <span>Efectivo</span>
                 <span>Bancos</span>
                 <span>Total</span>
@@ -476,7 +476,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                   <span className="font-medium">Disposiciones de Crédito</span>
                 </div>
                 {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-4 text-right">
+                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className="font-bold text-finance-success">{formatCurrency(flujoData.financiamiento.disposiciones * 0.5)}</span>
                     <span className="font-bold text-finance-success">{formatCurrency(flujoData.financiamiento.disposiciones * 0.5)}</span>
                     <span className="font-bold text-finance-success">{formatCurrency(flujoData.financiamiento.disposiciones)}</span>
@@ -494,7 +494,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                   <span className="font-medium">Pago de Capital</span>
                 </div>
                 {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-4 text-right">
+                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className="font-bold text-destructive">-{formatCurrency(flujoData.financiamiento.amortizacionesEfectivo || 0)}</span>
                     <span className="font-bold text-destructive">-{formatCurrency(flujoData.financiamiento.amortizacionesBancos || 0)}</span>
                     <span className="font-bold text-destructive">-{formatCurrency(flujoData.financiamiento.amortizaciones)}</span>
@@ -512,7 +512,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                   <span className="font-medium">Pago de Intereses</span>
                 </div>
                 {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-4 text-right">
+                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className="font-bold text-destructive">-{formatCurrency(flujoData.financiamiento.interesesEfectivo || 0)}</span>
                     <span className="font-bold text-destructive">-{formatCurrency(flujoData.financiamiento.interesesBancos || 0)}</span>
                     <span className="font-bold text-destructive">-{formatCurrency(flujoData.financiamiento.intereses)}</span>
@@ -535,7 +535,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Flujo Neto de Financiamiento</span>
                 {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-4 text-right">
+                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className={`text-lg font-bold ${(financiamientoData.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
                       {formatCurrency(financiamientoData.efectivo || 0)}
                     </span>
@@ -563,7 +563,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
           <div className="flex justify-between items-center">
             <span className="text-2xl font-bold text-foreground">Flujo Neto de Efectivo</span>
             {isDetallada ? (
-              <div className="grid grid-cols-3 gap-4 text-right">
+              <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Efectivo</div>
                   <span className={`text-xl font-bold ${((operativoData.efectivo || 0) + (inversionData.efectivo || 0) + (financiamientoData.efectivo || 0)) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
@@ -598,7 +598,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
           <div className="flex justify-between items-center">
             <span className="text-xl font-bold text-foreground">Saldo Final de Efectivo y Bancos</span>
             {isDetallada ? (
-              <div className="grid grid-cols-3 gap-4 text-right">
+              <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Efectivo</div>
                   <span className="text-2xl font-bold text-green-600">
