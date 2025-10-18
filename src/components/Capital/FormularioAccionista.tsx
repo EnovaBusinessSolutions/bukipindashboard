@@ -3,47 +3,92 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, UserPlus, Trash2 } from "lucide-react";
+import { Plus, UserPlus, Trash2, Edit } from "lucide-react";
 import { useAccionistas } from "@/hooks/useAccionistas";
 
 export const FormularioAccionista = () => {
-  const { accionistas, isLoading, crearAccionista, eliminarAccionista } = useAccionistas();
+  const { accionistas, isLoading, crearAccionista, actualizarAccionista, eliminarAccionista } = useAccionistas();
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [accionistaEditandoId, setAccionistaEditandoId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [porcentaje, setPorcentaje] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [rfc, setRfc] = useState("");
 
+  const handleEditar = (accionista: any) => {
+    setModoEdicion(true);
+    setAccionistaEditandoId(accionista.id);
+    setNombre(accionista.nombre);
+    setPorcentaje(accionista.porcentaje_participacion?.toString() || "");
+    setEmail(accionista.email || "");
+    setTelefono(accionista.telefono || "");
+    setRfc(accionista.rfc || "");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicion = () => {
+    setModoEdicion(false);
+    setAccionistaEditandoId(null);
+    setNombre("");
+    setPorcentaje("");
+    setEmail("");
+    setTelefono("");
+    setRfc("");
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!nombre.trim()) return;
 
-    crearAccionista.mutate({
-      nombre: nombre.trim(),
-      porcentaje_participacion: porcentaje ? parseFloat(porcentaje) : 0,
-      email: email.trim() || undefined,
-      telefono: telefono.trim() || undefined,
-      rfc: rfc.trim() || undefined,
-      activo: true,
-    }, {
-      onSuccess: () => {
-        setNombre("");
-        setPorcentaje("");
-        setEmail("");
-        setTelefono("");
-        setRfc("");
-      }
-    });
+    if (modoEdicion && accionistaEditandoId) {
+      actualizarAccionista.mutate({
+        id: accionistaEditandoId,
+        nombre: nombre.trim(),
+        porcentaje_participacion: porcentaje ? parseFloat(porcentaje) : 0,
+        email: email.trim() || undefined,
+        telefono: telefono.trim() || undefined,
+        rfc: rfc.trim() || undefined,
+      }, {
+        onSuccess: () => {
+          handleCancelarEdicion();
+        }
+      });
+    } else {
+      crearAccionista.mutate({
+        nombre: nombre.trim(),
+        porcentaje_participacion: porcentaje ? parseFloat(porcentaje) : 0,
+        email: email.trim() || undefined,
+        telefono: telefono.trim() || undefined,
+        rfc: rfc.trim() || undefined,
+        activo: true,
+      }, {
+        onSuccess: () => {
+          setNombre("");
+          setPorcentaje("");
+          setEmail("");
+          setTelefono("");
+          setRfc("");
+        }
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5" />
-            Registrar Nuevo Accionista
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              {modoEdicion ? "Editar Accionista" : "Registrar Nuevo Accionista"}
+            </div>
+            {modoEdicion && (
+              <Button variant="ghost" size="sm" onClick={handleCancelarEdicion}>
+                Cancelar
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -109,7 +154,7 @@ export const FormularioAccionista = () => {
 
             <Button type="submit" className="w-full">
               <Plus className="h-4 w-4 mr-2" />
-              Registrar Accionista
+              {modoEdicion ? "Actualizar Accionista" : "Registrar Accionista"}
             </Button>
           </form>
         </CardContent>
@@ -140,13 +185,22 @@ export const FormularioAccionista = () => {
                       {accionista.telefono && <span>{accionista.telefono}</span>}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => eliminarAccionista.mutate(accionista.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditar(accionista)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => eliminarAccionista.mutate(accionista.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
