@@ -2,14 +2,20 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface SaldosBalance {
-  // Activos
+  // Activos Circulantes
   caja: number;
   bancos: number;
   cuentasPorCobrar: number;
   inventario: number;
   
-  // Pasivos
+  // Activos Fijos
+  activosFijos: number;
+  
+  // Pasivos Circulantes
   proveedores: number;
+  
+  // Pasivos Largo Plazo
+  financiamientos: number;
   
   // Resultados
   ingresos: number;
@@ -73,6 +79,33 @@ export const useBalanceGeneral = () => {
 
       const proveedores = cuentasPagar?.reduce((sum, t) => sum + (t.monto_pendiente || 0), 0) || 0;
 
+      // 5B. ACTIVOS FIJOS - Inversiones CAPEX
+      const { data: inversionesData } = await supabase
+        .from('inversiones_capex')
+        .select('valor_total, valor_depreciacion_anual, fecha_adquisicion');
+
+      let activosFijos = 0;
+      if (inversionesData) {
+        activosFijos = inversionesData.reduce((sum, inv) => {
+          const valorTotal = inv.valor_total || 0;
+          const depreciacionAnual = inv.valor_depreciacion_anual || 0;
+          const fechaAdquisicion = new Date(inv.fecha_adquisicion);
+          const hoy = new Date();
+          const añosTranscurridos = (hoy.getTime() - fechaAdquisicion.getTime()) / (1000 * 60 * 60 * 24 * 365);
+          const depreciacionAcumulada = depreciacionAnual * añosTranscurridos;
+          const valorNeto = valorTotal - depreciacionAcumulada;
+          return sum + Math.max(0, valorNeto);
+        }, 0);
+      }
+
+      // 5C. FINANCIAMIENTOS - Pasivos Largo Plazo
+      const { data: financiamientosData } = await supabase
+        .from('financiamientos')
+        .select('saldo_actual')
+        .eq('estado', 'activo');
+
+      const financiamientos = financiamientosData?.reduce((sum, f) => sum + (f.saldo_actual || 0), 0) || 0;
+
       // 6. INGRESOS (4xxx) - Total de ingresos
       const { data: ingresosData } = await supabase
         .from('transacciones_ingresos')
@@ -104,7 +137,9 @@ export const useBalanceGeneral = () => {
         bancos,
         cuentasPorCobrar,
         inventario,
+        activosFijos,
         proveedores,
+        financiamientos,
         ingresos,
         costos,
         gastos,
