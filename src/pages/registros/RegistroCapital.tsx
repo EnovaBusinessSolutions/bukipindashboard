@@ -517,6 +517,10 @@ const RegistroCapital = () => {
                     .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
                     .reduce((sum, t) => sum + Number(t.monto), 0)
                 : totalDividendos}
+              accionista={accionistaSeleccionado && accionistaSeleccionado !== "all"
+                ? accionistas.find(a => a.id === accionistaSeleccionado)
+                : undefined}
+              totalAportaciones={totalAportaciones}
             />
           </div>
 
