@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, TrendingUp, TrendingDown } from "lucide-react";
+import { CalendarIcon, Plus, TrendingUp, TrendingDown, PieChart, BarChart3 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,16 @@ const RegistroCapital = () => {
         <p className="text-muted-foreground">Registra aportaciones de capital y distribución de dividendos</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Tabs defaultValue="registro" className="w-full">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsTrigger value="registro">Registros de Capital</TabsTrigger>
+          <TabsTrigger value="resumen">Resumen de Transacciones</TabsTrigger>
+          <TabsTrigger value="analitica">Analítica</TabsTrigger>
+        </TabsList>
+
+        {/* Pestaña 1: Registros de Capital */}
+        <TabsContent value="registro" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Formulario */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -218,8 +227,205 @@ const RegistroCapital = () => {
               </p>
             </CardContent>
           </Card>
+          </div>
         </div>
-      </div>
+      </TabsContent>
+
+      {/* Pestaña 2: Resumen de Transacciones */}
+      <TabsContent value="resumen" className="mt-6">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Resumen de Movimientos de Capital</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Capital Social Total
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-primary">$0.00</p>
+                    <p className="text-xs text-muted-foreground mt-1">Aportaciones acumuladas</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Total Aportaciones
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600">$0.00</p>
+                    <p className="text-xs text-muted-foreground mt-1">En el periodo</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Total Dividendos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-red-600">$0.00</p>
+                    <p className="text-xs text-muted-foreground mt-1">Distribuidos en el periodo</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de transacciones */}
+              <div className="border rounded-lg">
+                <div className="p-4 border-b bg-muted/50">
+                  <h3 className="font-semibold">Historial de Transacciones</h3>
+                </div>
+                <div className="p-8 text-center text-muted-foreground">
+                  <p>No hay transacciones registradas</p>
+                  <p className="text-sm mt-2">Las transacciones aparecerán aquí una vez que las registres</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Resumen por Socio */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Resumen por Socio / Accionista</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-lg">
+                <div className="p-4 border-b bg-muted/50">
+                  <div className="grid grid-cols-4 gap-4 font-semibold text-sm">
+                    <div>Socio</div>
+                    <div className="text-right">Aportaciones</div>
+                    <div className="text-right">Dividendos</div>
+                    <div className="text-right">Balance</div>
+                  </div>
+                </div>
+                <div className="p-8 text-center text-muted-foreground">
+                  <p>No hay datos disponibles</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
+
+      {/* Pestaña 3: Analítica */}
+      <TabsContent value="analitica" className="mt-6">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Análisis de Capital</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="border rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <PieChart className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Composición del Capital</h3>
+                  </div>
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    <p>Gráfica de composición del capital por socio</p>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Evolución del Capital</h3>
+                  </div>
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    <p>Gráfica de evolución del capital en el tiempo</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Retorno sobre Capital (ROE)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      ROE Anual
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">0.0%</p>
+                    <p className="text-xs text-muted-foreground mt-1">Utilidad / Capital</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Dividendos / Capital
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">0.0%</p>
+                    <p className="text-xs text-muted-foreground mt-1">Tasa de distribución</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Capital / Activos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">0.0%</p>
+                    <p className="text-xs text-muted-foreground mt-1">Apalancamiento</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Indicadores Clave</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Número de Socios</p>
+                    <p className="text-sm text-muted-foreground">Accionistas activos</p>
+                  </div>
+                  <p className="text-2xl font-bold">0</p>
+                </div>
+
+                <div className="flex justify-between items-center p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Última Aportación</p>
+                    <p className="text-sm text-muted-foreground">Fecha del último movimiento</p>
+                  </div>
+                  <p className="text-lg font-semibold text-muted-foreground">N/A</p>
+                </div>
+
+                <div className="flex justify-between items-center p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Último Dividendo</p>
+                    <p className="text-sm text-muted-foreground">Fecha de última distribución</p>
+                  </div>
+                  <p className="text-lg font-semibold text-muted-foreground">N/A</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
+    </Tabs>
     </div>
   );
 };
