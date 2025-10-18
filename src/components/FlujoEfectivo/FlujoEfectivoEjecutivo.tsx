@@ -233,13 +233,13 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <div className="grid grid-cols-4 gap-4 items-center">
                 <span>Flujo Operativo</span>
                 <span className={`font-medium text-right ${flujoData?.operativo.efectivo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.operativo.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.operativo.efectivo >= 0 ? '$' : '-$'}{Math.abs(flujoData?.operativo.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-medium text-right ${flujoData?.operativo.bancos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.operativo.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.operativo.bancos >= 0 ? '$' : '-$'}{Math.abs(flujoData?.operativo.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-bold text-right ${flujoData?.operativo.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.operativo.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.operativo.total >= 0 ? '$' : '-$'}{Math.abs(flujoData?.operativo.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -271,13 +271,13 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <div className="grid grid-cols-4 gap-4 items-center">
                 <span>Flujo de Inversión</span>
                 <span className={`font-medium text-right ${flujoData?.inversion.efectivo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.inversion.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.inversion.efectivo >= 0 ? '$' : '-$'}{Math.abs(flujoData?.inversion.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-medium text-right ${flujoData?.inversion.bancos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.inversion.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.inversion.bancos >= 0 ? '$' : '-$'}{Math.abs(flujoData?.inversion.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-bold text-right ${flujoData?.inversion.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.inversion.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.inversion.total >= 0 ? '$' : '-$'}{Math.abs(flujoData?.inversion.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -309,13 +309,13 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <div className="grid grid-cols-4 gap-4 items-center">
                 <span>Flujo Financiamiento</span>
                 <span className={`font-medium text-right ${flujoData?.financiamiento.efectivo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.financiamiento.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.financiamiento.efectivo >= 0 ? '$' : '-$'}{Math.abs(flujoData?.financiamiento.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-medium text-right ${flujoData?.financiamiento.bancos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.financiamiento.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.financiamiento.bancos >= 0 ? '$' : '-$'}{Math.abs(flujoData?.financiamiento.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-bold text-right ${flujoData?.financiamiento.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(flujoData?.financiamiento.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  {flujoData?.financiamiento.total >= 0 ? '$' : '-$'}{Math.abs(flujoData?.financiamiento.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -344,13 +344,13 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
               <span className="text-right">Total</span>
               <span>Flujo Neto</span>
               <span className={`text-right ${flujoData?.flujoNeto.efectivo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ${flujoData?.flujoNeto.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                {flujoData?.flujoNeto.efectivo >= 0 ? '$' : '-$'}{Math.abs(flujoData?.flujoNeto.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
               <span className={`text-right ${flujoData?.flujoNeto.bancos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ${flujoData?.flujoNeto.bancos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                {flujoData?.flujoNeto.bancos >= 0 ? '$' : '-$'}{Math.abs(flujoData?.flujoNeto.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
               <span className={`text-right ${flujoData?.flujoNeto.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ${flujoData?.flujoNeto.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                {flujoData?.flujoNeto.total >= 0 ? '$' : '-$'}{Math.abs(flujoData?.flujoNeto.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
           ) : (
