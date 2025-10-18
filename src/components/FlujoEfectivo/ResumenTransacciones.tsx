@@ -10,11 +10,12 @@ import { Badge } from "@/components/ui/badge";
 interface ResumenTransaccionesProps {
   startDate: Date;
   endDate: Date;
+  filtroMetodoPago: "consolidado" | "efectivo" | "bancos";
 }
 
-const ResumenTransacciones = ({ startDate, endDate }: ResumenTransaccionesProps) => {
+const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenTransaccionesProps) => {
   const { data, isLoading } = useQuery({
-    queryKey: ["resumen-transacciones", startDate, endDate],
+    queryKey: ["resumen-transacciones", startDate, endDate, filtroMetodoPago],
     queryFn: async () => {
       const startDateStr = startDate.toISOString();
       const endDateStr = endDate.toISOString();
@@ -27,6 +28,11 @@ const ResumenTransacciones = ({ startDate, endDate }: ResumenTransaccionesProps)
         .lte("created_at", endDateStr)
         .order("created_at", { ascending: false });
 
+      // Filtrar ingresos según método de pago
+      const ingresosFiltrados = filtroMetodoPago === "consolidado" 
+        ? ingresos 
+        : ingresos?.filter(ing => ing.metodo_pago === filtroMetodoPago);
+
       // Egresos
       const { data: egresos } = await supabase
         .from("transacciones_egresos")
@@ -34,6 +40,11 @@ const ResumenTransacciones = ({ startDate, endDate }: ResumenTransaccionesProps)
         .gte("created_at", startDateStr)
         .lte("created_at", endDateStr)
         .order("created_at", { ascending: false });
+
+      // Filtrar egresos según método de pago
+      const egresosFiltrados = filtroMetodoPago === "consolidado" 
+        ? egresos 
+        : egresos?.filter(egr => egr.metodo_pago === filtroMetodoPago);
 
       // Inversiones
       const { data: inversiones } = await supabase
@@ -43,13 +54,23 @@ const ResumenTransacciones = ({ startDate, endDate }: ResumenTransaccionesProps)
         .lte("created_at", endDateStr)
         .order("created_at", { ascending: false });
 
-      // Financiamientos
+      // Filtrar inversiones según método de pago
+      const inversionesFiltradas = filtroMetodoPago === "consolidado" 
+        ? inversiones 
+        : inversiones?.filter(inv => inv.metodo_pago === filtroMetodoPago);
+
+      // Financiamientos (siempre asumimos que son bancos)
       const { data: financiamientos } = await supabase
         .from("financiamientos")
         .select("*")
         .gte("created_at", startDateStr)
         .lte("created_at", endDateStr)
         .order("created_at", { ascending: false });
+
+      // Filtrar financiamientos: solo si es consolidado o bancos
+      const financiamientosFiltrados = (filtroMetodoPago === "consolidado" || filtroMetodoPago === "bancos") 
+        ? financiamientos 
+        : [];
 
       // Amortizaciones
       const { data: amortizaciones } = await supabase
@@ -60,6 +81,11 @@ const ResumenTransacciones = ({ startDate, endDate }: ResumenTransaccionesProps)
         .lte("created_at", endDateStr)
         .order("created_at", { ascending: false });
 
+      // Filtrar amortizaciones según método de pago
+      const amortizacionesFiltradas = filtroMetodoPago === "consolidado" 
+        ? amortizaciones 
+        : amortizaciones?.filter(amort => amort.metodo_pago === filtroMetodoPago);
+
       // Cargos de interés
       const { data: intereses } = await supabase
         .from("transacciones_financiamientos")
@@ -69,13 +95,18 @@ const ResumenTransacciones = ({ startDate, endDate }: ResumenTransaccionesProps)
         .lte("created_at", endDateStr)
         .order("created_at", { ascending: false });
 
+      // Filtrar intereses según método de pago
+      const interesesFiltrados = filtroMetodoPago === "consolidado" 
+        ? intereses 
+        : intereses?.filter(int => int.metodo_pago === filtroMetodoPago);
+
       return {
-        ingresos: ingresos || [],
-        egresos: egresos || [],
-        inversiones: inversiones || [],
-        financiamientos: financiamientos || [],
-        amortizaciones: amortizaciones || [],
-        intereses: intereses || []
+        ingresos: ingresosFiltrados || [],
+        egresos: egresosFiltrados || [],
+        inversiones: inversionesFiltradas || [],
+        financiamientos: financiamientosFiltrados || [],
+        amortizaciones: amortizacionesFiltradas || [],
+        intereses: interesesFiltrados || []
       };
     }
   });

@@ -15,6 +15,7 @@ interface FlujoEfectivoAnaliticoProps {
   endDate: Date;
   periodType: PeriodType;
   vistaColumnas: "consolidada" | "detallada";
+  filtroMetodoPago: "consolidado" | "efectivo" | "bancos";
 }
 
 interface Transaccion {
@@ -24,6 +25,7 @@ interface Transaccion {
   descripcion: string;
   monto: number;
   categoria: string;
+  metodoPago?: string;
 }
 
 interface WaterfallData {
@@ -34,17 +36,24 @@ interface WaterfallData {
   isTotal: boolean;
 }
 
-const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoProps) => {
+const FlujoEfectivoAnalitico = ({ startDate, endDate, filtroMetodoPago }: FlujoEfectivoAnaliticoProps) => {
   // Obtener saldo inicial
   const { data: saldoInicial, isLoading: saldoLoading } = useQuery({
-    queryKey: ["saldo-inicial-flujo", startDate],
+    queryKey: ["saldo-inicial-flujo", startDate, filtroMetodoPago],
     queryFn: async () => {
       const startDateStr = startDate.toISOString().split('T')[0];
+      
+      // Filtrar por cuenta dependiendo del filtro
+      const cuentas = filtroMetodoPago === "consolidado" 
+        ? ["1001", "1002"] 
+        : filtroMetodoPago === "efectivo" 
+          ? ["1001"] 
+          : ["1002"];
 
       const { data } = await supabase
         .from("detalle_asientos")
         .select("debe, haber, cuenta_codigo, asientos_contables!inner(fecha)")
-        .in("cuenta_codigo", ["1001", "1002"])
+        .in("cuenta_codigo", cuentas)
         .lt("asientos_contables.fecha", startDateStr);
 
       let saldo = 0;
@@ -57,7 +66,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
   });
 
   const { data: transacciones, isLoading } = useQuery({
-    queryKey: ["flujo-efectivo-analitico", startDate, endDate],
+    queryKey: ["flujo-efectivo-analitico", startDate, endDate, filtroMetodoPago],
     queryFn: async () => {
       const startDateStr = startDate.toISOString();
       const endDateStr = endDate.toISOString();
@@ -73,14 +82,20 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
 
       ingresos?.forEach(ing => {
         if (ing.monto_pagado > 0) {
-          trans.push({
-            fecha: format(new Date(ing.created_at), "dd/MM/yyyy"),
-            referencia: `ING-${ing.id.slice(0, 8)}`,
-            tipo: "Cobro",
-            descripcion: ing.descripcion,
-            monto: ing.monto_pagado,
-            categoria: "Operativo"
-          });
+          // Filtrar según método de pago
+          if (filtroMetodoPago === "consolidado" || 
+              (filtroMetodoPago === "efectivo" && ing.metodo_pago === "efectivo") ||
+              (filtroMetodoPago === "bancos" && ing.metodo_pago === "bancos")) {
+            trans.push({
+              fecha: format(new Date(ing.created_at), "dd/MM/yyyy"),
+              referencia: `ING-${ing.id.slice(0, 8)}`,
+              tipo: "Cobro",
+              descripcion: ing.descripcion,
+              monto: ing.monto_pagado,
+              categoria: "Operativo",
+              metodoPago: ing.metodo_pago
+            });
+          }
         }
       });
 
@@ -94,14 +109,20 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
 
       egresos?.forEach(egr => {
         if (egr.monto_pagado > 0) {
-          trans.push({
-            fecha: format(new Date(egr.created_at), "dd/MM/yyyy"),
-            referencia: `EGR-${egr.id.slice(0, 8)}`,
-            tipo: "Pago",
-            descripcion: egr.descripcion,
-            monto: -egr.monto_pagado,
-            categoria: "Operativo"
-          });
+          // Filtrar según método de pago
+          if (filtroMetodoPago === "consolidado" || 
+              (filtroMetodoPago === "efectivo" && egr.metodo_pago === "efectivo") ||
+              (filtroMetodoPago === "bancos" && egr.metodo_pago === "bancos")) {
+            trans.push({
+              fecha: format(new Date(egr.created_at), "dd/MM/yyyy"),
+              referencia: `EGR-${egr.id.slice(0, 8)}`,
+              tipo: "Pago",
+              descripcion: egr.descripcion,
+              monto: -egr.monto_pagado,
+              categoria: "Operativo",
+              metodoPago: egr.metodo_pago
+            });
+          }
         }
       });
 
@@ -115,14 +136,20 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
 
       inversiones?.forEach(inv => {
         if (inv.monto_pagado > 0) {
-          trans.push({
-            fecha: format(new Date(inv.created_at), "dd/MM/yyyy"),
-            referencia: `INV-${inv.id.slice(0, 8)}`,
-            tipo: "Inversión",
-            descripcion: inv.producto_nombre,
-            monto: -inv.monto_pagado,
-            categoria: "Inversión"
-          });
+          // Filtrar según método de pago
+          if (filtroMetodoPago === "consolidado" || 
+              (filtroMetodoPago === "efectivo" && inv.metodo_pago === "efectivo") ||
+              (filtroMetodoPago === "bancos" && inv.metodo_pago === "bancos")) {
+            trans.push({
+              fecha: format(new Date(inv.created_at), "dd/MM/yyyy"),
+              referencia: `INV-${inv.id.slice(0, 8)}`,
+              tipo: "Inversión",
+              descripcion: inv.producto_nombre,
+              monto: -inv.monto_pagado,
+              categoria: "Inversión",
+              metodoPago: inv.metodo_pago
+            });
+          }
         }
       });
 
@@ -136,14 +163,18 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
 
       financiamientos?.forEach(fin => {
         if (fin.saldo_inicial > 0) {
-          trans.push({
-            fecha: format(new Date(fin.created_at), "dd/MM/yyyy"),
-            referencia: `FIN-${fin.id.slice(0, 8)}`,
-            tipo: "Disposición",
-            descripcion: fin.nombre,
-            monto: fin.saldo_inicial,
-            categoria: "Financiamiento"
-          });
+          // Para financiamientos, siempre asumimos bancos
+          if (filtroMetodoPago === "consolidado" || filtroMetodoPago === "bancos") {
+            trans.push({
+              fecha: format(new Date(fin.created_at), "dd/MM/yyyy"),
+              referencia: `FIN-${fin.id.slice(0, 8)}`,
+              tipo: "Disposición",
+              descripcion: fin.nombre,
+              monto: fin.saldo_inicial,
+              categoria: "Financiamiento",
+              metodoPago: "bancos"
+            });
+          }
         }
       });
 
@@ -158,14 +189,20 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
       pagos?.forEach(pago => {
         const monto = (pago.capital_pagado || 0) + (pago.interes_pagado || 0);
         if (monto > 0) {
-          trans.push({
-            fecha: format(new Date(pago.created_at), "dd/MM/yyyy"),
-            referencia: `PAG-${pago.id.slice(0, 8)}`,
-            tipo: pago.tipo_transaccion === 'amortizacion' ? 'Amortización' : 'Interés',
-            descripcion: (pago.financiamientos as any)?.nombre || pago.descripcion || "",
-            monto: -monto,
-            categoria: "Financiamiento"
-          });
+          // Filtrar según método de pago
+          if (filtroMetodoPago === "consolidado" || 
+              (filtroMetodoPago === "efectivo" && pago.metodo_pago === "efectivo") ||
+              (filtroMetodoPago === "bancos" && pago.metodo_pago === "bancos")) {
+            trans.push({
+              fecha: format(new Date(pago.created_at), "dd/MM/yyyy"),
+              referencia: `PAG-${pago.id.slice(0, 8)}`,
+              tipo: pago.tipo_transaccion === 'amortizacion' ? 'Amortización' : 'Interés',
+              descripcion: (pago.financiamientos as any)?.nombre || pago.descripcion || "",
+              monto: -monto,
+              categoria: "Financiamiento",
+              metodoPago: pago.metodo_pago
+            });
+          }
         }
       });
 

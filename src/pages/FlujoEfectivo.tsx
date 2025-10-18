@@ -21,6 +21,7 @@ const FlujoEfectivo = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [vistaColumnas, setVistaColumnas] = useState<"consolidada" | "detallada">("consolidada");
   const [activeTab, setActiveTab] = useState<string>("ejecutivo");
+  const [filtroMetodoPago, setFiltroMetodoPago] = useState<"consolidado" | "efectivo" | "bancos">("consolidado");
 
   // Calcular fechas de inicio y fin según el tipo de período
   const getDateRange = () => {
@@ -124,6 +125,23 @@ const FlujoEfectivo = () => {
             {format(dateRange.startDate, "dd/MM/yyyy", { locale: es })} - {format(dateRange.endDate, "dd/MM/yyyy", { locale: es })}
           </div>
         </div>
+
+        {/* Filtro adicional para Analítico y Resumen */}
+        {(activeTab === "analitico" || activeTab === "resumen") && (
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-sm font-medium mb-2 block">Filtro de Cuentas</label>
+            <Select value={filtroMetodoPago} onValueChange={(value) => setFiltroMetodoPago(value as "consolidado" | "efectivo" | "bancos")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="consolidado">Consolidado (Efectivo + Bancos)</SelectItem>
+                <SelectItem value="efectivo">Solo Efectivo</SelectItem>
+                <SelectItem value="bancos">Solo Bancos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Resumen Financiero */}
@@ -171,6 +189,7 @@ const FlujoEfectivo = () => {
             endDate={dateRange.endDate}
             periodType={periodType}
             vistaColumnas={vistaColumnas}
+            filtroMetodoPago={filtroMetodoPago}
           />
         </TabsContent>
         
@@ -178,6 +197,7 @@ const FlujoEfectivo = () => {
           <ResumenTransacciones 
             startDate={dateRange.startDate} 
             endDate={dateRange.endDate}
+            filtroMetodoPago={filtroMetodoPago}
           />
         </TabsContent>
       </Tabs>
