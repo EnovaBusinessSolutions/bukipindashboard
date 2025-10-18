@@ -26,6 +26,8 @@ import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
 import Clientes from "./pages/Clientes";
 import AnalyticasClientes from "./pages/clientes/AnalyticasClientes";
 import Proveedores from "./pages/Proveedores";
+import AnalisisResultados from "./pages/analisis/AnalisisResultados";
+import AnalisisBalance from "./pages/analisis/AnalisisBalance";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +54,8 @@ const App = () => (
                         <Route path="/estados-financieros/balance" element={<BalanceGeneral />} />
                         <Route path="/estados-financieros/flujo-efectivo" element={<FlujoEfectivo />} />
                         <Route path="/estados-financieros/balanza" element={<Balanza />} />
+                        <Route path="/analisis-financiero/resultados" element={<AnalisisResultados />} />
+                        <Route path="/analisis-financiero/balance" element={<AnalisisBalance />} />
                         <Route path="/registros/ingresos" element={<RegistroIngresos />} />
                         <Route path="/registros/egresos" element={<RegistroEgresos />} />
                         <Route path="/registros/inversiones" element={<RegistroInversiones />} />
