@@ -457,53 +457,158 @@ const RegistroCapital = () => {
       {/* Pestaña 3: Analítica */}
       <TabsContent value="analitica" className="mt-6">
         <div className="space-y-6">
+          {/* Filtro de Accionista */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <Label htmlFor="filtro-accionista" className="whitespace-nowrap">
+                  Ver análisis de:
+                </Label>
+                <Select 
+                  value={accionistaSeleccionado} 
+                  onValueChange={setAccionistaSeleccionado}
+                >
+                  <SelectTrigger id="filtro-accionista" className="w-full max-w-md">
+                    <SelectValue placeholder="Consolidado (Todos los accionistas)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Consolidado (Todos los accionistas)</SelectItem>
+                    {accionistas.map((accionista) => (
+                      <SelectItem key={accionista.id} value={accionista.id}>
+                        {accionista.nombre}
+                        {accionista.porcentaje_participacion > 0 && 
+                          ` (${accionista.porcentaje_participacion}%)`
+                        }
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <GraficaWaterfall 
               data={{
-                aportaciones: totalAportaciones,
+                aportaciones: accionistaSeleccionado 
+                  ? transacciones
+                      .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion")
+                      .reduce((sum, t) => sum + Number(t.monto), 0)
+                  : totalAportaciones,
                 utilidades: utilidadesAcumuladas,
-                dividendos: totalDividendos,
+                dividendos: accionistaSeleccionado
+                  ? transacciones
+                      .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
+                      .reduce((sum, t) => sum + Number(t.monto), 0)
+                  : totalDividendos,
               }}
+              accionistaId={accionistaSeleccionado}
             />
             
             <GraficaRadialKPI
-              aportaciones={totalAportaciones}
+              aportaciones={accionistaSeleccionado 
+                ? transacciones
+                    .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion")
+                    .reduce((sum, t) => sum + Number(t.monto), 0)
+                : totalAportaciones}
               utilidades={utilidadesAcumuladas}
-              dividendosDistribuidos={totalDividendos}
+              dividendosDistribuidos={accionistaSeleccionado
+                ? transacciones
+                    .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
+                    .reduce((sum, t) => sum + Number(t.monto), 0)
+                : totalDividendos}
             />
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Indicadores Clave</CardTitle>
+              <CardTitle>
+                Indicadores Clave - {accionistaSeleccionado 
+                  ? accionistas.find(a => a.id === accionistaSeleccionado)?.nombre 
+                  : "Consolidado"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 border rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">Número de Accionistas</p>
-                  <p className="text-2xl font-bold">{accionistas.length}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {accionistaSeleccionado ? "Transacciones" : "Número de Accionistas"}
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {accionistaSeleccionado 
+                      ? transacciones.filter(t => t.accionista_id === accionistaSeleccionado).length
+                      : accionistas.length
+                    }
+                  </p>
                 </div>
 
                 <div className="p-4 border rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">Última Aportación</p>
                   <p className="text-lg font-semibold">
-                    {transacciones.find(t => t.tipo_movimiento === "aportacion")
-                      ? format(new Date(transacciones.find(t => t.tipo_movimiento === "aportacion")!.fecha), "dd/MM/yyyy", { locale: es })
-                      : "N/A"
-                    }
+                    {(() => {
+                      const filtradas = accionistaSeleccionado
+                        ? transacciones.filter(t => t.tipo_movimiento === "aportacion" && t.accionista_id === accionistaSeleccionado)
+                        : transacciones.filter(t => t.tipo_movimiento === "aportacion");
+                      const ultima = filtradas[0];
+                      return ultima
+                        ? format(new Date(ultima.fecha), "dd/MM/yyyy", { locale: es })
+                        : "N/A";
+                    })()}
                   </p>
                 </div>
 
                 <div className="p-4 border rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">Último Dividendo</p>
                   <p className="text-lg font-semibold">
-                    {transacciones.find(t => t.tipo_movimiento === "dividendo")
-                      ? format(new Date(transacciones.find(t => t.tipo_movimiento === "dividendo")!.fecha), "dd/MM/yyyy", { locale: es })
-                      : "N/A"
-                    }
+                    {(() => {
+                      const filtradas = accionistaSeleccionado
+                        ? transacciones.filter(t => t.tipo_movimiento === "dividendo" && t.accionista_id === accionistaSeleccionado)
+                        : transacciones.filter(t => t.tipo_movimiento === "dividendo");
+                      const ultimo = filtradas[0];
+                      return ultimo
+                        ? format(new Date(ultimo.fecha), "dd/MM/yyyy", { locale: es })
+                        : "N/A";
+                    })()}
                   </p>
                 </div>
               </div>
+
+              {/* Detalles adicionales por accionista */}
+              {accionistaSeleccionado && (() => {
+                const accionista = accionistas.find(a => a.id === accionistaSeleccionado);
+                if (!accionista) return null;
+                return (
+                  <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+                    <h4 className="font-semibold mb-3">Información del Accionista</h4>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {accionista.porcentaje_participacion > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Participación:</span>
+                          <span className="ml-2 font-medium">{accionista.porcentaje_participacion}%</span>
+                        </div>
+                      )}
+                      {accionista.email && (
+                        <div>
+                          <span className="text-muted-foreground">Email:</span>
+                          <span className="ml-2 font-medium">{accionista.email}</span>
+                        </div>
+                      )}
+                      {accionista.telefono && (
+                        <div>
+                          <span className="text-muted-foreground">Teléfono:</span>
+                          <span className="ml-2 font-medium">{accionista.telefono}</span>
+                        </div>
+                      )}
+                      {accionista.rfc && (
+                        <div>
+                          <span className="text-muted-foreground">RFC:</span>
+                          <span className="ml-2 font-medium">{accionista.rfc}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>
