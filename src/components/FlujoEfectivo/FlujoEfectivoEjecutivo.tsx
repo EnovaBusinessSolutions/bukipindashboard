@@ -65,7 +65,6 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
           // transferencia, cheque, tarjeta, etc van a bancos
           operativo.bancos += monto;
         }
-        operativo.total += monto;
       });
       
       egresos?.forEach(e => {
@@ -76,8 +75,10 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
           // transferencia, cheque, tarjeta, etc van a bancos
           operativo.bancos -= monto;
         }
-        operativo.total -= monto;
       });
+      
+      // El total SIEMPRE es la suma de efectivo + bancos
+      operativo.total = operativo.efectivo + operativo.bancos;
 
       // Actividades de Inversión
       const { data: inversiones } = await supabase
@@ -95,8 +96,10 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
           // transferencia, cheque, etc van a bancos
           inversion.bancos -= monto;
         }
-        inversion.total -= monto;
       });
+      
+      // El total SIEMPRE es la suma de efectivo + bancos
+      inversion.total = inversion.efectivo + inversion.bancos;
 
       // Actividades de Financiamiento  
       const { data: financiamientos } = await supabase
@@ -118,7 +121,6 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       financiamientos?.forEach(f => {
         const monto = f.saldo_inicial || 0;
         financiamiento.bancos += monto;
-        financiamiento.total += monto;
       });
       
       // Pagos de financiamiento según método de pago
@@ -129,20 +131,26 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         } else {
           financiamiento.bancos -= monto;
         }
-        financiamiento.total -= monto;
       });
+      
+      // El total SIEMPRE es la suma de efectivo + bancos
+      financiamiento.total = financiamiento.efectivo + financiamiento.bancos;
 
       const flujoNeto = {
         efectivo: operativo.efectivo + inversion.efectivo + financiamiento.efectivo,
         bancos: operativo.bancos + inversion.bancos + financiamiento.bancos,
-        total: operativo.total + inversion.total + financiamiento.total
+        total: 0 // se calculará después
       };
+      // El total SIEMPRE es la suma de efectivo + bancos
+      flujoNeto.total = flujoNeto.efectivo + flujoNeto.bancos;
 
       const saldoFinal = {
         efectivo: saldoInicial.efectivo + flujoNeto.efectivo,
         bancos: saldoInicial.bancos + flujoNeto.bancos,
-        total: saldoInicial.total + flujoNeto.total
+        total: 0 // se calculará después
       };
+      // El total SIEMPRE es la suma de efectivo + bancos
+      saldoFinal.total = saldoFinal.efectivo + saldoFinal.bancos;
 
       return {
         saldoInicial,
