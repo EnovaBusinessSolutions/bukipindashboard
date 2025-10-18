@@ -15,7 +15,8 @@ const Sidebar = () => {
     contabilidad: false,
     registros: false,
     cobrosPagos: false,
-    estadosFinancieros: false
+    estadosFinancieros: false,
+    analisisFinanciero: false
   });
 
   const handleSignOut = async () => {
@@ -106,6 +107,16 @@ const Sidebar = () => {
     name: "Base de Datos Proveedores",
     path: "/proveedores",
     active: location.pathname === "/proveedores"
+  }];
+
+  const analisisFinancieroItems = [{
+    name: "Resultados",
+    path: "/analisis-financiero/resultados",
+    active: location.pathname === "/analisis-financiero/resultados"
+  }, {
+    name: "Balance",
+    path: "/analisis-financiero/balance",
+    active: location.pathname === "/analisis-financiero/balance"
   }];
 
   return (
@@ -216,7 +227,7 @@ const Sidebar = () => {
       <Separator className="mx-6 bg-sidebar-border" />
 
       {/* Estados Financieros Section */}
-      <div className="px-3 py-4 flex-1">
+      <div className="px-3 py-4">
         <Collapsible open={openSections.estadosFinancieros} onOpenChange={() => toggleSection('estadosFinancieros')}>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
@@ -226,6 +237,33 @@ const Sidebar = () => {
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-1 mt-2">
             {estadosFinancierosItems.map(item => (
+              <Link key={item.name} to={item.path}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className={`w-full justify-start ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}`}
+                >
+                  {item.name}
+                </Button>
+              </Link>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      <Separator className="mx-6 bg-sidebar-border" />
+
+      {/* Análisis Financiero Section */}
+      <div className="px-3 py-4 flex-1">
+        <Collapsible open={openSections.analisisFinanciero} onOpenChange={() => toggleSection('analisisFinanciero')}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+              <span className="font-semibold text-sm">Análisis Financiero</span>
+              {openSections.analisisFinanciero ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 mt-2">
+            {analisisFinancieroItems.map(item => (
               <Link key={item.name} to={item.path}>
                 <Button 
                   variant="ghost" 
