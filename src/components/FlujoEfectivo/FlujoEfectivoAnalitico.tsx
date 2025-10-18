@@ -6,6 +6,10 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PeriodType } from "@/pages/EstadoResultados";
 import { format } from "date-fns";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+  PieChart, Pie, Legend
+} from "recharts";
 
 interface FlujoEfectivoAnaliticoProps {
   startDate: Date;
@@ -23,7 +27,36 @@ interface Transaccion {
   categoria: string;
 }
 
+interface WaterfallData {
+  name: string;
+  value: number;
+  start: number;
+  fill: string;
+  isTotal: boolean;
+}
+
 const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoProps) => {
+  // Obtener saldo inicial
+  const { data: saldoInicial, isLoading: saldoLoading } = useQuery({
+    queryKey: ["saldo-inicial-flujo", startDate],
+    queryFn: async () => {
+      const startDateStr = startDate.toISOString().split('T')[0];
+
+      const { data } = await supabase
+        .from("detalle_asientos")
+        .select("debe, haber, cuenta_codigo, asientos_contables!inner(fecha)")
+        .in("cuenta_codigo", ["1001", "1002"])
+        .lt("asientos_contables.fecha", startDateStr);
+
+      let saldo = 0;
+      data?.forEach((detalle) => {
+        saldo += Number(detalle.debe || 0) - Number(detalle.haber || 0);
+      });
+
+      return saldo;
+    },
+  });
+
   const { data: transacciones, isLoading } = useQuery({
     queryKey: ["flujo-efectivo-analitico", startDate, endDate],
     queryFn: async () => {
@@ -141,7 +174,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     },
   });
 
-  if (isLoading) {
+  if (isLoading || saldoLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -162,9 +195,304 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
   };
 
   const totalGeneral = totales.operativo + totales.inversion + totales.financiamiento;
+  const saldoFinal = (saldoInicial || 0) + totalGeneral;
+
+  // Datos para waterfall
+  const waterfallData: WaterfallData[] = [];
+
+  // Saldo Inicial
+  waterfallData.push({
+    name: "Saldo Inicial",
+    value: 0,
+    start: saldoInicial || 0,
+    fill: "#3b82f6",
+    isTotal: true
+  });
+
+  // Actividades Operativas
+  const despuesOperativo = (saldoInicial || 0) + totales.operativo;
+  waterfallData.push({
+    name: "Activ. Operativas",
+    value: saldoInicial || 0,
+    start: totales.operativo,
+    fill: totales.operativo >= 0 ? "#10b981" : "#ef4444",
+    isTotal: false
+  });
+
+  waterfallData.push({
+    name: "Subtotal Operativo",
+    value: 0,
+    start: despuesOperativo,
+    fill: "#6366f1",
+    isTotal: true
+  });
+
+  // Actividades de Inversión
+  const despuesInversion = despuesOperativo + totales.inversion;
+  waterfallData.push({
+    name: "Activ. Inversión",
+    value: despuesOperativo,
+    start: totales.inversion,
+    fill: totales.inversion >= 0 ? "#10b981" : "#ef4444",
+    isTotal: false
+  });
+
+  waterfallData.push({
+    name: "Subtotal Inversión",
+    value: 0,
+    start: despuesInversion,
+    fill: "#6366f1",
+    isTotal: true
+  });
+
+  // Actividades de Financiamiento
+  const despuesFinanciamiento = despuesInversion + totales.financiamiento;
+  waterfallData.push({
+    name: "Activ. Financ.",
+    value: despuesInversion,
+    start: totales.financiamiento,
+    fill: totales.financiamiento >= 0 ? "#10b981" : "#ef4444",
+    isTotal: false
+  });
+
+  // Saldo Final
+  waterfallData.push({
+    name: "SALDO FINAL",
+    value: 0,
+    start: saldoFinal,
+    fill: saldoFinal >= 0 ? "#059669" : "#dc2626",
+    isTotal: true
+  });
+
+  // Datos para gráfica de pie
+  const pieData = [
+    { name: "Operativas", value: Math.abs(totales.operativo), fill: "#10b981" },
+    { name: "Inversión", value: Math.abs(totales.inversion), fill: "#3b82f6" },
+    { name: "Financiamiento", value: Math.abs(totales.financiamiento), fill: "#8b5cf6" }
+  ].filter(item => item.value > 0);
+
+  // Datos para gráfica de barras comparativas
+  const barData = [
+    { name: "Operativas", monto: totales.operativo, fill: totales.operativo >= 0 ? "#10b981" : "#ef4444" },
+    { name: "Inversión", monto: totales.inversion, fill: totales.inversion >= 0 ? "#10b981" : "#ef4444" },
+    { name: "Financiamiento", monto: totales.financiamiento, fill: totales.financiamiento >= 0 ? "#10b981" : "#ef4444" }
+  ];
+
+  const formatCurrency = (value: number) => {
+    return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
+  const CustomTooltipWaterfall = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const displayValue = data.isTotal ? data.start : data.start;
+      return (
+        <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
+          <p className="font-semibold text-foreground mb-1">{data.name}</p>
+          <p className={`text-sm ${displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(displayValue)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* 1. Gráfico de Cascada (Waterfall) */}
+      <Card className="border-2">
+        <CardHeader className="bg-muted/50">
+          <CardTitle className="text-2xl">1. Gráfico de Cascada del Flujo de Efectivo</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Visualización del impacto de cada categoría de actividades en el efectivo
+          </p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <ResponsiveContainer width="100%" height={500}>
+            <BarChart
+              data={waterfallData}
+              margin={{ top: 20, right: 30, left: 60, bottom: 80 }}
+              barGap={8}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis 
+                dataKey="name" 
+                angle={-45}
+                textAnchor="end"
+                height={100}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 500 }}
+                interval={0}
+              />
+              <YAxis 
+                tickFormatter={(value) => formatCurrency(value)}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                width={80}
+              />
+              <Tooltip content={<CustomTooltipWaterfall />} />
+              <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
+              
+              <Bar dataKey="value" stackId="stack" isAnimationActive={false}>
+                {waterfallData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-value-${index}`} 
+                    fill="transparent"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                ))}
+              </Bar>
+              <Bar 
+                dataKey="start" 
+                stackId="stack" 
+                radius={[6, 6, 6, 6]}
+                label={{
+                  position: 'top',
+                  content: ({ x, y, width, value, index }: any) => {
+                    const item = waterfallData[index];
+                    if (!item) return null;
+                    return (
+                      <text
+                        x={Number(x) + Number(width) / 2}
+                        y={Number(y) - 5}
+                        fill="hsl(var(--foreground))"
+                        textAnchor="middle"
+                        dominantBaseline="bottom"
+                        fontSize={10}
+                        fontWeight="bold"
+                      >
+                        {formatCurrency(item.start)}
+                      </text>
+                    );
+                  }
+                }}
+              >
+                {waterfallData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-start-${index}`} 
+                    fill={entry.fill}
+                    stroke={entry.isTotal ? "#000" : "transparent"}
+                    strokeWidth={entry.isTotal ? 2 : 0}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Saldo Inicial</p>
+              <p className="font-semibold text-lg">{formatCurrency(saldoInicial || 0)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Flujo Operativo</p>
+              <p className={`font-semibold text-lg ${totales.operativo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(totales.operativo)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Flujo Neto</p>
+              <p className={`font-semibold text-lg ${totalGeneral >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(totalGeneral)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Saldo Final</p>
+              <p className={`font-semibold text-lg ${saldoFinal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(saldoFinal)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 2. Gráficos Comparativos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Gráfica de Barras por Actividad */}
+        <Card className="border-2">
+          <CardHeader className="bg-muted/50">
+            <CardTitle className="text-xl">2. Comparativa por Tipo de Actividad</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Flujo neto de efectivo por categoría
+            </p>
+          </CardHeader>
+          <CardContent className="p-6">
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart
+                data={barData}
+                margin={{ top: 20, right: 20, left: 60, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-25}
+                  textAnchor="end"
+                  height={80}
+                  tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                />
+                <YAxis 
+                  tickFormatter={(value) => formatCurrency(value)}
+                  tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                  width={80}
+                />
+                <Tooltip 
+                  formatter={(value: number) => formatCurrency(value)}
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--background))', 
+                    border: '1px solid hsl(var(--border))' 
+                  }}
+                />
+                <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
+                <Bar dataKey="monto" radius={[8, 8, 0, 0]}>
+                  {barData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Gráfica de Pie - Distribución de Actividades */}
+        {pieData.length > 0 && (
+          <Card className="border-2">
+            <CardHeader className="bg-muted/50">
+              <CardTitle className="text-xl">3. Distribución de Movimientos</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Participación por tipo de actividad (valores absolutos)
+              </p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <ResponsiveContainer width="100%" height={350}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={100}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--background))', 
+                      border: '1px solid hsl(var(--border))' 
+                    }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Detalle de Transacciones */}
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>

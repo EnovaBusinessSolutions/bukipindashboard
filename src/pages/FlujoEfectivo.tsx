@@ -127,9 +127,9 @@ const FlujoEfectivo = () => {
       <Tabs defaultValue="ejecutivo" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
-          <TabsTrigger value="resumen">Resumen Transacciones</TabsTrigger>
           <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
           <TabsTrigger value="analitico">Formato Analítico</TabsTrigger>
+          <TabsTrigger value="resumen">Resumen Transacciones</TabsTrigger>
         </TabsList>
         
         <TabsContent value="ejecutivo" className="mt-6">
@@ -138,13 +138,6 @@ const FlujoEfectivo = () => {
             endDate={dateRange.endDate}
             periodType={periodType}
             vistaColumnas={vistaColumnas}
-          />
-        </TabsContent>
-        
-        <TabsContent value="resumen" className="mt-6">
-          <ResumenTransacciones 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
           />
         </TabsContent>
         
@@ -163,6 +156,13 @@ const FlujoEfectivo = () => {
             endDate={dateRange.endDate}
             periodType={periodType}
             vistaColumnas={vistaColumnas}
+          />
+        </TabsContent>
+        
+        <TabsContent value="resumen" className="mt-6">
+          <ResumenTransacciones 
+            startDate={dateRange.startDate} 
+            endDate={dateRange.endDate}
           />
         </TabsContent>
       </Tabs>
