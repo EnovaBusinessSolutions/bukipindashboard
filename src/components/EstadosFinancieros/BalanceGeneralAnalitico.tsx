@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { Loader2 } from "lucide-react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Treemap, ResponsiveContainer, Tooltip } from "recharts";
 
 interface BalanceGeneralAnaliticoProps {
   cutoffDate: Date;
@@ -24,29 +24,30 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const totalPasivos = saldos.proveedores;
   const capital = totalActivos - totalPasivos;
 
-  // Datos para gráfica de composición de activos
-  const activosData = [
-    { name: "Caja", value: saldos.caja, color: "hsl(var(--chart-1))" },
-    { name: "Bancos", value: saldos.bancos, color: "hsl(var(--chart-2))" },
-    { name: "Cuentas por Cobrar", value: saldos.cuentasPorCobrar, color: "hsl(var(--chart-3))" },
-    { name: "Inventario", value: saldos.inventario, color: "hsl(var(--chart-4))" },
-  ].filter(item => item.value > 0);
+  // Datos para treemap de activos
+  const activosTreemapData = [
+    { name: "Caja", size: saldos.caja, color: "hsl(var(--chart-1))" },
+    { name: "Bancos", size: saldos.bancos, color: "hsl(var(--chart-2))" },
+    { name: "Cuentas por Cobrar", size: saldos.cuentasPorCobrar, color: "hsl(var(--chart-3))" },
+    { name: "Inventario", size: saldos.inventario, color: "hsl(var(--chart-4))" },
+  ].filter(item => item.size > 0);
 
-  // Datos para gráfica de composición patrimonial
-  const patrimonioData = [
+  // Datos para treemap de pasivos
+  const pasivosTreemapData = [
+    { name: "Proveedores", size: saldos.proveedores, color: "hsl(var(--chart-5))" },
+  ].filter(item => item.size > 0);
+
+  // Datos para treemap de capital
+  const capitalTreemapData = [
+    { name: "Capital Contable", size: capital, color: "hsl(var(--chart-2))" },
+  ].filter(item => item.size > 0);
+
+  // Datos para gráfica de dona - Estructura de Balance
+  const estructuraBalanceData = [
     { name: "Activos", value: totalActivos, color: "hsl(var(--chart-1))" },
     { name: "Pasivos", value: totalPasivos, color: "hsl(var(--chart-5))" },
-    { name: "Capital", value: capital, color: "hsl(var(--chart-2))" },
-  ].filter(item => item.value !== 0);
-
-  // Datos para gráfica de barras comparativa
-  const comparativaData = [
-    {
-      name: "Balance",
-      Activos: totalActivos,
-      "Pasivos + Capital": totalPasivos + capital,
-    },
-  ];
+    { name: "Capital", value: Math.abs(capital), color: "hsl(var(--chart-2))" },
+  ].filter(item => item.value > 0);
 
   // Cálculo de ratios financieros
   const activoCorriente = saldos.caja + saldos.bancos + saldos.cuentasPorCobrar;
@@ -64,14 +65,56 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     }).format(value);
   };
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTreemapContent = ({ x, y, width, height, name, size, color }: any) => {
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: color,
+            stroke: "hsl(var(--background))",
+            strokeWidth: 2,
+          }}
+        />
+        {width > 60 && height > 40 && (
+          <>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 - 10}
+              textAnchor="middle"
+              fill="hsl(var(--background))"
+              fontSize={14}
+              fontWeight="bold"
+            >
+              {name}
+            </text>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + 10}
+              textAnchor="middle"
+              fill="hsl(var(--background))"
+              fontSize={12}
+            >
+              {formatCurrency(size)}
+            </text>
+          </>
+        )}
+      </g>
+    );
+  };
+
+  const CustomDonutTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const total = estructuraBalanceData.reduce((sum, item) => sum + item.value, 0);
       return (
         <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
           <p className="font-semibold text-foreground">{payload[0].name}</p>
           <p className="text-primary font-bold">{formatCurrency(payload[0].value)}</p>
           <p className="text-sm text-muted-foreground">
-            {((payload[0].value / payload[0].payload.total) * 100).toFixed(1)}%
+            {((payload[0].value / total) * 100).toFixed(1)}%
           </p>
         </div>
       );
@@ -148,38 +191,26 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
         </Card>
       </div>
 
-      {/* Gráficas de Composición */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Composición de Activos */}
+      {/* Treemaps de Composición */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Treemap de Activos */}
         <Card>
           <CardHeader>
             <CardTitle>Composición de Activos</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={activosData.map(item => ({
-                    ...item,
-                    total: totalActivos,
-                  }))}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {activosData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
+              <Treemap
+                data={activosTreemapData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="hsl(var(--background))"
+                fill="hsl(var(--chart-1))"
+                content={<CustomTreemapContent />}
+              />
             </ResponsiveContainer>
             <div className="mt-4 space-y-2">
-              {activosData.map((item, index) => (
+              {activosTreemapData.map((item, index) => (
                 <div key={index} className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
                     <div
@@ -188,43 +219,31 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                     />
                     <span className="text-muted-foreground">{item.name}</span>
                   </div>
-                  <span className="font-semibold text-foreground">{formatCurrency(item.value)}</span>
+                  <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Estructura Patrimonial */}
+        {/* Treemap de Pasivos */}
         <Card>
           <CardHeader>
-            <CardTitle>Estructura Patrimonial</CardTitle>
+            <CardTitle>Composición de Pasivos</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={patrimonioData.map(item => ({
-                    ...item,
-                    total: totalActivos,
-                  }))}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {patrimonioData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
+              <Treemap
+                data={pasivosTreemapData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="hsl(var(--background))"
+                fill="hsl(var(--chart-5))"
+                content={<CustomTreemapContent />}
+              />
             </ResponsiveContainer>
             <div className="mt-4 space-y-2">
-              {patrimonioData.map((item, index) => (
+              {pasivosTreemapData.map((item, index) => (
                 <div key={index} className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
                     <div
@@ -233,7 +252,40 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                     />
                     <span className="text-muted-foreground">{item.name}</span>
                   </div>
-                  <span className="font-semibold text-foreground">{formatCurrency(item.value)}</span>
+                  <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Treemap de Capital */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Composición de Capital</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <Treemap
+                data={capitalTreemapData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="hsl(var(--background))"
+                fill="hsl(var(--chart-2))"
+                content={<CustomTreemapContent />}
+              />
+            </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              {capitalTreemapData.map((item, index) => (
+                <div key={index} className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-muted-foreground">{item.name}</span>
+                  </div>
+                  <span className="font-semibold text-foreground">{formatCurrency(item.size)}</span>
                 </div>
               ))}
             </div>
@@ -241,30 +293,47 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
         </Card>
       </div>
 
-      {/* Gráfica Comparativa de Balance */}
+      {/* Estructura de Balance - Gráfica de Dona */}
       <Card>
         <CardHeader>
-          <CardTitle>Balance: Activos vs Pasivos + Capital</CardTitle>
+          <CardTitle>Estructura de Balance</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={comparativaData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="name" className="text-muted-foreground" />
-              <YAxis className="text-muted-foreground" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--background))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                }}
-                formatter={(value: number) => formatCurrency(value)}
-              />
-              <Legend />
-              <Bar dataKey="Activos" fill="hsl(var(--chart-1))" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="Pasivos + Capital" fill="hsl(var(--chart-2))" radius={[8, 8, 0, 0]} />
-            </BarChart>
+          <ResponsiveContainer width="100%" height={400}>
+            <PieChart>
+              <Pie
+                data={estructuraBalanceData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                outerRadius={120}
+                innerRadius={70}
+                fill="#8884d8"
+                dataKey="value"
+                paddingAngle={5}
+              >
+                {estructuraBalanceData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomDonutTooltip />} />
+            </PieChart>
           </ResponsiveContainer>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            {estructuraBalanceData.map((item, index) => (
+              <div key={index} className="flex flex-col items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="text-sm text-muted-foreground">{item.name}</span>
+                </div>
+                <span className="text-lg font-bold text-foreground">{formatCurrency(item.value)}</span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
