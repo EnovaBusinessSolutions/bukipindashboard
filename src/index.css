@@ -31,6 +31,10 @@ All colors MUST be HSL.
     --chart-3: 180 55% 65%;
     --chart-4: 180 40% 40%;
     --chart-5: 180 60% 70%;
+    
+    --chart-balance: 180 25% 50%;
+    --chart-income: 70 40% 45%;
+    --chart-expense: 0 50% 40%;
 
     --secondary: 180 10% 92%;
     --secondary-foreground: 0 0% 15%;
@@ -102,6 +106,10 @@ All colors MUST be HSL.
     --chart-3: 180 55% 65%;
     --chart-4: 180 40% 40%;
     --chart-5: 180 60% 70%;
+    
+    --chart-balance: 180 25% 50%;
+    --chart-income: 70 40% 45%;
+    --chart-expense: 0 50% 40%;
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;

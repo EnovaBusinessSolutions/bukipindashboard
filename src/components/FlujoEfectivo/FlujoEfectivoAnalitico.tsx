@@ -7,8 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PeriodType } from "@/pages/EstadoResultados";
 import { format } from "date-fns";
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
-  PieChart, Pie, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from "recharts";
 
 interface FlujoEfectivoAnaliticoProps {
@@ -194,10 +193,20 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     financiamiento: porCategoria.financiamiento.reduce((sum, t) => sum + t.monto, 0)
   };
 
+  // Calcular componentes para el Sankey
+  const cobros = porCategoria.operativo.filter(t => t.monto > 0).reduce((sum, t) => sum + t.monto, 0);
+  const pagos = Math.abs(porCategoria.operativo.filter(t => t.monto < 0).reduce((sum, t) => sum + t.monto, 0));
+  const inversiones = Math.abs(totales.inversion);
+  const nuevosCreditos = porCategoria.financiamiento.filter(t => t.monto > 0).reduce((sum, t) => sum + t.monto, 0);
+  const pagosCreditos = Math.abs(porCategoria.financiamiento.filter(t => t.monto < 0).reduce((sum, t) => sum + t.monto, 0));
+
+  const totalIngresos = cobros + nuevosCreditos;
+  const totalEgresos = pagos + inversiones + pagosCreditos;
+
   const totalGeneral = totales.operativo + totales.inversion + totales.financiamiento;
   const saldoFinal = (saldoInicial || 0) + totalGeneral;
 
-  // Datos para waterfall
+  // Datos para waterfall con colores del sistema de diseño
   const waterfallData: WaterfallData[] = [];
 
   // Saldo Inicial
@@ -205,7 +214,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "Saldo Inicial",
     value: 0,
     start: saldoInicial || 0,
-    fill: "#3b82f6",
+    fill: "hsl(var(--chart-balance))",
     isTotal: true
   });
 
@@ -215,7 +224,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "Activ. Operativas",
     value: saldoInicial || 0,
     start: totales.operativo,
-    fill: totales.operativo >= 0 ? "#10b981" : "#ef4444",
+    fill: totales.operativo >= 0 ? "hsl(var(--chart-income))" : "hsl(var(--chart-expense))",
     isTotal: false
   });
 
@@ -223,7 +232,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "Subtotal Operativo",
     value: 0,
     start: despuesOperativo,
-    fill: "#6366f1",
+    fill: "hsl(var(--chart-balance))",
     isTotal: true
   });
 
@@ -233,7 +242,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "Activ. Inversión",
     value: despuesOperativo,
     start: totales.inversion,
-    fill: totales.inversion >= 0 ? "#10b981" : "#ef4444",
+    fill: totales.inversion >= 0 ? "hsl(var(--chart-income))" : "hsl(var(--chart-expense))",
     isTotal: false
   });
 
@@ -241,7 +250,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "Subtotal Inversión",
     value: 0,
     start: despuesInversion,
-    fill: "#6366f1",
+    fill: "hsl(var(--chart-balance))",
     isTotal: true
   });
 
@@ -251,7 +260,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "Activ. Financ.",
     value: despuesInversion,
     start: totales.financiamiento,
-    fill: totales.financiamiento >= 0 ? "#10b981" : "#ef4444",
+    fill: totales.financiamiento >= 0 ? "hsl(var(--chart-income))" : "hsl(var(--chart-expense))",
     isTotal: false
   });
 
@@ -260,23 +269,9 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
     name: "SALDO FINAL",
     value: 0,
     start: saldoFinal,
-    fill: saldoFinal >= 0 ? "#059669" : "#dc2626",
+    fill: "hsl(var(--chart-balance))",
     isTotal: true
   });
-
-  // Datos para gráfica de pie
-  const pieData = [
-    { name: "Operativas", value: Math.abs(totales.operativo), fill: "#10b981" },
-    { name: "Inversión", value: Math.abs(totales.inversion), fill: "#3b82f6" },
-    { name: "Financiamiento", value: Math.abs(totales.financiamiento), fill: "#8b5cf6" }
-  ].filter(item => item.value > 0);
-
-  // Datos para gráfica de barras comparativas
-  const barData = [
-    { name: "Operativas", monto: totales.operativo, fill: totales.operativo >= 0 ? "#10b981" : "#ef4444" },
-    { name: "Inversión", monto: totales.inversion, fill: totales.inversion >= 0 ? "#10b981" : "#ef4444" },
-    { name: "Financiamiento", monto: totales.financiamiento, fill: totales.financiamiento >= 0 ? "#10b981" : "#ef4444" }
-  ];
 
   const formatCurrency = (value: number) => {
     return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -405,92 +400,79 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
         </CardContent>
       </Card>
 
-      {/* 2. Gráficos Comparativos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfica de Barras por Actividad */}
-        <Card className="border-2">
-          <CardHeader className="bg-muted/50">
-            <CardTitle className="text-xl">2. Comparativa por Tipo de Actividad</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Flujo neto de efectivo por categoría
-            </p>
-          </CardHeader>
-          <CardContent className="p-6">
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart
-                data={barData}
-                margin={{ top: 20, right: 20, left: 60, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="name" 
-                  angle={-25}
-                  textAnchor="end"
-                  height={80}
-                  tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-                />
-                <YAxis 
-                  tickFormatter={(value) => formatCurrency(value)}
-                  tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
-                  width={80}
-                />
-                <Tooltip 
-                  formatter={(value: number) => formatCurrency(value)}
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--background))', 
-                    border: '1px solid hsl(var(--border))' 
-                  }}
-                />
-                <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
-                <Bar dataKey="monto" radius={[8, 8, 0, 0]}>
-                  {barData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Gráfica de Pie - Distribución de Actividades */}
-        {pieData.length > 0 && (
-          <Card className="border-2">
-            <CardHeader className="bg-muted/50">
-              <CardTitle className="text-xl">3. Distribución de Movimientos</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Participación por tipo de actividad (valores absolutos)
-              </p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={100}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--background))', 
-                      border: '1px solid hsl(var(--border))' 
-                    }}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {/* 2. Gráfico Sankey - Composición de Flujos */}
+      <Card className="border-2">
+        <CardHeader className="bg-muted/50">
+          <CardTitle className="text-2xl">2. Composición de Ingresos y Egresos de Efectivo</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Desglose porcentual por naturaleza de cada flujo
+          </p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Ingresos de Efectivo */}
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 p-6 rounded-lg border-2 border-green-200 dark:border-green-800">
+                <h3 className="text-xl font-bold mb-4 text-green-800 dark:text-green-200">Ingresos de Efectivo</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white dark:bg-green-950 rounded-md">
+                    <span className="font-medium">Cobros a Clientes</span>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-green-600">{totalIngresos > 0 ? ((cobros / totalIngresos) * 100).toFixed(1) : 0}%</p>
+                      <p className="text-sm text-muted-foreground">${cobros.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white dark:bg-green-950 rounded-md">
+                    <span className="font-medium">Nuevos Créditos</span>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-green-600">{totalIngresos > 0 ? ((nuevosCreditos / totalIngresos) * 100).toFixed(1) : 0}%</p>
+                      <p className="text-sm text-muted-foreground">${nuevosCreditos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between border-t-2 border-green-300 pt-3 mt-3">
+                    <span className="font-bold text-lg">Total Ingresos</span>
+                    <span className="font-bold text-xl text-green-700 dark:text-green-300">${totalIngresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Egresos de Efectivo */}
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 p-6 rounded-lg border-2 border-red-200 dark:border-red-800">
+                <h3 className="text-xl font-bold mb-4 text-red-800 dark:text-red-200">Egresos de Efectivo</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white dark:bg-red-950 rounded-md">
+                    <span className="font-medium">Pagos a Proveedores</span>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-red-600">{totalEgresos > 0 ? ((pagos / totalEgresos) * 100).toFixed(1) : 0}%</p>
+                      <p className="text-sm text-muted-foreground">${pagos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white dark:bg-red-950 rounded-md">
+                    <span className="font-medium">Inversiones (CAPEX)</span>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-red-600">{totalEgresos > 0 ? ((inversiones / totalEgresos) * 100).toFixed(1) : 0}%</p>
+                      <p className="text-sm text-muted-foreground">${inversiones.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white dark:bg-red-950 rounded-md">
+                    <span className="font-medium">Pago de Créditos</span>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-red-600">{totalEgresos > 0 ? ((pagosCreditos / totalEgresos) * 100).toFixed(1) : 0}%</p>
+                      <p className="text-sm text-muted-foreground">${pagosCreditos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between border-t-2 border-red-300 pt-3 mt-3">
+                    <span className="font-bold text-lg">Total Egresos</span>
+                    <span className="font-bold text-xl text-red-700 dark:text-red-300">${totalEgresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Detalle de Transacciones */}
       <Alert>
