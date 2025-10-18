@@ -36,7 +36,7 @@ const RegistroCapital = () => {
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [accionistaId, setAccionistaId] = useState("");
-  const [accionistaSeleccionado, setAccionistaSeleccionado] = useState<string>("");
+  const [accionistaSeleccionado, setAccionistaSeleccionado] = useState<string>("all");
 
   // Calcular utilidades (esto debería venir de estado de resultados en producción)
   const utilidadesAcumuladas = 0; // TODO: Integrar con estado de resultados
@@ -472,7 +472,7 @@ const RegistroCapital = () => {
                     <SelectValue placeholder="Consolidado (Todos los accionistas)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Consolidado (Todos los accionistas)</SelectItem>
+                    <SelectItem value="all">Consolidado (Todos los accionistas)</SelectItem>
                     {accionistas.map((accionista) => (
                       <SelectItem key={accionista.id} value={accionista.id}>
                         {accionista.nombre}
@@ -490,13 +490,13 @@ const RegistroCapital = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <GraficaWaterfall 
               data={{
-                aportaciones: accionistaSeleccionado 
+                aportaciones: accionistaSeleccionado && accionistaSeleccionado !== "all"
                   ? transacciones
                       .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion")
                       .reduce((sum, t) => sum + Number(t.monto), 0)
                   : totalAportaciones,
                 utilidades: utilidadesAcumuladas,
-                dividendos: accionistaSeleccionado
+                dividendos: accionistaSeleccionado && accionistaSeleccionado !== "all"
                   ? transacciones
                       .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
                       .reduce((sum, t) => sum + Number(t.monto), 0)
@@ -506,13 +506,13 @@ const RegistroCapital = () => {
             />
             
             <GraficaRadialKPI
-              aportaciones={accionistaSeleccionado 
+              aportaciones={accionistaSeleccionado && accionistaSeleccionado !== "all"
                 ? transacciones
                     .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion")
                     .reduce((sum, t) => sum + Number(t.monto), 0)
                 : totalAportaciones}
               utilidades={utilidadesAcumuladas}
-              dividendosDistribuidos={accionistaSeleccionado
+              dividendosDistribuidos={accionistaSeleccionado && accionistaSeleccionado !== "all"
                 ? transacciones
                     .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
                     .reduce((sum, t) => sum + Number(t.monto), 0)
@@ -523,7 +523,7 @@ const RegistroCapital = () => {
           <Card>
             <CardHeader>
               <CardTitle>
-                Indicadores Clave - {accionistaSeleccionado 
+                Indicadores Clave - {accionistaSeleccionado && accionistaSeleccionado !== "all"
                   ? accionistas.find(a => a.id === accionistaSeleccionado)?.nombre 
                   : "Consolidado"}
               </CardTitle>
@@ -532,10 +532,10 @@ const RegistroCapital = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 border rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">
-                    {accionistaSeleccionado ? "Transacciones" : "Número de Accionistas"}
+                    {accionistaSeleccionado && accionistaSeleccionado !== "all" ? "Transacciones" : "Número de Accionistas"}
                   </p>
                   <p className="text-2xl font-bold">
-                    {accionistaSeleccionado 
+                    {accionistaSeleccionado && accionistaSeleccionado !== "all"
                       ? transacciones.filter(t => t.accionista_id === accionistaSeleccionado).length
                       : accionistas.length
                     }
@@ -546,7 +546,7 @@ const RegistroCapital = () => {
                   <p className="text-sm text-muted-foreground mb-1">Última Aportación</p>
                   <p className="text-lg font-semibold">
                     {(() => {
-                      const filtradas = accionistaSeleccionado
+                      const filtradas = accionistaSeleccionado && accionistaSeleccionado !== "all"
                         ? transacciones.filter(t => t.tipo_movimiento === "aportacion" && t.accionista_id === accionistaSeleccionado)
                         : transacciones.filter(t => t.tipo_movimiento === "aportacion");
                       const ultima = filtradas[0];
@@ -561,7 +561,7 @@ const RegistroCapital = () => {
                   <p className="text-sm text-muted-foreground mb-1">Último Dividendo</p>
                   <p className="text-lg font-semibold">
                     {(() => {
-                      const filtradas = accionistaSeleccionado
+                      const filtradas = accionistaSeleccionado && accionistaSeleccionado !== "all"
                         ? transacciones.filter(t => t.tipo_movimiento === "dividendo" && t.accionista_id === accionistaSeleccionado)
                         : transacciones.filter(t => t.tipo_movimiento === "dividendo");
                       const ultimo = filtradas[0];
@@ -574,7 +574,7 @@ const RegistroCapital = () => {
               </div>
 
               {/* Detalles adicionales por accionista */}
-              {accionistaSeleccionado && (() => {
+              {accionistaSeleccionado && accionistaSeleccionado !== "all" && (() => {
                 const accionista = accionistas.find(a => a.id === accionistaSeleccionado);
                 if (!accionista) return null;
                 return (
