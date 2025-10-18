@@ -31,6 +31,7 @@ interface AsientoAgrupado {
   movimientos: BalanzaEntry[];
   totalDebe: number;
   totalHaber: number;
+  categoriaFlujo?: string;
 }
 
 const Balanza = () => {
@@ -195,6 +196,23 @@ const Balanza = () => {
       
       movimientos.forEach(mov => {
         if (!asientosMap.has(mov.referencia)) {
+          // Determinar categoría de flujo de efectivo
+          let categoriaFlujo: string | undefined;
+          const afectaEfectivo = movimientos.some(m => 
+            m.referencia === mov.referencia && 
+            (m.cuenta_codigo === '1001' || m.cuenta_codigo === '1002')
+          );
+          
+          if (afectaEfectivo) {
+            if (mov.tipo === 'Inversión') {
+              categoriaFlujo = 'Inversión';
+            } else if (mov.tipo === 'Financiamiento') {
+              categoriaFlujo = 'Financiamiento';
+            } else {
+              categoriaFlujo = 'Operativo';
+            }
+          }
+          
           asientosMap.set(mov.referencia, {
             referencia: mov.referencia,
             fecha: mov.fecha,
@@ -202,7 +220,8 @@ const Balanza = () => {
             descripcion: mov.descripcion,
             movimientos: [],
             totalDebe: 0,
-            totalHaber: 0
+            totalHaber: 0,
+            categoriaFlujo
           });
         }
         
@@ -315,6 +334,11 @@ const Balanza = () => {
                               <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                                 {asiento.tipo}
                               </span>
+                              {asiento.categoriaFlujo && (
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                  Flujo: {asiento.categoriaFlujo}
+                                </span>
+                              )}
                               <span className="text-sm text-muted-foreground">{asiento.fecha}</span>
                             </div>
                             <div className="text-sm text-muted-foreground mt-1">{asiento.descripcion}</div>
