@@ -409,64 +409,119 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate }: FlujoEfectivoAnaliticoPr
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="flex flex-col lg:flex-row gap-8 items-stretch">
             {/* Ingresos de Efectivo */}
-            <div className="space-y-4">
-              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 p-6 rounded-lg border-2 border-green-200 dark:border-green-800">
+            <div 
+              className="flex-1 transition-all duration-500 hover:scale-105"
+              style={{ 
+                minHeight: `${Math.max(200, (totalIngresos / Math.max(totalIngresos, totalEgresos)) * 500)}px`,
+                maxHeight: '600px'
+              }}
+            >
+              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 p-6 rounded-lg border-2 border-green-200 dark:border-green-800 h-full flex flex-col animate-fade-in">
                 <h3 className="text-xl font-bold mb-4 text-green-800 dark:text-green-200">Ingresos de Efectivo</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-white dark:bg-green-950 rounded-md">
-                    <span className="font-medium">Cobros a Clientes</span>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-green-600">{totalIngresos > 0 ? ((cobros / totalIngresos) * 100).toFixed(1) : 0}%</p>
-                      <p className="text-sm text-muted-foreground">${cobros.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                <div className="flex-1 flex flex-col justify-center space-y-3">
+                  <div 
+                    className="flex flex-col p-4 bg-white dark:bg-green-950 rounded-md transition-all duration-300 hover:shadow-lg"
+                    style={{
+                      height: totalIngresos > 0 ? `${(cobros / totalIngresos) * 100}%` : '50%',
+                      minHeight: '60px'
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-medium">Cobros a Clientes</span>
+                      <div className="text-right">
+                        <p className="font-bold text-2xl text-green-600">{totalIngresos > 0 ? ((cobros / totalIngresos) * 100).toFixed(1) : 0}%</p>
+                      </div>
                     </div>
+                    <p className="text-sm text-muted-foreground mt-auto">${cobros.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-white dark:bg-green-950 rounded-md">
-                    <span className="font-medium">Nuevos Créditos</span>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-green-600">{totalIngresos > 0 ? ((nuevosCreditos / totalIngresos) * 100).toFixed(1) : 0}%</p>
-                      <p className="text-sm text-muted-foreground">${nuevosCreditos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                  
+                  <div 
+                    className="flex flex-col p-4 bg-white dark:bg-green-950 rounded-md transition-all duration-300 hover:shadow-lg"
+                    style={{
+                      height: totalIngresos > 0 ? `${(nuevosCreditos / totalIngresos) * 100}%` : '50%',
+                      minHeight: '60px'
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-medium">Nuevos Créditos</span>
+                      <div className="text-right">
+                        <p className="font-bold text-2xl text-green-600">{totalIngresos > 0 ? ((nuevosCreditos / totalIngresos) * 100).toFixed(1) : 0}%</p>
+                      </div>
                     </div>
+                    <p className="text-sm text-muted-foreground mt-auto">${nuevosCreditos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="flex justify-between border-t-2 border-green-300 pt-3 mt-3">
-                    <span className="font-bold text-lg">Total Ingresos</span>
-                    <span className="font-bold text-xl text-green-700 dark:text-green-300">${totalIngresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                </div>
+                <div className="flex justify-between border-t-2 border-green-300 pt-3 mt-4">
+                  <span className="font-bold text-lg">Total Ingresos</span>
+                  <span className="font-bold text-xl text-green-700 dark:text-green-300">${totalIngresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
             
             {/* Egresos de Efectivo */}
-            <div className="space-y-4">
-              <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 p-6 rounded-lg border-2 border-red-200 dark:border-red-800">
+            <div 
+              className="flex-1 transition-all duration-500 hover:scale-105"
+              style={{ 
+                minHeight: `${Math.max(200, (totalEgresos / Math.max(totalIngresos, totalEgresos)) * 500)}px`,
+                maxHeight: '600px'
+              }}
+            >
+              <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 p-6 rounded-lg border-2 border-red-200 dark:border-red-800 h-full flex flex-col animate-fade-in">
                 <h3 className="text-xl font-bold mb-4 text-red-800 dark:text-red-200">Egresos de Efectivo</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-white dark:bg-red-950 rounded-md">
-                    <span className="font-medium">Pagos a Proveedores</span>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-red-600">{totalEgresos > 0 ? ((pagos / totalEgresos) * 100).toFixed(1) : 0}%</p>
-                      <p className="text-sm text-muted-foreground">${pagos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                <div className="flex-1 flex flex-col justify-center space-y-3">
+                  <div 
+                    className="flex flex-col p-4 bg-white dark:bg-red-950 rounded-md transition-all duration-300 hover:shadow-lg"
+                    style={{
+                      height: totalEgresos > 0 ? `${(pagos / totalEgresos) * 100}%` : '33.33%',
+                      minHeight: '60px'
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-medium">Pagos a Proveedores</span>
+                      <div className="text-right">
+                        <p className="font-bold text-2xl text-red-600">{totalEgresos > 0 ? ((pagos / totalEgresos) * 100).toFixed(1) : 0}%</p>
+                      </div>
                     </div>
+                    <p className="text-sm text-muted-foreground mt-auto">${pagos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-white dark:bg-red-950 rounded-md">
-                    <span className="font-medium">Inversiones (CAPEX)</span>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-red-600">{totalEgresos > 0 ? ((inversiones / totalEgresos) * 100).toFixed(1) : 0}%</p>
-                      <p className="text-sm text-muted-foreground">${inversiones.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                  
+                  <div 
+                    className="flex flex-col p-4 bg-white dark:bg-red-950 rounded-md transition-all duration-300 hover:shadow-lg"
+                    style={{
+                      height: totalEgresos > 0 ? `${(inversiones / totalEgresos) * 100}%` : '33.33%',
+                      minHeight: '60px'
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-medium">Inversiones (CAPEX)</span>
+                      <div className="text-right">
+                        <p className="font-bold text-2xl text-red-600">{totalEgresos > 0 ? ((inversiones / totalEgresos) * 100).toFixed(1) : 0}%</p>
+                      </div>
                     </div>
+                    <p className="text-sm text-muted-foreground mt-auto">${inversiones.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-white dark:bg-red-950 rounded-md">
-                    <span className="font-medium">Pago de Créditos</span>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-red-600">{totalEgresos > 0 ? ((pagosCreditos / totalEgresos) * 100).toFixed(1) : 0}%</p>
-                      <p className="text-sm text-muted-foreground">${pagosCreditos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
+                  
+                  <div 
+                    className="flex flex-col p-4 bg-white dark:bg-red-950 rounded-md transition-all duration-300 hover:shadow-lg"
+                    style={{
+                      height: totalEgresos > 0 ? `${(pagosCreditos / totalEgresos) * 100}%` : '33.33%',
+                      minHeight: '60px'
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-medium">Pago de Créditos</span>
+                      <div className="text-right">
+                        <p className="font-bold text-2xl text-red-600">{totalEgresos > 0 ? ((pagosCreditos / totalEgresos) * 100).toFixed(1) : 0}%</p>
+                      </div>
                     </div>
+                    <p className="text-sm text-muted-foreground mt-auto">${pagosCreditos.toLocaleString('es-MX', { minimumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="flex justify-between border-t-2 border-red-300 pt-3 mt-3">
-                    <span className="font-bold text-lg">Total Egresos</span>
-                    <span className="font-bold text-xl text-red-700 dark:text-red-300">${totalEgresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                </div>
+                <div className="flex justify-between border-t-2 border-red-300 pt-3 mt-4">
+                  <span className="font-bold text-lg">Total Egresos</span>
+                  <span className="font-bold text-xl text-red-700 dark:text-red-300">${totalEgresos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
