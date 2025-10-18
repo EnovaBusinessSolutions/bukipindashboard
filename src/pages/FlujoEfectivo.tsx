@@ -20,6 +20,7 @@ const FlujoEfectivo = () => {
   const [periodType, setPeriodType] = useState<PeriodType>("mensual");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [vistaColumnas, setVistaColumnas] = useState<"consolidada" | "detallada">("consolidada");
+  const [activeTab, setActiveTab] = useState<string>("ejecutivo");
 
   // Calcular fechas de inicio y fin según el tipo de período
   const getDateRange = () => {
@@ -74,8 +75,12 @@ const FlujoEfectivo = () => {
 
         <div className="flex-1 min-w-[180px]">
           <label className="text-sm font-medium mb-2 block">Vista</label>
-          <Select value={vistaColumnas} onValueChange={(value) => setVistaColumnas(value as "consolidada" | "detallada")}>
-            <SelectTrigger>
+          <Select 
+            value={vistaColumnas} 
+            onValueChange={(value) => setVistaColumnas(value as "consolidada" | "detallada")}
+            disabled={activeTab === "analitico" || activeTab === "resumen"}
+          >
+            <SelectTrigger className={activeTab === "analitico" || activeTab === "resumen" ? "opacity-50 cursor-not-allowed" : ""}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -124,7 +129,17 @@ const FlujoEfectivo = () => {
       {/* Resumen Financiero */}
       <ResumenFinanciero startDate={dateRange.startDate} endDate={dateRange.endDate} />
 
-      <Tabs defaultValue="ejecutivo" className="w-full">
+      <Tabs 
+        defaultValue="ejecutivo" 
+        className="w-full"
+        onValueChange={(value) => {
+          setActiveTab(value);
+          // Cambiar automáticamente a consolidada cuando se selecciona analítico o resumen
+          if (value === "analitico" || value === "resumen") {
+            setVistaColumnas("consolidada");
+          }
+        }}
+      >
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
           <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
