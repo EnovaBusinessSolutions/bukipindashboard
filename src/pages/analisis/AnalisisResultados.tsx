@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
+import { useVentasProductos } from "@/hooks/useVentasProductos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const AnalisisResultados = () => {
   const { data: saldos, isLoading } = useBalanceGeneral();
   const { data: resultadosMensuales, isLoading: isLoadingMensual } = useEstadoResultadosMensual();
+  const { data: ventasProductos = [], isLoading: isLoadingVentasProductos } = useVentasProductos();
 
   if (isLoading) {
     return (
@@ -167,8 +169,9 @@ const AnalisisResultados = () => {
 
         {/* Tabs de Análisis */}
         <Tabs defaultValue="mensual" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="mensual">Estado de Resultados Mensual</TabsTrigger>
+            <TabsTrigger value="ventas">Ventas</TabsTrigger>
             <TabsTrigger value="margenes">Márgenes</TabsTrigger>
             <TabsTrigger value="rentabilidad">Rentabilidad</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
@@ -662,6 +665,92 @@ const AnalisisResultados = () => {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Tab de Ventas por Producto */}
+          <TabsContent value="ventas" className="space-y-4">
+            {isLoadingVentasProductos ? (
+              <Skeleton className="h-96 w-full" />
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Análisis de Ventas por Producto</CardTitle>
+                  <CardDescription>
+                    Desglose mensual de ventas por producto: volumen, monto y tarifa promedio
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-primary/10">
+                          <TableHead className="font-bold bg-primary/20">Producto</TableHead>
+                          <TableHead className="font-bold bg-primary/20">Mes</TableHead>
+                          <TableHead className="text-right font-bold bg-primary/20">Volumen (unidades)</TableHead>
+                          <TableHead className="text-right font-bold bg-primary/20">Monto Total</TableHead>
+                          <TableHead className="text-right font-bold bg-primary/20">Tarifa Promedio</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ventasProductos.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                              No hay datos de ventas de productos disponibles para el año actual
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          ventasProductos.map((venta, index) => (
+                            <TableRow key={`${venta.producto}-${venta.mes}-${index}`}>
+                              <TableCell className="font-medium bg-muted/50">{venta.producto}</TableCell>
+                              <TableCell>{venta.mes}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {venta.volumen.toLocaleString('es-MX', { maximumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="text-right text-green-600 font-medium">
+                                {formatCurrency(venta.monto)}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(venta.tarifaPromedio)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  
+                  {ventasProductos.length > 0 && (
+                    <div className="mt-6 grid gap-4">
+                      <Card className="bg-muted/50">
+                        <CardHeader>
+                          <CardTitle className="text-lg">Resumen Total</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Total Volumen:</span>
+                            <span className="font-bold">
+                              {ventasProductos.reduce((sum, v) => sum + v.volumen, 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })} unidades
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Total Monto:</span>
+                            <span className="font-bold text-green-600">
+                              {formatCurrency(ventasProductos.reduce((sum, v) => sum + v.monto, 0))}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Productos Diferentes:</span>
+                            <span className="font-bold">
+                              {new Set(ventasProductos.map(v => v.producto)).size}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>
