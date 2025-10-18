@@ -17,6 +17,7 @@ export type PeriodType = "diario" | "mensual" | "anual";
 const FlujoEfectivo = () => {
   const [periodType, setPeriodType] = useState<PeriodType>("mensual");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [vistaColumnas, setVistaColumnas] = useState<"consolidada" | "detallada">("consolidada");
 
   // Calcular fechas de inicio y fin según el tipo de período
   const getDateRange = () => {
@@ -55,7 +56,7 @@ const FlujoEfectivo = () => {
 
       {/* Selector de Período */}
       <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 min-w-[180px]">
           <label className="text-sm font-medium mb-2 block">Tipo de Período</label>
           <Select value={periodType} onValueChange={(value) => setPeriodType(value as PeriodType)}>
             <SelectTrigger>
@@ -65,6 +66,19 @@ const FlujoEfectivo = () => {
               <SelectItem value="diario">Diario</SelectItem>
               <SelectItem value="mensual">Mensual (Acumulado)</SelectItem>
               <SelectItem value="anual">Anual (Acumulado)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex-1 min-w-[180px]">
+          <label className="text-sm font-medium mb-2 block">Vista</label>
+          <Select value={vistaColumnas} onValueChange={(value) => setVistaColumnas(value as "consolidada" | "detallada")}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="consolidada">Total Consolidado</SelectItem>
+              <SelectItem value="detallada">Efectivo / Bancos / Total</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -117,6 +131,7 @@ const FlujoEfectivo = () => {
             startDate={dateRange.startDate} 
             endDate={dateRange.endDate}
             periodType={periodType}
+            vistaColumnas={vistaColumnas}
           />
         </TabsContent>
         
@@ -125,6 +140,7 @@ const FlujoEfectivo = () => {
             startDate={dateRange.startDate} 
             endDate={dateRange.endDate}
             periodType={periodType}
+            vistaColumnas={vistaColumnas}
           />
         </TabsContent>
         
@@ -133,6 +149,7 @@ const FlujoEfectivo = () => {
             startDate={dateRange.startDate} 
             endDate={dateRange.endDate}
             periodType={periodType}
+            vistaColumnas={vistaColumnas}
           />
         </TabsContent>
       </Tabs>

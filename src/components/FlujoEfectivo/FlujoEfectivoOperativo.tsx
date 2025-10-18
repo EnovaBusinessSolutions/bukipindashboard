@@ -9,6 +9,7 @@ interface FlujoEfectivoOperativoProps {
   startDate: Date;
   endDate: Date;
   periodType: PeriodType;
+  vistaColumnas: "consolidada" | "detallada";
 }
 
 interface Transaccion {
