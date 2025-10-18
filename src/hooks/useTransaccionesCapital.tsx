@@ -9,6 +9,7 @@ export interface TransaccionCapital {
   fecha: string;
   monto: number;
   socio: string;
+  accionista_id: string | null;
   descripcion: string | null;
   created_at: string;
   updated_at: string;
@@ -36,6 +37,7 @@ export const useTransaccionesCapital = () => {
       fecha: Date;
       monto: number;
       socio: string;
+      accionista_id?: string;
       descripcion: string;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -49,6 +51,7 @@ export const useTransaccionesCapital = () => {
           fecha: transaccion.fecha.toISOString().split("T")[0],
           monto: transaccion.monto,
           socio: transaccion.socio,
+          accionista_id: transaccion.accionista_id || null,
           descripcion: transaccion.descripcion || null,
         })
         .select()

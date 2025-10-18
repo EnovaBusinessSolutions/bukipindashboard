@@ -7,11 +7,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, TrendingUp, TrendingDown, PieChart, BarChart3 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarIcon, Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useTransaccionesCapital } from "@/hooks/useTransaccionesCapital";
+import { useAccionistas } from "@/hooks/useAccionistas";
+import { GraficaWaterfall } from "@/components/Capital/GraficaWaterfall";
+import { GraficaRadialKPI } from "@/components/Capital/GraficaRadialKPI";
+import { FormularioAccionista } from "@/components/Capital/FormularioAccionista";
 
 const RegistroCapital = () => {
   const {
@@ -24,16 +29,22 @@ const RegistroCapital = () => {
     resumenPorSocio,
   } = useTransaccionesCapital();
 
+  const { accionistas } = useAccionistas();
+
   const [tipoMovimiento, setTipoMovimiento] = useState<"aportacion" | "dividendo">("aportacion");
   const [fecha, setFecha] = useState<Date>(new Date());
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [socio, setSocio] = useState("");
+  const [accionistaId, setAccionistaId] = useState("");
+  const [accionistaSeleccionado, setAccionistaSeleccionado] = useState<string>("");
+
+  // Calcular utilidades (esto debería venir de estado de resultados en producción)
+  const utilidadesAcumuladas = 0; // TODO: Integrar con estado de resultados
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!socio.trim()) {
+    if (!accionistaId) {
       return;
     }
 
@@ -41,17 +52,22 @@ const RegistroCapital = () => {
       return;
     }
 
+    const accionista = accionistas.find(a => a.id === accionistaId);
+    if (!accionista) return;
+
     registrarTransaccion.mutate({
       tipo_movimiento: tipoMovimiento,
       fecha,
       monto: parseFloat(monto),
-      socio: socio.trim(),
+      socio: accionista.nombre,
+      accionista_id: accionistaId,
       descripcion: descripcion.trim(),
     }, {
       onSuccess: () => {
         setMonto("");
         setDescripcion("");
-        setSocio("");
+        setAccionistaId("");
+        setAccionistaSeleccionado("");
         setFecha(new Date());
       }
     });
@@ -65,10 +81,11 @@ const RegistroCapital = () => {
       </div>
 
       <Tabs defaultValue="registro" className="w-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+        <TabsList className="grid w-full max-w-3xl grid-cols-4">
           <TabsTrigger value="registro">Registros de Capital</TabsTrigger>
           <TabsTrigger value="resumen">Resumen de Transacciones</TabsTrigger>
           <TabsTrigger value="analitica">Analítica</TabsTrigger>
+          <TabsTrigger value="accionistas">Accionistas</TabsTrigger>
         </TabsList>
 
         {/* Pestaña 1: Registros de Capital */}
@@ -131,16 +148,34 @@ const RegistroCapital = () => {
                 </Popover>
               </div>
 
-              {/* Socio */}
+              {/* Accionista */}
               <div className="space-y-2">
-                <Label htmlFor="socio">Socio / Accionista</Label>
-                <Input
-                  id="socio"
-                  placeholder="Nombre del socio o accionista"
-                  value={socio}
-                  onChange={(e) => setSocio(e.target.value)}
-                  required
-                />
+                <Label htmlFor="accionista">Accionista *</Label>
+                <Select value={accionistaId} onValueChange={(value) => {
+                  setAccionistaId(value);
+                  const accionista = accionistas.find(a => a.id === value);
+                  setAccionistaSeleccionado(accionista?.nombre || "");
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un accionista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accionistas.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground">
+                        No hay accionistas registrados. Ve a la pestaña "Accionistas" para registrar uno.
+                      </div>
+                    ) : (
+                      accionistas.map((accionista) => (
+                        <SelectItem key={accionista.id} value={accionista.id}>
+                          {accionista.nombre}
+                          {accionista.porcentaje_participacion > 0 && 
+                            ` (${accionista.porcentaje_participacion}%)`
+                          }
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Monto */}
@@ -422,113 +457,61 @@ const RegistroCapital = () => {
       {/* Pestaña 3: Analítica */}
       <TabsContent value="analitica" className="mt-6">
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Análisis de Capital</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="border rounded-lg p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <PieChart className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Composición del Capital</h3>
-                  </div>
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">
-                    <p>Gráfica de composición del capital por socio</p>
-                  </div>
-                </div>
-
-                <div className="border rounded-lg p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <BarChart3 className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Evolución del Capital</h3>
-                  </div>
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">
-                    <p>Gráfica de evolución del capital en el tiempo</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Retorno sobre Capital (ROE)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      ROE Anual
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">0.0%</p>
-                    <p className="text-xs text-muted-foreground mt-1">Utilidad / Capital</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Dividendos / Capital
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">0.0%</p>
-                    <p className="text-xs text-muted-foreground mt-1">Tasa de distribución</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Capital / Activos
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">0.0%</p>
-                    <p className="text-xs text-muted-foreground mt-1">Apalancamiento</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <GraficaWaterfall 
+              data={{
+                aportaciones: totalAportaciones,
+                utilidades: utilidadesAcumuladas,
+                dividendos: totalDividendos,
+              }}
+            />
+            
+            <GraficaRadialKPI
+              aportaciones={totalAportaciones}
+              utilidades={utilidadesAcumuladas}
+              dividendosDistribuidos={totalDividendos}
+            />
+          </div>
 
           <Card>
             <CardHeader>
               <CardTitle>Indicadores Clave</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 border rounded-lg">
-                  <div>
-                    <p className="font-medium">Número de Socios</p>
-                    <p className="text-sm text-muted-foreground">Accionistas activos</p>
-                  </div>
-                  <p className="text-2xl font-bold">0</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Número de Accionistas</p>
+                  <p className="text-2xl font-bold">{accionistas.length}</p>
                 </div>
 
-                <div className="flex justify-between items-center p-4 border rounded-lg">
-                  <div>
-                    <p className="font-medium">Última Aportación</p>
-                    <p className="text-sm text-muted-foreground">Fecha del último movimiento</p>
-                  </div>
-                  <p className="text-lg font-semibold text-muted-foreground">N/A</p>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Última Aportación</p>
+                  <p className="text-lg font-semibold">
+                    {transacciones.find(t => t.tipo_movimiento === "aportacion")
+                      ? format(new Date(transacciones.find(t => t.tipo_movimiento === "aportacion")!.fecha), "dd/MM/yyyy", { locale: es })
+                      : "N/A"
+                    }
+                  </p>
                 </div>
 
-                <div className="flex justify-between items-center p-4 border rounded-lg">
-                  <div>
-                    <p className="font-medium">Último Dividendo</p>
-                    <p className="text-sm text-muted-foreground">Fecha de última distribución</p>
-                  </div>
-                  <p className="text-lg font-semibold text-muted-foreground">N/A</p>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Último Dividendo</p>
+                  <p className="text-lg font-semibold">
+                    {transacciones.find(t => t.tipo_movimiento === "dividendo")
+                      ? format(new Date(transacciones.find(t => t.tipo_movimiento === "dividendo")!.fecha), "dd/MM/yyyy", { locale: es })
+                      : "N/A"
+                    }
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+      </TabsContent>
+
+      {/* Pestaña 4: Accionistas */}
+      <TabsContent value="accionistas" className="mt-6">
+        <FormularioAccionista />
       </TabsContent>
     </Tabs>
     </div>

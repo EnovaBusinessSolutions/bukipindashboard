@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      accionistas: {
+        Row: {
+          activo: boolean
+          created_at: string
+          email: string | null
+          id: string
+          nombre: string
+          porcentaje_participacion: number | null
+          rfc: string | null
+          telefono: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          nombre: string
+          porcentaje_participacion?: number | null
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          nombre?: string
+          porcentaje_participacion?: number | null
+          rfc?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       asientos_contables: {
         Row: {
           created_at: string
@@ -645,6 +684,7 @@ export type Database = {
       }
       transacciones_capital: {
         Row: {
+          accionista_id: string | null
           created_at: string
           descripcion: string | null
           fecha: string
@@ -656,6 +696,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          accionista_id?: string | null
           created_at?: string
           descripcion?: string | null
           fecha?: string
@@ -667,6 +708,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          accionista_id?: string | null
           created_at?: string
           descripcion?: string | null
           fecha?: string
@@ -677,7 +719,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transacciones_capital_accionista_id_fkey"
+            columns: ["accionista_id"]
+            isOneToOne: false
+            referencedRelation: "accionistas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transacciones_egresos: {
         Row: {
