@@ -85,7 +85,7 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
               x={x + width / 2}
               y={y + height / 2 - 10}
               textAnchor="middle"
-              fill="hsl(var(--background))"
+              fill="#000000"
               fontSize={14}
               fontWeight="bold"
             >
@@ -95,7 +95,7 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
               x={x + width / 2}
               y={y + height / 2 + 10}
               textAnchor="middle"
-              fill="hsl(var(--background))"
+              fill="#000000"
               fontSize={12}
             >
               {formatCurrency(size)}
@@ -124,72 +124,6 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
 
   return (
     <div className="space-y-6">
-      {/* Ratios Financieros */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Liquidez Corriente
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">
-              {liquidezCorriente.toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {liquidezCorriente >= 1.5 ? "Saludable" : liquidezCorriente >= 1 ? "Aceptable" : "Riesgo"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Prueba Ácida
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">
-              {pruebaAcida.toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {pruebaAcida >= 1 ? "Saludable" : "Limitada"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Endeudamiento
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">
-              {nivelEndeudamiento.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {nivelEndeudamiento <= 50 ? "Saludable" : "Alto"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Autonomía Financiera
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">
-              {autonomiaFinanciera.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {autonomiaFinanciera >= 50 ? "Independiente" : "Dependiente"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Treemaps de Composición */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -342,7 +276,7 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
         <CardHeader>
           <CardTitle>Resumen Ejecutivo</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground mb-1">Total Activos</p>
@@ -358,32 +292,6 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                 {formatCurrency(capital)}
               </p>
             </div>
-          </div>
-
-          <div className="pt-4 border-t border-border">
-            <h4 className="font-semibold text-foreground mb-2">Análisis de Salud Financiera</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>
-                • <span className="font-medium">Liquidez:</span>{" "}
-                {liquidezCorriente >= 1.5
-                  ? "La empresa tiene una posición de liquidez saludable, con capacidad para cubrir sus obligaciones de corto plazo."
-                  : liquidezCorriente >= 1
-                  ? "La empresa tiene liquidez aceptable, pero debe monitorear sus obligaciones de corto plazo."
-                  : "La empresa enfrenta desafíos de liquidez y debe priorizar la gestión del efectivo."}
-              </li>
-              <li>
-                • <span className="font-medium">Endeudamiento:</span>{" "}
-                {nivelEndeudamiento <= 50
-                  ? "El nivel de endeudamiento es saludable y permite flexibilidad financiera."
-                  : "El nivel de endeudamiento es elevado, se recomienda reducir el apalancamiento."}
-              </li>
-              <li>
-                • <span className="font-medium">Autonomía:</span>{" "}
-                {autonomiaFinanciera >= 50
-                  ? "La empresa tiene independencia financiera con bajo riesgo de solvencia."
-                  : "La empresa depende significativamente de financiamiento externo."}
-              </li>
-            </ul>
           </div>
         </CardContent>
       </Card>
