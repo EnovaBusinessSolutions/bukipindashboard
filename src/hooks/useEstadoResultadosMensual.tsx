@@ -36,8 +36,8 @@ export const useEstadoResultadosMensual = (año?: number) => {
         const { data: ingresosData } = await supabase
           .from('transacciones_ingresos')
           .select('monto_neto')
-          .gte('fecha', fechaInicio)
-          .lte('fecha', fechaFin);
+          .gte('created_at', fechaInicio)
+          .lte('created_at', fechaFin);
 
         const ingresos = ingresosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
 
@@ -46,8 +46,8 @@ export const useEstadoResultadosMensual = (año?: number) => {
           .from('transacciones_egresos')
           .select('monto_total')
           .eq('tipo_egreso', 'costo')
-          .gte('fecha', fechaInicio)
-          .lte('fecha', fechaFin);
+          .gte('created_at', fechaInicio)
+          .lte('created_at', fechaFin);
 
         const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
 
@@ -56,8 +56,8 @@ export const useEstadoResultadosMensual = (año?: number) => {
           .from('transacciones_egresos')
           .select('monto_total')
           .eq('tipo_egreso', 'gasto')
-          .gte('fecha', fechaInicio)
-          .lte('fecha', fechaFin);
+          .gte('created_at', fechaInicio)
+          .lte('created_at', fechaFin);
 
         const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
 
