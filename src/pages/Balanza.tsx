@@ -4,7 +4,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CalendarIcon } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CalendarIcon, ChevronDown, ChevronRight } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,16 @@ interface BalanzaEntry {
   debe: number;
   haber: number;
   referencia: string;
+}
+
+interface AsientoAgrupado {
+  referencia: string;
+  fecha: string;
+  tipo: string;
+  descripcion: string;
+  movimientos: BalanzaEntry[];
+  totalDebe: number;
+  totalHaber: number;
 }
 
 const Balanza = () => {
@@ -179,12 +190,36 @@ const Balanza = () => {
         }
       });
 
+      // Agrupar movimientos por referencia
+      const asientosMap = new Map<string, AsientoAgrupado>();
+      
+      movimientos.forEach(mov => {
+        if (!asientosMap.has(mov.referencia)) {
+          asientosMap.set(mov.referencia, {
+            referencia: mov.referencia,
+            fecha: mov.fecha,
+            tipo: mov.tipo,
+            descripcion: mov.descripcion,
+            movimientos: [],
+            totalDebe: 0,
+            totalHaber: 0
+          });
+        }
+        
+        const asiento = asientosMap.get(mov.referencia)!;
+        asiento.movimientos.push(mov);
+        asiento.totalDebe += mov.debe;
+        asiento.totalHaber += mov.haber;
+      });
+
+      const asientosAgrupados = Array.from(asientosMap.values());
+
       // Calcular totales
       const totalDebe = movimientos.reduce((sum, m) => sum + m.debe, 0);
       const totalHaber = movimientos.reduce((sum, m) => sum + m.haber, 0);
 
       return {
-        movimientos,
+        asientos: asientosAgrupados,
         totales: {
           debe: totalDebe,
           haber: totalHaber,
@@ -264,46 +299,73 @@ const Balanza = () => {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Movimientos Contables</CardTitle>
+              <CardTitle>Asientos Contables</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Referencia</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Cuenta</TableHead>
-                      <TableHead className="text-right">Debe</TableHead>
-                      <TableHead className="text-right">Haber</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {balanzaData?.movimientos.map((mov, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="text-sm">{mov.fecha}</TableCell>
-                        <TableCell className="text-sm font-mono">{mov.referencia}</TableCell>
-                        <TableCell>
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                            {mov.tipo}
-                          </span>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">{mov.descripcion}</TableCell>
-                        <TableCell className="font-mono text-sm">{mov.cuenta_codigo}</TableCell>
-                        <TableCell>{mov.cuenta_nombre}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {mov.debe > 0 ? `$${mov.debe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {mov.haber > 0 ? `$${mov.haber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <div className="space-y-2">
+                {balanzaData?.asientos.map((asiento, index) => (
+                  <Collapsible key={index} className="border rounded-lg">
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-4 flex-1">
+                          <ChevronRight className="h-4 w-4 transition-transform [&[data-state=open]]:rotate-90" />
+                          <div className="text-left">
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono text-sm font-medium">{asiento.referencia}</span>
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                                {asiento.tipo}
+                              </span>
+                              <span className="text-sm text-muted-foreground">{asiento.fecha}</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-1">{asiento.descripcion}</div>
+                          </div>
+                        </div>
+                        <div className="flex gap-6 mr-4">
+                          <div className="text-right">
+                            <div className="text-xs text-muted-foreground">Debe</div>
+                            <div className="font-medium">
+                              ${asiento.totalDebe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-muted-foreground">Haber</div>
+                            <div className="font-medium">
+                              ${asiento.totalHaber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="border-t bg-muted/30">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Código</TableHead>
+                              <TableHead>Cuenta</TableHead>
+                              <TableHead className="text-right">Debe</TableHead>
+                              <TableHead className="text-right">Haber</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {asiento.movimientos.map((mov, movIndex) => (
+                              <TableRow key={movIndex}>
+                                <TableCell className="font-mono text-sm">{mov.cuenta_codigo}</TableCell>
+                                <TableCell>{mov.cuenta_nombre}</TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {mov.debe > 0 ? `$${mov.debe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {mov.haber > 0 ? `$${mov.haber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
               </div>
             </CardContent>
           </Card>
