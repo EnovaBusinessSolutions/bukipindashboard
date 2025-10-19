@@ -79,7 +79,7 @@ const Clientes = () => {
       const transactionClientMap = new Map();
       
       transactionClients?.forEach((tc) => {
-        const key = `${tc.cliente_nombre}_${tc.cliente_email}_${tc.cliente_telefono}_${tc.cliente_rfc}`.toLowerCase();
+        const key = `${tc.cliente_nombre}_${tc.cliente_email}_${tc.cliente_telefono}`.toLowerCase();
         if (!transactionClientMap.has(key)) {
           transactionClientMap.set(key, {
             id: `tx-${Math.random().toString(36).substr(2, 9)}`, // temporary ID
@@ -101,10 +101,26 @@ const Clientes = () => {
 
       const transactionClientsFormatted = Array.from(transactionClientMap.values());
       
-      // Combine both sources, prioritizing dedicated clients
+      // Combine both sources, filtering out transaction clients that match dedicated clients
+      const dedicatedClientsWithSource = (dedicatedClients || []).map(c => ({ ...c, source: 'dedicated' as const }));
+      
+      // Create a set of keys from dedicated clients for deduplication
+      const dedicatedKeys = new Set(
+        dedicatedClientsWithSource.map(c => 
+          `${c.nombre}_${c.email}_${c.telefono}`.toLowerCase()
+        )
+      );
+      
+      // Filter out transaction clients that already exist as dedicated clients
+      const uniqueTransactionClients = transactionClientsFormatted.filter(tc => {
+        const key = `${tc.nombre}_${tc.email}_${tc.telefono}`.toLowerCase();
+        return !dedicatedKeys.has(key);
+      });
+      
+      // Combine both sources
       const allClients = [
-        ...(dedicatedClients || []).map(c => ({ ...c, source: 'dedicated' })),
-        ...transactionClientsFormatted
+        ...dedicatedClientsWithSource,
+        ...uniqueTransactionClients
       ];
 
       return allClients.sort((a, b) => a.nombre.localeCompare(b.nombre));
