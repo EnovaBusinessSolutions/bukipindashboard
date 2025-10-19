@@ -108,12 +108,12 @@ const CatalogoProductos = () => {
       return;
     }
 
-    // Validar subcuenta obligatoria - SIEMPRE requerida
-    if (!newProduct.subcuentaId) {
-      console.log("❌ Validation failed: missing subcuenta");
+    // Validar subcuenta obligatoria - SOLO para costos
+    if (newProduct.tipo === "costo" && !newProduct.subcuentaId) {
+      console.log("❌ Validation failed: missing subcuenta for costo");
       toast({
         title: "⚠️ Subcuenta requerida",
-        description: "Es obligatorio seleccionar una subcuenta para registrar este producto",
+        description: "Es obligatorio seleccionar una subcuenta para registrar un costo",
         variant: "destructive"
       });
       return;
