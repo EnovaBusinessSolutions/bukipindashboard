@@ -748,213 +748,435 @@ const AnalisisResultados = () => {
           <TabsContent value="ventas" className="space-y-4">
             {isLoadingVentasProductos ? (
               <Skeleton className="h-96 w-full" />
-            ) : (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Volumen de Ventas por Producto (Mensual)</CardTitle>
-                    <CardDescription>
-                      Visualización mensual del volumen de ventas por producto
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer 
-                      config={productos.reduce((acc, producto, index) => {
-                        const colors = [
-                          "hsl(var(--chart-1))", 
-                          "hsl(var(--chart-2))", 
-                          "hsl(var(--chart-3))", 
-                          "hsl(var(--chart-4))", 
-                          "hsl(var(--chart-5))"
-                        ];
-                        acc[`${producto}_volumen`] = {
-                          label: producto,
-                          color: colors[index % colors.length]
-                        };
-                        return acc;
-                      }, {} as any)} 
-                      className="h-[600px]"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={ventasPorMes}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="mes" 
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                          />
-                          <YAxis 
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                            label={{ value: 'Unidades', angle: -90, position: 'insideLeft' }}
-                          />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Legend />
-                          {productos.map((producto, index) => {
-                            const colors = [
-                              "hsl(var(--chart-1))", 
-                              "hsl(var(--chart-2))", 
-                              "hsl(var(--chart-3))", 
-                              "hsl(var(--chart-4))", 
-                              "hsl(var(--chart-5))"
-                            ];
-                            return (
+            ) : (() => {
+              // Preparar datos para las gráficas
+              const mesesDelAno = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+              
+              // Crear estructura de datos por mes con totales
+              const datosPorMes = mesesDelAno.map(mes => {
+                const ventasDelMes = ventasProductos.filter(v => v.mes === mes);
+                const productosDelMes: any = { mes };
+                let totalMontoMes = 0;
+                let totalVolumenMes = 0;
+                
+                productos.forEach(producto => {
+                  const ventaProducto = ventasDelMes.find(v => v.producto === producto);
+                  productosDelMes[`${producto}_monto`] = ventaProducto?.monto || 0;
+                  productosDelMes[`${producto}_volumen`] = ventaProducto?.volumen || 0;
+                  totalMontoMes += ventaProducto?.monto || 0;
+                  totalVolumenMes += ventaProducto?.volumen || 0;
+                });
+                
+                productosDelMes.totalMonto = totalMontoMes;
+                productosDelMes.totalVolumen = totalVolumenMes;
+                
+                // Calcular porcentajes
+                productos.forEach(producto => {
+                  const monto = productosDelMes[`${producto}_monto`];
+                  const volumen = productosDelMes[`${producto}_volumen`];
+                  productosDelMes[`${producto}_pct_monto`] = totalMontoMes > 0 ? (monto / totalMontoMes) * 100 : 0;
+                  productosDelMes[`${producto}_pct_volumen`] = totalVolumenMes > 0 ? (volumen / totalVolumenMes) * 100 : 0;
+                  productosDelMes[`${producto}_precio_promedio`] = volumen > 0 ? monto / volumen : 0;
+                });
+                
+                // Precio promedio general del mes
+                productosDelMes.precioPromedioGeneral = totalVolumenMes > 0 ? totalMontoMes / totalVolumenMes : 0;
+                
+                return productosDelMes;
+              });
+
+              // Datos para la tabla (productos en filas, meses en columnas)
+              const productosConDatos = productos.map(producto => {
+                const ventasProducto = ventasProductos.filter(v => v.producto === producto);
+                const datosPorMesProducto: any = { 
+                  nombre: producto,
+                  // Aquí podríamos agregar la URL de imagen si está disponible
+                };
+                
+                mesesDelAno.forEach(mes => {
+                  const venta = ventasProducto.find(v => v.mes === mes);
+                  datosPorMesProducto[mes] = {
+                    monto: venta?.monto || 0,
+                    volumen: venta?.volumen || 0,
+                    tarifaPromedio: venta?.tarifaPromedio || 0
+                  };
+                });
+                
+                return datosPorMesProducto;
+              });
+
+              const colors = [
+                "hsl(var(--chart-1))", 
+                "hsl(var(--chart-2))", 
+                "hsl(var(--chart-3))", 
+                "hsl(var(--chart-4))", 
+                "hsl(var(--chart-5))"
+              ];
+
+              return (
+                <>
+                  {/* 1. Gráfica de Ventas por Producto (Columnas Apiladas) */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Ventas por Producto (Monto Total)</CardTitle>
+                      <CardDescription>
+                        Monto total de ventas en columnas apiladas por mes
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer 
+                        config={productos.reduce((acc, producto, index) => {
+                          acc[`${producto}_monto`] = {
+                            label: producto,
+                            color: colors[index % colors.length]
+                          };
+                          return acc;
+                        }, {} as any)} 
+                        className="h-[500px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={datosPorMes}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--foreground))' }} />
+                            <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip 
+                              content={({ active, payload }) => {
+                                if (!active || !payload) return null;
+                                return (
+                                  <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                    {payload.map((entry: any, index: number) => (
+                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                        {entry.name}: {formatCurrency(entry.value)}
+                                      </p>
+                                    ))}
+                                    <p className="text-sm font-bold border-t pt-1">
+                                      Total: {formatCurrency(payload[0]?.payload?.totalMonto || 0)}
+                                    </p>
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Legend />
+                            {productos.map((producto, index) => (
+                              <Bar
+                                key={producto}
+                                dataKey={`${producto}_monto`}
+                                stackId="a"
+                                fill={colors[index % colors.length]}
+                                name={producto}
+                                label={{ position: 'center', fill: 'white', fontSize: 12, formatter: (value: number) => value > 0 ? formatCurrency(value) : '' }}
+                              />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* 2. Gráfica de Número de Ventas (Unidades) */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Volumen de Ventas por Producto (Unidades)</CardTitle>
+                      <CardDescription>
+                        Cantidad de unidades vendidas por producto cada mes
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer 
+                        config={productos.reduce((acc, producto, index) => {
+                          acc[`${producto}_volumen`] = {
+                            label: producto,
+                            color: colors[index % colors.length]
+                          };
+                          return acc;
+                        }, {} as any)} 
+                        className="h-[500px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={datosPorMes}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--foreground))' }} />
+                            <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Unidades', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Legend />
+                            {productos.map((producto, index) => (
                               <Bar
                                 key={producto}
                                 dataKey={`${producto}_volumen`}
                                 fill={colors[index % colors.length]}
                                 name={producto}
+                                label={{ position: 'center', fill: 'white', fontSize: 12, formatter: (value: number) => value > 0 ? value.toFixed(0) : '' }}
                               />
-                            );
-                          })}
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Monto de Ventas por Producto (Mensual)</CardTitle>
-                    <CardDescription>
-                      Visualización mensual del monto de ventas por producto
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer 
-                      config={productos.reduce((acc, producto, index) => {
-                        const colors = [
-                          "hsl(var(--chart-1))", 
-                          "hsl(var(--chart-2))", 
-                          "hsl(var(--chart-3))", 
-                          "hsl(var(--chart-4))", 
-                          "hsl(var(--chart-5))"
-                        ];
-                        acc[`${producto}_monto`] = {
-                          label: producto,
-                          color: colors[index % colors.length]
-                        };
-                        return acc;
-                      }, {} as any)} 
-                      className="h-[600px]"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={ventasPorMes}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="mes" 
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                          />
-                          <YAxis 
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                            label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }}
-                          />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Legend />
-                          {productos.map((producto, index) => {
-                            const colors = [
-                              "hsl(var(--chart-1))", 
-                              "hsl(var(--chart-2))", 
-                              "hsl(var(--chart-3))", 
-                              "hsl(var(--chart-4))", 
-                              "hsl(var(--chart-5))"
-                            ];
-                            return (
+                  {/* 3. Gráfica de Porcentaje de Ventas por Producto (Monto) */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Porcentaje de Ventas por Producto (Monto)</CardTitle>
+                      <CardDescription>
+                        Porcentaje que representa cada producto sobre el total de ventas en dinero del mes
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer 
+                        config={productos.reduce((acc, producto, index) => {
+                          acc[`${producto}_pct_monto`] = {
+                            label: producto,
+                            color: colors[index % colors.length]
+                          };
+                          return acc;
+                        }, {} as any)} 
+                        className="h-[500px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={datosPorMes}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--foreground))' }} />
+                            <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip 
+                              content={({ active, payload }) => {
+                                if (!active || !payload) return null;
+                                return (
+                                  <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                    {payload.map((entry: any, index: number) => (
+                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                        {entry.name}: {formatPercent(entry.value)}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Legend />
+                            {productos.map((producto, index) => (
                               <Line
                                 key={producto}
                                 type="monotone"
-                                dataKey={`${producto}_monto`}
+                                dataKey={`${producto}_pct_monto`}
+                                stroke={colors[index % colors.length]}
+                                strokeWidth={3}
+                                name={producto}
+                                dot={{ r: 5 }}
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* 4. Gráfica de Porcentaje de Ventas por Volumen */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Porcentaje de Ventas por Producto (Volumen)</CardTitle>
+                      <CardDescription>
+                        Porcentaje que representa cada producto sobre el total de unidades vendidas del mes
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer 
+                        config={productos.reduce((acc, producto, index) => {
+                          acc[`${producto}_pct_volumen`] = {
+                            label: producto,
+                            color: colors[index % colors.length]
+                          };
+                          return acc;
+                        }, {} as any)} 
+                        className="h-[500px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={datosPorMes}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--foreground))' }} />
+                            <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip 
+                              content={({ active, payload }) => {
+                                if (!active || !payload) return null;
+                                return (
+                                  <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                    {payload.map((entry: any, index: number) => (
+                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                        {entry.name}: {formatPercent(entry.value)}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Legend />
+                            {productos.map((producto, index) => (
+                              <Line
+                                key={producto}
+                                type="monotone"
+                                dataKey={`${producto}_pct_volumen`}
+                                stroke={colors[index % colors.length]}
+                                strokeWidth={3}
+                                name={producto}
+                                dot={{ r: 5 }}
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* 5. Gráfica de Ticket Promedio */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Ticket Promedio por Producto</CardTitle>
+                      <CardDescription>
+                        Precio promedio de venta por producto y precio promedio general a lo largo de los meses
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer 
+                        config={{
+                          ...productos.reduce((acc, producto, index) => {
+                            acc[`${producto}_precio_promedio`] = {
+                              label: producto,
+                              color: colors[index % colors.length]
+                            };
+                            return acc;
+                          }, {} as any),
+                          precioPromedioGeneral: {
+                            label: "Precio Promedio General",
+                            color: "hsl(var(--destructive))"
+                          }
+                        }} 
+                        className="h-[500px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={datosPorMes}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--foreground))' }} />
+                            <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Precio ($)', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip 
+                              content={({ active, payload }) => {
+                                if (!active || !payload) return null;
+                                return (
+                                  <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                    {payload.map((entry: any, index: number) => (
+                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                        {entry.name}: {formatCurrency(entry.value)}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Legend />
+                            {productos.map((producto, index) => (
+                              <Line
+                                key={producto}
+                                type="monotone"
+                                dataKey={`${producto}_precio_promedio`}
                                 stroke={colors[index % colors.length]}
                                 strokeWidth={2}
                                 name={producto}
                                 dot={{ r: 4 }}
                               />
-                            );
-                          })}
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                            ))}
+                            <Line
+                              type="monotone"
+                              dataKey="precioPromedioGeneral"
+                              stroke="hsl(var(--destructive))"
+                              strokeWidth={4}
+                              name="Precio Promedio General"
+                              dot={{ r: 6 }}
+                              strokeDasharray="5 5"
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Detalle de Ventas por Producto y Mes</CardTitle>
-                    <CardDescription>
-                      Tabla detallada con volumen, monto y tarifa promedio
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-primary/10">
-                            <TableHead className="font-bold bg-primary/20">Producto</TableHead>
-                            <TableHead className="font-bold bg-primary/20">Mes</TableHead>
-                            <TableHead className="text-right font-bold bg-primary/20">Volumen (unidades)</TableHead>
-                            <TableHead className="text-right font-bold bg-primary/20">Monto Total</TableHead>
-                            <TableHead className="text-right font-bold bg-primary/20">Tarifa Promedio</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {ventasProductos.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                                No hay datos de ventas de productos disponibles para el año actual
-                              </TableCell>
+                  {/* Tabla Final: Productos en Filas, Meses en Columnas */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Resumen de Ventas por Producto y Mes</CardTitle>
+                      <CardDescription>
+                        Tabla detallada con productos en filas y meses en columnas
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-primary/10">
+                              <TableHead className="font-bold bg-primary/20 sticky left-0 z-10">Producto</TableHead>
+                              {mesesDelAno.map((mes) => (
+                                <TableHead key={mes} className="text-right min-w-[120px] font-semibold">{mes}</TableHead>
+                              ))}
+                              <TableHead className="text-right font-bold bg-primary/20 min-w-[120px]">Total Anual</TableHead>
                             </TableRow>
-                          ) : (
-                            ventasProductos.map((venta, index) => (
-                              <TableRow key={`${venta.producto}-${venta.mes}-${index}`}>
-                                <TableCell className="font-medium bg-muted/50">{venta.producto}</TableCell>
-                                <TableCell>{venta.mes}</TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {venta.volumen.toLocaleString('es-MX', { maximumFractionDigits: 2 })}
-                                </TableCell>
-                                <TableCell className="text-right text-green-600 font-medium">
-                                  {formatCurrency(venta.monto)}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {formatCurrency(venta.tarifaPromedio)}
+                          </TableHeader>
+                          <TableBody>
+                            {productosConDatos.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={mesesDelAno.length + 2} className="text-center text-muted-foreground py-8">
+                                  No hay datos de ventas de productos disponibles para el año actual
                                 </TableCell>
                               </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    
-                    {ventasProductos.length > 0 && (
-                      <div className="mt-6 grid gap-4">
-                        <Card className="bg-muted/50">
-                          <CardHeader>
-                            <CardTitle className="text-lg">Resumen Total Anual</CardTitle>
-                          </CardHeader>
-                          <CardContent className="grid gap-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">Total Volumen:</span>
-                              <span className="font-bold">
-                                {ventasProductos.reduce((sum, v) => sum + v.volumen, 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })} unidades
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">Total Monto:</span>
-                              <span className="font-bold text-green-600">
-                                {formatCurrency(ventasProductos.reduce((sum, v) => sum + v.monto, 0))}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">Productos Diferentes:</span>
-                              <span className="font-bold">
-                                {new Set(ventasProductos.map(v => v.producto)).size}
-                              </span>
-                            </div>
-                          </CardContent>
-                        </Card>
+                            ) : (
+                              productosConDatos.map((producto, index) => {
+                                const totalAnual = mesesDelAno.reduce((sum, mes) => sum + (producto[mes]?.monto || 0), 0);
+                                const totalVolumen = mesesDelAno.reduce((sum, mes) => sum + (producto[mes]?.volumen || 0), 0);
+                                
+                                return (
+                                  <TableRow key={producto.nombre}>
+                                    <TableCell className="font-medium bg-muted/50 sticky left-0 z-10">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: colors[index % colors.length] }}>
+                                          {producto.nombre.substring(0, 2).toUpperCase()}
+                                        </div>
+                                        <span>{producto.nombre}</span>
+                                      </div>
+                                    </TableCell>
+                                    {mesesDelAno.map((mes) => (
+                                      <TableCell key={mes} className="text-right">
+                                        <div className="space-y-1">
+                                          <div className="text-green-600 font-medium">
+                                            {formatCurrency(producto[mes]?.monto || 0)}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {(producto[mes]?.volumen || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })} und
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                    ))}
+                                    <TableCell className="text-right font-bold bg-muted">
+                                      <div className="space-y-1">
+                                        <div className="text-green-600">
+                                          {formatCurrency(totalAnual)}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {totalVolumen.toLocaleString('es-MX', { maximumFractionDigits: 0 })} und
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                            )}
+                          </TableBody>
+                        </Table>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </>
-            )}
+                    </CardContent>
+                  </Card>
+                </>
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </div>
