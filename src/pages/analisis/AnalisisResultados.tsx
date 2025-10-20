@@ -867,27 +867,24 @@ const AnalisisResultados = () => {
                                 stackId="a"
                                 fill={colors[index % colors.length]}
                                 name={producto}
-                                label={{ 
-                                  position: 'inside', 
-                                  fill: 'black', 
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  formatter: (value: number) => value > 0 ? formatCurrency(value) : '' 
+                                label={({ value, x, y, width, height }: any) => {
+                                  if (!value || value === 0) return null;
+                                  return (
+                                    <text
+                                      x={x + width / 2}
+                                      y={y + height / 2}
+                                      fill="black"
+                                      textAnchor="middle"
+                                      dominantBaseline="middle"
+                                      fontSize={11}
+                                      fontWeight={600}
+                                    >
+                                      {formatCurrency(value)}
+                                    </text>
+                                  );
                                 }}
                               />
                             ))}
-                            <Bar
-                              dataKey="totalMonto"
-                              fill="none"
-                              stackId="b"
-                              label={{
-                                position: 'top',
-                                fill: 'black',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                formatter: (value: number) => value > 0 ? formatCurrency(value) : ''
-                              }}
-                            />
                           </BarChart>
                         </ResponsiveContainer>
                       </ChartContainer>
