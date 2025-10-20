@@ -6,7 +6,7 @@ import { useVentasProductos } from "@/hooks/useVentasProductos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart as RechartsPieChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ComposedChart } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart as RechartsPieChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ComposedChart, LabelList } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -874,25 +874,14 @@ const AnalisisResultados = () => {
                                 fill={colors[index % colors.length]}
                                 name={producto}
                               >
-                                {datosPorMes.map((entry, entryIndex) => {
-                                  const value = entry[`${producto}_monto`] || 0;
-                                  if (value === 0) return null;
-                                  
-                                  return (
-                                    <text
-                                      key={`text-${entryIndex}`}
-                                      x="50%"
-                                      y="50%"
-                                      fill="black"
-                                      textAnchor="middle"
-                                      dominantBaseline="middle"
-                                      fontSize={11}
-                                      fontWeight={600}
-                                    >
-                                      {formatCurrency(value)}
-                                    </text>
-                                  );
-                                })}
+                                <LabelList
+                                  dataKey={`${producto}_monto`}
+                                  position="center"
+                                  fill="black"
+                                  fontSize={11}
+                                  fontWeight={600}
+                                  formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
+                                />
                               </Bar>
                             ))}
                           </BarChart>
