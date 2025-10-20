@@ -870,30 +870,30 @@ const AnalisisResultados = () => {
                               <Bar
                                 key={producto}
                                 dataKey={`${producto}_monto`}
-                                stackId="stack1"
+                                stackId="a"
                                 fill={colors[index % colors.length]}
                                 name={producto}
-                                label={{
-                                  position: 'center',
-                                  content: (props: any) => {
-                                    const { x, y, width, height, value } = props;
-                                    if (!value || value === 0) return null;
-                                    return (
-                                      <text
-                                        x={x + width / 2}
-                                        y={y + height / 2}
-                                        fill="black"
-                                        textAnchor="middle"
-                                        dominantBaseline="middle"
-                                        fontSize={11}
-                                        fontWeight={600}
-                                      >
-                                        {formatCurrency(value)}
-                                      </text>
-                                    );
-                                  }
-                                }}
-                              />
+                              >
+                                {datosPorMes.map((entry, entryIndex) => {
+                                  const value = entry[`${producto}_monto`] || 0;
+                                  if (value === 0) return null;
+                                  
+                                  return (
+                                    <text
+                                      key={`text-${entryIndex}`}
+                                      x="50%"
+                                      y="50%"
+                                      fill="black"
+                                      textAnchor="middle"
+                                      dominantBaseline="middle"
+                                      fontSize={11}
+                                      fontWeight={600}
+                                    >
+                                      {formatCurrency(value)}
+                                    </text>
+                                  );
+                                })}
+                              </Bar>
                             ))}
                           </BarChart>
                         </ResponsiveContainer>
