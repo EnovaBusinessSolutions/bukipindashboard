@@ -455,7 +455,7 @@ const AnalisisResultados = () => {
 
           {/* Tab de Márgenes */}
           <TabsContent value="margenes" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Análisis de Márgenes</CardTitle>
@@ -466,7 +466,7 @@ const AnalisisResultados = () => {
                 <CardContent>
                   <ChartContainer config={{
                     value: { label: "Porcentaje", color: "hsl(var(--chart-1))" }
-                  }} className="h-[300px]">
+                  }} className="h-[450px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={margenesData}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -552,7 +552,7 @@ const AnalisisResultados = () => {
 
           {/* Tab de Rentabilidad */}
           <TabsContent value="rentabilidad" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Ratios de Rentabilidad</CardTitle>
@@ -563,7 +563,7 @@ const AnalisisResultados = () => {
                 <CardContent>
                   <ChartContainer config={{
                     value: { label: "Porcentaje", color: "hsl(var(--chart-1))" }
-                  }} className="h-[300px]">
+                  }} className="h-[450px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={rentabilidadData}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -675,7 +675,7 @@ const AnalisisResultados = () => {
 
           {/* Tab de Distribución */}
           <TabsContent value="distribucion" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Distribución de Ingresos</CardTitle>
@@ -686,7 +686,7 @@ const AnalisisResultados = () => {
                 <CardContent>
                   <ChartContainer config={{
                     value: { label: "Monto", color: "hsl(var(--chart-1))" }
-                  }} className="h-[300px]">
+                  }} className="h-[450px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RechartsPieChart>
                         <Pie
