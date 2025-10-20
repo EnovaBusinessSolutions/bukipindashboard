@@ -758,11 +758,6 @@ const AnalisisResultados = () => {
                 const ventasDelMes = ventasPorMes.find(v => v.mes === mes);
                 const productosDelMes: any = ventasDelMes ? { ...ventasDelMes } : { mes };
                 
-                // Log para depuración
-                if (mes === 'Oct' && ventasDelMes) {
-                  console.log('Datos Oct:', productosDelMes);
-                }
-                
                 let totalMontoMes = 0;
                 let totalVolumenMes = 0;
                 
@@ -827,7 +822,7 @@ const AnalisisResultados = () => {
                     <CardHeader className="pb-2">
                       <CardTitle>Ventas por Producto (Monto Total)</CardTitle>
                       <CardDescription>
-                        Monto total de ventas en columnas apiladas por mes
+                        Monto individual de ventas por producto en columnas apiladas por mes
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="px-2 pb-2">
@@ -848,17 +843,23 @@ const AnalisisResultados = () => {
                             <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
                             <ChartTooltip 
                               content={({ active, payload }) => {
-                                if (!active || !payload) return null;
+                                if (!active || !payload || !payload.length) return null;
+                                const data = payload[0].payload;
                                 return (
                                   <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
-                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
-                                    {payload.map((entry: any, index: number) => (
-                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
-                                        {entry.name}: {formatCurrency(entry.value)}
-                                      </p>
-                                    ))}
+                                    <p className="font-bold">{data.mes}</p>
+                                    {productos.map((prod) => {
+                                      const valor = data[`${prod}_monto`];
+                                      if (!valor || valor === 0) return null;
+                                      const color = colors[productos.indexOf(prod) % colors.length];
+                                      return (
+                                        <p key={prod} className="text-sm" style={{ color }}>
+                                          {prod}: {formatCurrency(valor)}
+                                        </p>
+                                      );
+                                    })}
                                     <p className="text-sm font-bold border-t pt-1">
-                                      Total: {formatCurrency(payload[0]?.payload?.totalMonto || 0)}
+                                      Total: {formatCurrency(data.totalMonto || 0)}
                                     </p>
                                   </div>
                                 );
@@ -869,25 +870,28 @@ const AnalisisResultados = () => {
                               <Bar
                                 key={producto}
                                 dataKey={`${producto}_monto`}
-                                stackId="a"
+                                stackId="stack1"
                                 fill={colors[index % colors.length]}
                                 name={producto}
-                                label={({ value, x, y, width, height }: any) => {
-                                  if (!value || value === 0) return null;
-                                  
-                                  return (
-                                    <text
-                                      x={x + width / 2}
-                                      y={y + height / 2}
-                                      fill="black"
-                                      textAnchor="middle"
-                                      dominantBaseline="middle"
-                                      fontSize={11}
-                                      fontWeight={600}
-                                    >
-                                      {formatCurrency(value)}
-                                    </text>
-                                  );
+                                label={{
+                                  position: 'center',
+                                  content: (props: any) => {
+                                    const { x, y, width, height, value } = props;
+                                    if (!value || value === 0) return null;
+                                    return (
+                                      <text
+                                        x={x + width / 2}
+                                        y={y + height / 2}
+                                        fill="black"
+                                        textAnchor="middle"
+                                        dominantBaseline="middle"
+                                        fontSize={11}
+                                        fontWeight={600}
+                                      >
+                                        {formatCurrency(value)}
+                                      </text>
+                                    );
+                                  }
                                 }}
                               />
                             ))}
