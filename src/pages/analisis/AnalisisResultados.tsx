@@ -817,13 +817,13 @@ const AnalisisResultados = () => {
                 <>
                   {/* 1. Gráfica de Ventas por Producto (Columnas Apiladas) */}
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="pb-2">
                       <CardTitle>Ventas por Producto (Monto Total)</CardTitle>
                       <CardDescription>
                         Monto total de ventas en columnas apiladas por mes
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-2 pb-2">
                       <ChartContainer 
                         config={productos.reduce((acc, producto, index) => {
                           acc[`${producto}_monto`] = {
@@ -832,7 +832,7 @@ const AnalisisResultados = () => {
                           };
                           return acc;
                         }, {} as any)} 
-                        className="h-[500px]"
+                        className="h-[600px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={datosPorMes}>
@@ -876,13 +876,13 @@ const AnalisisResultados = () => {
 
                   {/* 2. Gráfica de Número de Ventas (Unidades) */}
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="pb-2">
                       <CardTitle>Volumen de Ventas por Producto (Unidades)</CardTitle>
                       <CardDescription>
                         Cantidad de unidades vendidas por producto cada mes
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-2 pb-2">
                       <ChartContainer 
                         config={productos.reduce((acc, producto, index) => {
                           acc[`${producto}_volumen`] = {
@@ -891,7 +891,7 @@ const AnalisisResultados = () => {
                           };
                           return acc;
                         }, {} as any)} 
-                        className="h-[500px]"
+                        className="h-[600px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={datosPorMes}>
@@ -917,13 +917,13 @@ const AnalisisResultados = () => {
 
                   {/* 3. Gráfica de Porcentaje de Ventas por Producto (Monto) */}
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="pb-2">
                       <CardTitle>Porcentaje de Ventas por Producto (Monto)</CardTitle>
                       <CardDescription>
                         Porcentaje que representa cada producto sobre el total de ventas en dinero del mes
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-2 pb-2">
                       <ChartContainer 
                         config={productos.reduce((acc, producto, index) => {
                           acc[`${producto}_pct_monto`] = {
@@ -932,7 +932,7 @@ const AnalisisResultados = () => {
                           };
                           return acc;
                         }, {} as any)} 
-                        className="h-[500px]"
+                        className="h-[600px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={datosPorMes}>
@@ -974,13 +974,13 @@ const AnalisisResultados = () => {
 
                   {/* 4. Gráfica de Porcentaje de Ventas por Volumen */}
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="pb-2">
                       <CardTitle>Porcentaje de Ventas por Producto (Volumen)</CardTitle>
                       <CardDescription>
                         Porcentaje que representa cada producto sobre el total de unidades vendidas del mes
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-2 pb-2">
                       <ChartContainer 
                         config={productos.reduce((acc, producto, index) => {
                           acc[`${producto}_pct_volumen`] = {
@@ -989,7 +989,7 @@ const AnalisisResultados = () => {
                           };
                           return acc;
                         }, {} as any)} 
-                        className="h-[500px]"
+                        className="h-[600px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={datosPorMes}>
@@ -1031,13 +1031,13 @@ const AnalisisResultados = () => {
 
                   {/* 5. Gráfica de Ticket Promedio */}
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="pb-2">
                       <CardTitle>Ticket Promedio por Producto</CardTitle>
                       <CardDescription>
                         Precio promedio de venta por producto y precio promedio general a lo largo de los meses
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-2 pb-2">
                       <ChartContainer 
                         config={{
                           ...productos.reduce((acc, producto, index) => {
@@ -1052,7 +1052,7 @@ const AnalisisResultados = () => {
                             color: "hsl(var(--destructive))"
                           }
                         }} 
-                        className="h-[500px]"
+                        className="h-[600px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={datosPorMes}>
