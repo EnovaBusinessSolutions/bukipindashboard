@@ -269,14 +269,14 @@ const AnalisisResultados = () => {
                             </TableCell>
                           </TableRow>
                           <TableRow className="border-t-2 bg-green-50 dark:bg-green-950">
-                            <TableCell className="font-bold bg-muted/50">Utilidad Operativa (EBITDA)</TableCell>
+                            <TableCell className="font-bold bg-muted/50">EBITDA</TableCell>
                             {resultadosMensuales.map((r) => (
                               <TableCell key={r.mes} className="text-right font-bold">
-                                {formatCurrency(r.utilidadOperativa)}
+                                {formatCurrency(r.ebitda)}
                               </TableCell>
                             ))}
                             <TableCell className="text-right font-bold bg-green-100 dark:bg-green-900">
-                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0))}
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.ebitda, 0))}
                             </TableCell>
                           </TableRow>
                           <TableRow className="bg-green-50/50 dark:bg-green-950/50">
@@ -289,10 +289,81 @@ const AnalisisResultados = () => {
                             <TableCell className="text-right font-bold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 italic text-sm">
                               {formatPercent(
                                 resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
-                                  ? (resultadosMensuales.reduce((sum, r) => sum + r.utilidadOperativa, 0) / 
+                                  ? (resultadosMensuales.reduce((sum, r) => sum + r.ebitda, 0) / 
                                      resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0)) * 100
                                   : 0
                               )}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold bg-muted/50">Depreciación</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-red-600">
+                                ({formatCurrency(r.depreciacion)})
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-red-600">
+                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.depreciacion, 0))})
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-2 bg-cyan-50 dark:bg-cyan-950">
+                            <TableCell className="font-bold bg-muted/50">EBIT (Utilidad Operativa)</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right font-bold">
+                                {formatCurrency(r.ebit)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-cyan-100 dark:bg-cyan-900">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.ebit, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-cyan-50/50 dark:bg-cyan-950/50">
+                            <TableCell className="font-bold bg-muted/50 italic text-sm">Margen EBIT %</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-cyan-700 dark:text-cyan-300 font-semibold italic text-sm">
+                                {formatPercent(r.margenEBIT)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 italic text-sm">
+                              {formatPercent(
+                                resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0) > 0
+                                  ? (resultadosMensuales.reduce((sum, r) => sum + r.ebit, 0) / 
+                                     resultadosMensuales.reduce((sum, r) => sum + r.ingresos, 0)) * 100
+                                  : 0
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold bg-muted/50">Intereses</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-red-600">
+                                ({formatCurrency(r.intereses)})
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-red-600">
+                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.intereses, 0))})
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-t-2 bg-amber-50 dark:bg-amber-950">
+                            <TableCell className="font-bold bg-muted/50">Utilidad antes de Impuestos (EBT)</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right font-bold">
+                                {formatCurrency(r.utilidadAntesImpuestos)}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-amber-100 dark:bg-amber-900">
+                              {formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.utilidadAntesImpuestos, 0))}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-bold bg-muted/50">Impuestos (30%)</TableCell>
+                            {resultadosMensuales.map((r) => (
+                              <TableCell key={r.mes} className="text-right text-red-600">
+                                ({formatCurrency(r.impuestos)})
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold bg-muted text-red-600">
+                              ({formatCurrency(resultadosMensuales.reduce((sum, r) => sum + r.impuestos, 0))})
                             </TableCell>
                           </TableRow>
                           <TableRow className="border-t-2 bg-purple-50 dark:bg-purple-950">
@@ -341,6 +412,7 @@ const AnalisisResultados = () => {
                         ingresos: { label: "Ventas", color: "hsl(var(--chart-1))" },
                         margenBruto: { label: "Margen Bruto %", color: "hsl(var(--chart-2))" },
                         margenEBITDA: { label: "Margen EBITDA %", color: "hsl(var(--chart-3))" },
+                        margenEBIT: { label: "Margen EBIT %", color: "hsl(var(--chart-5))" },
                         margenNeto: { label: "Margen Neto %", color: "hsl(var(--chart-4))" },
                       }} 
                       className="h-[600px]"
@@ -370,6 +442,7 @@ const AnalisisResultados = () => {
                           <Bar yAxisId="left" dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
                           <Line yAxisId="right" type="monotone" dataKey="margenBruto" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Margen Bruto %" dot={{ r: 4 }} />
                           <Line yAxisId="right" type="monotone" dataKey="margenEBITDA" stroke="hsl(var(--chart-3))" strokeWidth={2} name="Margen EBITDA %" dot={{ r: 4 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenEBIT" stroke="hsl(var(--chart-5))" strokeWidth={2} name="Margen EBIT %" dot={{ r: 4 }} />
                           <Line yAxisId="right" type="monotone" dataKey="margenNeto" stroke="hsl(var(--chart-4))" strokeWidth={2} name="Margen Neto %" dot={{ r: 4 }} />
                         </ComposedChart>
                       </ResponsiveContainer>

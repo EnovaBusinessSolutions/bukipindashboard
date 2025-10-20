@@ -8,10 +8,16 @@ interface ResultadoMensual {
   costos: number;
   gastos: number;
   utilidadBruta: number;
-  utilidadOperativa: number;
+  ebitda: number;
+  depreciacion: number;
+  ebit: number;
+  intereses: number;
+  utilidadAntesImpuestos: number;
+  impuestos: number;
   utilidadNeta: number;
   margenBruto: number;
   margenEBITDA: number;
+  margenEBIT: number;
   margenNeto: number;
 }
 
@@ -61,13 +67,48 @@ export const useEstadoResultadosMensual = (año?: number) => {
 
         const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
 
-        // Calcular utilidades y márgenes
+        // Obtener depreciación mensual del mes
+        const { data: inversionesData } = await supabase
+          .from('inversiones_capex')
+          .select('valor_depreciacion_mensual, fecha_inicio_depreciacion, fecha_baja, estado')
+          .eq('estado', 'activo');
+
+        let depreciacion = 0;
+        inversionesData?.forEach((inv) => {
+          if (inv.fecha_inicio_depreciacion) {
+            const fechaInicioDep = new Date(inv.fecha_inicio_depreciacion);
+            const fechaMes = new Date(añoActual, mes, 15);
+            
+            // Solo agregar depreciación si el mes está después del inicio de depreciación
+            if (fechaMes >= fechaInicioDep) {
+              depreciacion += inv.valor_depreciacion_mensual || 0;
+            }
+          }
+        });
+
+        // Obtener intereses pagados del mes
+        const { data: interesesData } = await supabase
+          .from('transacciones_financiamientos')
+          .select('interes_pagado')
+          .eq('tipo_transaccion', 'cargo_interes')
+          .gte('fecha', new Date(añoActual, mes, 1).toISOString().split('T')[0])
+          .lte('fecha', new Date(añoActual, mes + 1, 0).toISOString().split('T')[0]);
+
+        const intereses = interesesData?.reduce((sum, t) => sum + (t.interes_pagado || 0), 0) || 0;
+
+        // Calcular utilidades y márgenes según estructura contable
         const utilidadBruta = ingresos - costos;
-        const utilidadOperativa = utilidadBruta - gastos;
-        const utilidadNeta = utilidadOperativa;
+        const ebitda = utilidadBruta - gastos;
+        const ebit = ebitda - depreciacion;
+        const utilidadAntesImpuestos = ebit - intereses;
+        
+        // Calcular impuestos (30% estimado sobre utilidad antes de impuestos positiva)
+        const impuestos = utilidadAntesImpuestos > 0 ? utilidadAntesImpuestos * 0.30 : 0;
+        const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
         const margenBruto = ingresos > 0 ? (utilidadBruta / ingresos) * 100 : 0;
-        const margenEBITDA = ingresos > 0 ? (utilidadOperativa / ingresos) * 100 : 0; // Simplificado como margen operativo
+        const margenEBITDA = ingresos > 0 ? (ebitda / ingresos) * 100 : 0;
+        const margenEBIT = ingresos > 0 ? (ebit / ingresos) * 100 : 0;
         const margenNeto = ingresos > 0 ? (utilidadNeta / ingresos) * 100 : 0;
 
         resultados.push({
@@ -77,10 +118,16 @@ export const useEstadoResultadosMensual = (año?: number) => {
           costos,
           gastos,
           utilidadBruta,
-          utilidadOperativa,
+          ebitda,
+          depreciacion,
+          ebit,
+          intereses,
+          utilidadAntesImpuestos,
+          impuestos,
           utilidadNeta,
           margenBruto,
           margenEBITDA,
+          margenEBIT,
           margenNeto
         });
       }
