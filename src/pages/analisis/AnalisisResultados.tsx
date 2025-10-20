@@ -758,6 +758,11 @@ const AnalisisResultados = () => {
                 const ventasDelMes = ventasPorMes.find(v => v.mes === mes);
                 const productosDelMes: any = ventasDelMes ? { ...ventasDelMes } : { mes };
                 
+                // Log para depuración
+                if (mes === 'Oct' && ventasDelMes) {
+                  console.log('Datos Oct:', productosDelMes);
+                }
+                
                 let totalMontoMes = 0;
                 let totalVolumenMes = 0;
                 
@@ -867,10 +872,8 @@ const AnalisisResultados = () => {
                                 stackId="a"
                                 fill={colors[index % colors.length]}
                                 name={producto}
-                                label={({ value, x, y, width, height, payload }: any) => {
-                                  // Obtener el valor directo del dataKey para este producto
-                                  const valorProducto = payload[`${producto}_monto`];
-                                  if (!valorProducto || valorProducto === 0) return null;
+                                label={({ value, x, y, width, height }: any) => {
+                                  if (!value || value === 0) return null;
                                   
                                   return (
                                     <text
@@ -882,7 +885,7 @@ const AnalisisResultados = () => {
                                       fontSize={11}
                                       fontWeight={600}
                                     >
-                                      {formatCurrency(valorProducto)}
+                                      {formatCurrency(value)}
                                     </text>
                                   );
                                 }}
