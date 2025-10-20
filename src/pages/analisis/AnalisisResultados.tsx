@@ -865,7 +865,13 @@ const AnalisisResultados = () => {
                                 stackId="a"
                                 fill={colors[index % colors.length]}
                                 name={producto}
-                                label={{ position: 'center', fill: 'white', fontSize: 12, formatter: (value: number) => value > 0 ? formatCurrency(value) : '' }}
+                                label={{ 
+                                  position: 'inside', 
+                                  fill: 'black', 
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  formatter: (value: number) => value > 0 ? formatCurrency(value) : '' 
+                                }}
                               />
                             ))}
                           </BarChart>
