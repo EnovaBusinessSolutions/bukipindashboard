@@ -752,28 +752,30 @@ const AnalisisResultados = () => {
               // Preparar datos para las gráficas
               const mesesDelAno = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
               
-              // Crear estructura de datos por mes con totales
+              // Usar ventasPorMes del hook directamente y enriquecerlo con cálculos adicionales
               const datosPorMes = mesesDelAno.map(mes => {
-                const ventasDelMes = ventasProductos.filter(v => v.mes === mes);
-                const productosDelMes: any = { mes };
+                // Buscar el mes en ventasPorMes o crear uno vacío
+                const ventasDelMes = ventasPorMes.find(v => v.mes === mes);
+                const productosDelMes: any = ventasDelMes ? { ...ventasDelMes } : { mes };
+                
                 let totalMontoMes = 0;
                 let totalVolumenMes = 0;
                 
+                // Calcular totales
                 productos.forEach(producto => {
-                  const ventaProducto = ventasDelMes.find(v => v.producto === producto);
-                  productosDelMes[`${producto}_monto`] = ventaProducto?.monto || 0;
-                  productosDelMes[`${producto}_volumen`] = ventaProducto?.volumen || 0;
-                  totalMontoMes += ventaProducto?.monto || 0;
-                  totalVolumenMes += ventaProducto?.volumen || 0;
+                  const monto = productosDelMes[`${producto}_monto`] || 0;
+                  const volumen = productosDelMes[`${producto}_volumen`] || 0;
+                  totalMontoMes += monto;
+                  totalVolumenMes += volumen;
                 });
                 
                 productosDelMes.totalMonto = totalMontoMes;
                 productosDelMes.totalVolumen = totalVolumenMes;
                 
-                // Calcular porcentajes
+                // Calcular porcentajes y precios promedio
                 productos.forEach(producto => {
-                  const monto = productosDelMes[`${producto}_monto`];
-                  const volumen = productosDelMes[`${producto}_volumen`];
+                  const monto = productosDelMes[`${producto}_monto`] || 0;
+                  const volumen = productosDelMes[`${producto}_volumen`] || 0;
                   productosDelMes[`${producto}_pct_monto`] = totalMontoMes > 0 ? (monto / totalMontoMes) * 100 : 0;
                   productosDelMes[`${producto}_pct_volumen`] = totalVolumenMes > 0 ? (volumen / totalVolumenMes) * 100 : 0;
                   productosDelMes[`${producto}_precio_promedio`] = volumen > 0 ? monto / volumen : 0;
