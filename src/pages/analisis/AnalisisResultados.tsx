@@ -1045,36 +1045,43 @@ const AnalisisResultados = () => {
                     </CardContent>
                   </Card>
 
-                  {/* 5. Gráfica de Ticket Promedio */}
+                  {/* 5. Gráfica Combinada: Total de Ventas y Ticket Promedio */}
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle>Ticket Promedio por Producto</CardTitle>
+                      <CardTitle>Ventas Totales y Ticket Promedio</CardTitle>
                       <CardDescription>
-                        Precio promedio de venta por producto y precio promedio general a lo largo de los meses
+                        Comparación del total de ventas mensuales (barras) con el ticket promedio (línea)
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="px-2 pb-2">
                       <ChartContainer 
                         config={{
-                          ...productos.reduce((acc, producto, index) => {
-                            acc[`${producto}_precio_promedio`] = {
-                              label: producto,
-                              color: colors[index % colors.length]
-                            };
-                            return acc;
-                          }, {} as any),
+                          totalMonto: {
+                            label: "Total Ventas",
+                            color: "hsl(var(--primary))"
+                          },
                           precioPromedioGeneral: {
-                            label: "Precio Promedio General",
+                            label: "Ticket Promedio",
                             color: "hsl(var(--destructive))"
                           }
                         }} 
                         className="h-[600px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={datosPorMes}>
+                          <ComposedChart data={datosPorMes}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--foreground))' }} />
-                            <YAxis tick={{ fill: 'hsl(var(--foreground))' }} label={{ value: 'Precio ($)', angle: -90, position: 'insideLeft' }} />
+                            <YAxis 
+                              yAxisId="left"
+                              tick={{ fill: 'hsl(var(--foreground))' }} 
+                              label={{ value: 'Total Ventas ($)', angle: -90, position: 'insideLeft' }}
+                            />
+                            <YAxis 
+                              yAxisId="right"
+                              orientation="right"
+                              tick={{ fill: 'hsl(var(--foreground))' }} 
+                              label={{ value: 'Ticket Promedio ($)', angle: 90, position: 'insideRight' }}
+                            />
                             <ChartTooltip 
                               content={({ active, payload }) => {
                                 if (!active || !payload) return null;
@@ -1091,27 +1098,22 @@ const AnalisisResultados = () => {
                               }}
                             />
                             <Legend />
-                            {productos.map((producto, index) => (
-                              <Line
-                                key={producto}
-                                type="monotone"
-                                dataKey={`${producto}_precio_promedio`}
-                                stroke={colors[index % colors.length]}
-                                strokeWidth={2}
-                                name={producto}
-                                dot={{ r: 4 }}
-                              />
-                            ))}
+                            <Bar 
+                              yAxisId="left"
+                              dataKey="totalMonto" 
+                              fill="hsl(var(--primary))" 
+                              name="Total Ventas"
+                            />
                             <Line
+                              yAxisId="right"
                               type="monotone"
                               dataKey="precioPromedioGeneral"
                               stroke="hsl(var(--destructive))"
                               strokeWidth={4}
-                              name="Precio Promedio General"
+                              name="Ticket Promedio"
                               dot={{ r: 6 }}
-                              strokeDasharray="5 5"
                             />
-                          </LineChart>
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
                     </CardContent>
