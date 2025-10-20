@@ -867,8 +867,11 @@ const AnalisisResultados = () => {
                                 stackId="a"
                                 fill={colors[index % colors.length]}
                                 name={producto}
-                                label={({ value, x, y, width, height }: any) => {
-                                  if (!value || value === 0) return null;
+                                label={({ value, x, y, width, height, payload }: any) => {
+                                  // Obtener el valor directo del dataKey para este producto
+                                  const valorProducto = payload[`${producto}_monto`];
+                                  if (!valorProducto || valorProducto === 0) return null;
+                                  
                                   return (
                                     <text
                                       x={x + width / 2}
@@ -879,7 +882,7 @@ const AnalisisResultados = () => {
                                       fontSize={11}
                                       fontWeight={600}
                                     >
-                                      {formatCurrency(value)}
+                                      {formatCurrency(valorProducto)}
                                     </text>
                                   );
                                 }}
