@@ -876,6 +876,18 @@ const AnalisisResultados = () => {
                                 }}
                               />
                             ))}
+                            <Bar
+                              dataKey="totalMonto"
+                              fill="none"
+                              stackId="b"
+                              label={{
+                                position: 'top',
+                                fill: 'black',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                formatter: (value: number) => value > 0 ? formatCurrency(value) : ''
+                              }}
+                            />
                           </BarChart>
                         </ResponsiveContainer>
                       </ChartContainer>
