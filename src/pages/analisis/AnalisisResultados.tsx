@@ -190,9 +190,9 @@ const AnalisisResultados = () => {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Estado de Resultados Mensual</CardTitle>
+                    <CardTitle>Evolución Mensual de Ventas y Márgenes</CardTitle>
                     <CardDescription>
-                      Análisis mensual de ingresos, costos, gastos y utilidades del ejercicio actual
+                      Barras representan ventas mensuales, líneas muestran evolución de márgenes
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -401,9 +401,9 @@ const AnalisisResultados = () => {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Evolución Mensual de Ventas y Márgenes</CardTitle>
+                    <CardTitle>Estado de Resultados Mensual</CardTitle>
                     <CardDescription>
-                      Barras representan ventas mensuales, líneas muestran evolución de márgenes
+                      Análisis mensual de ingresos, costos, gastos y utilidades del ejercicio actual
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
