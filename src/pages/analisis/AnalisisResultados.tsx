@@ -196,6 +196,57 @@ const AnalisisResultados = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
+                    <ChartContainer 
+                      config={{
+                        ingresos: { label: "Ventas", color: "hsl(var(--chart-1))" },
+                        margenBruto: { label: "Margen Bruto %", color: "hsl(220, 70%, 50%)" },
+                        margenEBITDA: { label: "Margen EBITDA %", color: "hsl(142, 70%, 45%)" },
+                        margenEBIT: { label: "Margen EBIT %", color: "hsl(280, 70%, 50%)" },
+                        margenNeto: { label: "Margen Neto %", color: "hsl(25, 95%, 53%)" },
+                      }} 
+                      className="h-[600px]"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={resultadosMensuales}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
+                          <YAxis yAxisId="left" label={{ value: 'Ventas ($)', angle: -90, position: 'insideLeft' }} />
+                          <YAxis yAxisId="right" orientation="right" label={{ value: 'Margen (%)', angle: 90, position: 'insideRight' }} />
+                          <ChartTooltip 
+                            content={({ active, payload }) => {
+                              if (!active || !payload) return null;
+                              return (
+                                <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                  <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                  {payload.map((entry: any, index: number) => (
+                                    <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                      {entry.name}: {entry.name.includes('%') ? formatPercent(entry.value) : formatCurrency(entry.value)}
+                                    </p>
+                                  ))}
+                                </div>
+                              );
+                            }}
+                          />
+                          <Legend />
+                          <Bar yAxisId="left" dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
+                          <Line yAxisId="right" type="monotone" dataKey="margenBruto" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Margen Bruto %" dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenEBITDA" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="Margen EBITDA %" dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenEBIT" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="Margen EBIT %" dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenNeto" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Margen Neto %" dot={{ r: 5 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Estado de Resultados Mensual</CardTitle>
+                    <CardDescription>
+                      Análisis mensual de ingresos, costos, gastos y utilidades del ejercicio actual
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
@@ -396,57 +447,6 @@ const AnalisisResultados = () => {
                         </TableBody>
                       </Table>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Estado de Resultados Mensual</CardTitle>
-                    <CardDescription>
-                      Análisis mensual de ingresos, costos, gastos y utilidades del ejercicio actual
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer 
-                      config={{
-                        ingresos: { label: "Ventas", color: "hsl(var(--chart-1))" },
-                        margenBruto: { label: "Margen Bruto %", color: "hsl(220, 70%, 50%)" },
-                        margenEBITDA: { label: "Margen EBITDA %", color: "hsl(142, 70%, 45%)" },
-                        margenEBIT: { label: "Margen EBIT %", color: "hsl(280, 70%, 50%)" },
-                        margenNeto: { label: "Margen Neto %", color: "hsl(25, 95%, 53%)" },
-                      }} 
-                      className="h-[600px]"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={resultadosMensuales}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
-                          <YAxis yAxisId="left" label={{ value: 'Ventas ($)', angle: -90, position: 'insideLeft' }} />
-                          <YAxis yAxisId="right" orientation="right" label={{ value: 'Margen (%)', angle: 90, position: 'insideRight' }} />
-                          <ChartTooltip 
-                            content={({ active, payload }) => {
-                              if (!active || !payload) return null;
-                              return (
-                                <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
-                                  <p className="font-bold">{payload[0]?.payload?.mes}</p>
-                                  {payload.map((entry: any, index: number) => (
-                                    <p key={index} className="text-sm" style={{ color: entry.color }}>
-                                      {entry.name}: {entry.name.includes('%') ? formatPercent(entry.value) : formatCurrency(entry.value)}
-                                    </p>
-                                  ))}
-                                </div>
-                              );
-                            }}
-                          />
-                          <Legend />
-                          <Bar yAxisId="left" dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
-                          <Line yAxisId="right" type="monotone" dataKey="margenBruto" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Margen Bruto %" dot={{ r: 5 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="margenEBITDA" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="Margen EBITDA %" dot={{ r: 5 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="margenEBIT" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="Margen EBIT %" dot={{ r: 5 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="margenNeto" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Margen Neto %" dot={{ r: 5 }} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
                   </CardContent>
                 </Card>
               </>
