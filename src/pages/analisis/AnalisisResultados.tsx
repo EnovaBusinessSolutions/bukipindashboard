@@ -410,10 +410,10 @@ const AnalisisResultados = () => {
                     <ChartContainer 
                       config={{
                         ingresos: { label: "Ventas", color: "hsl(var(--chart-1))" },
-                        margenBruto: { label: "Margen Bruto %", color: "hsl(var(--chart-2))" },
-                        margenEBITDA: { label: "Margen EBITDA %", color: "hsl(var(--chart-3))" },
-                        margenEBIT: { label: "Margen EBIT %", color: "hsl(var(--chart-5))" },
-                        margenNeto: { label: "Margen Neto %", color: "hsl(var(--chart-4))" },
+                        margenBruto: { label: "Margen Bruto %", color: "hsl(220, 70%, 50%)" },
+                        margenEBITDA: { label: "Margen EBITDA %", color: "hsl(142, 70%, 45%)" },
+                        margenEBIT: { label: "Margen EBIT %", color: "hsl(280, 70%, 50%)" },
+                        margenNeto: { label: "Margen Neto %", color: "hsl(25, 95%, 53%)" },
                       }} 
                       className="h-[600px]"
                     >
@@ -440,10 +440,10 @@ const AnalisisResultados = () => {
                           />
                           <Legend />
                           <Bar yAxisId="left" dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
-                          <Line yAxisId="right" type="monotone" dataKey="margenBruto" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Margen Bruto %" dot={{ r: 4 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="margenEBITDA" stroke="hsl(var(--chart-3))" strokeWidth={2} name="Margen EBITDA %" dot={{ r: 4 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="margenEBIT" stroke="hsl(var(--chart-5))" strokeWidth={2} name="Margen EBIT %" dot={{ r: 4 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="margenNeto" stroke="hsl(var(--chart-4))" strokeWidth={2} name="Margen Neto %" dot={{ r: 4 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenBruto" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Margen Bruto %" dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenEBITDA" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="Margen EBITDA %" dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenEBIT" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="Margen EBIT %" dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="margenNeto" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Margen Neto %" dot={{ r: 5 }} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </ChartContainer>
