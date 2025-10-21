@@ -4,6 +4,8 @@ import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { useVentasProductos } from "@/hooks/useVentasProductos";
 import { useCostosMensuales } from "@/hooks/useCostosMensuales";
+import { useIngresosMensualesPorTipo } from "@/hooks/useIngresosMensualesPorTipo";
+import { useEgresosMensualesPorTipo } from "@/hooks/useEgresosMensualesPorTipo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +19,8 @@ const AnalisisResultados = () => {
   const { data: resultadosMensuales, isLoading: isLoadingMensual } = useEstadoResultadosMensual();
   const { data: ventasProductosData, isLoading: isLoadingVentasProductos } = useVentasProductos();
   const { data: costosData, isLoading: isLoadingCostos } = useCostosMensuales();
+  const { data: ingresosPorTipo, isLoading: isLoadingIngresosTipo } = useIngresosMensualesPorTipo();
+  const { data: egresosPorTipo, isLoading: isLoadingEgresosTipo } = useEgresosMensualesPorTipo();
 
   const ventasProductos = ventasProductosData?.ventasDetalladas || [];
   const ventasPorMes = ventasProductosData?.ventasPorMes || [];
@@ -314,6 +318,180 @@ const AnalisisResultados = () => {
                         </ComposedChart>
                       </ResponsiveContainer>
                     </ChartContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Nueva Gráfica: Ingresos por Tipo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Desglose de Ingresos por Tipo</CardTitle>
+                    <CardDescription>
+                      Análisis mensual de ventas y otros ingresos
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingIngresosTipo ? (
+                      <Skeleton className="h-[400px] w-full" />
+                    ) : ingresosPorTipo && ingresosPorTipo.length > 0 ? (
+                      <ChartContainer
+                        config={{
+                          ventas: { label: "Ventas", color: "hsl(142, 70%, 45%)" },
+                          otrosIngresos: { label: "Otros Ingresos", color: "hsl(220, 70%, 50%)" },
+                          total: { label: "Total Ingresos", color: "hsl(0, 0%, 20%)" },
+                        }}
+                        className="h-[400px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={ingresosPorTipo}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
+                            <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip
+                              content={({ active, payload }) => {
+                                if (!active || !payload) return null;
+                                return (
+                                  <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                    {payload.map((entry: any, index: number) => (
+                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                        {entry.name}: {formatCurrency(entry.value)}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Legend />
+                            <Bar dataKey="ventas" fill="hsl(142, 70%, 45%)" name="Ventas" stackId="ingresos">
+                              <LabelList
+                                dataKey="ventas"
+                                position="inside"
+                                fill="white"
+                                fontSize={10}
+                                fontWeight={600}
+                                formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
+                              />
+                            </Bar>
+                            <Bar dataKey="otrosIngresos" fill="hsl(220, 70%, 50%)" name="Otros Ingresos" stackId="ingresos">
+                              <LabelList
+                                dataKey="otrosIngresos"
+                                position="inside"
+                                fill="white"
+                                fontSize={10}
+                                fontWeight={600}
+                                formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
+                              />
+                            </Bar>
+                            <Line
+                              type="monotone"
+                              dataKey="total"
+                              stroke="hsl(0, 0%, 20%)"
+                              strokeWidth={3}
+                              name="Total"
+                              dot={{ r: 5 }}
+                            >
+                              <LabelList
+                                dataKey="total"
+                                position="top"
+                                fill="black"
+                                fontSize={11}
+                                fontWeight={600}
+                                formatter={(value: number) => formatCurrency(value)}
+                              />
+                            </Line>
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">No hay datos de ingresos disponibles</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Nueva Gráfica: Egresos por Tipo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Desglose de Egresos por Tipo</CardTitle>
+                    <CardDescription>
+                      Análisis mensual de costos y gastos
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingEgresosTipo ? (
+                      <Skeleton className="h-[400px] w-full" />
+                    ) : egresosPorTipo && egresosPorTipo.length > 0 ? (
+                      <ChartContainer
+                        config={{
+                          costos: { label: "Costos", color: "hsl(0, 70%, 50%)" },
+                          gastos: { label: "Gastos", color: "hsl(25, 95%, 53%)" },
+                          total: { label: "Total Egresos", color: "hsl(0, 0%, 20%)" },
+                        }}
+                        className="h-[400px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={egresosPorTipo}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
+                            <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
+                            <ChartTooltip
+                              content={({ active, payload }) => {
+                                if (!active || !payload) return null;
+                                return (
+                                  <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                    <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                    {payload.map((entry: any, index: number) => (
+                                      <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                        {entry.name}: {formatCurrency(entry.value)}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Legend />
+                            <Bar dataKey="costos" fill="hsl(0, 70%, 50%)" name="Costos" stackId="egresos">
+                              <LabelList
+                                dataKey="costos"
+                                position="inside"
+                                fill="white"
+                                fontSize={10}
+                                fontWeight={600}
+                                formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
+                              />
+                            </Bar>
+                            <Bar dataKey="gastos" fill="hsl(25, 95%, 53%)" name="Gastos" stackId="egresos">
+                              <LabelList
+                                dataKey="gastos"
+                                position="inside"
+                                fill="white"
+                                fontSize={10}
+                                fontWeight={600}
+                                formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
+                              />
+                            </Bar>
+                            <Line
+                              type="monotone"
+                              dataKey="total"
+                              stroke="hsl(0, 0%, 20%)"
+                              strokeWidth={3}
+                              name="Total"
+                              dot={{ r: 5 }}
+                            >
+                              <LabelList
+                                dataKey="total"
+                                position="top"
+                                fill="black"
+                                fontSize={11}
+                                fontWeight={600}
+                                formatter={(value: number) => formatCurrency(value)}
+                              />
+                            </Line>
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">No hay datos de egresos disponibles</p>
+                    )}
                   </CardContent>
                 </Card>
 
