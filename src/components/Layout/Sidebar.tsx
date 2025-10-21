@@ -89,6 +89,10 @@ const Sidebar = () => {
     name: "Registro de Capital",
     path: "/registros/capital",
     active: location.pathname === "/registros/capital"
+  }, {
+    name: "Registro de Impuestos",
+    path: "/registros/impuestos",
+    active: location.pathname === "/registros/impuestos"
   }];
 
   const cobrosPagosItems = [{
