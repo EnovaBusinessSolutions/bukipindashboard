@@ -206,7 +206,7 @@ const AnalisisResultados = () => {
                   <CardHeader>
                     <CardTitle>Evolución Mensual de Ventas y Utilidades</CardTitle>
                     <CardDescription>
-                      Barras representan ventas mensuales, líneas muestran evolución de utilidades
+                      Barras representan ventas mensuales, líneas muestran evolución de utilidades en la misma escala
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -224,8 +224,7 @@ const AnalisisResultados = () => {
                         <ComposedChart data={resultadosMensuales}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
-                          <YAxis yAxisId="left" label={{ value: 'Ventas ($)', angle: -90, position: 'insideLeft' }} />
-                          <YAxis yAxisId="right" orientation="right" label={{ value: 'Utilidades ($)', angle: 90, position: 'insideRight' }} />
+                          <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
                           <ChartTooltip 
                             content={({ active, payload }) => {
                               if (!active || !payload) return null;
@@ -242,11 +241,11 @@ const AnalisisResultados = () => {
                             }}
                           />
                           <Legend />
-                          <Bar yAxisId="left" dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
-                          <Line yAxisId="right" type="monotone" dataKey="utilidadBruta" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Utilidad Bruta" dot={{ r: 5 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="ebitda" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="EBITDA" dot={{ r: 5 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="ebit" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="EBIT" dot={{ r: 5 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="utilidadNeta" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Utilidad Neta" dot={{ r: 5 }} />
+                          <Bar dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
+                          <Line type="monotone" dataKey="utilidadBruta" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Utilidad Bruta" dot={{ r: 5 }} />
+                          <Line type="monotone" dataKey="ebitda" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="EBITDA" dot={{ r: 5 }} />
+                          <Line type="monotone" dataKey="ebit" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="EBIT" dot={{ r: 5 }} />
+                          <Line type="monotone" dataKey="utilidadNeta" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Utilidad Neta" dot={{ r: 5 }} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </ChartContainer>
