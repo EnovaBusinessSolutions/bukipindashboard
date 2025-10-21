@@ -1124,7 +1124,7 @@ const AnalisisResultados = () => {
                                 stroke={colors[index % colors.length]}
                                 strokeWidth={3}
                                 name={producto}
-                                dot={{ r: 5 }}
+                                dot={{ r: 5, fill: colors[index % colors.length] }}
                               />
                             ))}
                           </LineChart>
