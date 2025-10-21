@@ -9,6 +9,12 @@ interface IngresoMensual {
   total: number;
 }
 
+interface DetalleIngreso {
+  tipo_ingreso: string;
+  monto: number;
+  cuenta_principal_codigo: string;
+}
+
 export const useIngresosMensualesPorTipo = (año?: number) => {
   const añoActual = año || new Date().getFullYear();
 
@@ -26,25 +32,30 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
         const fechaInicio = new Date(añoActual, mes, 1).toISOString();
         const fechaFin = new Date(añoActual, mes + 1, 0, 23, 59, 59).toISOString();
 
-        // Obtener ventas del mes
-        const { data: ventasData } = await supabase
+        // Obtener TODAS las transacciones de ingresos del mes con su clasificación
+        const { data: ingresosData } = await supabase
           .from('transacciones_ingresos')
-          .select('monto_neto')
-          .eq('tipo_ingreso', 'venta')
+          .select('tipo_ingreso, monto_neto, cuenta_principal_codigo')
           .gte('created_at', fechaInicio)
           .lte('created_at', fechaFin);
 
-        const ventas = ventasData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
+        let ventas = 0;
+        let otrosIngresos = 0;
 
-        // Obtener otros ingresos del mes
-        const { data: otrosData } = await supabase
-          .from('transacciones_ingresos')
-          .select('monto_neto')
-          .neq('tipo_ingreso', 'venta')
-          .gte('created_at', fechaInicio)
-          .lte('created_at', fechaFin);
-
-        const otrosIngresos = otrosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
+        // Clasificar según el cuenta_principal_codigo (4001 es ventas)
+        if (ingresosData) {
+          ingresosData.forEach(ingreso => {
+            const monto = ingreso.monto_neto || 0;
+            
+            // Si la cuenta empieza con 4001, es venta
+            if (ingreso.cuenta_principal_codigo && ingreso.cuenta_principal_codigo.startsWith('4001')) {
+              ventas += monto;
+            } else {
+              // Todo lo demás son otros ingresos
+              otrosIngresos += monto;
+            }
+          });
+        }
 
         ingresosMensuales.push({
           mes: meses[mes],

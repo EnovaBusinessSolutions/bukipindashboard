@@ -337,12 +337,11 @@ const AnalisisResultados = () => {
                         config={{
                           ventas: { label: "Ventas", color: "hsl(142, 70%, 45%)" },
                           otrosIngresos: { label: "Otros Ingresos", color: "hsl(220, 70%, 50%)" },
-                          total: { label: "Total Ingresos", color: "hsl(0, 0%, 20%)" },
                         }}
                         className="h-[400px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={ingresosPorTipo}>
+                          <BarChart data={ingresosPorTipo}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
                             <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
@@ -357,6 +356,9 @@ const AnalisisResultados = () => {
                                         {entry.name}: {formatCurrency(entry.value)}
                                       </p>
                                     ))}
+                                    <p className="text-sm font-bold border-t pt-1 mt-1">
+                                      Total: {formatCurrency(payload[0]?.payload?.total)}
+                                    </p>
                                   </div>
                                 );
                               }}
@@ -382,24 +384,7 @@ const AnalisisResultados = () => {
                                 formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
                               />
                             </Bar>
-                            <Line
-                              type="monotone"
-                              dataKey="total"
-                              stroke="hsl(0, 0%, 20%)"
-                              strokeWidth={3}
-                              name="Total"
-                              dot={{ r: 5 }}
-                            >
-                              <LabelList
-                                dataKey="total"
-                                position="top"
-                                fill="black"
-                                fontSize={11}
-                                fontWeight={600}
-                                formatter={(value: number) => formatCurrency(value)}
-                              />
-                            </Line>
-                          </ComposedChart>
+                          </BarChart>
                         </ResponsiveContainer>
                       </ChartContainer>
                     ) : (
@@ -424,12 +409,11 @@ const AnalisisResultados = () => {
                         config={{
                           costos: { label: "Costos", color: "hsl(0, 70%, 50%)" },
                           gastos: { label: "Gastos", color: "hsl(25, 95%, 53%)" },
-                          total: { label: "Total Egresos", color: "hsl(0, 0%, 20%)" },
                         }}
                         className="h-[400px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={egresosPorTipo}>
+                          <BarChart data={egresosPorTipo}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
                             <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
@@ -444,6 +428,9 @@ const AnalisisResultados = () => {
                                         {entry.name}: {formatCurrency(entry.value)}
                                       </p>
                                     ))}
+                                    <p className="text-sm font-bold border-t pt-1 mt-1">
+                                      Total: {formatCurrency(payload[0]?.payload?.total)}
+                                    </p>
                                   </div>
                                 );
                               }}
@@ -469,24 +456,7 @@ const AnalisisResultados = () => {
                                 formatter={(value: number) => value > 0 ? formatCurrency(value) : ''}
                               />
                             </Bar>
-                            <Line
-                              type="monotone"
-                              dataKey="total"
-                              stroke="hsl(0, 0%, 20%)"
-                              strokeWidth={3}
-                              name="Total"
-                              dot={{ r: 5 }}
-                            >
-                              <LabelList
-                                dataKey="total"
-                                position="top"
-                                fill="black"
-                                fontSize={11}
-                                fontWeight={600}
-                                formatter={(value: number) => formatCurrency(value)}
-                              />
-                            </Line>
-                          </ComposedChart>
+                          </BarChart>
                         </ResponsiveContainer>
                       </ChartContainer>
                     ) : (
