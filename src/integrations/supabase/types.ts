@@ -895,6 +895,51 @@ export type Database = {
           },
         ]
       }
+      transacciones_impuestos: {
+        Row: {
+          ano: number
+          created_at: string
+          diferencia: number
+          id: string
+          isr_calculado: number
+          isr_real: number
+          mes: number
+          observaciones: string | null
+          tasa_isr: number
+          updated_at: string
+          user_id: string
+          utilidad_antes_impuestos: number
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          diferencia?: number
+          id?: string
+          isr_calculado?: number
+          isr_real?: number
+          mes: number
+          observaciones?: string | null
+          tasa_isr?: number
+          updated_at?: string
+          user_id: string
+          utilidad_antes_impuestos?: number
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          diferencia?: number
+          id?: string
+          isr_calculado?: number
+          isr_real?: number
+          mes?: number
+          observaciones?: string | null
+          tasa_isr?: number
+          updated_at?: string
+          user_id?: string
+          utilidad_antes_impuestos?: number
+        }
+        Relationships: []
+      }
       transacciones_ingresos: {
         Row: {
           cliente_email: string | null

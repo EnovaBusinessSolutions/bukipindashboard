@@ -1,22 +1,169 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calculator } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calculator, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const RegistroImpuestos = () => {
-  const [tasaISR, setTasaISR] = useState<string>("");
-  const [utilidadAntesImpuestos, setUtilidadAntesImpuestos] = useState<string>("");
-  const [isrCalculado, setIsrCalculado] = useState<number>(0);
+  const { user } = useAuth();
+  const currentDate = new Date();
+  const [mesSeleccionado, setMesSeleccionado] = useState<number>(currentDate.getMonth() + 1);
+  const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentDate.getFullYear());
+  const [tasaISR, setTasaISR] = useState<string>("30");
   const [isrReal, setIsrReal] = useState<string>("");
+  const [observaciones, setObservaciones] = useState<string>("");
+  const [registroExistente, setRegistroExistente] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const calcularISR = () => {
-    const utilidad = parseFloat(utilidadAntesImpuestos) || 0;
-    const tasa = parseFloat(tasaISR) || 0;
-    const calculado = (utilidad * tasa) / 100;
-    setIsrCalculado(calculado);
-    setIsrReal(calculado.toFixed(2));
+  const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
+
+  // Verificar si ya existe un registro para el mes/año seleccionado
+  useEffect(() => {
+    const verificarRegistroExistente = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('transacciones_impuestos')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('mes', mesSeleccionado)
+        .eq('ano', anoSeleccionado)
+        .single();
+
+      if (data) {
+        setRegistroExistente(data);
+        setTasaISR(data.tasa_isr.toString());
+        setIsrReal(data.isr_real.toString());
+        setObservaciones(data.observaciones || "");
+      } else {
+        setRegistroExistente(null);
+      }
+    };
+
+    verificarRegistroExistente();
+  }, [mesSeleccionado, anoSeleccionado, user]);
+
+  const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
+  const isrCalculado = (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100;
+
+  // Verificar si el mes seleccionado es pasado
+  const isPeriodoPasado = () => {
+    const periodoSeleccionado = new Date(anoSeleccionado, mesSeleccionado - 1);
+    const mesActual = new Date(currentDate.getFullYear(), currentDate.getMonth());
+    return periodoSeleccionado < mesActual;
+  };
+
+  // Verificar si faltan menos de 5 días para el fin de mes
+  const diasRestantesMes = () => {
+    const ultimoDiaMes = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const diaActual = currentDate.getDate();
+    return ultimoDiaMes - diaActual;
+  };
+
+  const mostrarAlertaCierreMes = mesSeleccionado === currentDate.getMonth() + 1 && 
+                                  anoSeleccionado === currentDate.getFullYear() && 
+                                  diasRestantesMes() <= 5;
+
+  const handleGuardarRegistro = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Debes iniciar sesión para guardar el registro",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (isPeriodoPasado() && !registroExistente) {
+      toast({
+        title: "Error",
+        description: "No puedes crear registros para períodos pasados",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!isrReal || parseFloat(isrReal) < 0) {
+      toast({
+        title: "Error",
+        description: "Debes ingresar el monto real de ISR",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const diferencia = parseFloat(isrReal) - isrCalculado;
+      const datosRegistro = {
+        user_id: user.id,
+        mes: mesSeleccionado,
+        ano: anoSeleccionado,
+        utilidad_antes_impuestos: utilidadAntesImpuestos,
+        tasa_isr: parseFloat(tasaISR),
+        isr_calculado: isrCalculado,
+        isr_real: parseFloat(isrReal),
+        diferencia: diferencia,
+        observaciones: observaciones || null
+      };
+
+      if (registroExistente) {
+        // Actualizar registro existente
+        const { error } = await supabase
+          .from('transacciones_impuestos')
+          .update(datosRegistro)
+          .eq('id', registroExistente.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Registro actualizado",
+          description: "El registro de ISR se ha actualizado correctamente"
+        });
+      } else {
+        // Crear nuevo registro
+        const { error } = await supabase
+          .from('transacciones_impuestos')
+          .insert(datosRegistro);
+
+        if (error) throw error;
+
+        toast({
+          title: "Registro guardado",
+          description: "El registro de ISR se ha guardado correctamente"
+        });
+      }
+
+      // Recargar datos
+      const { data } = await supabase
+        .from('transacciones_impuestos')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('mes', mesSeleccionado)
+        .eq('ano', anoSeleccionado)
+        .single();
+
+      if (data) setRegistroExistente(data);
+
+    } catch (error) {
+      console.error("Error al guardar registro:", error);
+      toast({
+        title: "Error",
+        description: "Hubo un error al guardar el registro",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatCurrency = (value: number) => {
@@ -26,9 +173,14 @@ const RegistroImpuestos = () => {
     }).format(value);
   };
 
+  const meses = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
+
   return (
     <div className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Registro de Impuestos</h1>
           <p className="text-muted-foreground mt-2">
@@ -36,6 +188,82 @@ const RegistroImpuestos = () => {
           </p>
         </div>
 
+        {/* Alertas */}
+        {isPeriodoPasado() && !registroExistente && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              No puedes crear nuevos registros para períodos pasados. Solo puedes modificar registros existentes.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {mostrarAlertaCierreMes && (
+          <Alert className="border-amber-500 bg-amber-500/10">
+            <Clock className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-600 dark:text-amber-400">
+              ¡Atención! Faltan {diasRestantesMes()} días para el cierre de mes. Asegúrate de registrar el ISR antes de que termine el mes.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {registroExistente && (
+          <Alert className="border-green-500 bg-green-500/10">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-600 dark:text-green-400">
+              Ya existe un registro de ISR para este período. Puedes modificarlo si es necesario.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Selector de Período */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Período</CardTitle>
+            <CardDescription>Selecciona el mes y año del registro</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="mes">Mes</Label>
+              <Select 
+                value={mesSeleccionado.toString()} 
+                onValueChange={(value) => setMesSeleccionado(parseInt(value))}
+              >
+                <SelectTrigger id="mes">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {meses.map((mes, index) => (
+                    <SelectItem key={index + 1} value={(index + 1).toString()}>
+                      {mes}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ano">Año</Label>
+              <Select 
+                value={anoSeleccionado.toString()} 
+                onValueChange={(value) => setAnoSeleccionado(parseInt(value))}
+              >
+                <SelectTrigger id="ano">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[currentDate.getFullYear(), currentDate.getFullYear() - 1].map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cálculo de ISR */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -43,69 +271,88 @@ const RegistroImpuestos = () => {
               Cálculo de ISR
             </CardTitle>
             <CardDescription>
-              Ingresa la tasa de ISR y la utilidad antes de impuestos para calcular el impuesto
+              Cálculo automático basado en la utilidad antes de impuestos del período seleccionado
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="tasa-isr">Tasa de ISR (%)</Label>
-                <Input
-                  id="tasa-isr"
-                  type="number"
-                  placeholder="Ej: 30"
-                  value={tasaISR}
-                  onChange={(e) => setTasaISR(e.target.value)}
-                  step="0.01"
-                  min="0"
-                  max="100"
-                />
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Cargando datos del período...
               </div>
+            ) : (
+              <>
+                <div className="p-4 bg-muted rounded-lg space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Ingresos:</span>
+                    <span className="font-semibold">{formatCurrency(utilidadData?.ingresos || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Costos:</span>
+                    <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.costos || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Gastos:</span>
+                    <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.gastos || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Depreciación:</span>
+                    <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.depreciacion || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Intereses:</span>
+                    <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.intereses || 0)}</span>
+                  </div>
+                  <div className="pt-3 border-t border-border flex justify-between items-center">
+                    <span className="font-semibold">Utilidad Antes de Impuestos:</span>
+                    <span className="text-xl font-bold text-foreground">
+                      {formatCurrency(utilidadAntesImpuestos)}
+                    </span>
+                  </div>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="utilidad">Utilidad Antes de Impuestos</Label>
-                <Input
-                  id="utilidad"
-                  type="number"
-                  placeholder="Ej: 100000"
-                  value={utilidadAntesImpuestos}
-                  onChange={(e) => setUtilidadAntesImpuestos(e.target.value)}
-                  step="0.01"
-                  min="0"
-                />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tasa-isr">Tasa de ISR (%)</Label>
+                  <Input
+                    id="tasa-isr"
+                    type="number"
+                    placeholder="Ej: 30"
+                    value={tasaISR}
+                    onChange={(e) => setTasaISR(e.target.value)}
+                    step="0.01"
+                    min="0"
+                    max="100"
+                  />
+                </div>
 
-            <Button onClick={calcularISR} className="w-full md:w-auto">
-              <Calculator className="h-4 w-4 mr-2" />
-              Calcular ISR
-            </Button>
-
-            {isrCalculado > 0 && (
-              <div className="mt-6 p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">ISR Calculado:</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(isrCalculado)}
-                </p>
-              </div>
+                <div className="p-4 bg-primary/10 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-2">ISR Calculado:</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {formatCurrency(isrCalculado)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {tasaISR}% de {formatCurrency(utilidadAntesImpuestos)}
+                  </p>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
+        {/* ISR Real a Pagar */}
         <Card>
           <CardHeader>
             <CardTitle>ISR Real a Pagar</CardTitle>
             <CardDescription>
-              Ingresa el monto real de ISR que pagarás (puede diferir del cálculo)
+              Ingresa el monto real de ISR que pagarás (puede diferir del cálculo automático)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="isr-real">Monto Real de ISR</Label>
+              <Label htmlFor="isr-real">Monto Real de ISR *</Label>
               <Input
                 id="isr-real"
                 type="number"
-                placeholder="Ingresa el monto real"
+                placeholder="Ingresa el monto real a pagar"
                 value={isrReal}
                 onChange={(e) => setIsrReal(e.target.value)}
                 step="0.01"
@@ -120,12 +367,28 @@ const RegistroImpuestos = () => {
                   <span className="font-semibold">
                     {formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))}
                   </span>
+                  {parseFloat(isrReal) > isrCalculado ? " (mayor)" : " (menor)"}
                 </p>
               </div>
             )}
 
-            <Button className="w-full" disabled={!isrReal}>
-              Registrar ISR
+            <div className="space-y-2">
+              <Label htmlFor="observaciones">Observaciones (opcional)</Label>
+              <Textarea
+                id="observaciones"
+                placeholder="Agrega notas o comentarios sobre este registro..."
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <Button 
+              className="w-full" 
+              onClick={handleGuardarRegistro}
+              disabled={!isrReal || isSaving || (isPeriodoPasado() && !registroExistente)}
+            >
+              {isSaving ? "Guardando..." : registroExistente ? "Actualizar Registro" : "Guardar Registro"}
             </Button>
           </CardContent>
         </Card>
