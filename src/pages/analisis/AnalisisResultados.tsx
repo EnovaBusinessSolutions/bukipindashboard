@@ -187,10 +187,11 @@ const AnalisisResultados = () => {
 
         {/* Tabs de Análisis */}
         <Tabs defaultValue="mensual" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="mensual">Estado de Resultados Mensual</TabsTrigger>
             <TabsTrigger value="ventas">Ventas</TabsTrigger>
             <TabsTrigger value="margenes">Márgenes</TabsTrigger>
+            <TabsTrigger value="costos">Costos</TabsTrigger>
             <TabsTrigger value="rentabilidad">Rentabilidad</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
             <TabsTrigger value="distribucion">Distribución</TabsTrigger>
@@ -1283,6 +1284,21 @@ const AnalisisResultados = () => {
                 </>
               );
             })()}
+          </TabsContent>
+
+          {/* Tab de Costos */}
+          <TabsContent value="costos" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Análisis de Costos</CardTitle>
+                <CardDescription>
+                  Desglose detallado de los costos de operación
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Contenido del análisis de costos en desarrollo...</p>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
