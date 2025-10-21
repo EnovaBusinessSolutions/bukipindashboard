@@ -295,12 +295,66 @@ const AnalisisResultados = () => {
                             }}
                           />
                           <Legend />
-                          <Bar dataKey="ingresos" fill="hsl(142, 70%, 45%)" name="Ingresos" />
-                          <Bar dataKey="egresos" fill="hsl(0, 70%, 50%)" name="Egresos" />
-                          <Line type="monotone" dataKey="utilidadBruta" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Utilidad Bruta" dot={{ r: 5 }} />
-                          <Line type="monotone" dataKey="ebitda" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="EBITDA" dot={{ r: 5 }} />
-                          <Line type="monotone" dataKey="ebit" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="EBIT" dot={{ r: 5 }} />
-                          <Line type="monotone" dataKey="utilidadNeta" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Utilidad Neta" dot={{ r: 5 }} />
+                          <Bar dataKey="ingresos" fill="hsl(142, 70%, 45%)" name="Ingresos">
+                            <LabelList
+                              dataKey="ingresos"
+                              position="top"
+                              fill="black"
+                              fontSize={11}
+                              fontWeight={600}
+                              formatter={(value: number) => formatCurrency(value)}
+                            />
+                          </Bar>
+                          <Bar dataKey="egresos" fill="hsl(0, 70%, 50%)" name="Egresos">
+                            <LabelList
+                              dataKey="egresos"
+                              position="top"
+                              fill="black"
+                              fontSize={11}
+                              fontWeight={600}
+                              formatter={(value: number) => formatCurrency(value)}
+                            />
+                          </Bar>
+                          <Line type="monotone" dataKey="utilidadBruta" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Utilidad Bruta" dot={{ r: 5 }}>
+                            <LabelList
+                              dataKey="utilidadBruta"
+                              position="top"
+                              fill="black"
+                              fontSize={10}
+                              fontWeight={600}
+                              formatter={(value: number) => formatCurrency(value)}
+                            />
+                          </Line>
+                          <Line type="monotone" dataKey="ebitda" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="EBITDA" dot={{ r: 5 }}>
+                            <LabelList
+                              dataKey="ebitda"
+                              position="top"
+                              fill="black"
+                              fontSize={10}
+                              fontWeight={600}
+                              formatter={(value: number) => formatCurrency(value)}
+                            />
+                          </Line>
+                          <Line type="monotone" dataKey="ebit" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="EBIT" dot={{ r: 5 }}>
+                            <LabelList
+                              dataKey="ebit"
+                              position="top"
+                              fill="black"
+                              fontSize={10}
+                              fontWeight={600}
+                              formatter={(value: number) => formatCurrency(value)}
+                            />
+                          </Line>
+                          <Line type="monotone" dataKey="utilidadNeta" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Utilidad Neta" dot={{ r: 5 }}>
+                            <LabelList
+                              dataKey="utilidadNeta"
+                              position="top"
+                              fill="black"
+                              fontSize={10}
+                              fontWeight={600}
+                              formatter={(value: number) => formatCurrency(value)}
+                            />
+                          </Line>
                         </ComposedChart>
                       </ResponsiveContainer>
                     </ChartContainer>
