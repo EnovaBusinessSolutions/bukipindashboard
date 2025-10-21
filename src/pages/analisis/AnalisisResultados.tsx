@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
 import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { useVentasProductos } from "@/hooks/useVentasProductos";
+import { useCostosMensuales } from "@/hooks/useCostosMensuales";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,10 +16,14 @@ const AnalisisResultados = () => {
   const { data: saldos, isLoading } = useBalanceGeneral();
   const { data: resultadosMensuales, isLoading: isLoadingMensual } = useEstadoResultadosMensual();
   const { data: ventasProductosData, isLoading: isLoadingVentasProductos } = useVentasProductos();
+  const { data: costosData, isLoading: isLoadingCostos } = useCostosMensuales();
 
   const ventasProductos = ventasProductosData?.ventasDetalladas || [];
   const ventasPorMes = ventasProductosData?.ventasPorMes || [];
   const productos = ventasProductosData?.productos || [];
+  const costosMensuales = costosData?.costosMensuales || [];
+  const costosPorCuenta = costosData?.costosPorCuenta || [];
+  const cuentasCostos = costosData?.cuentas || [];
 
   if (isLoading) {
     return (
@@ -1288,17 +1293,177 @@ const AnalisisResultados = () => {
 
           {/* Tab de Costos */}
           <TabsContent value="costos" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Análisis de Costos</CardTitle>
-                <CardDescription>
-                  Desglose detallado de los costos de operación
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Contenido del análisis de costos en desarrollo...</p>
-              </CardContent>
-            </Card>
+            {isLoadingCostos ? (
+              <Skeleton className="h-96 w-full" />
+            ) : costosMensuales.length > 0 ? (
+              <>
+                {/* Gráfica de Costos Mensuales por Cuenta */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Evolución Mensual de Costos por Cuenta</CardTitle>
+                    <CardDescription>
+                      Análisis de costos desglosados por cuenta contable a lo largo del año
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer
+                      config={
+                        cuentasCostos.reduce((acc, cuenta, index) => {
+                          const colors = [
+                            "hsl(220, 70%, 50%)",
+                            "hsl(142, 70%, 45%)",
+                            "hsl(0, 70%, 50%)",
+                            "hsl(280, 70%, 50%)",
+                            "hsl(25, 95%, 53%)",
+                            "hsl(45, 93%, 47%)",
+                            "hsl(340, 82%, 52%)",
+                            "hsl(195, 85%, 50%)"
+                          ];
+                          acc[cuenta.codigo] = {
+                            label: cuenta.nombre,
+                            color: colors[index % colors.length]
+                          };
+                          return acc;
+                        }, {} as Record<string, { label: string; color: string }>)
+                      }
+                      className="h-[500px]"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={costosMensuales}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
+                          <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
+                          <ChartTooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload) return null;
+                              return (
+                                <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
+                                  <p className="font-bold">{payload[0]?.payload?.mes}</p>
+                                  {payload.map((entry: any, index: number) => (
+                                    <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                      {entry.name}: {formatCurrency(entry.value)}
+                                    </p>
+                                  ))}
+                                  <p className="text-sm font-bold border-t pt-1 mt-1">
+                                    Total: {formatCurrency(payload[0]?.payload?.total)}
+                                  </p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Legend />
+                          {cuentasCostos.map((cuenta, index) => {
+                            const colors = [
+                              "hsl(220, 70%, 50%)",
+                              "hsl(142, 70%, 45%)",
+                              "hsl(0, 70%, 50%)",
+                              "hsl(280, 70%, 50%)",
+                              "hsl(25, 95%, 53%)",
+                              "hsl(45, 93%, 47%)",
+                              "hsl(340, 82%, 52%)",
+                              "hsl(195, 85%, 50%)"
+                            ];
+                            return (
+                              <Line
+                                key={cuenta.codigo}
+                                type="monotone"
+                                dataKey={cuenta.codigo}
+                                stroke={colors[index % colors.length]}
+                                strokeWidth={3}
+                                name={cuenta.nombre}
+                                dot={{ r: 5 }}
+                              />
+                            );
+                          })}
+                          <Line
+                            type="monotone"
+                            dataKey="total"
+                            stroke="hsl(0, 0%, 20%)"
+                            strokeWidth={4}
+                            strokeDasharray="5 5"
+                            name="Total Costos"
+                            dot={{ r: 6 }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Tabla de Costos Mensuales */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Detalle de Costos Mensuales por Cuenta</CardTitle>
+                    <CardDescription>
+                      Tabla con el desglose completo de costos por mes y cuenta contable
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            <TableHead className="font-bold">Mes</TableHead>
+                            {cuentasCostos.map((cuenta) => (
+                              <TableHead key={cuenta.codigo} className="text-right min-w-[120px]">
+                                {cuenta.nombre}
+                              </TableHead>
+                            ))}
+                            <TableHead className="text-right font-bold min-w-[120px] bg-muted/50">
+                              Total Mes
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {costosMensuales.map((mes) => (
+                            <TableRow key={mes.mes}>
+                              <TableCell className="font-medium">{mes.mes}</TableCell>
+                              {cuentasCostos.map((cuenta) => (
+                                <TableCell key={cuenta.codigo} className="text-right">
+                                  {formatCurrency(mes[cuenta.codigo] as number || 0)}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right font-bold bg-muted/20">
+                                {formatCurrency(mes.total as number)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-primary/10 font-bold">
+                            <TableCell>Total Anual</TableCell>
+                            {cuentasCostos.map((cuenta) => (
+                              <TableCell key={cuenta.codigo} className="text-right">
+                                {formatCurrency(
+                                  costosMensuales.reduce((sum, mes) => sum + ((mes[cuenta.codigo] as number) || 0), 0)
+                                )}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right bg-primary/20">
+                              {formatCurrency(
+                                costosMensuales.reduce((sum, mes) => sum + (mes.total as number), 0)
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sin Datos de Costos</CardTitle>
+                  <CardDescription>
+                    No hay transacciones de costos registradas para el año actual
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground text-center py-8">
+                    Comienza a registrar costos para ver el análisis mensual
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>
