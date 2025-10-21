@@ -571,11 +571,12 @@ export const RegistroImpuestosForm = () => {
               placeholder="Ingresa el monto real a pagar"
               value={isrReal ? parseFloat(isrReal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
               onChange={(e) => {
-                const value = e.target.value.replace(/,/g, '');
-                if (value === '' || !isNaN(parseFloat(value))) {
+                const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
+                if (value === '' || (!isNaN(parseFloat(value)) && parseFloat(value) >= 0)) {
                   setIsrReal(value);
                 }
               }}
+              maxLength={20}
             />
           </div>
 
