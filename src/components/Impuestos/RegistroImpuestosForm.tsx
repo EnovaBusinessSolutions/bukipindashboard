@@ -273,23 +273,22 @@ export const RegistroImpuestosForm = () => {
               <Select 
                 value={mesSeleccionado.toString()} 
                 onValueChange={(value) => setMesSeleccionado(parseInt(value))}
+                disabled={true}
               >
-                <SelectTrigger id="mes">
+                <SelectTrigger id="mes" className="bg-muted text-muted-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {meses.map((mes, index) => {
                     const mesNumero = index + 1;
                     const mesActual = currentDate.getMonth() + 1;
-                    const esAnioActual = anoSeleccionado === currentDate.getFullYear();
-                    
-                    // Solo mostrar meses hasta el mes actual si es el año actual
-                    if (esAnioActual && mesNumero > mesActual) {
-                      return null;
-                    }
                     
                     return (
-                      <SelectItem key={mesNumero} value={mesNumero.toString()}>
+                      <SelectItem 
+                        key={mesNumero} 
+                        value={mesNumero.toString()}
+                        disabled={mesNumero !== mesActual}
+                      >
                         {mes}
                       </SelectItem>
                     );
@@ -303,8 +302,9 @@ export const RegistroImpuestosForm = () => {
               <Select 
                 value={anoSeleccionado.toString()} 
                 onValueChange={(value) => setAnoSeleccionado(parseInt(value))}
+                disabled={true}
               >
-                <SelectTrigger id="ano">
+                <SelectTrigger id="ano" className="bg-muted text-muted-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -402,15 +402,29 @@ export const RegistroImpuestosForm = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="isr-real">Monto Real de ISR *</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="isr-real">Monto Real de ISR *</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsrReal(isrCalculado.toFixed(2))}
+                className="text-xs"
+              >
+                Usar ISR Calculado
+              </Button>
+            </div>
             <Input
               id="isr-real"
-              type="number"
+              type="text"
               placeholder="Ingresa el monto real a pagar"
-              value={isrReal}
-              onChange={(e) => setIsrReal(e.target.value)}
-              step="0.01"
-              min="0"
+              value={isrReal ? parseFloat(isrReal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+              onChange={(e) => {
+                const value = e.target.value.replace(/,/g, '');
+                if (value === '' || !isNaN(parseFloat(value))) {
+                  setIsrReal(value);
+                }
+              }}
             />
           </div>
 
