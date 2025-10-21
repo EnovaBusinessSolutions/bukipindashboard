@@ -22,6 +22,11 @@ export const RegistroImpuestosForm = () => {
   const [observaciones, setObservaciones] = useState<string>("");
   const [registroExistente, setRegistroExistente] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [tipoPago, setTipoPago] = useState<string>("credito");
+  const [fechaVencimiento, setFechaVencimiento] = useState<string>("");
+  const [proveedorNombre, setProveedorNombre] = useState<string>("SAT - Servicio de Administración Tributaria");
+  const [proveedorRfc, setProveedorRfc] = useState<string>("SAT970701NN3");
+  const [metodoPago, setMetodoPago] = useState<string>("");
 
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
 
@@ -46,6 +51,9 @@ export const RegistroImpuestosForm = () => {
         setRegistroExistente(null);
         setIsrReal("");
         setObservaciones("");
+        setTipoPago("credito");
+        setFechaVencimiento("");
+        setMetodoPago("");
       }
     };
 
@@ -99,6 +107,24 @@ export const RegistroImpuestosForm = () => {
       return;
     }
 
+    if (tipoPago === "credito" && !fechaVencimiento) {
+      toast({
+        title: "Error",
+        description: "Debes ingresar la fecha de vencimiento para pago a crédito",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (tipoPago === "contado" && !metodoPago) {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar el método de pago",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -131,6 +157,32 @@ export const RegistroImpuestosForm = () => {
           description: "El registro de ISR se ha actualizado correctamente"
         });
       } else {
+        // Crear transacción de egreso (cuenta por pagar o pago inmediato)
+        const montoPagado = tipoPago === "contado" ? parseFloat(isrReal) : 0;
+        const montoPendiente = tipoPago === "credito" ? parseFloat(isrReal) : 0;
+
+        const { data: egresoData, error: egresoError } = await supabase
+          .from('transacciones_egresos')
+          .insert({
+            user_id: user.id,
+            tipo_egreso: 'impuesto',
+            subtipo_egreso: 'ISR',
+            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+            cuenta_codigo: '5200',
+            monto_total: parseFloat(isrReal),
+            monto_pagado: montoPagado,
+            monto_pendiente: montoPendiente,
+            tipo_pago: tipoPago,
+            metodo_pago: tipoPago === "contado" ? metodoPago : null,
+            fecha_vencimiento: tipoPago === "credito" ? fechaVencimiento : null,
+            proveedor_nombre: proveedorNombre,
+            proveedor_rfc: proveedorRfc,
+            comentarios: observaciones
+          })
+          .select()
+          .single();
+
+        if (egresoError) throw egresoError;
         const { data: newTransaction, error } = await supabase
           .from('transacciones_impuestos')
           .insert(datosRegistro)
@@ -158,22 +210,45 @@ export const RegistroImpuestosForm = () => {
         if (asientoError) throw asientoError;
 
         // Detalles del asiento (doble partida)
-        const detalles = [
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '5200', // ISR por pagar
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: parseFloat(isrReal),
-            haber: 0
-          },
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '1100', // Bancos
-            descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: 0,
-            haber: parseFloat(isrReal)
-          }
-        ];
+        let detalles;
+        
+        if (tipoPago === "contado") {
+          // Pago inmediato: Debe ISR por pagar / Haber Bancos
+          detalles = [
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '5200', // ISR por pagar
+              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: parseFloat(isrReal),
+              haber: 0
+            },
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '1100', // Bancos
+              descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: 0,
+              haber: parseFloat(isrReal)
+            }
+          ];
+        } else {
+          // Pago a crédito: Debe ISR por pagar / Haber Proveedores (cuenta por pagar)
+          detalles = [
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '5200', // ISR por pagar (gasto)
+              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: parseFloat(isrReal),
+              haber: 0
+            },
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '2100', // Proveedores (pasivo - cuenta por pagar)
+              descripcion: `Cuenta por pagar ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: 0,
+              haber: parseFloat(isrReal)
+            }
+          ];
+        }
 
         const { error: detallesError } = await supabase
           .from('detalle_asientos')
@@ -183,7 +258,9 @@ export const RegistroImpuestosForm = () => {
 
         toast({
           title: "Registro guardado",
-          description: "El registro de ISR y su asiento contable se han guardado correctamente"
+          description: tipoPago === "contado" 
+            ? "El pago de ISR se registró correctamente con su asiento contable"
+            : "La cuenta por pagar de ISR se registró correctamente con su asiento contable"
         });
       }
 
@@ -439,6 +516,68 @@ export const RegistroImpuestosForm = () => {
               </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="tipo-pago">Tipo de Pago *</Label>
+            <Select value={tipoPago} onValueChange={setTipoPago}>
+              <SelectTrigger id="tipo-pago">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="credito">A Crédito (Cuenta por Pagar)</SelectItem>
+                <SelectItem value="contado">Pago Inmediato</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {tipoPago === "credito" && (
+            <div className="space-y-2">
+              <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
+              <Input
+                id="fecha-vencimiento"
+                type="date"
+                value={fechaVencimiento}
+                onChange={(e) => setFechaVencimiento(e.target.value)}
+              />
+            </div>
+          )}
+
+          {tipoPago === "contado" && (
+            <div className="space-y-2">
+              <Label htmlFor="metodo-pago">Método de Pago *</Label>
+              <Select value={metodoPago} onValueChange={setMetodoPago}>
+                <SelectTrigger id="metodo-pago">
+                  <SelectValue placeholder="Selecciona el método de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="transferencia">Transferencia Bancaria</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="proveedor-nombre">Proveedor</Label>
+            <Input
+              id="proveedor-nombre"
+              type="text"
+              value={proveedorNombre}
+              onChange={(e) => setProveedorNombre(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="proveedor-rfc">RFC del Proveedor</Label>
+            <Input
+              id="proveedor-rfc"
+              type="text"
+              value={proveedorRfc}
+              onChange={(e) => setProveedorRfc(e.target.value)}
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="observaciones">Observaciones (opcional)</Label>
