@@ -569,15 +569,28 @@ export const RegistroImpuestosForm = () => {
               id="isr-real"
               type="text"
               placeholder="Ingresa el monto real a pagar"
-              value={isrReal ? parseFloat(isrReal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+              value={isrReal}
               onChange={(e) => {
                 const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
-                if (value === '' || (!isNaN(parseFloat(value)) && parseFloat(value) >= 0)) {
+                // Permitir vacío, números con o sin punto decimal
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
                   setIsrReal(value);
+                }
+              }}
+              onBlur={(e) => {
+                // Al perder foco, formatear el número si es válido
+                const num = parseFloat(isrReal);
+                if (!isNaN(num)) {
+                  setIsrReal(num.toFixed(2));
                 }
               }}
               maxLength={20}
             />
+            {isrReal && !isNaN(parseFloat(isrReal)) && (
+              <p className="text-sm text-muted-foreground">
+                {parseFloat(isrReal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+              </p>
+            )}
           </div>
 
           {isrReal && parseFloat(isrReal) !== isrCalculado && (
