@@ -204,56 +204,6 @@ const AnalisisResultados = () => {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Evolución Mensual de Ventas y Utilidades</CardTitle>
-                    <CardDescription>
-                      Barras representan ventas mensuales, líneas muestran evolución de utilidades en la misma escala
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer 
-                      config={{
-                        ingresos: { label: "Ventas", color: "hsl(var(--chart-1))" },
-                        utilidadBruta: { label: "Utilidad Bruta", color: "hsl(220, 70%, 50%)" },
-                        ebitda: { label: "EBITDA", color: "hsl(142, 70%, 45%)" },
-                        ebit: { label: "EBIT", color: "hsl(280, 70%, 50%)" },
-                        utilidadNeta: { label: "Utilidad Neta", color: "hsl(25, 95%, 53%)" },
-                      }} 
-                      className="h-[600px]"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={resultadosMensuales}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="mes" angle={-45} textAnchor="end" height={80} />
-                          <YAxis label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft' }} />
-                          <ChartTooltip 
-                            content={({ active, payload }) => {
-                              if (!active || !payload) return null;
-                              return (
-                                <div className="bg-background border rounded-lg shadow-lg p-3 space-y-1">
-                                  <p className="font-bold">{payload[0]?.payload?.mes}</p>
-                                  {payload.map((entry: any, index: number) => (
-                                    <p key={index} className="text-sm" style={{ color: entry.color }}>
-                                      {entry.name}: {formatCurrency(entry.value)}
-                                    </p>
-                                  ))}
-                                </div>
-                              );
-                            }}
-                          />
-                          <Legend />
-                          <Bar dataKey="ingresos" fill="hsl(var(--chart-1))" name="Ventas" />
-                          <Line type="monotone" dataKey="utilidadBruta" stroke="hsl(220, 70%, 50%)" strokeWidth={3} name="Utilidad Bruta" dot={{ r: 5 }} />
-                          <Line type="monotone" dataKey="ebitda" stroke="hsl(142, 70%, 45%)" strokeWidth={3} name="EBITDA" dot={{ r: 5 }} />
-                          <Line type="monotone" dataKey="ebit" stroke="hsl(280, 70%, 50%)" strokeWidth={3} name="EBIT" dot={{ r: 5 }} />
-                          <Line type="monotone" dataKey="utilidadNeta" stroke="hsl(25, 95%, 53%)" strokeWidth={3} name="Utilidad Neta" dot={{ r: 5 }} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
                     <CardTitle>Comparativo de Ingresos vs Egresos con Utilidades</CardTitle>
                     <CardDescription>
                       Barras muestran ingresos y egresos totales, líneas representan evolución de utilidades
