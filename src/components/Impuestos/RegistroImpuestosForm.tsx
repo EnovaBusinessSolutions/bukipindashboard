@@ -267,45 +267,54 @@ export const RegistroImpuestosForm = () => {
           <CardTitle>Período</CardTitle>
           <CardDescription>Selecciona el mes y año del registro</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="mes">Mes</Label>
-            <Select 
-              value={mesSeleccionado.toString()} 
-              onValueChange={(value) => setMesSeleccionado(parseInt(value))}
-            >
-              <SelectTrigger id="mes">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {meses.map((mes, index) => (
-                  <SelectItem key={index + 1} value={(index + 1).toString()}>
-                    {mes}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="mes">Mes</Label>
+              <Select 
+                value={mesSeleccionado.toString()} 
+                onValueChange={(value) => setMesSeleccionado(parseInt(value))}
+              >
+                <SelectTrigger id="mes">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {meses.map((mes, index) => {
+                    const mesNumero = index + 1;
+                    const mesActual = currentDate.getMonth() + 1;
+                    const esAnioActual = anoSeleccionado === currentDate.getFullYear();
+                    
+                    // Solo mostrar meses hasta el mes actual si es el año actual
+                    if (esAnioActual && mesNumero > mesActual) {
+                      return null;
+                    }
+                    
+                    return (
+                      <SelectItem key={mesNumero} value={mesNumero.toString()}>
+                        {mes}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ano">Año</Label>
-            <Select 
-              value={anoSeleccionado.toString()} 
-              onValueChange={(value) => setAnoSeleccionado(parseInt(value))}
-            >
-              <SelectTrigger id="ano">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[currentDate.getFullYear(), currentDate.getFullYear() - 1].map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
-                    {year}
+            <div className="space-y-2">
+              <Label htmlFor="ano">Año</Label>
+              <Select 
+                value={anoSeleccionado.toString()} 
+                onValueChange={(value) => setAnoSeleccionado(parseInt(value))}
+              >
+                <SelectTrigger id="ano">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={currentDate.getFullYear().toString()}>
+                    {currentDate.getFullYear()}
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
       </Card>
 
       {/* Cálculo de ISR */}
