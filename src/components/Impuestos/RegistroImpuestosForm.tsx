@@ -598,27 +598,28 @@ export const RegistroImpuestosForm = () => {
           </div>
 
           {isrReal && parseFloat(isrReal) !== isrCalculado && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
               <p className="text-sm text-amber-600 dark:text-amber-400">
-                {registroExistente ? (
-                  <>
-                    Habías registrado {formatCurrency(registroExistente.isr_real)} anteriormente. 
-                    Con este nuevo monto de {formatCurrency(parseFloat(isrReal))}, la diferencia contra el cálculo ({formatCurrency(isrCalculado)}) es de{" "}
-                    <span className="font-semibold">
-                      {formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))}
-                    </span>
-                    {parseFloat(isrReal) > isrCalculado ? " (mayor)" : " (menor)"}
-                  </>
-                ) : (
-                  <>
-                    El monto real difiere del calculado por{" "}
-                    <span className="font-semibold">
-                      {formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))}
-                    </span>
-                    {parseFloat(isrReal) > isrCalculado ? " (mayor)" : " (menor)"}
-                  </>
-                )}
+                <span className="font-semibold">Comparación con el cálculo:</span>
               </p>
+              <div className="text-sm text-amber-600 dark:text-amber-400 space-y-1">
+                <div className="flex justify-between">
+                  <span>ISR según cálculo:</span>
+                  <span className="font-semibold">{formatCurrency(isrCalculado)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Estás registrando:</span>
+                  <span className="font-semibold">{formatCurrency(parseFloat(isrReal))}</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-amber-500/20">
+                  <span>Diferencia:</span>
+                  <span className="font-bold">
+                    {parseFloat(isrReal) > isrCalculado ? "+" : ""}
+                    {formatCurrency(parseFloat(isrReal) - isrCalculado)}
+                    {parseFloat(isrReal) > isrCalculado ? " (por encima)" : " (por debajo)"}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
