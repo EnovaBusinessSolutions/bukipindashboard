@@ -106,6 +106,27 @@ export const AnalyticaImpuestos = () => {
     };
 
     fetchDatos();
+
+    // Suscripción a cambios en tiempo real
+    const channel = supabase
+      .channel('impuestos_analitica_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transacciones_impuestos',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          fetchDatos();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user, anoSeleccionado, tipoVista, currentYear]);
 
   const formatCurrency = (value: number) => {
