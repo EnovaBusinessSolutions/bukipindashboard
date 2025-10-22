@@ -600,31 +600,44 @@ export const RegistroImpuestosForm = () => {
           {isrReal && parseFloat(isrReal) !== isrCalculado && (
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
               <p className="text-sm text-amber-600 dark:text-amber-400">
-                <span className="font-semibold">Comparación con el cálculo:</span>
+                <span className="font-semibold">Análisis del registro:</span>
               </p>
               <div className="text-sm text-amber-600 dark:text-amber-400 space-y-1">
                 <div className="flex justify-between">
-                  <span>ISR según cálculo:</span>
+                  <span>ISR según cálculo del período:</span>
                   <span className="font-semibold">{formatCurrency(isrCalculado)}</span>
                 </div>
                 {registroExistente && (
+                  <>
+                    <div className="flex justify-between text-xs opacity-75">
+                      <span>Habías registrado:</span>
+                      <span>{formatCurrency(registroExistente.isr_real)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Actualizando a:</span>
+                      <span className="font-semibold">{formatCurrency(parseFloat(isrReal))}</span>
+                    </div>
+                  </>
+                )}
+                {!registroExistente && (
                   <div className="flex justify-between">
-                    <span>Registrado anteriormente:</span>
-                    <span className="font-semibold">{formatCurrency(registroExistente.isr_real)}</span>
+                    <span>Vas a registrar:</span>
+                    <span className="font-semibold">{formatCurrency(parseFloat(isrReal))}</span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span>{registroExistente ? "Nuevo monto a registrar:" : "Estás registrando:"}</span>
-                  <span className="font-semibold">{formatCurrency(parseFloat(isrReal))}</span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-amber-500/20">
-                  <span>Diferencia:</span>
+                <div className="flex justify-between pt-2 border-t border-amber-500/20">
+                  <span className="font-semibold">Diferencia vs cálculo:</span>
                   <span className="font-bold">
                     {parseFloat(isrReal) > isrCalculado ? "+" : ""}
                     {formatCurrency(parseFloat(isrReal) - isrCalculado)}
-                    {parseFloat(isrReal) > isrCalculado ? " (por encima)" : " (por debajo)"}
                   </span>
                 </div>
+                <p className="text-xs pt-1">
+                  {parseFloat(isrReal) > isrCalculado 
+                    ? `Registrarás ${formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))} más de lo calculado`
+                    : `Registrarás ${formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))} menos de lo calculado`
+                  }
+                </p>
               </div>
             </div>
           )}
