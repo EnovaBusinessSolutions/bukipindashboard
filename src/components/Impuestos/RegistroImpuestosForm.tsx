@@ -607,8 +607,14 @@ export const RegistroImpuestosForm = () => {
                   <span>ISR según cálculo:</span>
                   <span className="font-semibold">{formatCurrency(isrCalculado)}</span>
                 </div>
+                {registroExistente && (
+                  <div className="flex justify-between">
+                    <span>Registrado anteriormente:</span>
+                    <span className="font-semibold">{formatCurrency(registroExistente.isr_real)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span>Estás registrando:</span>
+                  <span>{registroExistente ? "Nuevo monto a registrar:" : "Estás registrando:"}</span>
                   <span className="font-semibold">{formatCurrency(parseFloat(isrReal))}</span>
                 </div>
                 <div className="flex justify-between pt-1 border-t border-amber-500/20">
