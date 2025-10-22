@@ -46,14 +46,20 @@ export const AnalyticaImpuestos = () => {
             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
           ];
 
-          const datosFormateados = (data || []).map(t => ({
-            periodo: meses[t.mes - 1],
-            calculado: Number(t.isr_calculado),
-            registrado: Number(t.isr_real),
-            diferencia: Number(t.diferencia)
-          }));
+          // Crear array con todos los 12 meses
+          const datosCompletos = meses.map((mes, index) => {
+            const mesNumero = index + 1;
+            const transaccion = (data || []).find(t => t.mes === mesNumero);
+            
+            return {
+              periodo: mes,
+              calculado: transaccion ? Number(transaccion.isr_calculado) : 0,
+              registrado: transaccion ? Number(transaccion.isr_real) : 0,
+              diferencia: transaccion ? Number(transaccion.diferencia) : 0
+            };
+          });
 
-          setDatos(datosFormateados);
+          setDatos(datosCompletos);
         }
       } else {
         // Datos anuales (últimos 5 años)
@@ -235,8 +241,11 @@ export const AnalyticaImpuestos = () => {
                   contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: '6px'
+                    borderRadius: '6px',
+                    color: '#000000'
                   }}
+                  labelStyle={{ color: '#000000', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#000000' }}
                 />
                 <Legend />
                 <Bar 
@@ -248,7 +257,7 @@ export const AnalyticaImpuestos = () => {
                 <Bar 
                   dataKey="registrado" 
                   name="ISR Registrado" 
-                  fill="hsl(var(--secondary))" 
+                  fill="#6366f1"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
