@@ -411,7 +411,7 @@ export const RegistroImpuestosForm = () => {
         <Alert className="border-green-500 bg-green-500/10">
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-600 dark:text-green-400">
-            Ya existe un registro de ISR para este período. Puedes modificarlo si es necesario.
+            Ya has registrado {formatCurrency(registroExistente.isr_real)} de ISR para este período ({meses[mesSeleccionado - 1]} {anoSeleccionado}). Puedes modificar el registro si es necesario.
           </AlertDescription>
         </Alert>
       )}
