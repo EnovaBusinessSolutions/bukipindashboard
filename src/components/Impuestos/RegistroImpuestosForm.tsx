@@ -600,11 +600,24 @@ export const RegistroImpuestosForm = () => {
           {isrReal && parseFloat(isrReal) !== isrCalculado && (
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <p className="text-sm text-amber-600 dark:text-amber-400">
-                El monto real difiere del calculado por{" "}
-                <span className="font-semibold">
-                  {formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))}
-                </span>
-                {parseFloat(isrReal) > isrCalculado ? " (mayor)" : " (menor)"}
+                {registroExistente ? (
+                  <>
+                    Habías registrado {formatCurrency(registroExistente.isr_real)} anteriormente. 
+                    Con este nuevo monto de {formatCurrency(parseFloat(isrReal))}, la diferencia contra el cálculo ({formatCurrency(isrCalculado)}) es de{" "}
+                    <span className="font-semibold">
+                      {formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))}
+                    </span>
+                    {parseFloat(isrReal) > isrCalculado ? " (mayor)" : " (menor)"}
+                  </>
+                ) : (
+                  <>
+                    El monto real difiere del calculado por{" "}
+                    <span className="font-semibold">
+                      {formatCurrency(Math.abs(parseFloat(isrReal) - isrCalculado))}
+                    </span>
+                    {parseFloat(isrReal) > isrCalculado ? " (mayor)" : " (menor)"}
+                  </>
+                )}
               </p>
             </div>
           )}
