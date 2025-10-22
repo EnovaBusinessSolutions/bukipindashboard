@@ -32,7 +32,7 @@ export const RegistroImpuestosForm = () => {
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
 
   useEffect(() => {
-    const verificarRegistroExistente = async () => {
+    const verificarRegistrosExistentes = async () => {
       if (!user) return;
 
       const { data, error } = await supabase
@@ -41,13 +41,16 @@ export const RegistroImpuestosForm = () => {
         .eq('user_id', user.id)
         .eq('mes', mesSeleccionado)
         .eq('ano', anoSeleccionado)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
-      if (data) {
-        setRegistroExistente(data);
-        setTasaISR(data.tasa_isr.toString());
-        setIsrReal(data.isr_real.toString());
-        setObservaciones(data.observaciones || "");
+      if (data && data.length > 0) {
+        // Calcular el total acumulado de todos los registros
+        const totalAcumulado = data.reduce((sum, reg) => sum + Number(reg.isr_real), 0);
+        setRegistroExistente({
+          registros: data,
+          total_acumulado: totalAcumulado,
+          ultimo_registro: data[0]
+        });
       } else {
         setRegistroExistente(null);
         setIsrReal("");
@@ -59,7 +62,7 @@ export const RegistroImpuestosForm = () => {
       }
     };
 
-    verificarRegistroExistente();
+    verificarRegistrosExistentes();
   }, [mesSeleccionado, anoSeleccionado, user]);
 
   const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
@@ -91,7 +94,7 @@ export const RegistroImpuestosForm = () => {
       return;
     }
 
-    if (isPeriodoPasado() && !registroExistente) {
+    if (isPeriodoPasado()) {
       toast({
         title: "Error",
         description: "No puedes crear registros para períodos pasados",
@@ -172,223 +175,166 @@ export const RegistroImpuestosForm = () => {
         observaciones: observaciones || null
       };
 
-      let transaccionId: string;
-
-      if (registroExistente) {
-        const { error } = await supabase
-          .from('transacciones_impuestos')
-          .update(datosRegistro)
-          .eq('id', registroExistente.id);
-
-        if (error) throw error;
-        transaccionId = registroExistente.id;
-
-        // Actualizar también la transacción de egreso existente
-        const { data: egresoExistente } = await supabase
-          .from('transacciones_egresos')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('tipo_egreso', 'impuesto')
-          .eq('subtipo_egreso', 'ISR')
-          .ilike('descripcion', `%${meses[mesSeleccionado - 1]}%${anoSeleccionado}%`)
-          .maybeSingle();
-
-        if (egresoExistente) {
-          // Actualizar egreso existente
-          let montoPagadoFinal = 0;
-          let montoPendienteFinal = 0;
-          let tipoPagoFinal = '';
-          
-          if (tipoPago === "total") {
-            montoPagadoFinal = parseFloat(isrReal);
-            montoPendienteFinal = 0;
-            tipoPagoFinal = 'contado';
-          } else if (tipoPago === "credito") {
-            montoPagadoFinal = 0;
-            montoPendienteFinal = parseFloat(isrReal);
-            tipoPagoFinal = 'credito';
-          } else if (tipoPago === "parcial") {
-            montoPagadoFinal = parseFloat(montoPagado);
-            montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
-            tipoPagoFinal = 'parcial';
-          }
-
-          const { error: updateEgresoError } = await supabase
-            .from('transacciones_egresos')
-            .update({
-              monto_total: parseFloat(isrReal),
-              monto_pagado: montoPagadoFinal,
-              monto_pendiente: montoPendienteFinal,
-              tipo_pago: tipoPagoFinal,
-              metodo_pago: (tipoPago === "total" || tipoPago === "parcial") ? metodoPago : null,
-              fecha_vencimiento: (tipoPago === "credito" || tipoPago === "parcial") ? fechaVencimiento : null,
-              proveedor_nombre: proveedorNombre,
-              proveedor_rfc: proveedorRfc,
-              comentarios: observaciones
-            })
-            .eq('id', egresoExistente.id);
-
-          if (updateEgresoError) throw updateEgresoError;
-        }
-
-        toast({
-          title: "Registro actualizado",
-          description: "El registro de ISR se ha actualizado correctamente"
-        });
-      } else {
-        // Crear transacción de egreso (cuenta por pagar o pago inmediato)
-        let montoPagadoFinal = 0;
-        let montoPendienteFinal = 0;
-        let tipoPagoFinal = '';
-        
-        if (tipoPago === "total") {
-          montoPagadoFinal = parseFloat(isrReal);
-          montoPendienteFinal = 0;
-          tipoPagoFinal = 'contado';
-        } else if (tipoPago === "credito") {
-          montoPagadoFinal = 0;
-          montoPendienteFinal = parseFloat(isrReal);
-          tipoPagoFinal = 'credito';
-        } else if (tipoPago === "parcial") {
-          montoPagadoFinal = parseFloat(montoPagado);
-          montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
-          tipoPagoFinal = 'parcial';
-        }
-
-        const { data: egresoData, error: egresoError } = await supabase
-          .from('transacciones_egresos')
-          .insert({
-            user_id: user.id,
-            tipo_egreso: 'impuesto',
-            subtipo_egreso: 'ISR',
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            cuenta_codigo: '6001',
-            monto_total: parseFloat(isrReal),
-            monto_pagado: montoPagadoFinal,
-            monto_pendiente: montoPendienteFinal,
-            tipo_pago: tipoPagoFinal,
-            metodo_pago: (tipoPago === "total" || tipoPago === "parcial") ? metodoPago : null,
-            fecha_vencimiento: (tipoPago === "credito" || tipoPago === "parcial") ? fechaVencimiento : null,
-            proveedor_nombre: proveedorNombre,
-            proveedor_rfc: proveedorRfc,
-            comentarios: observaciones
-          })
-          .select()
-          .single();
-
-        if (egresoError) throw egresoError;
-        const { data: newTransaction, error } = await supabase
-          .from('transacciones_impuestos')
-          .insert(datosRegistro)
-          .select()
-          .single();
-
-        if (error) throw error;
-        transaccionId = newTransaction.id;
-
-        // Crear asiento contable (doble partida)
-        const numeroAsiento = await generarNumeroAsiento();
-        const fechaAsiento = new Date(anoSeleccionado, mesSeleccionado - 1, 1);
-
-        const { data: asiento, error: asientoError } = await supabase
-          .from('asientos_contables')
-          .insert({
-            user_id: user.id,
-            numero_asiento: numeroAsiento,
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            fecha: fechaAsiento.toISOString().split('T')[0]
-          })
-          .select()
-          .single();
-
-        if (asientoError) throw asientoError;
-
-        // Detalles del asiento (doble partida)
-        let detalles;
-        
-        if (tipoPago === "total") {
-          // Pago total: Debe ISR / Haber Bancos
-          detalles = [
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '6001', // ISR (gasto)
-              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: parseFloat(isrReal),
-              haber: 0
-            },
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '1002', // Bancos
-              descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: 0,
-              haber: parseFloat(isrReal)
-            }
-          ];
-        } else if (tipoPago === "credito") {
-          // Pago a crédito: Debe ISR / Haber Proveedores (cuenta por pagar)
-          detalles = [
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '6001', // ISR (gasto)
-              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: parseFloat(isrReal),
-              haber: 0
-            },
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
-              descripcion: `Cuenta por pagar ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: 0,
-              haber: parseFloat(isrReal)
-            }
-          ];
-        } else {
-          // Pago parcial: Debe ISR / Haber Bancos (pagado) + Haber Proveedores (pendiente)
-          detalles = [
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '6001', // ISR (gasto)
-              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: parseFloat(isrReal),
-              haber: 0
-            },
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '1002', // Bancos
-              descripcion: `Pago parcial ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: 0,
-              haber: montoPagadoFinal
-            },
-            {
-              asiento_id: asiento.id,
-              cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
-              descripcion: `Saldo pendiente ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-              debe: 0,
-              haber: montoPendienteFinal
-            }
-          ];
-        }
-
-        const { error: detallesError } = await supabase
-          .from('detalle_asientos')
-          .insert(detalles);
-
-        if (detallesError) throw detallesError;
-
-        let descripcionToast = "";
-        if (tipoPago === "total") {
-          descripcionToast = "El pago de ISR se registró correctamente con su asiento contable";
-        } else if (tipoPago === "credito") {
-          descripcionToast = "La cuenta por pagar de ISR se registró correctamente con su asiento contable";
-        } else {
-          descripcionToast = "El pago parcial de ISR y su cuenta por pagar se registraron correctamente";
-        }
-
-        toast({
-          title: "Registro guardado",
-          description: descripcionToast
-        });
+      // Siempre crear un nuevo registro (nunca actualizar)
+      let montoPagadoFinal = 0;
+      let montoPendienteFinal = 0;
+      let tipoPagoFinal = '';
+      
+      if (tipoPago === "total") {
+        montoPagadoFinal = parseFloat(isrReal);
+        montoPendienteFinal = 0;
+        tipoPagoFinal = 'contado';
+      } else if (tipoPago === "credito") {
+        montoPagadoFinal = 0;
+        montoPendienteFinal = parseFloat(isrReal);
+        tipoPagoFinal = 'credito';
+      } else if (tipoPago === "parcial") {
+        montoPagadoFinal = parseFloat(montoPagado);
+        montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
+        tipoPagoFinal = 'parcial';
       }
+
+      const { data: egresoData, error: egresoError } = await supabase
+        .from('transacciones_egresos')
+        .insert({
+          user_id: user.id,
+          tipo_egreso: 'impuesto',
+          subtipo_egreso: 'ISR',
+          descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
+          cuenta_codigo: '6001',
+          monto_total: parseFloat(isrReal),
+          monto_pagado: montoPagadoFinal,
+          monto_pendiente: montoPendienteFinal,
+          tipo_pago: tipoPagoFinal,
+          metodo_pago: (tipoPago === "total" || tipoPago === "parcial") ? metodoPago : null,
+          fecha_vencimiento: (tipoPago === "credito" || tipoPago === "parcial") ? fechaVencimiento : null,
+          proveedor_nombre: proveedorNombre,
+          proveedor_rfc: proveedorRfc,
+          comentarios: observaciones
+        })
+        .select()
+        .single();
+
+      if (egresoError) throw egresoError;
+      
+      const { data: newTransaction, error } = await supabase
+        .from('transacciones_impuestos')
+        .insert(datosRegistro)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Crear asiento contable (doble partida)
+      const numeroAsiento = await generarNumeroAsiento();
+      const fechaAsiento = new Date(anoSeleccionado, mesSeleccionado - 1, 1);
+
+      const { data: asiento, error: asientoError } = await supabase
+        .from('asientos_contables')
+        .insert({
+          user_id: user.id,
+          numero_asiento: numeroAsiento,
+          descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
+          fecha: fechaAsiento.toISOString().split('T')[0]
+        })
+        .select()
+        .single();
+
+      if (asientoError) throw asientoError;
+
+      // Detalles del asiento (doble partida)
+      let detalles;
+      
+      if (tipoPago === "total") {
+        // Pago total: Debe ISR / Haber Bancos
+        detalles = [
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '6001', // ISR (gasto)
+            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
+            debe: parseFloat(isrReal),
+            haber: 0
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '1002', // Bancos
+            descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+            debe: 0,
+            haber: parseFloat(isrReal)
+          }
+        ];
+      } else if (tipoPago === "credito") {
+        // Pago a crédito: Debe ISR / Haber Proveedores (cuenta por pagar)
+        detalles = [
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '6001', // ISR (gasto)
+            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
+            debe: parseFloat(isrReal),
+            haber: 0
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
+            descripcion: `Cuenta por pagar ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+            debe: 0,
+            haber: parseFloat(isrReal)
+          }
+        ];
+      } else {
+        // Pago parcial: Debe ISR / Haber Bancos (pagado) + Haber Proveedores (pendiente)
+        detalles = [
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '6001', // ISR (gasto)
+            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
+            debe: parseFloat(isrReal),
+            haber: 0
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '1002', // Bancos
+            descripcion: `Pago parcial ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+            debe: 0,
+            haber: montoPagadoFinal
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
+            descripcion: `Saldo pendiente ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+            debe: 0,
+            haber: montoPendienteFinal
+          }
+        ];
+      }
+
+      const { error: detallesError } = await supabase
+        .from('detalle_asientos')
+        .insert(detalles);
+
+      if (detallesError) throw detallesError;
+
+      let descripcionToast = "";
+      if (tipoPago === "total") {
+        descripcionToast = "El pago de ISR se registró correctamente con su asiento contable";
+      } else if (tipoPago === "credito") {
+        descripcionToast = "La cuenta por pagar de ISR se registró correctamente con su asiento contable";
+      } else {
+        descripcionToast = "El pago parcial de ISR y su cuenta por pagar se registraron correctamente";
+      }
+
+      toast({
+        title: "Registro guardado",
+        description: descripcionToast
+      });
+
+      // Limpiar formulario
+      setIsrReal("");
+      setObservaciones("");
+      setTipoPago("total");
+      setFechaVencimiento("");
+      setMetodoPago("transferencia");
+      setMontoPagado("");
 
       // Recargar datos
       const { data } = await supabase
@@ -397,9 +343,16 @@ export const RegistroImpuestosForm = () => {
         .eq('user_id', user.id)
         .eq('mes', mesSeleccionado)
         .eq('ano', anoSeleccionado)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
-      if (data) setRegistroExistente(data);
+      if (data && data.length > 0) {
+        const totalAcumulado = data.reduce((sum, reg) => sum + Number(reg.isr_real), 0);
+        setRegistroExistente({
+          registros: data,
+          total_acumulado: totalAcumulado,
+          ultimo_registro: data[0]
+        });
+      }
 
     } catch (error) {
       console.error("Error al guardar registro:", error);
@@ -456,10 +409,12 @@ export const RegistroImpuestosForm = () => {
       )}
 
       {registroExistente && (
-        <Alert className="border-green-500 bg-green-500/10">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-600 dark:text-green-400">
-            Ya has registrado {formatCurrency(registroExistente.isr_real)} de ISR para este período ({meses[mesSeleccionado - 1]} {anoSeleccionado}). Puedes modificar el registro si es necesario.
+        <Alert className="border-blue-500 bg-blue-500/10">
+          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-600 dark:text-blue-400">
+            Has registrado un total acumulado de {formatCurrency(registroExistente.total_acumulado)} de ISR para {meses[mesSeleccionado - 1]} {anoSeleccionado} 
+            ({registroExistente.registros.length} registro{registroExistente.registros.length > 1 ? 's' : ''}). 
+            Puedes continuar agregando pagos adicionales.
           </AlertDescription>
         </Alert>
       )}
@@ -647,10 +602,11 @@ export const RegistroImpuestosForm = () => {
 
           {isrReal && (
             (() => {
-              const montoAnterior = registroExistente ? registroExistente.isr_real : 0;
+              const montoAnterior = registroExistente ? registroExistente.total_acumulado : 0;
               const faltantePrevio = isrCalculado - montoAnterior;
               const nuevoMonto = parseFloat(isrReal);
-              const diferenciaFinal = nuevoMonto - faltantePrevio;
+              const totalConNuevo = montoAnterior + nuevoMonto;
+              const diferenciaFinal = totalConNuevo - isrCalculado;
               
               return (parseFloat(isrReal) !== isrCalculado || registroExistente) && (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
@@ -665,7 +621,7 @@ export const RegistroImpuestosForm = () => {
                     {registroExistente && (
                       <>
                         <div className="flex justify-between">
-                          <span>Ya habías registrado:</span>
+                          <span>Ya has registrado (total acumulado):</span>
                           <span className="font-semibold">{formatCurrency(montoAnterior)}</span>
                         </div>
                         <div className="flex justify-between text-xs pt-1 border-t border-amber-500/20">
@@ -675,12 +631,16 @@ export const RegistroImpuestosForm = () => {
                       </>
                     )}
                     <div className="flex justify-between pt-1 border-t border-amber-500/20">
-                      <span>{registroExistente ? 'Nuevo monto a registrar:' : 'Vas a registrar:'}</span>
+                      <span>Vas a registrar ahora:</span>
                       <span className="font-semibold">{formatCurrency(nuevoMonto)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold bg-amber-500/20 p-2 rounded">
+                      <span>Total que tendrás registrado:</span>
+                      <span>{formatCurrency(totalConNuevo)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t-2 border-amber-500/30">
                       <span className="font-semibold">
-                        {registroExistente ? 'Con este cambio quedas:' : 'Diferencia vs cálculo:'}
+                        Diferencia final vs cálculo:
                       </span>
                       <span className="font-bold">
                         {diferenciaFinal > 0 ? "+" : ""}
@@ -689,7 +649,7 @@ export const RegistroImpuestosForm = () => {
                     </div>
                     <p className="text-xs pt-1 italic">
                       {Math.abs(diferenciaFinal) < 0.01
-                        ? '✓ Coincide exactamente con el cálculo'
+                        ? '✓ Coincidirá exactamente con el cálculo'
                         : diferenciaFinal > 0 
                           ? `${formatCurrency(Math.abs(diferenciaFinal))} por encima del cálculo`
                           : `${formatCurrency(Math.abs(diferenciaFinal))} por debajo del cálculo`
@@ -825,9 +785,9 @@ export const RegistroImpuestosForm = () => {
           <Button 
             className="w-full" 
             onClick={handleGuardarRegistro}
-            disabled={!isrReal || isSaving || (isPeriodoPasado() && !registroExistente)}
+            disabled={!isrReal || isSaving || isPeriodoPasado()}
           >
-            {isSaving ? "Guardando..." : registroExistente ? "Actualizar Registro" : "Guardar Registro"}
+            {isSaving ? "Guardando..." : "Guardar Nuevo Registro"}
           </Button>
         </CardContent>
       </Card>
