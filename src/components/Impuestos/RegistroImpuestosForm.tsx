@@ -183,6 +183,54 @@ export const RegistroImpuestosForm = () => {
         if (error) throw error;
         transaccionId = registroExistente.id;
 
+        // Actualizar también la transacción de egreso existente
+        const { data: egresoExistente } = await supabase
+          .from('transacciones_egresos')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('tipo_egreso', 'impuesto')
+          .eq('subtipo_egreso', 'ISR')
+          .ilike('descripcion', `%${meses[mesSeleccionado - 1]}%${anoSeleccionado}%`)
+          .maybeSingle();
+
+        if (egresoExistente) {
+          // Actualizar egreso existente
+          let montoPagadoFinal = 0;
+          let montoPendienteFinal = 0;
+          let tipoPagoFinal = '';
+          
+          if (tipoPago === "total") {
+            montoPagadoFinal = parseFloat(isrReal);
+            montoPendienteFinal = 0;
+            tipoPagoFinal = 'contado';
+          } else if (tipoPago === "credito") {
+            montoPagadoFinal = 0;
+            montoPendienteFinal = parseFloat(isrReal);
+            tipoPagoFinal = 'credito';
+          } else if (tipoPago === "parcial") {
+            montoPagadoFinal = parseFloat(montoPagado);
+            montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
+            tipoPagoFinal = 'parcial';
+          }
+
+          const { error: updateEgresoError } = await supabase
+            .from('transacciones_egresos')
+            .update({
+              monto_total: parseFloat(isrReal),
+              monto_pagado: montoPagadoFinal,
+              monto_pendiente: montoPendienteFinal,
+              tipo_pago: tipoPagoFinal,
+              metodo_pago: (tipoPago === "total" || tipoPago === "parcial") ? metodoPago : null,
+              fecha_vencimiento: (tipoPago === "credito" || tipoPago === "parcial") ? fechaVencimiento : null,
+              proveedor_nombre: proveedorNombre,
+              proveedor_rfc: proveedorRfc,
+              comentarios: observaciones
+            })
+            .eq('id', egresoExistente.id);
+
+          if (updateEgresoError) throw updateEgresoError;
+        }
+
         toast({
           title: "Registro actualizado",
           description: "El registro de ISR se ha actualizado correctamente"
