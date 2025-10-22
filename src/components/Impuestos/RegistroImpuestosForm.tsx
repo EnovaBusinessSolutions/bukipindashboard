@@ -214,7 +214,7 @@ export const RegistroImpuestosForm = () => {
             tipo_egreso: 'impuesto',
             subtipo_egreso: 'ISR',
             descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            cuenta_codigo: '5200',
+            cuenta_codigo: '6001',
             monto_total: parseFloat(isrReal),
             monto_pagado: montoPagadoFinal,
             monto_pendiente: montoPendienteFinal,
@@ -259,36 +259,36 @@ export const RegistroImpuestosForm = () => {
         let detalles;
         
         if (tipoPago === "total") {
-          // Pago total: Debe ISR por pagar / Haber Bancos
+          // Pago total: Debe ISR / Haber Bancos
           detalles = [
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '5200', // ISR por pagar
+              cuenta_codigo: '6001', // ISR (gasto)
               descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: parseFloat(isrReal),
               haber: 0
             },
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '1100', // Bancos
+              cuenta_codigo: '1002', // Bancos
               descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: 0,
               haber: parseFloat(isrReal)
             }
           ];
         } else if (tipoPago === "credito") {
-          // Pago a crédito: Debe ISR por pagar / Haber Proveedores (cuenta por pagar)
+          // Pago a crédito: Debe ISR / Haber Proveedores (cuenta por pagar)
           detalles = [
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '5200', // ISR por pagar (gasto)
+              cuenta_codigo: '6001', // ISR (gasto)
               descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: parseFloat(isrReal),
               haber: 0
             },
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '2100', // Proveedores (pasivo - cuenta por pagar)
+              cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
               descripcion: `Cuenta por pagar ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: 0,
               haber: parseFloat(isrReal)
@@ -299,21 +299,21 @@ export const RegistroImpuestosForm = () => {
           detalles = [
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '5200', // ISR por pagar (gasto)
+              cuenta_codigo: '6001', // ISR (gasto)
               descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: parseFloat(isrReal),
               haber: 0
             },
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '1100', // Bancos
+              cuenta_codigo: '1002', // Bancos
               descripcion: `Pago parcial ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: 0,
               haber: montoPagadoFinal
             },
             {
               asiento_id: asiento.id,
-              cuenta_codigo: '2100', // Proveedores (pasivo - cuenta por pagar)
+              cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
               descripcion: `Saldo pendiente ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
               debe: 0,
               haber: montoPendienteFinal
