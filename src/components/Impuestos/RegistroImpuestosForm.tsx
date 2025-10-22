@@ -22,9 +22,12 @@ export const RegistroImpuestosForm = () => {
   const [observaciones, setObservaciones] = useState<string>("");
   const [registroExistente, setRegistroExistente] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [tipoPago, setTipoPago] = useState<string>("total");
+  const [fechaVencimiento, setFechaVencimiento] = useState<string>("");
   const [proveedorNombre, setProveedorNombre] = useState<string>("SAT - Servicio de Administración Tributaria");
   const [proveedorRfc, setProveedorRfc] = useState<string>("SAT970701NN3");
   const [metodoPago, setMetodoPago] = useState<string>("transferencia");
+  const [montoPagado, setMontoPagado] = useState<string>("");
 
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
 
@@ -49,7 +52,10 @@ export const RegistroImpuestosForm = () => {
         setRegistroExistente(null);
         setIsrReal("");
         setObservaciones("");
+        setTipoPago("total");
+        setFechaVencimiento("");
         setMetodoPago("transferencia");
+        setMontoPagado("");
       }
     };
 
@@ -103,13 +109,51 @@ export const RegistroImpuestosForm = () => {
       return;
     }
 
-    if (!metodoPago) {
+    if (tipoPago === "credito" && !fechaVencimiento) {
+      toast({
+        title: "Error",
+        description: "Debes ingresar la fecha de vencimiento para pago a crédito",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if ((tipoPago === "total" || tipoPago === "parcial") && !metodoPago) {
       toast({
         title: "Error",
         description: "Debes seleccionar el método de pago",
         variant: "destructive"
       });
       return;
+    }
+
+    if (tipoPago === "parcial") {
+      if (!montoPagado || parseFloat(montoPagado) <= 0) {
+        toast({
+          title: "Error",
+          description: "Debes ingresar el monto pagado",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      if (parseFloat(montoPagado) > parseFloat(isrReal)) {
+        toast({
+          title: "Error",
+          description: "El monto pagado no puede ser mayor al ISR total",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!fechaVencimiento) {
+        toast({
+          title: "Error",
+          description: "Debes ingresar la fecha de vencimiento para el saldo pendiente",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -144,7 +188,25 @@ export const RegistroImpuestosForm = () => {
           description: "El registro de ISR se ha actualizado correctamente"
         });
       } else {
-        // Crear transacción de egreso (pago inmediato)
+        // Crear transacción de egreso (cuenta por pagar o pago inmediato)
+        let montoPagadoFinal = 0;
+        let montoPendienteFinal = 0;
+        let tipoPagoFinal = '';
+        
+        if (tipoPago === "total") {
+          montoPagadoFinal = parseFloat(isrReal);
+          montoPendienteFinal = 0;
+          tipoPagoFinal = 'contado';
+        } else if (tipoPago === "credito") {
+          montoPagadoFinal = 0;
+          montoPendienteFinal = parseFloat(isrReal);
+          tipoPagoFinal = 'credito';
+        } else if (tipoPago === "parcial") {
+          montoPagadoFinal = parseFloat(montoPagado);
+          montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
+          tipoPagoFinal = 'parcial';
+        }
+
         const { data: egresoData, error: egresoError } = await supabase
           .from('transacciones_egresos')
           .insert({
@@ -154,11 +216,11 @@ export const RegistroImpuestosForm = () => {
             descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
             cuenta_codigo: '5200',
             monto_total: parseFloat(isrReal),
-            monto_pagado: parseFloat(isrReal),
-            monto_pendiente: 0,
-            tipo_pago: 'contado',
-            metodo_pago: metodoPago,
-            fecha_vencimiento: null,
+            monto_pagado: montoPagadoFinal,
+            monto_pendiente: montoPendienteFinal,
+            tipo_pago: tipoPagoFinal,
+            metodo_pago: (tipoPago === "total" || tipoPago === "parcial") ? metodoPago : null,
+            fecha_vencimiento: (tipoPago === "credito" || tipoPago === "parcial") ? fechaVencimiento : null,
             proveedor_nombre: proveedorNombre,
             proveedor_rfc: proveedorRfc,
             comentarios: observaciones
@@ -193,23 +255,71 @@ export const RegistroImpuestosForm = () => {
 
         if (asientoError) throw asientoError;
 
-        // Detalles del asiento (doble partida) - Pago inmediato
-        const detalles = [
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '5200', // ISR por pagar
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: parseFloat(isrReal),
-            haber: 0
-          },
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '1100', // Bancos
-            descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: 0,
-            haber: parseFloat(isrReal)
-          }
-        ];
+        // Detalles del asiento (doble partida)
+        let detalles;
+        
+        if (tipoPago === "total") {
+          // Pago total: Debe ISR por pagar / Haber Bancos
+          detalles = [
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '5200', // ISR por pagar
+              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: parseFloat(isrReal),
+              haber: 0
+            },
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '1100', // Bancos
+              descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: 0,
+              haber: parseFloat(isrReal)
+            }
+          ];
+        } else if (tipoPago === "credito") {
+          // Pago a crédito: Debe ISR por pagar / Haber Proveedores (cuenta por pagar)
+          detalles = [
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '5200', // ISR por pagar (gasto)
+              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: parseFloat(isrReal),
+              haber: 0
+            },
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '2100', // Proveedores (pasivo - cuenta por pagar)
+              descripcion: `Cuenta por pagar ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: 0,
+              haber: parseFloat(isrReal)
+            }
+          ];
+        } else {
+          // Pago parcial: Debe ISR / Haber Bancos (pagado) + Haber Proveedores (pendiente)
+          detalles = [
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '5200', // ISR por pagar (gasto)
+              descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: parseFloat(isrReal),
+              haber: 0
+            },
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '1100', // Bancos
+              descripcion: `Pago parcial ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: 0,
+              haber: montoPagadoFinal
+            },
+            {
+              asiento_id: asiento.id,
+              cuenta_codigo: '2100', // Proveedores (pasivo - cuenta por pagar)
+              descripcion: `Saldo pendiente ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
+              debe: 0,
+              haber: montoPendienteFinal
+            }
+          ];
+        }
 
         const { error: detallesError } = await supabase
           .from('detalle_asientos')
@@ -217,9 +327,18 @@ export const RegistroImpuestosForm = () => {
 
         if (detallesError) throw detallesError;
 
+        let descripcionToast = "";
+        if (tipoPago === "total") {
+          descripcionToast = "El pago de ISR se registró correctamente con su asiento contable";
+        } else if (tipoPago === "credito") {
+          descripcionToast = "La cuenta por pagar de ISR se registró correctamente con su asiento contable";
+        } else {
+          descripcionToast = "El pago parcial de ISR y su cuenta por pagar se registraron correctamente";
+        }
+
         toast({
           title: "Registro guardado",
-          description: "El pago de ISR se registró correctamente con su asiento contable"
+          description: descripcionToast
         });
       }
 
@@ -491,17 +610,94 @@ export const RegistroImpuestosForm = () => {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="metodo-pago">Método de Pago *</Label>
-            <Select value={metodoPago} onValueChange={setMetodoPago}>
-              <SelectTrigger id="metodo-pago">
-                <SelectValue placeholder="Selecciona el método de pago" />
+            <Label htmlFor="tipo-pago">Tipo de Liquidación *</Label>
+            <Select value={tipoPago} onValueChange={setTipoPago}>
+              <SelectTrigger id="tipo-pago">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="transferencia">Transferencia</SelectItem>
-                <SelectItem value="efectivo">Efectivo</SelectItem>
+                <SelectItem value="total">Pago Total</SelectItem>
+                <SelectItem value="parcial">Pago Parcial</SelectItem>
+                <SelectItem value="credito">A Crédito (Cuenta por Pagar)</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {tipoPago === "credito" && (
+            <div className="space-y-2">
+              <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
+              <Input
+                id="fecha-vencimiento"
+                type="date"
+                value={fechaVencimiento}
+                onChange={(e) => setFechaVencimiento(e.target.value)}
+              />
+            </div>
+          )}
+
+          {(tipoPago === "total" || tipoPago === "parcial") && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="metodo-pago">Método de Pago *</Label>
+                <Select value={metodoPago} onValueChange={setMetodoPago}>
+                  <SelectTrigger id="metodo-pago">
+                    <SelectValue placeholder="Selecciona el método de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {tipoPago === "parcial" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="monto-pagado">Monto Pagado *</Label>
+                    <Input
+                      id="monto-pagado"
+                      type="text"
+                      placeholder="Ingresa el monto pagado"
+                      value={montoPagado}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setMontoPagado(value);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseFloat(montoPagado);
+                        if (!isNaN(num)) {
+                          setMontoPagado(num.toFixed(2));
+                        }
+                      }}
+                      maxLength={20}
+                    />
+                    {montoPagado && !isNaN(parseFloat(montoPagado)) && (
+                      <p className="text-sm text-muted-foreground">
+                        {parseFloat(montoPagado).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                      </p>
+                    )}
+                    {montoPagado && isrReal && (
+                      <p className="text-xs text-muted-foreground">
+                        Saldo pendiente: {formatCurrency(parseFloat(isrReal) - parseFloat(montoPagado))}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha-vencimiento-parcial">Fecha de Vencimiento del Saldo *</Label>
+                    <Input
+                      id="fecha-vencimiento-parcial"
+                      type="date"
+                      value={fechaVencimiento}
+                      onChange={(e) => setFechaVencimiento(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="proveedor-nombre">Proveedor</Label>
