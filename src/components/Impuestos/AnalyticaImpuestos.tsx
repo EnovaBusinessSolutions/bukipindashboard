@@ -117,14 +117,17 @@ export const AnalyticaImpuestos = () => {
     }).format(value);
   };
 
-  const totales = datos.reduce(
-    (acc, d) => ({
-      calculado: acc.calculado + d.calculado,
-      registrado: acc.registrado + d.registrado,
-      diferencia: acc.diferencia + d.diferencia
-    }),
-    { calculado: 0, registrado: 0, diferencia: 0 }
-  );
+  // Calcular totales según la vista
+  const totales = tipoVista === "mensual"
+    ? datos.reduce(
+        (acc, d) => ({
+          calculado: acc.calculado + d.calculado,
+          registrado: acc.registrado + d.registrado,
+          diferencia: acc.diferencia + d.diferencia
+        }),
+        { calculado: 0, registrado: 0, diferencia: 0 }
+      )
+    : datos.find(d => d.periodo === anoSeleccionado.toString()) || { calculado: 0, registrado: 0, diferencia: 0 };
 
   const promedioDiferencia = datos.length > 0 
     ? totales.diferencia / datos.length 
@@ -182,23 +185,30 @@ export const AnalyticaImpuestos = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Total Calculado</CardDescription>
+            <CardDescription>
+              Total Calculado {tipoVista === "mensual" ? anoSeleccionado : ""}
+            </CardDescription>
             <CardTitle className="text-2xl">{formatCurrency(totales.calculado)}</CardTitle>
           </CardHeader>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Total Registrado</CardDescription>
+            <CardDescription>
+              Total Registrado {tipoVista === "mensual" ? anoSeleccionado : ""}
+            </CardDescription>
             <CardTitle className="text-2xl">{formatCurrency(totales.registrado)}</CardTitle>
           </CardHeader>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Diferencia Promedio</CardDescription>
-            <CardTitle className={`text-2xl ${promedioDiferencia > 0 ? 'text-red-600' : promedioDiferencia < 0 ? 'text-green-600' : ''}`}>
-              {formatCurrency(Math.abs(promedioDiferencia))}
+            <CardDescription>
+              Diferencia Total {tipoVista === "mensual" ? anoSeleccionado : ""}
+            </CardDescription>
+            <CardTitle className={`text-2xl ${totales.diferencia > 0 ? 'text-red-600' : totales.diferencia < 0 ? 'text-green-600' : ''}`}>
+              {totales.diferencia > 0 ? '+' : ''}
+              {formatCurrency(totales.diferencia)}
             </CardTitle>
           </CardHeader>
         </Card>
