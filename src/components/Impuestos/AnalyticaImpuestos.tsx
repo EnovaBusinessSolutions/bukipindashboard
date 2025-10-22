@@ -10,7 +10,7 @@ import { TrendingUp } from "lucide-react";
 interface DatosGrafica {
   periodo: string;
   calculado: number;
-  pagado: number;
+  registrado: number;
   diferencia: number;
 }
 
@@ -49,7 +49,7 @@ export const AnalyticaImpuestos = () => {
           const datosFormateados = (data || []).map(t => ({
             periodo: meses[t.mes - 1],
             calculado: Number(t.isr_calculado),
-            pagado: Number(t.isr_real),
+            registrado: Number(t.isr_real),
             diferencia: Number(t.diferencia)
           }));
 
@@ -73,21 +73,21 @@ export const AnalyticaImpuestos = () => {
             if (!acc[t.ano]) {
               acc[t.ano] = {
                 calculado: 0,
-                pagado: 0,
+                registrado: 0,
                 diferencia: 0
               };
             }
             acc[t.ano].calculado += Number(t.isr_calculado);
-            acc[t.ano].pagado += Number(t.isr_real);
+            acc[t.ano].registrado += Number(t.isr_real);
             acc[t.ano].diferencia += Number(t.diferencia);
             return acc;
-          }, {} as Record<number, { calculado: number; pagado: number; diferencia: number }>);
+          }, {} as Record<number, { calculado: number; registrado: number; diferencia: number }>);
 
           const datosFormateados = Object.entries(agrupadoPorAno)
             .map(([ano, valores]) => ({
               periodo: ano,
               calculado: valores.calculado,
-              pagado: valores.pagado,
+              registrado: valores.registrado,
               diferencia: valores.diferencia
             }))
             .sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
@@ -114,10 +114,10 @@ export const AnalyticaImpuestos = () => {
   const totales = datos.reduce(
     (acc, d) => ({
       calculado: acc.calculado + d.calculado,
-      pagado: acc.pagado + d.pagado,
+      registrado: acc.registrado + d.registrado,
       diferencia: acc.diferencia + d.diferencia
     }),
-    { calculado: 0, pagado: 0, diferencia: 0 }
+    { calculado: 0, registrado: 0, diferencia: 0 }
   );
 
   const promedioDiferencia = datos.length > 0 
@@ -183,8 +183,8 @@ export const AnalyticaImpuestos = () => {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Total Pagado</CardDescription>
-            <CardTitle className="text-2xl">{formatCurrency(totales.pagado)}</CardTitle>
+            <CardDescription>Total Registrado</CardDescription>
+            <CardTitle className="text-2xl">{formatCurrency(totales.registrado)}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -203,7 +203,7 @@ export const AnalyticaImpuestos = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            Comparativa ISR Calculado vs Pagado
+            Comparativa ISR Calculado vs Registrado
           </CardTitle>
           <CardDescription>
             Análisis histórico {tipoVista === "mensual" ? `del año ${anoSeleccionado}` : "de los últimos 5 años"}
@@ -246,8 +246,8 @@ export const AnalyticaImpuestos = () => {
                   radius={[4, 4, 0, 0]}
                 />
                 <Bar 
-                  dataKey="pagado" 
-                  name="ISR Pagado" 
+                  dataKey="registrado" 
+                  name="ISR Registrado" 
                   fill="hsl(var(--secondary))" 
                   radius={[4, 4, 0, 0]}
                 />
@@ -263,7 +263,7 @@ export const AnalyticaImpuestos = () => {
           <CardHeader>
             <CardTitle>Análisis de Diferencias</CardTitle>
             <CardDescription>
-              Detalle de las variaciones entre ISR calculado y pagado
+              Detalle de las variaciones entre ISR calculado y registrado
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -276,7 +276,7 @@ export const AnalyticaImpuestos = () => {
                       Calculado: {formatCurrency(d.calculado)}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      Pagado: {formatCurrency(d.pagado)}
+                      Registrado: {formatCurrency(d.registrado)}
                     </span>
                     <span className={`font-semibold ${
                       d.diferencia > 0 ? 'text-red-600' : 

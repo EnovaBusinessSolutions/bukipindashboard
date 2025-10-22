@@ -29,11 +29,14 @@ export const ResumenImpuestos = () => {
 
     const fetchTransacciones = async () => {
       setLoading(true);
+      const currentYear = new Date().getFullYear();
+      
+      // Solo obtener datos del ejercicio fiscal actual (enero a mes actual)
       const { data, error } = await supabase
         .from('transacciones_impuestos')
         .select('*')
         .eq('user_id', user.id)
-        .order('ano', { ascending: false })
+        .eq('ano', currentYear)
         .order('mes', { ascending: false });
 
       if (error) {
@@ -110,7 +113,7 @@ export const ResumenImpuestos = () => {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>ISR Pagado</CardDescription>
+            <CardDescription>ISR Registrado</CardDescription>
             <CardTitle className="text-2xl">{formatCurrency(totales.real)}</CardTitle>
           </CardHeader>
         </Card>
@@ -135,7 +138,7 @@ export const ResumenImpuestos = () => {
             Historial de Transacciones
           </CardTitle>
           <CardDescription>
-            Registro detallado de todos los impuestos calculados y pagados
+            Registro detallado mensual del ejercicio fiscal actual
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -156,7 +159,7 @@ export const ResumenImpuestos = () => {
                     <TableHead className="text-right">Utilidad</TableHead>
                     <TableHead className="text-right">Tasa</TableHead>
                     <TableHead className="text-right">ISR Calculado</TableHead>
-                    <TableHead className="text-right">ISR Pagado</TableHead>
+                    <TableHead className="text-right">ISR Registrado</TableHead>
                     <TableHead className="text-right">Diferencia</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
@@ -212,8 +215,8 @@ export const ResumenImpuestos = () => {
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p>Cada registro de impuesto genera automáticamente un asiento contable de doble partida:</p>
           <ul className="list-disc list-inside space-y-1 ml-2">
-            <li><strong>Debe:</strong> Cuenta 5200 (ISR por pagar) - Monto del ISR</li>
-            <li><strong>Haber:</strong> Cuenta 1100 (Bancos) - Monto del ISR</li>
+            <li><strong>Debe:</strong> Cuenta 6001 (ISR) - Monto del ISR</li>
+            <li><strong>Haber:</strong> Cuenta 1002 (Bancos) o 2001 (Proveedores) según el tipo de pago</li>
           </ul>
           <p className="mt-3">Estos asientos se reflejan automáticamente en tu Balance General y en la Balanza de Comprobación.</p>
         </CardContent>
