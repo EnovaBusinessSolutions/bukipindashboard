@@ -17,6 +17,13 @@ interface TransaccionImpuesto {
   diferencia: number;
   observaciones: string | null;
   created_at: string;
+  egreso?: {
+    tipo_pago: string;
+    metodo_pago: string | null;
+    monto_pagado: number;
+    monto_pendiente: number;
+    cuenta_codigo: string;
+  } | null;
 }
 
 export const ResumenImpuestos = () => {
@@ -31,18 +38,38 @@ export const ResumenImpuestos = () => {
       setLoading(true);
       const currentYear = new Date().getFullYear();
       
-      // Solo obtener datos del ejercicio fiscal actual (enero a mes actual)
-      const { data, error } = await supabase
+      // Obtener transacciones de impuestos del ejercicio fiscal actual
+      const { data: impuestosData, error: impuestosError } = await supabase
         .from('transacciones_impuestos')
         .select('*')
         .eq('user_id', user.id)
         .eq('ano', currentYear)
         .order('mes', { ascending: false });
 
-      if (error) {
-        console.error("Error fetching transacciones:", error);
+      if (impuestosError) {
+        console.error("Error fetching transacciones:", impuestosError);
+        setTransacciones([]);
       } else {
-        setTransacciones(data || []);
+        // Obtener información de egresos relacionados para cada transacción
+        const transaccionesConDetalles = await Promise.all(
+          (impuestosData || []).map(async (t) => {
+            const { data: egresoData } = await supabase
+              .from('transacciones_egresos')
+              .select('tipo_pago, metodo_pago, monto_pagado, monto_pendiente, cuenta_codigo')
+              .eq('user_id', user.id)
+              .eq('tipo_egreso', 'impuesto')
+              .eq('subtipo_egreso', 'ISR')
+              .ilike('descripcion', `%${meses[t.mes - 1]}%${t.ano}%`)
+              .maybeSingle();
+
+            return {
+              ...t,
+              egreso: egresoData
+            };
+          })
+        );
+
+        setTransacciones(transaccionesConDetalles);
       }
       setLoading(false);
     };
@@ -161,6 +188,11 @@ export const ResumenImpuestos = () => {
                     <TableHead className="text-right">ISR Calculado</TableHead>
                     <TableHead className="text-right">ISR Registrado</TableHead>
                     <TableHead className="text-right">Diferencia</TableHead>
+                    <TableHead>Tipo Pago</TableHead>
+                    <TableHead>Método</TableHead>
+                    <TableHead className="text-right">Monto Pagado</TableHead>
+                    <TableHead className="text-right">Saldo Pendiente</TableHead>
+                    <TableHead>Cuenta</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -190,12 +222,53 @@ export const ResumenImpuestos = () => {
                         {formatCurrency(t.diferencia)}
                       </TableCell>
                       <TableCell>
-                        {t.diferencia === 0 ? (
-                          <Badge variant="secondary">Exacto</Badge>
-                        ) : t.diferencia > 0 ? (
-                          <Badge variant="destructive">Mayor</Badge>
+                        {t.egreso?.tipo_pago === 'contado' ? (
+                          <Badge variant="secondary">Pago Total</Badge>
+                        ) : t.egreso?.tipo_pago === 'credito' ? (
+                          <Badge variant="outline">A Crédito</Badge>
+                        ) : t.egreso?.tipo_pago === 'parcial' ? (
+                          <Badge className="bg-amber-500">Pago Parcial</Badge>
                         ) : (
-                          <Badge className="bg-green-600">Menor</Badge>
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {t.egreso?.metodo_pago ? (
+                          <span className="capitalize">{t.egreso.metodo_pago}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {t.egreso?.monto_pagado ? (
+                          <span className="text-green-600 font-semibold">
+                            {formatCurrency(t.egreso.monto_pagado)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">$0.00</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {t.egreso?.monto_pendiente && t.egreso.monto_pendiente > 0 ? (
+                          <span className="text-red-600 font-semibold">
+                            {formatCurrency(t.egreso.monto_pendiente)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">$0.00</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs font-mono">
+                          {t.egreso?.cuenta_codigo || '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {t.egreso?.monto_pendiente && t.egreso.monto_pendiente > 0 ? (
+                          <Badge variant="destructive">Por Pagar</Badge>
+                        ) : t.egreso?.monto_pagado && t.egreso.monto_pagado > 0 ? (
+                          <Badge className="bg-green-600">Pagado</Badge>
+                        ) : (
+                          <Badge variant="secondary">Registrado</Badge>
                         )}
                       </TableCell>
                     </TableRow>
