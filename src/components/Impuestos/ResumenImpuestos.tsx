@@ -118,15 +118,37 @@ export const ResumenImpuestos = () => {
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
 
-  const totales = transacciones.reduce(
-    (acc, t) => ({
-      utilidad: acc.utilidad + Number(t.utilidad_antes_impuestos),
-      calculado: acc.calculado + Number(t.isr_calculado),
-      real: acc.real + Number(t.isr_real),
-      diferencia: acc.diferencia + Number(t.diferencia)
-    }),
+  // Agrupar transacciones por mes para evitar duplicar utilidad e ISR calculado
+  const transaccionesPorMes = transacciones.reduce((acc, t) => {
+    const key = `${t.mes}-${t.ano}`;
+    if (!acc[key]) {
+      acc[key] = {
+        utilidad: Number(t.utilidad_antes_impuestos), // Solo una vez por mes
+        calculado: Number(t.isr_calculado), // Solo una vez por mes
+        pagosReales: [],
+        diferencia: Number(t.diferencia)
+      };
+    }
+    acc[key].pagosReales.push(Number(t.isr_real));
+    return acc;
+  }, {} as Record<string, { utilidad: number; calculado: number; pagosReales: number[]; diferencia: number }>);
+
+  // Calcular totales correctamente
+  const totales = Object.values(transaccionesPorMes).reduce(
+    (acc, mes) => {
+      const realMes = mes.pagosReales.reduce((sum, pago) => sum + pago, 0);
+      return {
+        utilidad: acc.utilidad + mes.utilidad,
+        calculado: acc.calculado + mes.calculado,
+        real: acc.real + realMes,
+        diferencia: 0 // Se calcula al final
+      };
+    },
     { utilidad: 0, calculado: 0, real: 0, diferencia: 0 }
   );
+  
+  // La diferencia total es: ISR registrado total - ISR calculado total
+  totales.diferencia = totales.real - totales.calculado;
 
   return (
     <div className="space-y-6">

@@ -46,24 +46,36 @@ export const AnalyticaImpuestos = () => {
             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
           ];
 
-          // Crear array con todos los 12 meses, agrupando múltiples registros del mismo mes
+          // Crear array con todos los 12 meses, agrupando múltiples registros sin duplicar utilidad base
           const datosCompletos = meses.map((mes, index) => {
             const mesNumero = index + 1;
             // Filtrar TODAS las transacciones del mes (puede haber múltiples pagos)
             const transaccionesMes = (data || []).filter(t => t.mes === mesNumero);
             
-            // Sumar todos los registros del mes
-            const totalesMes = transaccionesMes.reduce((acc, t) => ({
-              calculado: acc.calculado + Number(t.isr_calculado),
-              registrado: acc.registrado + Number(t.isr_real),
-              diferencia: acc.diferencia + Number(t.diferencia)
-            }), { calculado: 0, registrado: 0, diferencia: 0 });
+            if (transaccionesMes.length === 0) {
+              return {
+                periodo: mes,
+                calculado: 0,
+                registrado: 0,
+                diferencia: 0
+              };
+            }
+
+            // La utilidad e ISR calculado son únicos por mes (no se suman entre pagos)
+            const utilidadMes = Number(transaccionesMes[0].utilidad_antes_impuestos);
+            const calculadoMes = Number(transaccionesMes[0].isr_calculado);
+            
+            // Solo sumamos los ISR reales (pagos realizados)
+            const registradoMes = transaccionesMes.reduce((sum, t) => sum + Number(t.isr_real), 0);
+            
+            // La diferencia es ISR registrado - ISR calculado del mes
+            const diferenciaMes = registradoMes - calculadoMes;
             
             return {
               periodo: mes,
-              calculado: totalesMes.calculado,
-              registrado: totalesMes.registrado,
-              diferencia: totalesMes.diferencia
+              calculado: calculadoMes,
+              registrado: registradoMes,
+              diferencia: diferenciaMes
             };
           });
 
@@ -82,27 +94,34 @@ export const AnalyticaImpuestos = () => {
           console.error("Error fetching datos:", error);
           setDatos([]);
         } else {
-          // Agrupar por año
+          // Agrupar por año sin duplicar utilidad base
           const agrupadoPorAno = (data || []).reduce((acc, t) => {
             if (!acc[t.ano]) {
               acc[t.ano] = {
                 calculado: 0,
                 registrado: 0,
-                diferencia: 0
+                mesesContados: new Set<number>()
               };
             }
-            acc[t.ano].calculado += Number(t.isr_calculado);
+            
+            // Solo contamos el ISR calculado una vez por mes
+            if (!acc[t.ano].mesesContados.has(t.mes)) {
+              acc[t.ano].calculado += Number(t.isr_calculado);
+              acc[t.ano].mesesContados.add(t.mes);
+            }
+            
+            // Sumamos todos los pagos realizados
             acc[t.ano].registrado += Number(t.isr_real);
-            acc[t.ano].diferencia += Number(t.diferencia);
+            
             return acc;
-          }, {} as Record<number, { calculado: number; registrado: number; diferencia: number }>);
+          }, {} as Record<number, { calculado: number; registrado: number; mesesContados: Set<number> }>);
 
           const datosFormateados = Object.entries(agrupadoPorAno)
             .map(([ano, valores]) => ({
               periodo: ano,
               calculado: valores.calculado,
               registrado: valores.registrado,
-              diferencia: valores.diferencia
+              diferencia: valores.registrado - valores.calculado
             }))
             .sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
 
@@ -152,7 +171,7 @@ export const AnalyticaImpuestos = () => {
         (acc, d) => ({
           calculado: acc.calculado + d.calculado,
           registrado: acc.registrado + d.registrado,
-          diferencia: acc.diferencia + d.diferencia
+          diferencia: (acc.registrado + d.registrado) - (acc.calculado + d.calculado)
         }),
         { calculado: 0, registrado: 0, diferencia: 0 }
       )
