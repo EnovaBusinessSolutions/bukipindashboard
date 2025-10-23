@@ -816,13 +816,13 @@ const CuentasPorCobrar = () => {
                             if (!clienteData) return [];
                             
                             return [
-                              { rango: 'Sin vencimiento', monto: clienteData.sinVencimiento },
-                              { rango: 'Vencido 1-15 días', monto: clienteData.vencido1_15 },
-                              { rango: 'Vencido 16-30 días', monto: clienteData.vencido16_30 },
-                              { rango: 'Vencido 31-60 días', monto: clienteData.vencido31_60 },
-                              { rango: 'Vencido 61-90 días', monto: clienteData.vencido61_90 },
-                              { rango: 'Vencido +90 días', monto: clienteData.vencidoMas90 }
-                            ].filter(item => item.monto > 0);
+                              { rango: 'Sin vencimiento', monto: clienteData.sinVencimiento || 0 },
+                              { rango: 'Vencido 1-15 días', monto: clienteData.vencido1_15 || 0 },
+                              { rango: 'Vencido 16-30 días', monto: clienteData.vencido16_30 || 0 },
+                              { rango: 'Vencido 31-60 días', monto: clienteData.vencido31_60 || 0 },
+                              { rango: 'Vencido 61-90 días', monto: clienteData.vencido61_90 || 0 },
+                              { rango: 'Vencido +90 días', monto: clienteData.vencidoMas90 || 0 }
+                            ];
                           })()}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
