@@ -165,6 +165,13 @@ export const AnalyticaImpuestos = () => {
     }).format(value);
   };
 
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
+  };
+
   // Calcular totales según la vista
   const totales = tipoVista === "mensual"
     ? datos.reduce(
@@ -311,14 +318,24 @@ export const AnalyticaImpuestos = () => {
                   name="ISR Calculado" 
                   fill="hsl(var(--primary))" 
                   radius={[4, 4, 0, 0]}
-                  label={{ position: 'top', fill: '#000000', fontSize: 12 }}
+                  label={{ 
+                    position: 'top', 
+                    fill: '#000000', 
+                    fontSize: 12,
+                    formatter: (value: number) => `$${formatNumber(value)}`
+                  }}
                 />
                 <Bar 
                   dataKey="registrado" 
                   name="ISR Registrado" 
                   fill="#6366f1"
                   radius={[4, 4, 0, 0]}
-                  label={{ position: 'top', fill: '#000000', fontSize: 12 }}
+                  label={{ 
+                    position: 'top', 
+                    fill: '#000000', 
+                    fontSize: 12,
+                    formatter: (value: number) => `$${formatNumber(value)}`
+                  }}
                 />
                 <Line 
                   type="monotone"
@@ -327,7 +344,12 @@ export const AnalyticaImpuestos = () => {
                   stroke="#ef4444" 
                   strokeWidth={2}
                   dot={{ fill: '#ef4444', r: 4 }}
-                  label={{ position: 'top', fill: '#000000', fontSize: 12 }}
+                  label={{ 
+                    position: 'top', 
+                    fill: '#000000', 
+                    fontSize: 12,
+                    formatter: (value: number) => `$${formatNumber(Math.abs(value))}`
+                  }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
