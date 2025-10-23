@@ -75,7 +75,7 @@ export const AnalyticaImpuestos = () => {
               periodo: mes,
               calculado: calculadoMes,
               registrado: registradoMes,
-              diferencia: diferenciaMes
+              diferencia: Math.abs(diferenciaMes)
             };
           });
 
@@ -121,7 +121,7 @@ export const AnalyticaImpuestos = () => {
               periodo: ano,
               calculado: valores.calculado,
               registrado: valores.registrado,
-              diferencia: valores.registrado - valores.calculado
+              diferencia: Math.abs(valores.registrado - valores.calculado)
             }))
             .sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
 
@@ -348,7 +348,7 @@ export const AnalyticaImpuestos = () => {
                     position: 'top', 
                     fill: '#000000', 
                     fontSize: 12,
-                    formatter: (value: number) => `$${formatNumber(Math.abs(value))}`
+                    formatter: (value: number) => `$${formatNumber(value)}`
                   }}
                 />
               </ComposedChart>
