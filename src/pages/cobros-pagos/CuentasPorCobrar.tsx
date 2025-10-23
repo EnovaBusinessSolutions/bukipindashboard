@@ -71,6 +71,9 @@ const CuentasPorCobrar = () => {
   const [filtroAntiguedad, setFiltroAntiguedad] = useState<string>("todos");
   const [periodoCxC, setPeriodoCxC] = useState<"diario" | "mensual" | "anual">("mensual");
   const [selectedCliente, setSelectedCliente] = useState<string>("");
+  const [filtroCliente, setFiltroCliente] = useState<string>("todos");
+  const [filtroEstado, setFiltroEstado] = useState<string>("todos");
+  const [ordenMonto, setOrdenMonto] = useState<string>("ninguno");
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -152,14 +155,47 @@ const CuentasPorCobrar = () => {
     }
   });
 
-  const filteredCuentas = cuentasPorCobrar?.filter(
-    (cuenta) =>
-      cuenta.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (cuenta as any).cliente_telefono?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (cuenta as any).cliente_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (cuenta as any).cliente_rfc?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredCuentas = (() => {
+    let cuentas = cuentasPorCobrar?.filter(
+      (cuenta) =>
+        cuenta.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cuenta as any).cliente_telefono?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cuenta as any).cliente_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cuenta as any).cliente_rfc?.toLowerCase().includes(searchTerm.toLowerCase())
+    ) || [];
+
+    // Filtro por cliente específico
+    if (filtroCliente !== "todos") {
+      cuentas = cuentas.filter(cuenta => cuenta.cliente_nombre === filtroCliente);
+    }
+
+    // Filtro por estado
+    if (filtroEstado !== "todos") {
+      const hoy = new Date();
+      cuentas = cuentas.filter(cuenta => {
+        if (filtroEstado === "vencida") {
+          return cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) < hoy;
+        } else if (filtroEstado === "porVencer") {
+          return cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) >= hoy;
+        } else if (filtroEstado === "sinVencimiento") {
+          return !cuenta.fecha_vencimiento;
+        } else if (filtroEstado === "cobrado") {
+          return cuenta.monto_pendiente === 0;
+        }
+        return true;
+      });
+    }
+
+    // Ordenamiento por monto
+    if (ordenMonto === "menorMayor") {
+      cuentas = [...cuentas].sort((a, b) => (a.monto_pendiente || 0) - (b.monto_pendiente || 0));
+    } else if (ordenMonto === "mayorMenor") {
+      cuentas = [...cuentas].sort((a, b) => (b.monto_pendiente || 0) - (a.monto_pendiente || 0));
+    }
+
+    return cuentas;
+  })();
 
   const totalPorCobrar = filteredCuentas.reduce((sum, cuenta) => sum + (cuenta.monto_pendiente || 0), 0);
   const vencidas = filteredCuentas.filter(cuenta => 
@@ -317,13 +353,86 @@ const CuentasPorCobrar = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                          <Input
-                            placeholder="Buscar por cliente, descripción, teléfono, email o RFC..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                          />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Búsqueda general */}
+                  <div className="lg:col-span-2">
+                    <Label htmlFor="busqueda-general" className="mb-2 block">Búsqueda General</Label>
+                    <Input
+                      id="busqueda-general"
+                      placeholder="Buscar por cliente, descripción, teléfono, email o RFC..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Filtro por cliente */}
+                  <div>
+                    <Label htmlFor="filtro-cliente" className="mb-2 block">Cliente</Label>
+                    <Select value={filtroCliente} onValueChange={setFiltroCliente}>
+                      <SelectTrigger id="filtro-cliente" className="bg-background">
+                        <SelectValue placeholder="Todos los clientes" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="todos">Todos los clientes</SelectItem>
+                        {Array.from(new Set((cuentasPorCobrar || [])
+                          .map(c => c.cliente_nombre)
+                          .filter(Boolean)))
+                          .sort()
+                          .map((cliente) => (
+                            <SelectItem key={cliente} value={cliente!}>
+                              {cliente}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Filtro por estado */}
+                  <div>
+                    <Label htmlFor="filtro-estado" className="mb-2 block">Estado</Label>
+                    <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                      <SelectTrigger id="filtro-estado" className="bg-background">
+                        <SelectValue placeholder="Todos los estados" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="todos">Todos los estados</SelectItem>
+                        <SelectItem value="vencida">Vencida</SelectItem>
+                        <SelectItem value="porVencer">Por vencer</SelectItem>
+                        <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
+                        <SelectItem value="cobrado">Cobrado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Ordenar por monto */}
+                  <div className="lg:col-span-2">
+                    <Label htmlFor="orden-monto" className="mb-2 block">Ordenar por Monto</Label>
+                    <Select value={ordenMonto} onValueChange={setOrdenMonto}>
+                      <SelectTrigger id="orden-monto" className="bg-background">
+                        <SelectValue placeholder="Sin ordenar" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="ninguno">Sin ordenar</SelectItem>
+                        <SelectItem value="menorMayor">Menor a Mayor</SelectItem>
+                        <SelectItem value="mayorMenor">Mayor a Menor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Botón para limpiar filtros */}
+                  <div className="lg:col-span-2 flex items-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setFiltroCliente("todos");
+                        setFiltroEstado("todos");
+                        setOrdenMonto("ninguno");
+                      }}
+                      className="w-full"
+                    >
+                      Limpiar Filtros
+                    </Button>
                   </div>
                 </div>
               </CardContent>
