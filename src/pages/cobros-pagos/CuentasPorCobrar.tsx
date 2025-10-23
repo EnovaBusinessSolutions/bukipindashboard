@@ -1207,16 +1207,24 @@ const CuentasPorCobrar = () => {
                           contentStyle={{
                             backgroundColor: 'hsl(var(--background))',
                             border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
+                            borderRadius: '8px',
+                            color: 'hsl(var(--foreground))'
                           }}
                           formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Saldo CxC']}
+                          labelStyle={{ color: 'hsl(var(--foreground))' }}
                         />
-                        <Line 
+                         <Line 
                           type="monotone" 
                           dataKey="saldo" 
                           stroke={COLORS.primary}
                           strokeWidth={3}
                           dot={{ fill: COLORS.primary, r: 4 }}
+                          label={{
+                            position: 'top',
+                            fill: 'hsl(var(--foreground))',
+                            fontSize: 12,
+                            formatter: (value: number) => `$${(value / 1000).toFixed(0)}k`
+                          }}
                         />
                       </LineChart>
                     </ResponsiveContainer>

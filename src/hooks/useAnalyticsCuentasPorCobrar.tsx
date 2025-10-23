@@ -5,6 +5,8 @@ interface CuentaPorCobrar {
   id: string;
   cliente_nombre: string | null;
   monto_pendiente: number;
+  monto_neto: number;
+  monto_pagado: number;
   fecha_vencimiento: string | null;
   created_at: string;
   descripcion: string;
@@ -152,21 +154,66 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
       } else if (periodo === "mensual") {
         // Mostrar todos los días del mes actual
         const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0); // Normalizar a inicio del día para comparaciones
         const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        const diasDelMes = hoy.getDate(); // Solo hasta hoy
+        const diasDelMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+        const diaActual = new Date().getDate();
         
-        for (let dia = 1; dia <= diasDelMes; dia++) {
-          const fecha = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
-          fecha.setHours(23, 59, 59, 999);
+        for (let dia = 1; dia <= Math.min(diasDelMes, diaActual); dia++) {
+          const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
+          fechaDia.setHours(23, 59, 59, 999);
           
-          // Calcular el saldo de CxC al cierre de ese día
-          const saldo = cuentasConDias
-            .filter(c => new Date(c.created_at) <= fecha)
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
+          const esHoy = dia === diaActual;
+          
+          let saldo = 0;
+          
+          if (esHoy) {
+            // Para hoy, usar el saldo actual (monto_pendiente)
+            saldo = cuentasConDias
+              .filter(c => new Date(c.created_at) <= fechaDia)
+              .reduce((sum, c) => sum + c.monto_pendiente, 0);
+          } else {
+            // Para días pasados, calcular usando monto_neto de transacciones creadas hasta ese día
+            // y restar los pagos estimados proporcionalmente
+            const transaccionesHastaEseDia = cuentasConDias.filter(c => {
+              const fechaCreacion = new Date(c.created_at);
+              fechaCreacion.setHours(0, 0, 0, 0);
+              return fechaCreacion <= fechaDia;
+            });
+            
+            // Sumar monto_neto de todas las transacciones hasta ese día
+            const totalNeto = transaccionesHastaEseDia.reduce((sum, c) => sum + c.monto_neto, 0);
+            
+            // Calcular pagos realizados antes de ese día (aproximación)
+            // Asumimos distribución uniforme de pagos desde creación hasta hoy
+            const pagosEstimados = transaccionesHastaEseDia.reduce((sum, c) => {
+              const fechaCreacion = new Date(c.created_at);
+              fechaCreacion.setHours(0, 0, 0, 0);
+              
+              // Si la transacción fue creada ese día o después, no hubo pagos aún
+              if (fechaCreacion >= fechaDia) {
+                return sum;
+              }
+              
+              // Calcular días desde creación hasta ese día
+              const diasDesdeCreacion = Math.floor((fechaDia.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
+              const diasDesdeCreacionHastaHoy = Math.floor((hoy.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
+              
+              // Estimar pagos proporcionalmente
+              if (diasDesdeCreacionHastaHoy > 0) {
+                const proporcion = diasDesdeCreacion / diasDesdeCreacionHastaHoy;
+                return sum + (c.monto_pagado * proporcion);
+              }
+              
+              return sum;
+            }, 0);
+            
+            saldo = totalNeto - pagosEstimados;
+          }
           
           historicoCxC.push({
-            fecha: fecha.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-            saldo
+            fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+            saldo: Math.max(0, saldo) // No permitir saldos negativos
           });
         }
       } else if (periodo === "anual") {
@@ -180,14 +227,50 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
           const ultimoDiaMes = new Date(anioActual, mes + 1, 0);
           ultimoDiaMes.setHours(23, 59, 59, 999);
           
-          // Calcular el saldo de CxC al cierre de ese mes
-          const saldo = cuentasConDias
-            .filter(c => new Date(c.created_at) <= ultimoDiaMes)
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
+          const esMesActual = mes === mesActual;
+          
+          let saldo = 0;
+          
+          if (esMesActual) {
+            // Para el mes actual, usar el saldo actual
+            saldo = cuentasConDias
+              .filter(c => new Date(c.created_at) <= ultimoDiaMes)
+              .reduce((sum, c) => sum + c.monto_pendiente, 0);
+          } else {
+            // Para meses pasados, calcular saldo histórico estimado
+            const transaccionesHastaEseMes = cuentasConDias.filter(c => 
+              new Date(c.created_at) <= ultimoDiaMes
+            );
+            
+            const totalNeto = transaccionesHastaEseMes.reduce((sum, c) => sum + c.monto_neto, 0);
+            
+            // Estimar pagos hasta ese mes
+            const pagosEstimados = transaccionesHastaEseMes.reduce((sum, c) => {
+              const fechaCreacion = new Date(c.created_at);
+              
+              if (fechaCreacion >= ultimoDiaMes) {
+                return sum;
+              }
+              
+              const mesesDesdeCreacion = (ultimoDiaMes.getFullYear() - fechaCreacion.getFullYear()) * 12 + 
+                                         (ultimoDiaMes.getMonth() - fechaCreacion.getMonth());
+              const mesesDesdeCreacionHastaHoy = (hoy.getFullYear() - fechaCreacion.getFullYear()) * 12 + 
+                                                  (hoy.getMonth() - fechaCreacion.getMonth());
+              
+              if (mesesDesdeCreacionHastaHoy > 0) {
+                const proporcion = mesesDesdeCreacion / mesesDesdeCreacionHastaHoy;
+                return sum + (c.monto_pagado * proporcion);
+              }
+              
+              return sum;
+            }, 0);
+            
+            saldo = totalNeto - pagosEstimados;
+          }
           
           historicoCxC.push({
             fecha: ultimoDiaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
-            saldo
+            saldo: Math.max(0, saldo)
           });
         }
       }
