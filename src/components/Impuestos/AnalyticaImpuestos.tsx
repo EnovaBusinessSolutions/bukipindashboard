@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp } from "lucide-react";
 
 interface DatosGrafica {
@@ -284,7 +284,7 @@ export const AnalyticaImpuestos = () => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={datos}>
+              <ComposedChart data={datos}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis 
                   dataKey="periodo" 
@@ -311,14 +311,25 @@ export const AnalyticaImpuestos = () => {
                   name="ISR Calculado" 
                   fill="hsl(var(--primary))" 
                   radius={[4, 4, 0, 0]}
+                  label={{ position: 'top', fill: '#000000', fontSize: 12 }}
                 />
                 <Bar 
                   dataKey="registrado" 
                   name="ISR Registrado" 
                   fill="#6366f1"
                   radius={[4, 4, 0, 0]}
+                  label={{ position: 'top', fill: '#000000', fontSize: 12 }}
                 />
-              </BarChart>
+                <Line 
+                  type="monotone"
+                  dataKey="diferencia" 
+                  name="Diferencia" 
+                  stroke="#ef4444" 
+                  strokeWidth={2}
+                  dot={{ fill: '#ef4444', r: 4 }}
+                  label={{ position: 'top', fill: '#000000', fontSize: 12 }}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           )}
         </CardContent>
