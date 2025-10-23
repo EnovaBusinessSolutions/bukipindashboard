@@ -133,13 +133,17 @@ export const ResumenImpuestos = () => {
   ];
 
   const verDetalleAsiento = async (transaccion: TransaccionImpuesto) => {
-    // Buscar el asiento contable relacionado
+    // Buscar el asiento contable relacionado con los detalles y nombres de cuenta
     const { data: asientoData } = await supabase
       .from('asientos_contables')
       .select(`
         *,
         detalle_asientos (
-          *
+          *,
+          cuentas:cuenta_codigo (
+            codigo,
+            nombre
+          )
         )
       `)
       .eq('user_id', user?.id)
@@ -435,7 +439,12 @@ export const ResumenImpuestos = () => {
                   <TableBody>
                     {detalleAsiento.detalle_asientos?.map((detalle: any) => (
                       <TableRow key={detalle.id}>
-                        <TableCell className="font-mono text-sm">{detalle.cuenta_codigo}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-mono text-sm font-medium">{detalle.cuenta_codigo}</p>
+                            <p className="text-xs text-muted-foreground">{detalle.cuentas?.nombre || 'N/A'}</p>
+                          </div>
+                        </TableCell>
                         <TableCell>{detalle.descripcion}</TableCell>
                         <TableCell className="text-right font-medium">
                           {detalle.debe > 0 ? formatCurrency(detalle.debe) : '-'}
