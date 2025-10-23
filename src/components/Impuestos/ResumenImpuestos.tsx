@@ -2,9 +2,13 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { FileText, Eye } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface TransaccionImpuesto {
   id: string;
@@ -28,23 +32,33 @@ interface TransaccionImpuesto {
 
 export const ResumenImpuestos = () => {
   const { user } = useAuth();
+  const currentDate = new Date();
   const [transacciones, setTransacciones] = useState<TransaccionImpuesto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mesSeleccionado, setMesSeleccionado] = useState<string>("todos");
+  const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentDate.getFullYear());
+  const [detalleAsiento, setDetalleAsiento] = useState<any>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
 
     const fetchTransacciones = async () => {
       setLoading(true);
-      const currentYear = new Date().getFullYear();
       
-      // Obtener transacciones de impuestos del ejercicio fiscal actual
-      const { data: impuestosData, error: impuestosError } = await supabase
+      // Construir query con filtros
+      let query = supabase
         .from('transacciones_impuestos')
         .select('*')
         .eq('user_id', user.id)
-        .eq('ano', currentYear)
-        .order('mes', { ascending: false });
+        .eq('ano', anoSeleccionado);
+      
+      // Aplicar filtro de mes si no es "todos"
+      if (mesSeleccionado !== "todos") {
+        query = query.eq('mes', parseInt(mesSeleccionado));
+      }
+      
+      const { data: impuestosData, error: impuestosError } = await query.order('created_at', { ascending: false });
 
       if (impuestosError) {
         console.error("Error fetching transacciones:", impuestosError);
@@ -104,7 +118,7 @@ export const ResumenImpuestos = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, mesSeleccionado, anoSeleccionado]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -117,6 +131,31 @@ export const ResumenImpuestos = () => {
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
+
+  const verDetalleAsiento = async (transaccion: TransaccionImpuesto) => {
+    // Buscar el asiento contable relacionado
+    const { data: asientoData } = await supabase
+      .from('asientos_contables')
+      .select(`
+        *,
+        detalle_asientos (
+          *
+        )
+      `)
+      .eq('user_id', user?.id)
+      .ilike('descripcion', `%ISR%${meses[transaccion.mes - 1]}%${transaccion.ano}%`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (asientoData) {
+      setDetalleAsiento({
+        ...asientoData,
+        transaccion
+      });
+      setDialogOpen(true);
+    }
+  };
 
   // Agrupar transacciones por mes para evitar duplicar utilidad e ISR calculado
   const transaccionesPorMes = transacciones.reduce((acc, t) => {
@@ -152,8 +191,50 @@ export const ResumenImpuestos = () => {
 
   return (
     <div className="space-y-6">
+      {/* Filtros */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+          <CardDescription>Filtra las transacciones por período</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="mes-filtro">Mes</Label>
+            <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+              <SelectTrigger id="mes-filtro">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los meses</SelectItem>
+                {meses.map((mes, index) => (
+                  <SelectItem key={index + 1} value={(index + 1).toString()}>
+                    {mes}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ano-filtro">Año</Label>
+            <Select value={anoSeleccionado.toString()} onValueChange={(value) => setAnoSeleccionado(parseInt(value))}>
+              <SelectTrigger id="ano-filtro">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - i).map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Resumen General */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Utilidad Total</CardDescription>
@@ -175,16 +256,6 @@ export const ResumenImpuestos = () => {
           </CardHeader>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Diferencia</CardDescription>
-            <CardTitle className={`text-2xl flex items-center gap-2 ${totales.diferencia > 0 ? 'text-red-600' : totales.diferencia < 0 ? 'text-green-600' : ''}`}>
-              {totales.diferencia > 0 && <TrendingUp className="h-5 w-5" />}
-              {totales.diferencia < 0 && <TrendingDown className="h-5 w-5" />}
-              {formatCurrency(Math.abs(totales.diferencia))}
-            </CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
       {/* Tabla de Transacciones */}
@@ -217,18 +288,18 @@ export const ResumenImpuestos = () => {
                     <TableHead className="text-right">Tasa</TableHead>
                     <TableHead className="text-right">ISR Calculado</TableHead>
                     <TableHead className="text-right">ISR Registrado</TableHead>
-                    <TableHead className="text-right">Diferencia</TableHead>
                     <TableHead>Tipo Pago</TableHead>
                     <TableHead>Método</TableHead>
                     <TableHead className="text-right">Monto Pagado</TableHead>
                     <TableHead className="text-right">Saldo Pendiente</TableHead>
                     <TableHead>Cuenta</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transacciones.map((t) => (
-                    <TableRow key={t.id}>
+                    <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
                       <TableCell className="font-medium">
                         {meses[t.mes - 1]} {t.ano}
                       </TableCell>
@@ -243,13 +314,6 @@ export const ResumenImpuestos = () => {
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(t.isr_real)}
-                      </TableCell>
-                      <TableCell className={`text-right font-semibold ${
-                        t.diferencia > 0 ? 'text-red-600' : 
-                        t.diferencia < 0 ? 'text-green-600' : ''
-                      }`}>
-                        {t.diferencia > 0 ? '+' : ''}
-                        {formatCurrency(t.diferencia)}
                       </TableCell>
                       <TableCell>
                         {t.egreso?.tipo_pago === 'contado' ? (
@@ -301,6 +365,16 @@ export const ResumenImpuestos = () => {
                           <Badge variant="secondary">Registrado</Badge>
                         )}
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => verDetalleAsiento(t)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -321,9 +395,76 @@ export const ResumenImpuestos = () => {
             <li><strong>Debe:</strong> Cuenta 6001 (ISR) - Monto del ISR</li>
             <li><strong>Haber:</strong> Cuenta 1002 (Bancos) o 2001 (Proveedores) según el tipo de pago</li>
           </ul>
-          <p className="mt-3">Estos asientos se reflejan automáticamente en tu Balance General y en la Balanza de Comprobación.</p>
+          <p className="mt-3">Haz clic en el ícono del ojo para ver el desglose contable de cada transacción.</p>
         </CardContent>
       </Card>
+
+      {/* Dialog para mostrar detalle del asiento */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Desglose Contable</DialogTitle>
+            <DialogDescription>
+              Asiento: {detalleAsiento?.numero_asiento} - {detalleAsiento?.descripcion}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {detalleAsiento && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Fecha:</p>
+                  <p className="font-medium">{new Date(detalleAsiento.fecha).toLocaleDateString('es-MX')}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">ISR Registrado:</p>
+                  <p className="font-medium">{formatCurrency(detalleAsiento.transaccion.isr_real)}</p>
+                </div>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cuenta</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right">Debe</TableHead>
+                      <TableHead className="text-right">Haber</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detalleAsiento.detalle_asientos?.map((detalle: any) => (
+                      <TableRow key={detalle.id}>
+                        <TableCell className="font-mono text-sm">{detalle.cuenta_codigo}</TableCell>
+                        <TableCell>{detalle.descripcion}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {detalle.debe > 0 ? formatCurrency(detalle.debe) : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {detalle.haber > 0 ? formatCurrency(detalle.haber) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-semibold bg-muted/50">
+                      <TableCell colSpan={2}>Total</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(
+                          detalleAsiento.detalle_asientos?.reduce((sum: number, d: any) => sum + Number(d.debe), 0) || 0
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(
+                          detalleAsiento.detalle_asientos?.reduce((sum: number, d: any) => sum + Number(d.haber), 0) || 0
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
