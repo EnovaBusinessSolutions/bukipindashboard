@@ -46,16 +46,24 @@ export const AnalyticaImpuestos = () => {
             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
           ];
 
-          // Crear array con todos los 12 meses
+          // Crear array con todos los 12 meses, agrupando múltiples registros del mismo mes
           const datosCompletos = meses.map((mes, index) => {
             const mesNumero = index + 1;
-            const transaccion = (data || []).find(t => t.mes === mesNumero);
+            // Filtrar TODAS las transacciones del mes (puede haber múltiples pagos)
+            const transaccionesMes = (data || []).filter(t => t.mes === mesNumero);
+            
+            // Sumar todos los registros del mes
+            const totalesMes = transaccionesMes.reduce((acc, t) => ({
+              calculado: acc.calculado + Number(t.isr_calculado),
+              registrado: acc.registrado + Number(t.isr_real),
+              diferencia: acc.diferencia + Number(t.diferencia)
+            }), { calculado: 0, registrado: 0, diferencia: 0 });
             
             return {
               periodo: mes,
-              calculado: transaccion ? Number(transaccion.isr_calculado) : 0,
-              registrado: transaccion ? Number(transaccion.isr_real) : 0,
-              diferencia: transaccion ? Number(transaccion.diferencia) : 0
+              calculado: totalesMes.calculado,
+              registrado: totalesMes.registrado,
+              diferencia: totalesMes.diferencia
             };
           });
 

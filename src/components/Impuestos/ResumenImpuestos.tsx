@@ -53,18 +53,26 @@ export const ResumenImpuestos = () => {
         // Obtener información de egresos relacionados para cada transacción
         const transaccionesConDetalles = await Promise.all(
           (impuestosData || []).map(async (t) => {
+            // Buscar el egreso que corresponde específicamente a este registro
+            // Usamos la fecha de creación del impuesto para encontrar el egreso más cercano
             const { data: egresoData } = await supabase
               .from('transacciones_egresos')
-              .select('tipo_pago, metodo_pago, monto_pagado, monto_pendiente, cuenta_codigo')
+              .select('tipo_pago, metodo_pago, monto_pagado, monto_pendiente, cuenta_codigo, created_at')
               .eq('user_id', user.id)
               .eq('tipo_egreso', 'impuesto')
               .eq('subtipo_egreso', 'ISR')
               .ilike('descripcion', `%${meses[t.mes - 1]}%${t.ano}%`)
-              .maybeSingle();
+              .order('created_at', { ascending: false });
+
+            // Buscar el egreso que coincida temporalmente con el registro de impuesto
+            const egresoCorrespondiente = egresoData?.find(e => {
+              const diffMs = Math.abs(new Date(e.created_at).getTime() - new Date(t.created_at).getTime());
+              return diffMs < 5000; // Dentro de 5 segundos
+            }) || egresoData?.[0];
 
             return {
               ...t,
-              egreso: egresoData
+              egreso: egresoCorrespondiente
             };
           })
         );
