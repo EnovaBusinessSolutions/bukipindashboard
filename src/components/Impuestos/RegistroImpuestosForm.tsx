@@ -553,15 +553,15 @@ export const RegistroImpuestosForm = () => {
       {/* ISR Real a Pagar */}
       <Card>
         <CardHeader>
-          <CardTitle>ISR Real a Pagar</CardTitle>
+          <CardTitle>Monto Total del ISR</CardTitle>
           <CardDescription>
-            Ingresa el monto real de ISR que pagarás (puede diferir del cálculo automático)
+            Ingresa el monto TOTAL del ISR que corresponde a este período (este es el importe del impuesto, no lo que pagarás ahora)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="isr-real">Monto Real de ISR *</Label>
+              <Label htmlFor="isr-real" className="text-base font-semibold">Monto TOTAL del ISR *</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -575,7 +575,7 @@ export const RegistroImpuestosForm = () => {
             <Input
               id="isr-real"
               type="text"
-              placeholder="Ingresa el monto real a pagar"
+              placeholder="Ingresa el importe total del ISR"
               value={isrReal}
               onChange={(e) => {
                 const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
@@ -592,12 +592,16 @@ export const RegistroImpuestosForm = () => {
                 }
               }}
               maxLength={20}
+              className="text-lg font-semibold"
             />
             {isrReal && !isNaN(parseFloat(isrReal)) && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-medium text-primary">
                 {parseFloat(isrReal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
               </p>
             )}
+            <p className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-2 rounded border border-blue-200 dark:border-blue-800">
+              ℹ️ <strong>Importante:</strong> Este es el monto total del impuesto que te corresponde pagar. En el siguiente paso elegirás cómo realizarás el pago.
+            </p>
           </div>
 
           {isrReal && (
@@ -662,15 +666,15 @@ export const RegistroImpuestosForm = () => {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="tipo-pago">Tipo de Liquidación *</Label>
+            <Label htmlFor="tipo-pago" className="text-base font-semibold">¿Cómo realizarás el pago de este ISR? *</Label>
             <Select value={tipoPago} onValueChange={setTipoPago}>
               <SelectTrigger id="tipo-pago">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="total">Pago Total</SelectItem>
-                <SelectItem value="parcial">Pago Parcial</SelectItem>
-                <SelectItem value="credito">A Crédito (Cuenta por Pagar)</SelectItem>
+                <SelectItem value="total">✓ Pago Total - Pagaré el 100% AHORA</SelectItem>
+                <SelectItem value="parcial">⚡ Pago Parcial - Pagaré una PARTE ahora y el resto después</SelectItem>
+                <SelectItem value="credito">📅 A Crédito - NO pagaré nada ahora (solo registrar la deuda)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -704,12 +708,14 @@ export const RegistroImpuestosForm = () => {
 
               {tipoPago === "parcial" && (
                 <>
-                  <div className="space-y-2">
-                    <Label htmlFor="monto-pagado">Monto Pagado *</Label>
+                  <div className="space-y-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border-2 border-blue-300 dark:border-blue-700">
+                    <Label htmlFor="monto-pagado" className="text-base font-bold text-blue-900 dark:text-blue-100">
+                      💰 ¿Cuánto vas a pagar AHORA? *
+                    </Label>
                     <Input
                       id="monto-pagado"
                       type="text"
-                      placeholder="Ingresa el monto pagado"
+                      placeholder="Ingresa solo el monto que pagarás en este momento"
                       value={montoPagado}
                       onChange={(e) => {
                         const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
@@ -724,18 +730,48 @@ export const RegistroImpuestosForm = () => {
                         }
                       }}
                       maxLength={20}
+                      className="text-lg font-bold border-2"
                     />
                     {montoPagado && !isNaN(parseFloat(montoPagado)) && (
-                      <p className="text-sm text-muted-foreground">
-                        {parseFloat(montoPagado).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                      <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                        ✓ Pagarás: {parseFloat(montoPagado).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
                       </p>
                     )}
-                    {montoPagado && isrReal && (
-                      <p className="text-xs text-muted-foreground">
-                        Saldo pendiente: {formatCurrency(parseFloat(isrReal) - parseFloat(montoPagado))}
-                      </p>
-                    )}
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-white/50 dark:bg-black/20 p-2 rounded">
+                      ⚠️ Este NO es el total del ISR, es solo lo que vas a pagar en este momento. El resto quedará como saldo pendiente.
+                    </p>
                   </div>
+
+                  {montoPagado && isrReal && parseFloat(montoPagado) > 0 && parseFloat(isrReal) > 0 && (
+                    <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg border-2 border-amber-400 dark:border-amber-700">
+                      <h4 className="font-bold text-amber-900 dark:text-amber-100 mb-3 flex items-center gap-2">
+                        📊 Resumen del Pago Parcial
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center p-2 bg-white/50 dark:bg-black/20 rounded">
+                          <span className="text-sm font-medium">Monto TOTAL de ISR:</span>
+                          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                            {formatCurrency(parseFloat(isrReal))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-green-100 dark:bg-green-900/30 rounded">
+                          <span className="text-sm font-medium text-green-800 dark:text-green-300">✓ Pagarás AHORA:</span>
+                          <span className="text-lg font-bold text-green-700 dark:text-green-400">
+                            {formatCurrency(parseFloat(montoPagado))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-red-100 dark:bg-red-900/30 rounded border-t-2 border-red-300 dark:border-red-700">
+                          <span className="text-sm font-medium text-red-800 dark:text-red-300">📅 Quedará PENDIENTE:</span>
+                          <span className="text-xl font-bold text-red-700 dark:text-red-400">
+                            {formatCurrency(parseFloat(isrReal) - parseFloat(montoPagado))}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-3 italic font-medium">
+                        ✓ El saldo pendiente se registrará como cuenta por pagar y deberás liquidarlo antes de la fecha de vencimiento.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="fecha-vencimiento-parcial">Fecha de Vencimiento del Saldo *</Label>
