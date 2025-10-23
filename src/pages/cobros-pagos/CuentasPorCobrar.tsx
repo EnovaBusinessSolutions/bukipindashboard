@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,8 @@ import {
   TrendingUp, 
   Users, 
   Clock, 
-  Target
+  Target,
+  CheckCircle2
 } from "lucide-react";
 import { 
   BarChart, 
@@ -83,6 +84,20 @@ const CuentasPorCobrar = () => {
         .select("*")
         .gt("monto_pendiente", 0)
         .order("fecha_vencimiento", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Query para todas las transacciones (incluyendo pagadas) para ver trazabilidad
+  const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
+    queryKey: ["todas-transacciones-ingresos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transacciones_ingresos")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data || [];
@@ -286,10 +301,14 @@ const CuentasPorCobrar = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="lista" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Lista de Cuentas
+            </TabsTrigger>
+            <TabsTrigger value="transacciones" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Resumen de Transacciones
             </TabsTrigger>
             <TabsTrigger value="analiticas" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -604,7 +623,209 @@ const CuentasPorCobrar = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab 2: Analíticas */}
+          {/* Tab 2: Resumen de Transacciones */}
+          <TabsContent value="transacciones" className="space-y-6">
+            {loadingTransacciones ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-muted-foreground">Cargando transacciones...</div>
+              </div>
+            ) : (
+              <>
+                {/* KPIs de Transacciones */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Transacciones</CardTitle>
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{todasTransacciones?.length || 0}</div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Completamente Pagadas</CardTitle>
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-success">
+                        {todasTransacciones?.filter(t => t.monto_pendiente === 0).length || 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Pagos Parciales</CardTitle>
+                      <Clock className="h-4 w-4 text-warning" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-warning">
+                        {todasTransacciones?.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Sin Pagar</CardTitle>
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-destructive">
+                        {todasTransacciones?.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Tabla de Transacciones Completas */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Historial Completo de Transacciones
+                    </CardTitle>
+                    <CardDescription>
+                      Trazabilidad de todas las transacciones de ingresos, desde su creación hasta su liquidación
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {!todasTransacciones || todasTransacciones.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No hay transacciones registradas.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha Creación</TableHead>
+                              <TableHead>Cliente</TableHead>
+                              <TableHead>Descripción</TableHead>
+                              <TableHead>Tipo Ingreso</TableHead>
+                              <TableHead className="text-right">Monto Total</TableHead>
+                              <TableHead className="text-right">Descuento</TableHead>
+                              <TableHead className="text-right">Monto Neto</TableHead>
+                              <TableHead className="text-right">Pagado</TableHead>
+                              <TableHead className="text-right">Pendiente</TableHead>
+                              <TableHead>Tipo Pago</TableHead>
+                              <TableHead>Método Pago</TableHead>
+                              <TableHead>Estado</TableHead>
+                              <TableHead>Progreso</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {todasTransacciones.map((transaccion) => {
+                              const porcentajePagado = transaccion.monto_neto > 0 
+                                ? (transaccion.monto_pagado / transaccion.monto_neto) * 100 
+                                : 0;
+                              
+                              return (
+                                <TableRow key={transaccion.id}>
+                                  <TableCell className="font-medium">
+                                    {format(new Date(transaccion.created_at), "dd MMM yyyy HH:mm", { locale: es })}
+                                  </TableCell>
+                                  <TableCell>{transaccion.cliente_nombre || "Sin especificar"}</TableCell>
+                                  <TableCell className="max-w-[200px] truncate">
+                                    {transaccion.descripcion}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="capitalize">
+                                      {transaccion.tipo_ingreso}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">
+                                    ${transaccion.monto_total.toLocaleString('es-CO')}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {transaccion.monto_descuento > 0 ? (
+                                      <span className="text-destructive">
+                                        -${transaccion.monto_descuento.toLocaleString('es-CO')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">-</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right font-semibold">
+                                    ${transaccion.monto_neto.toLocaleString('es-CO')}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <span className="text-success font-semibold">
+                                      ${transaccion.monto_pagado.toLocaleString('es-CO')}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {transaccion.monto_pendiente > 0 ? (
+                                      <span className="text-destructive font-semibold">
+                                        ${transaccion.monto_pendiente.toLocaleString('es-CO')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">$0</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {transaccion.tipo_pago === 'contado' ? (
+                                      <Badge variant="secondary">Contado</Badge>
+                                    ) : transaccion.tipo_pago === 'credito' ? (
+                                      <Badge variant="outline">Crédito</Badge>
+                                    ) : (
+                                      <Badge className="bg-amber-500">Parcial</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="capitalize">
+                                    {transaccion.metodo_pago || "-"}
+                                  </TableCell>
+                                  <TableCell>
+                                    {transaccion.monto_pendiente === 0 ? (
+                                      <Badge className="bg-success">Completado</Badge>
+                                    ) : transaccion.monto_pagado > 0 ? (
+                                      <Badge className="bg-warning">En Progreso</Badge>
+                                    ) : (
+                                      <Badge variant="destructive">Sin Pagar</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="min-w-[150px]">
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between text-xs">
+                                        <span>{porcentajePagado.toFixed(0)}%</span>
+                                        <span className="text-muted-foreground">
+                                          {transaccion.monto_pagado > 0 && transaccion.monto_pendiente > 0
+                                            ? 'Parcial'
+                                            : transaccion.monto_pendiente === 0
+                                            ? 'Completo'
+                                            : 'Sin pago'}
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-muted rounded-full h-2">
+                                        <div
+                                          className={`h-2 rounded-full transition-all ${
+                                            porcentajePagado === 100
+                                              ? 'bg-success'
+                                              : porcentajePagado > 0
+                                              ? 'bg-warning'
+                                              : 'bg-destructive'
+                                          }`}
+                                          style={{ width: `${porcentajePagado}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Tab 3: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
             {loadingAnalytics ? (
               <div className="flex items-center justify-center h-64">
