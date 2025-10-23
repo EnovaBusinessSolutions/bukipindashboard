@@ -84,6 +84,7 @@ const CuentasPorCobrar = () => {
   const [filtroTipoIngreso, setFiltroTipoIngreso] = useState<string>("todos");
   const [filtroClienteTransaccion, setFiltroClienteTransaccion] = useState<string>("todos");
   const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
+  const [escalaHistorico, setEscalaHistorico] = useState<"normal" | "miles" | "millones">("normal");
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -1177,16 +1178,28 @@ const CuentasPorCobrar = () => {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>Histórico de Cuentas por Cobrar</CardTitle>
-                      <Select value={periodoCxC} onValueChange={(value: any) => setPeriodoCxC(value)}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Selecciona período" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="diario">Diario (Hoy)</SelectItem>
-                          <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
-                          <SelectItem value="anual">Anual (Año actual)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-4">
+                        <Select value={escalaHistorico} onValueChange={(value: any) => setEscalaHistorico(value)}>
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Escala" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="miles">Miles</SelectItem>
+                            <SelectItem value="millones">Millones</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={periodoCxC} onValueChange={(value: any) => setPeriodoCxC(value)}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Selecciona período" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="diario">Diario (Hoy)</SelectItem>
+                            <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
+                            <SelectItem value="anual">Anual (Año actual)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -1201,7 +1214,14 @@ const CuentasPorCobrar = () => {
                         <YAxis 
                           stroke="hsl(var(--foreground))"
                           tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                          tickFormatter={(value) => {
+                            if (escalaHistorico === "miles") {
+                              return `$${(value / 1000).toFixed(0)}k`;
+                            } else if (escalaHistorico === "millones") {
+                              return `$${(value / 1000000).toFixed(2)}M`;
+                            }
+                            return `$${(value / 1000).toFixed(0)}k`;
+                          }}
                         />
                         <Tooltip
                           contentStyle={{
@@ -1210,10 +1230,25 @@ const CuentasPorCobrar = () => {
                             borderRadius: '8px',
                             color: 'hsl(var(--foreground))'
                           }}
-                          formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Saldo CxC']}
+                          formatter={(value: number) => {
+                            let formatted = '';
+                            let label = 'Saldo CxC';
+                            
+                            if (escalaHistorico === "miles") {
+                              formatted = `$${(value / 1000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}k`;
+                              label = 'Saldo CxC (Miles)';
+                            } else if (escalaHistorico === "millones") {
+                              formatted = `$${(value / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M`;
+                              label = 'Saldo CxC (Millones)';
+                            } else {
+                              formatted = `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                            }
+                            
+                            return [formatted, label];
+                          }}
                           labelStyle={{ color: 'hsl(var(--foreground))' }}
                         />
-                         <Line 
+                        <Line 
                           type="monotone" 
                           dataKey="saldo" 
                           stroke={COLORS.primary}
@@ -1223,7 +1258,14 @@ const CuentasPorCobrar = () => {
                             position: 'top',
                             fill: 'hsl(var(--foreground))',
                             fontSize: 12,
-                            formatter: (value: number) => `$${(value / 1000).toFixed(0)}k`
+                            formatter: (value: number) => {
+                              if (escalaHistorico === "miles") {
+                                return `$${(value / 1000).toFixed(0)}k`;
+                              } else if (escalaHistorico === "millones") {
+                                return `$${(value / 1000000).toFixed(1)}M`;
+                              }
+                              return `$${(value / 1000).toFixed(0)}k`;
+                            }
                           }}
                         />
                       </LineChart>
