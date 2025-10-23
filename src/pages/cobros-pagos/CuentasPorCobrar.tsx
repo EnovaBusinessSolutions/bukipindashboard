@@ -70,6 +70,7 @@ const CuentasPorCobrar = () => {
   const [metodoPago, setMetodoPago] = useState("");
   const [filtroAntiguedad, setFiltroAntiguedad] = useState<string>("todos");
   const [periodoCxC, setPeriodoCxC] = useState<"diario" | "mensual" | "anual">("mensual");
+  const [selectedCliente, setSelectedCliente] = useState<string>("");
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -779,6 +780,96 @@ const CuentasPorCobrar = () => {
                         <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días" />
                       </BarChart>
                     </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico D: Vencimientos por Cliente (Barras Verticales) */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Vencimientos por Cliente</CardTitle>
+                      <Select 
+                        value={selectedCliente} 
+                        onValueChange={setSelectedCliente}
+                      >
+                        <SelectTrigger className="w-[300px]">
+                          <SelectValue placeholder="Selecciona un cliente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(analytics?.cxcPorClienteApilado || []).map((cliente) => (
+                            <SelectItem key={cliente.cliente} value={cliente.cliente}>
+                              {cliente.cliente} - ${cliente.total.toLocaleString('es-CO')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedCliente ? (
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart 
+                          data={(() => {
+                            const clienteData = (analytics?.cxcPorClienteApilado || []).find(
+                              c => c.cliente === selectedCliente
+                            );
+                            if (!clienteData) return [];
+                            
+                            return [
+                              { rango: 'Sin vencimiento', monto: clienteData.sinVencimiento },
+                              { rango: 'Vencido 1-15 días', monto: clienteData.vencido1_15 },
+                              { rango: 'Vencido 16-30 días', monto: clienteData.vencido16_30 },
+                              { rango: 'Vencido 31-60 días', monto: clienteData.vencido31_60 },
+                              { rango: 'Vencido 61-90 días', monto: clienteData.vencido61_90 },
+                              { rango: 'Vencido +90 días', monto: clienteData.vencidoMas90 }
+                            ].filter(item => item.monto > 0);
+                          })()}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis 
+                            dataKey="rango" 
+                            stroke="hsl(var(--foreground))"
+                            tick={{ fill: 'hsl(var(--foreground))' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={100}
+                          />
+                          <YAxis 
+                            stroke="hsl(var(--foreground))"
+                            tick={{ fill: 'hsl(var(--foreground))' }}
+                            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'hsl(var(--background))',
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                            formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Monto']}
+                            labelFormatter={(label) => `${label}`}
+                          />
+                          <Bar 
+                            dataKey="monto" 
+                            fill={COLORS.primary} 
+                            radius={[8, 8, 0, 0]}
+                            label={{
+                              position: 'top',
+                              fill: 'hsl(var(--foreground))',
+                              formatter: (value: number) => `$${value.toLocaleString('es-CO')}`
+                            }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-[350px]">
+                        <div className="text-center space-y-2">
+                          <User className="h-12 w-12 mx-auto text-muted-foreground" />
+                          <p className="text-muted-foreground">
+                            Selecciona un cliente para ver el desglose de sus vencimientos
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </>
