@@ -141,9 +141,25 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         };
       });
 
-      // Histórico de CxC (saldo al cierre real reconstruyendo desde transacciones)
+      // Histórico de CxC (basado en asientos contables - movimientos reales)
       const historicoCxC = [];
       const saldoActual = cuentasConDias.reduce((sum, c) => sum + c.monto_pendiente, 0);
+      
+      // Obtener asientos contables de cuentas por cobrar (cuenta 1102)
+      const { data: detallesAsientos } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          debe,
+          haber,
+          cuenta_codigo,
+          asientos_contables!inner(
+            fecha,
+            user_id
+          )
+        `)
+        .eq("asientos_contables.user_id", (cuentas && cuentas.length > 0) ? cuentas[0].user_id : "")
+        .eq("cuenta_codigo", "1102")
+        .order("asientos_contables(fecha)", { ascending: true });
       
       if (periodo === "diario") {
         // Mostrar solo el día de hoy con el saldo actual
@@ -153,38 +169,40 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
           saldo: saldoActual
         });
       } else if (periodo === "mensual") {
-        // Para cada día del mes, reconstruir el saldo basado en transacciones y pagos
+        // Calcular saldo por día basado en asientos contables
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const diaActual = hoy.getDate();
+        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
         
+        // Calcular saldo al inicio del mes (antes del primer día)
+        let saldoInicioMes = 0;
+        if (detallesAsientos) {
+          for (const detalle of detallesAsientos) {
+            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+            if (fechaAsiento < primerDiaMes) {
+              // Cuentas por cobrar aumentan en DEBE y disminuyen en HABER
+              saldoInicioMes += Number(detalle.debe || 0) - Number(detalle.haber || 0);
+            }
+          }
+        }
+        
+        // Calcular saldo para cada día del mes
         for (let dia = 1; dia <= diaActual; dia++) {
           const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
           fechaDia.setHours(23, 59, 59, 999);
           
-          // Calcular saldo al cierre de este día:
-          // 1. Sumar monto_neto de transacciones creadas hasta este día
-          // 2. Restar monto_pagado de transacciones actualizadas (pagadas) hasta este día
+          let saldoDia = saldoInicioMes;
           
-          const transaccionesCreadas = cuentasConDias.filter(c => {
-            const fechaCreacion = new Date(c.created_at);
-            return fechaCreacion <= fechaDia;
-          });
-          
-          const montoNetoTotal = transaccionesCreadas.reduce((sum, c) => sum + c.monto_neto, 0);
-          
-          const pagosRealizados = transaccionesCreadas.reduce((sum, c) => {
-            const fechaActualizacion = new Date(c.updated_at);
-            const fechaCreacion = new Date(c.created_at);
-            
-            // Si la transacción fue actualizada después de ser creada y antes/en este día
-            if (fechaActualizacion > fechaCreacion && fechaActualizacion <= fechaDia) {
-              return sum + c.monto_pagado;
+          // Sumar movimientos hasta este día
+          if (detallesAsientos) {
+            for (const detalle of detallesAsientos) {
+              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+              if (fechaAsiento >= primerDiaMes && fechaAsiento <= fechaDia) {
+                saldoDia += Number(detalle.debe || 0) - Number(detalle.haber || 0);
+              }
             }
-            return sum;
-          }, 0);
-          
-          const saldoDia = montoNetoTotal - pagosRealizados;
+          }
           
           historicoCxC.push({
             fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
@@ -192,35 +210,39 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
           });
         }
       } else if (periodo === "anual") {
-        // Para cada mes, reconstruir el saldo al cierre del mes
+        // Calcular saldo por mes basado en asientos contables
         const hoy = new Date();
         const anioActual = hoy.getFullYear();
         const mesActual = hoy.getMonth();
+        const inicioAno = new Date(anioActual, 0, 1);
         
+        // Calcular saldo al inicio del año
+        let saldoInicioAno = 0;
+        if (detallesAsientos) {
+          for (const detalle of detallesAsientos) {
+            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+            if (fechaAsiento < inicioAno) {
+              saldoInicioAno += Number(detalle.debe || 0) - Number(detalle.haber || 0);
+            }
+          }
+        }
+        
+        // Calcular saldo para cada mes
         for (let mes = 0; mes <= mesActual; mes++) {
           const ultimoDiaMes = new Date(anioActual, mes + 1, 0);
           ultimoDiaMes.setHours(23, 59, 59, 999);
           
-          // Transacciones creadas hasta el último día de este mes
-          const transaccionesCreadas = cuentasConDias.filter(c => {
-            const fechaCreacion = new Date(c.created_at);
-            return fechaCreacion <= ultimoDiaMes;
-          });
+          let saldoMes = saldoInicioAno;
           
-          const montoNetoTotal = transaccionesCreadas.reduce((sum, c) => sum + c.monto_neto, 0);
-          
-          // Pagos realizados hasta el último día de este mes
-          const pagosRealizados = transaccionesCreadas.reduce((sum, c) => {
-            const fechaActualizacion = new Date(c.updated_at);
-            const fechaCreacion = new Date(c.created_at);
-            
-            if (fechaActualizacion > fechaCreacion && fechaActualizacion <= ultimoDiaMes) {
-              return sum + c.monto_pagado;
+          // Sumar movimientos hasta el último día de este mes
+          if (detallesAsientos) {
+            for (const detalle of detallesAsientos) {
+              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+              if (fechaAsiento >= inicioAno && fechaAsiento <= ultimoDiaMes) {
+                saldoMes += Number(detalle.debe || 0) - Number(detalle.haber || 0);
+              }
             }
-            return sum;
-          }, 0);
-          
-          const saldoMes = montoNetoTotal - pagosRealizados;
+          }
           
           historicoCxC.push({
             fecha: ultimoDiaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
