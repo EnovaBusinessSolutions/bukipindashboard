@@ -128,9 +128,9 @@ export const useCuentasPorPagarConsolidadas = () => {
   });
 };
 
-export const useAnalyticsCuentasPorPagarConsolidadas = () => {
+export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "mensual" | "anual" = "mensual") => {
   return useQuery({
-    queryKey: ["analytics-cuentas-por-pagar-consolidadas"],
+    queryKey: ["analytics-cuentas-por-pagar-consolidadas", periodo],
     queryFn: async () => {
       const { data: egresos } = await supabase
         .from("transacciones_egresos")
@@ -143,12 +143,13 @@ export const useAnalyticsCuentasPorPagarConsolidadas = () => {
         .gt("monto_pendiente", 0);
 
       const todasCuentas = [
-        ...(egresos || []).map(e => ({ ...e, tipo: 'egreso' as const })),
+        ...(egresos || []).map(e => ({ ...e, tipo: 'egreso' as const, updated_at: e.updated_at })),
         ...(inversiones || []).map(i => ({ 
           ...i, 
           tipo: 'capex' as const,
           monto_total: i.valor_total,
-          proveedor_nombre: i.proveedor_nombre
+          proveedor_nombre: i.proveedor_nombre,
+          updated_at: i.updated_at
         }))
       ];
 
@@ -199,7 +200,7 @@ export const useAnalyticsCuentasPorPagarConsolidadas = () => {
         .sort((a, b) => b.monto - a.monto)
         .slice(0, 10);
 
-      // Análisis de aging (días de vencimiento)
+      // Análisis de aging básico
       const agingRanges = [
         { rango: '0-30 días', min: 0, max: 30 },
         { rango: '31-60 días', min: 31, max: 60 },
@@ -226,6 +227,189 @@ export const useAnalyticsCuentasPorPagarConsolidadas = () => {
           cantidad: cuentasEnRango.length
         };
       });
+
+      // Análisis de aging detallado (6 categorías)
+      const agingRangesDetailed = [
+        { rango: 'Sin vencimiento', min: null, max: null },
+        { rango: 'Vencido 1-15 días', min: 1, max: 15 },
+        { rango: 'Vencido 16-30 días', min: 16, max: 30 },
+        { rango: 'Vencido 31-60 días', min: 31, max: 60 },
+        { rango: 'Vencido 61-90 días', min: 61, max: 90 },
+        { rango: 'Vencido +90 días', min: 91, max: Infinity }
+      ];
+
+      const agingAnalysisDetailed = agingRangesDetailed.map(range => {
+        const cuentasEnRango = todasCuentas.filter(c => {
+          // Caso especial: sin vencimiento
+          if (range.min === null && range.max === null) {
+            if (!c.fecha_vencimiento) return true;
+            const fechaVenc = new Date(c.fecha_vencimiento);
+            const dias = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
+            return dias < 0; // Aún no vence
+          }
+          
+          if (!c.fecha_vencimiento) return false;
+          
+          const fechaVenc = new Date(c.fecha_vencimiento);
+          const dias = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
+          return dias >= range.min! && dias <= range.max!;
+        });
+        
+        return {
+          rango: range.rango,
+          monto: cuentasEnRango.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0),
+          cantidad: cuentasEnRango.length,
+          min: range.min,
+          max: range.max
+        };
+      });
+
+      // Histórico de CxP (basado en asientos contables - cuenta 2101)
+      const historicoCxP = [];
+      const saldoActual = totalPendiente;
+      
+      const { data: detallesAsientos } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          debe,
+          haber,
+          cuenta_codigo,
+          asientos_contables!inner(
+            fecha,
+            user_id
+          )
+        `)
+        .eq("asientos_contables.user_id", (egresos && egresos.length > 0) ? egresos[0].user_id : "")
+        .eq("cuenta_codigo", "2101")
+        .order("asientos_contables(fecha)", { ascending: true });
+      
+      if (periodo === "diario") {
+        const hoy = new Date();
+        historicoCxP.push({
+          fecha: hoy.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+          saldo: saldoActual
+        });
+      } else if (periodo === "mensual") {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const diaActual = hoy.getDate();
+        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        
+        let saldoInicioMes = 0;
+        if (detallesAsientos) {
+          for (const detalle of detallesAsientos) {
+            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+            if (fechaAsiento < primerDiaMes) {
+              // Cuentas por pagar aumentan en HABER y disminuyen en DEBE
+              saldoInicioMes += Number(detalle.haber || 0) - Number(detalle.debe || 0);
+            }
+          }
+        }
+        
+        for (let dia = 1; dia <= diaActual; dia++) {
+          const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
+          fechaDia.setHours(23, 59, 59, 999);
+          
+          let saldoDia = saldoInicioMes;
+          
+          if (detallesAsientos) {
+            for (const detalle of detallesAsientos) {
+              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+              if (fechaAsiento >= primerDiaMes && fechaAsiento <= fechaDia) {
+                saldoDia += Number(detalle.haber || 0) - Number(detalle.debe || 0);
+              }
+            }
+          }
+          
+          historicoCxP.push({
+            fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+            saldo: Math.max(0, saldoDia)
+          });
+        }
+      } else if (periodo === "anual") {
+        const hoy = new Date();
+        const anioActual = hoy.getFullYear();
+        const mesActual = hoy.getMonth();
+        const inicioAno = new Date(anioActual, 0, 1);
+        
+        let saldoInicioAno = 0;
+        if (detallesAsientos) {
+          for (const detalle of detallesAsientos) {
+            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+            if (fechaAsiento < inicioAno) {
+              saldoInicioAno += Number(detalle.haber || 0) - Number(detalle.debe || 0);
+            }
+          }
+        }
+        
+        for (let mes = 0; mes <= mesActual; mes++) {
+          const ultimoDiaMes = new Date(anioActual, mes + 1, 0);
+          ultimoDiaMes.setHours(23, 59, 59, 999);
+          
+          let saldoMes = saldoInicioAno;
+          
+          if (detallesAsientos) {
+            for (const detalle of detallesAsientos) {
+              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+              if (fechaAsiento >= inicioAno && fechaAsiento <= ultimoDiaMes) {
+                saldoMes += Number(detalle.haber || 0) - Number(detalle.debe || 0);
+              }
+            }
+          }
+          
+          historicoCxP.push({
+            fecha: ultimoDiaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
+            saldo: Math.max(0, saldoMes)
+          });
+        }
+      }
+
+      // CxP por proveedor apilado por antigüedad
+      const proveedoresMap = todasCuentas.reduce((acc, cuenta) => {
+        const proveedor = cuenta.proveedor_nombre || 'Sin nombre';
+        if (!acc[proveedor]) {
+          acc[proveedor] = {
+            sinVencimiento: 0,
+            vencido1_15: 0,
+            vencido16_30: 0,
+            vencido31_60: 0,
+            vencido61_90: 0,
+            vencidoMas90: 0,
+            total: 0
+          };
+        }
+        
+        const monto = cuenta.monto_pendiente || 0;
+        
+        // Calcular días de vencimiento
+        let diasVencimiento = null;
+        if (cuenta.fecha_vencimiento) {
+          const fechaVenc = new Date(cuenta.fecha_vencimiento);
+          diasVencimiento = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
+        }
+        
+        if (diasVencimiento === null || diasVencimiento < 0) {
+          acc[proveedor].sinVencimiento += monto;
+        } else {
+          if (diasVencimiento >= 1 && diasVencimiento <= 15) acc[proveedor].vencido1_15 += monto;
+          else if (diasVencimiento >= 16 && diasVencimiento <= 30) acc[proveedor].vencido16_30 += monto;
+          else if (diasVencimiento >= 31 && diasVencimiento <= 60) acc[proveedor].vencido31_60 += monto;
+          else if (diasVencimiento >= 61 && diasVencimiento <= 90) acc[proveedor].vencido61_90 += monto;
+          else acc[proveedor].vencidoMas90 += monto;
+        }
+        
+        acc[proveedor].total += monto;
+        return acc;
+      }, {} as Record<string, any>);
+
+      const cxpPorProveedorApilado = Object.entries(proveedoresMap)
+        .map(([proveedor, data]) => ({ proveedor, ...data }))
+        .sort((a, b) => b.total - a.total);
+
+      // Vencimientos por proveedor (para selector)
+      const proveedoresLista = Array.from(
+        new Set(todasCuentas.map(c => c.proveedor_nombre).filter(Boolean))
+      ).sort();
 
       // Tendencia mensual (últimos 6 meses)
       const mesesPasados = 6;
@@ -256,6 +440,11 @@ export const useAnalyticsCuentasPorPagarConsolidadas = () => {
         distribucionPorTipo,
         cuentasPorProveedor,
         agingAnalysis,
+        agingAnalysisDetailed,
+        historicoCxP,
+        cxpPorProveedorApilado,
+        proveedoresLista,
+        todasCuentas,
         tendenciaMensual
       };
     }

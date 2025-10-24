@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,8 @@ import {
   TrendingUp, 
   Users, 
   Clock, 
-  Target
+  Target,
+  CheckCircle2
 } from "lucide-react";
 import { 
   BarChart, 
@@ -68,6 +69,20 @@ const CuentasPorPagar = () => {
   const [selectedCuenta, setSelectedCuenta] = useState<any>(null);
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
+  
+  // Estados para filtros de transacciones
+  const [filtroMesTransaccion, setFiltroMesTransaccion] = useState("todos");
+  const [filtroAnoTransaccion, setFiltroAnoTransaccion] = useState("todos");
+  const [filtroProveedorTransaccion, setFiltroProveedorTransaccion] = useState("todos");
+  const [filtroEstadoTransaccion, setFiltroEstadoTransaccion] = useState("todos");
+  const [filtroMetodoPago, setFiltroMetodoPago] = useState("todos");
+  const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState("mayorMenor");
+  
+  // Estados para analíticas
+  const [periodoCxP, setPeriodoCxP] = useState<"diario" | "mensual" | "anual">("mensual");
+  const [escalaHistorico, setEscalaHistorico] = useState("normal");
+  const [filtroAntiguedad, setFiltroAntiguedad] = useState("todos");
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("todos");
 
   const { data: cuentasPorPagar, isLoading } = useCuentasPorPagarConsolidadas();
 
@@ -120,8 +135,48 @@ const CuentasPorPagar = () => {
     };
   }, [queryClient]);
 
-  // Hook para analíticas consolidadas
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagarConsolidadas();
+  // Hook para analíticas consolidadas con período dinámico
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagarConsolidadas(periodoCxP);
+  
+  // Obtener todas las transacciones para el resumen
+  const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
+    queryKey: ["todas-transacciones-cxp"],
+    queryFn: async () => {
+      const allTransactions = [];
+      
+      // Obtener egresos
+      const { data: egresos } = await supabase
+        .from("transacciones_egresos")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (egresos) {
+        allTransactions.push(...egresos.map(e => ({
+          ...e,
+          tipo_transaccion: 'egreso' as const
+        })));
+      }
+      
+      // Obtener inversiones
+      const { data: inversiones } = await supabase
+        .from("inversiones_capex")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (inversiones) {
+        allTransactions.push(...inversiones.map(i => ({
+          ...i,
+          tipo_transaccion: 'capex' as const,
+          monto_total: i.valor_total,
+          descripcion: i.descripcion || i.producto_nombre
+        })));
+      }
+      
+      return allTransactions.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    }
+  });
 
   // Mutación para registrar pago (maneja tanto egresos como inversiones)
   const registrarPagoMutation = useMutation({
@@ -271,10 +326,14 @@ const CuentasPorPagar = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="lista" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               Lista de Cuentas
+            </TabsTrigger>
+            <TabsTrigger value="transacciones" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Resumen de Transacciones
             </TabsTrigger>
             <TabsTrigger value="analiticas" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
