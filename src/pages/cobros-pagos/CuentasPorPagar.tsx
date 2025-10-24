@@ -47,7 +47,8 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart
+  AreaChart,
+  LabelList
 } from "recharts";
 import { useCuentasPorPagarConsolidadas, useAnalyticsCuentasPorPagarConsolidadas } from "@/hooks/useCuentasPorPagarConsolidadas";
 
@@ -1009,7 +1010,20 @@ const CuentasPorPagar = () => {
                         <XAxis dataKey="fecha" stroke="#000" tick={{ fill: '#000', fontSize: 12, fontWeight: 500 }} />
                         <YAxis stroke="#000" tick={{ fill: '#000', fontSize: 12, fontWeight: 500 }} tickFormatter={(value) => escalaHistorico === "miles" ? `$${(value / 1000).toFixed(0)}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toFixed(2)}M` : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`} />
                         <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} formatter={(value: number) => [escalaHistorico === "miles" ? `$${(value / 1000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M` : `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Saldo CxP']} labelStyle={{ color: 'hsl(var(--foreground))' }} labelFormatter={(label) => label} />
-                        <Line type="monotone" dataKey="saldo" stroke={COLORS.primary} strokeWidth={3} dot={{ fill: COLORS.primary, r: 5 }} />
+                        <Line type="monotone" dataKey="saldo" stroke={COLORS.primary} strokeWidth={3} dot={{ fill: COLORS.primary, r: 5 }}>
+                          <LabelList 
+                            dataKey="saldo" 
+                            position="top"
+                            style={{ fill: '#000', fontSize: '11px', fontWeight: 600 }}
+                            formatter={(value: number) => 
+                              escalaHistorico === "miles" 
+                                ? `$${(value / 1000).toFixed(1)}k` 
+                                : escalaHistorico === "millones" 
+                                ? `$${(value / 1000000).toFixed(2)}M` 
+                                : `$${(value / 1000).toFixed(0)}k`
+                            }
+                          />
+                        </Line>
                       </LineChart>
                     </ResponsiveContainer>
                   </CardContent>
