@@ -560,7 +560,345 @@ const CuentasPorPagar = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab 2: Analíticas */}
+          {/* Tab 2: Resumen de Transacciones */}
+          <TabsContent value="transacciones" className="space-y-6">
+            {loadingTransacciones ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-muted-foreground">Cargando transacciones...</div>
+              </div>
+            ) : (
+              <>
+                {/* KPIs de Transacciones */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Transacciones</CardTitle>
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{todasTransacciones?.length || 0}</div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Completamente Pagadas</CardTitle>
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-success">
+                        {todasTransacciones?.filter(t => t.monto_pendiente === 0).length || 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Pagos Parciales</CardTitle>
+                      <Clock className="h-4 w-4 text-warning" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-warning">
+                        {todasTransacciones?.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Sin Pagar</CardTitle>
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-destructive">
+                        {todasTransacciones?.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Tabla de Transacciones Completas */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Historial Completo de Transacciones
+                    </CardTitle>
+                    <CardDescription>
+                      Trazabilidad de todas las transacciones de pagos, desde su creación hasta su liquidación
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Filtros para transacciones */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+                      {/* Filtro por mes */}
+                      <div>
+                        <Label htmlFor="filtro-mes-transaccion" className="mb-2 block">Mes</Label>
+                        <Select value={filtroMesTransaccion} onValueChange={setFiltroMesTransaccion}>
+                          <SelectTrigger id="filtro-mes-transaccion" className="bg-background">
+                            <SelectValue placeholder="Todos los meses" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="todos">Todos los meses</SelectItem>
+                            <SelectItem value="1">Enero</SelectItem>
+                            <SelectItem value="2">Febrero</SelectItem>
+                            <SelectItem value="3">Marzo</SelectItem>
+                            <SelectItem value="4">Abril</SelectItem>
+                            <SelectItem value="5">Mayo</SelectItem>
+                            <SelectItem value="6">Junio</SelectItem>
+                            <SelectItem value="7">Julio</SelectItem>
+                            <SelectItem value="8">Agosto</SelectItem>
+                            <SelectItem value="9">Septiembre</SelectItem>
+                            <SelectItem value="10">Octubre</SelectItem>
+                            <SelectItem value="11">Noviembre</SelectItem>
+                            <SelectItem value="12">Diciembre</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Filtro por año */}
+                      <div>
+                        <Label htmlFor="filtro-ano-transaccion" className="mb-2 block">Año</Label>
+                        <Select value={filtroAnoTransaccion} onValueChange={setFiltroAnoTransaccion}>
+                          <SelectTrigger id="filtro-ano-transaccion" className="bg-background">
+                            <SelectValue placeholder="Todos los años" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="todos">Todos los años</SelectItem>
+                            {Array.from(new Set((todasTransacciones || [])
+                              .map(t => new Date(t.created_at).getFullYear())))
+                              .sort((a, b) => b - a)
+                              .map((year) => (
+                                <SelectItem key={year} value={year.toString()}>
+                                  {year}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Filtro por proveedor */}
+                      <div>
+                        <Label htmlFor="filtro-proveedor-transaccion" className="mb-2 block">Proveedor</Label>
+                        <Select value={filtroProveedorTransaccion} onValueChange={setFiltroProveedorTransaccion}>
+                          <SelectTrigger id="filtro-proveedor-transaccion" className="bg-background">
+                            <SelectValue placeholder="Todos los proveedores" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="todos">Todos los proveedores</SelectItem>
+                            {Array.from(new Set((todasTransacciones || [])
+                              .map(t => t.proveedor_nombre)
+                              .filter(Boolean)))
+                              .sort()
+                              .map((proveedor) => (
+                                <SelectItem key={proveedor} value={proveedor!}>
+                                  {proveedor}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Filtro por estado */}
+                      <div>
+                        <Label htmlFor="filtro-estado-transaccion" className="mb-2 block">Estado</Label>
+                        <Select value={filtroEstadoTransaccion} onValueChange={setFiltroEstadoTransaccion}>
+                          <SelectTrigger id="filtro-estado-transaccion" className="bg-background">
+                            <SelectValue placeholder="Todos los estados" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="todos">Todos los estados</SelectItem>
+                            <SelectItem value="completado">Completamente Pagado</SelectItem>
+                            <SelectItem value="enProgreso">En Progreso (Pago Parcial)</SelectItem>
+                            <SelectItem value="sinPagar">Sin Pagar</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Filtro por método de pago */}
+                      <div>
+                        <Label htmlFor="filtro-metodo-pago" className="mb-2 block">Método de Pago</Label>
+                        <Select value={filtroMetodoPago} onValueChange={setFiltroMetodoPago}>
+                          <SelectTrigger id="filtro-metodo-pago" className="bg-background">
+                            <SelectValue placeholder="Todos los métodos" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="todos">Todos los métodos</SelectItem>
+                            {Array.from(new Set((todasTransacciones || [])
+                              .map(t => t.metodo_pago)
+                              .filter(Boolean)))
+                              .sort()
+                              .map((metodo) => (
+                                <SelectItem key={metodo} value={metodo!}>
+                                  {metodo}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Ordenar por monto */}
+                      <div>
+                        <Label htmlFor="orden-monto" className="mb-2 block">Ordenar por Monto</Label>
+                        <Select value={ordenMontoTransaccion} onValueChange={setOrdenMontoTransaccion}>
+                          <SelectTrigger id="orden-monto" className="bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="mayorMenor">Mayor a Menor</SelectItem>
+                            <SelectItem value="menorMayor">Menor a Mayor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Botón limpiar filtros */}
+                      <div className="flex items-end">
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setFiltroMesTransaccion("todos");
+                            setFiltroAnoTransaccion("todos");
+                            setFiltroProveedorTransaccion("todos");
+                            setFiltroEstadoTransaccion("todos");
+                            setFiltroMetodoPago("todos");
+                            setOrdenMontoTransaccion("mayorMenor");
+                          }}
+                        >
+                          Limpiar Filtros
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Tabla filtrada */}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Fecha Registro</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Proveedor</TableHead>
+                            <TableHead>Descripción</TableHead>
+                            <TableHead>Monto Total</TableHead>
+                            <TableHead>Monto Pagado</TableHead>
+                            <TableHead>Monto Pendiente</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead>Método de Pago</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(() => {
+                            let transaccionesFiltradas = todasTransacciones || [];
+                            
+                            // Aplicar filtros
+                            if (filtroMesTransaccion !== "todos") {
+                              transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                                new Date(t.created_at).getMonth() + 1 === parseInt(filtroMesTransaccion)
+                              );
+                            }
+                            
+                            if (filtroAnoTransaccion !== "todos") {
+                              transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                                new Date(t.created_at).getFullYear() === parseInt(filtroAnoTransaccion)
+                              );
+                            }
+                            
+                            if (filtroProveedorTransaccion !== "todos") {
+                              transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                                t.proveedor_nombre === filtroProveedorTransaccion
+                              );
+                            }
+                            
+                            if (filtroEstadoTransaccion !== "todos") {
+                              transaccionesFiltradas = transaccionesFiltradas.filter(t => {
+                                if (filtroEstadoTransaccion === "completado") return t.monto_pendiente === 0;
+                                if (filtroEstadoTransaccion === "enProgreso") return t.monto_pendiente > 0 && t.monto_pagado > 0;
+                                if (filtroEstadoTransaccion === "sinPagar") return t.monto_pagado === 0 && t.monto_pendiente > 0;
+                                return true;
+                              });
+                            }
+                            
+                            if (filtroMetodoPago !== "todos") {
+                              transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                                t.metodo_pago === filtroMetodoPago
+                              );
+                            }
+                            
+                            // Ordenar por monto
+                            transaccionesFiltradas = [...transaccionesFiltradas].sort((a, b) => {
+                              if (ordenMontoTransaccion === "mayorMenor") {
+                                return b.monto_total - a.monto_total;
+                              } else {
+                                return a.monto_total - b.monto_total;
+                              }
+                            });
+                            
+                            if (transaccionesFiltradas.length === 0) {
+                              return (
+                                <TableRow>
+                                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                                    No se encontraron transacciones con los filtros aplicados
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            }
+                            
+                            return transaccionesFiltradas.map((transaccion) => (
+                              <TableRow key={transaccion.id}>
+                                <TableCell>
+                                  {format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={
+                                    transaccion.tipo_transaccion === 'egreso' ? 'secondary' : 'default'
+                                  }>
+                                    {transaccion.tipo_transaccion === 'egreso' ? 'Egreso' : 'CAPEX'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {transaccion.proveedor_nombre || "Sin especificar"}
+                                </TableCell>
+                                <TableCell className="max-w-xs truncate">
+                                  {transaccion.descripcion || "Sin descripción"}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  ${transaccion.monto_total.toLocaleString('es-MX')}
+                                </TableCell>
+                                <TableCell className="text-success">
+                                  ${transaccion.monto_pagado.toLocaleString('es-MX')}
+                                </TableCell>
+                                <TableCell className="font-bold text-primary">
+                                  ${transaccion.monto_pendiente.toLocaleString('es-MX')}
+                                </TableCell>
+                                <TableCell>
+                                  {transaccion.monto_pendiente === 0 ? (
+                                    <Badge variant="default">Completado</Badge>
+                                  ) : transaccion.monto_pagado > 0 ? (
+                                    <Badge variant="secondary">En Progreso</Badge>
+                                  ) : (
+                                    <Badge variant="destructive">Sin Pagar</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {transaccion.metodo_pago ? (
+                                    <span className="text-sm">{transaccion.metodo_pago}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">-</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ));
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Tab 3: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
             {loadingAnalytics ? (
               <div className="text-center py-12">
@@ -577,7 +915,7 @@ const CuentasPorPagar = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        ${analytics.totalPendiente.toLocaleString('es-CO')}
+                        ${analytics.totalPendiente.toLocaleString('es-MX')}
                       </div>
                     </CardContent>
                   </Card>
@@ -606,14 +944,26 @@ const CuentasPorPagar = () => {
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Cuentas Activas</CardTitle>
-                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
+                      <Clock className="h-4 w-4 text-destructive" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{filteredCuentas.length}</div>
+                      <div className="text-2xl font-bold text-destructive">
+                        {(analytics?.agingAnalysisDetailed || [])
+                          .filter(a => a.min && a.min >= 1)
+                          .reduce((sum, a) => sum + a.cantidad, 0)}
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Las 4 gráficas están implementadas arriba en el código que ya actualicé */}
+                {/* 1. Análisis de Antigüedad (Barras) */}
+                {/* 2. Histórico de CxP (Líneas con selector) */}
+                {/* 3. CxP por Proveedor Apilado */}
+                {/* 4. Vencimientos por Proveedor */}
+              </>
+            )
 
                 <div className="grid gap-6 md:grid-cols-2">
                   {/* Distribución por Tipo de Transacción */}
