@@ -957,105 +957,114 @@ const CuentasPorPagar = () => {
                   </Card>
                 </div>
 
-                {/* Las 4 gráficas están implementadas arriba en el código que ya actualicé */}
-                {/* 1. Análisis de Antigüedad (Barras) */}
-                {/* 2. Histórico de CxP (Líneas con selector) */}
-                {/* 3. CxP por Proveedor Apilado */}
-                {/* 4. Vencimientos por Proveedor */}
-              </>
-            )
+                {/* Gráfico 1: Análisis de Antigüedad */}
+                <Card>
+                  <CardHeader><CardTitle>Análisis de Antigüedad de Cuentas por Pagar</CardTitle></CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart data={analytics?.agingAnalysisDetailed || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="rango" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} angle={-45} textAnchor="end" height={100} />
+                        <YAxis stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, 'Monto']} />
+                        <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                  {/* Distribución por Tipo de Transacción */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Distribución por Tipo de Transacción</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={analytics.distribucionPorTipo}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="tipo" />
-                          <YAxis />
-                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
-                          <Bar dataKey="monto" fill={COLORS.accent} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                      <div className="mt-4 space-y-2">
-                        {analytics.distribucionPorTipo.map((item: any, index: number) => (
-                          <div key={index} className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{item.tipo}:</span>
-                            <span className="font-medium">{item.cantidad} cuenta{item.cantidad !== 1 ? 's' : ''}</span>
-                          </div>
-                        ))}
+                {/* Gráfico 2: Histórico de CxP */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Histórico de Cuentas por Pagar</CardTitle>
+                      <div className="flex gap-4">
+                        <Select value={escalaHistorico} onValueChange={setEscalaHistorico}>
+                          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="miles">Miles</SelectItem>
+                            <SelectItem value="millones">Millones</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={periodoCxP} onValueChange={(value) => setPeriodoCxP(value as "diario" | "mensual" | "anual")}>
+                          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="diario">Diario (Hoy)</SelectItem>
+                            <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
+                            <SelectItem value="anual">Anual (Año actual)</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <LineChart data={analytics?.historicoCxP || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="fecha" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} />
+                        <YAxis stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => escalaHistorico === "miles" ? `$${(value / 1000).toFixed(0)}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toFixed(2)}M` : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`} />
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} formatter={(value: number) => [escalaHistorico === "miles" ? `$${(value / 1000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M` : `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Saldo CxP']} labelStyle={{ color: 'hsl(var(--foreground))' }} />
+                        <Line type="monotone" dataKey="saldo" stroke={COLORS.primary} strokeWidth={3} dot={{ fill: COLORS.primary, r: 4 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
 
-                  {/* Top Proveedores */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Top 10 Proveedores por Deuda</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={analytics.cuentasPorProveedor}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="proveedor" angle={-45} textAnchor="end" height={100} />
-                          <YAxis />
-                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
-                          <Bar dataKey="monto" fill={COLORS.primary} />
+                {/* Gráfico 3: CxP por Proveedor Apilado */}
+                <Card>
+                  <CardHeader><CardTitle>Cuentas por Pagar por Proveedor (Apilado por Antigüedad)</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <Select value={filtroAntiguedad} onValueChange={setFiltroAntiguedad}>
+                      <SelectTrigger className="w-[240px]"><SelectValue placeholder="Filtrar por antigüedad" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos</SelectItem>
+                        <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
+                        <SelectItem value="vencido1_15">Vencido 1-15 días</SelectItem>
+                        <SelectItem value="vencido16_30">Vencido 16-30 días</SelectItem>
+                        <SelectItem value="vencido31_60">Vencido 31-60 días</SelectItem>
+                        <SelectItem value="vencido61_90">Vencido 61-90 días</SelectItem>
+                        <SelectItem value="vencidoMas90">Vencido +90 días</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={filtroAntiguedad === "todos" ? (analytics?.cxpPorProveedorApilado || []) : (analytics?.cxpPorProveedorApilado || []).filter(c => (c as any)[filtroAntiguedad] > 0)} layout="vertical" margin={{ left: 100 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis type="number" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                        <YAxis type="category" dataKey="proveedor" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} width={90} />
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, 'Monto']} />
+                        {filtroAntiguedad === "todos" ? (<><Bar dataKey="sinVencimiento" stackId="a" fill="#10b981" /><Bar dataKey="vencido1_15" stackId="a" fill="#fbbf24" /><Bar dataKey="vencido16_30" stackId="a" fill="#f97316" /><Bar dataKey="vencido31_60" stackId="a" fill="#ef4444" /><Bar dataKey="vencido61_90" stackId="a" fill="#dc2626" /><Bar dataKey="vencidoMas90" stackId="a" fill="#991b1b" /></>) : (<Bar dataKey={filtroAntiguedad} fill={COLORS.primary} />)}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico 4: Vencimientos por Proveedor */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Vencimientos por Proveedor</CardTitle>
+                    <Select value={proveedorSeleccionado} onValueChange={setProveedorSeleccionado}>
+                      <SelectTrigger className="w-[240px]"><SelectValue placeholder="Selecciona proveedor" /></SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="todos">Todos</SelectItem>
+                        {(analytics?.proveedoresLista || []).map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </CardHeader>
+                  <CardContent>
+                    {proveedorSeleccionado !== "todos" ? (
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart data={(() => { const pd = (analytics?.cxpPorProveedorApilado || []).find(c => c.proveedor === proveedorSeleccionado); if (!pd) return []; return [{ categoria: 'Sin vencimiento', monto: pd.sinVencimiento }, { categoria: 'Vencido 1-15 días', monto: pd.vencido1_15 }, { categoria: 'Vencido 16-30 días', monto: pd.vencido16_30 }, { categoria: 'Vencido 31-60 días', monto: pd.vencido31_60 }, { categoria: 'Vencido 61-90 días', monto: pd.vencido61_90 }, { categoria: 'Vencido +90 días', monto: pd.vencidoMas90 }].filter(item => item.monto > 0); })()}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="categoria" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} angle={-45} textAnchor="end" height={100} />
+                          <YAxis stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                          <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, 'Monto']} />
+                          <Bar dataKey="monto" fill={COLORS.accent} radius={[8, 8, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-
-                  {/* Aging Analysis */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Análisis de Antigüedad</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                          <Pie
-                            data={analytics.agingAnalysis}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ rango, monto }) => `${rango}: $${monto.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="monto"
-                          >
-                            {analytics.agingAnalysis.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-
-                  {/* Tendencia Mensual */}
-                  <Card className="md:col-span-2">
-                    <CardHeader>
-                      <CardTitle>Tendencia de Deudas (Últimos 6 Meses)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={analytics.tendenciaMensual}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="mes" />
-                          <YAxis />
-                          <Tooltip formatter={(value: any) => `$${value.toLocaleString('es-CO')}`} />
-                          <Area type="monotone" dataKey="monto" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.3} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </div>
+                    ) : (<div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Selecciona un proveedor</p></div>)}
+                  </CardContent>
+                </Card>
               </>
             ) : (
               <div className="text-center py-12">
