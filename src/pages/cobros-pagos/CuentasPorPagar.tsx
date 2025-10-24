@@ -304,7 +304,11 @@ const CuentasPorPagar = () => {
         onSuccess: async () => {
           const tarjetaId = extraerIdTarjetaCredito(metodoPago);
           if (tarjetaId) {
-            await actualizarSaldoTarjetaCredito(tarjetaId, monto);
+            await actualizarSaldoTarjetaCredito(
+              tarjetaId, 
+              monto,
+              `Pago de cuenta: ${selectedCuenta?.proveedor_nombre || 'Proveedor'}`
+            );
           }
         }
       }

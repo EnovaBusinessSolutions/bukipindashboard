@@ -109,7 +109,11 @@ const RegistroEgresosGenerales = () => {
       // Actualizar saldo de tarjeta de crédito si se usó
       const tarjetaId = extraerIdTarjetaCredito(paymentMethod);
       if (tarjetaId && montoPagado > 0) {
-        await actualizarSaldoTarjetaCredito(tarjetaId, montoPagado);
+        await actualizarSaldoTarjetaCredito(
+          tarjetaId, 
+          montoPagado,
+          `Egreso general: ${concept}`
+        );
       }
 
       toast({

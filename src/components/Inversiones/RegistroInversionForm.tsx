@@ -187,7 +187,11 @@ const RegistroInversionForm = () => {
         // Actualizar saldo de tarjeta de crédito si se usó
         const tarjetaId = extraerIdTarjetaCredito(formData.metodo_pago);
         if (tarjetaId && montoPagado > 0) {
-          await actualizarSaldoTarjetaCredito(tarjetaId, montoPagado);
+          await actualizarSaldoTarjetaCredito(
+            tarjetaId, 
+            montoPagado,
+            `Pago de inversión: ${formData.producto_nombre}`
+          );
         }
       }
     });

@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import TransaccionesTarjetaCredito from "./TransaccionesTarjetaCredito";
 
 const ResumenFinanciamientos = () => {
   const { transacciones, financiamientos, isLoading } = useFinanciamientos();
@@ -70,6 +72,7 @@ const ResumenFinanciamientos = () => {
 
   return (
     <div className="space-y-6">
+      {/* Resumen general */}
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -105,9 +108,61 @@ const ResumenFinanciamientos = () => {
         </Card>
       </div>
 
+      {/* Tarjetas de Crédito - Sección especial */}
+      {financiamientos.filter(f => f.tipo_credito === 'tarjeta_corporativa').length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tarjetas de Crédito Corporativas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {financiamientos
+                .filter(f => f.tipo_credito === 'tarjeta_corporativa')
+                .map((tarjeta) => (
+                  <AccordionItem key={tarjeta.id} value={tarjeta.id}>
+                    <AccordionTrigger>
+                      <div className="flex justify-between items-center w-full pr-4">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">{tarjeta.nombre}</span>
+                          <span className="text-sm text-muted-foreground">{tarjeta.institucion_financiera}</span>
+                        </div>
+                        <div className="flex gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Límite: </span>
+                            <span className="font-medium">${tarjeta.monto_total.toLocaleString('es-MX')}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Utilizado: </span>
+                            <span className="font-medium">${tarjeta.saldo_actual.toLocaleString('es-MX')}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Disponible: </span>
+                            <span className="font-medium text-success">
+                              ${(tarjeta.monto_total - tarjeta.saldo_actual).toLocaleString('es-MX')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <TransaccionesTarjetaCredito 
+                        financiamientoId={tarjeta.id}
+                        nombreTarjeta={tarjeta.nombre}
+                        limiteCredito={tarjeta.monto_total}
+                        saldoActual={tarjeta.saldo_actual}
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Historial de transacciones de financiamientos (no tarjetas) */}
       <Card>
         <CardHeader>
-          <CardTitle>Historial de Transacciones</CardTitle>
+          <CardTitle>Historial de Transacciones de Financiamientos</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

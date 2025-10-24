@@ -77,10 +77,16 @@ export const useFinanciamientos = () => {
 
       console.log("Iniciando creación de financiamiento:", financiamiento);
 
+      // Para tarjetas de crédito, el saldo inicial es 0 (no se desembolsa)
+      const esTarjetaCredito = financiamiento.tipo_credito === 'tarjeta_corporativa';
+      const financiamientoData = esTarjetaCredito 
+        ? { ...financiamiento, saldo_inicial: 0, saldo_actual: 0, user_id: user.id }
+        : { ...financiamiento, user_id: user.id };
+
       // Crear el financiamiento
       const { data: nuevoFinanciamiento, error: errorFinanciamiento } = await supabase
         .from("financiamientos")
-        .insert([{ ...financiamiento, user_id: user.id }])
+        .insert([financiamientoData])
         .select()
         .single();
 
@@ -91,7 +97,14 @@ export const useFinanciamientos = () => {
 
       console.log("Financiamiento creado:", nuevoFinanciamiento);
 
-      // Crear transacción de desembolso inicial
+      // Para tarjetas de crédito, NO crear transacción ni asientos contables
+      // Solo registrar el límite de crédito disponible
+      if (esTarjetaCredito) {
+        console.log("Tarjeta de crédito registrada - no se genera asiento contable");
+        return nuevoFinanciamiento;
+      }
+
+      // Para otros tipos de financiamiento, crear transacción de desembolso inicial
       const transaccionDesembolso = {
         user_id: user.id,
         financiamiento_id: nuevoFinanciamiento.id,

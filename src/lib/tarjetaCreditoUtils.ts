@@ -3,16 +3,26 @@ import { toast } from "@/hooks/use-toast";
 
 /**
  * Actualiza el saldo de una tarjeta de crédito después de una transacción
+ * y genera el asiento contable correspondiente
  * @param tarjetaId ID de la tarjeta de crédito (financiamiento)
  * @param montoTransaccion Monto de la transacción
+ * @param descripcion Descripción de la transacción
  * @returns Promise con el resultado de la actualización
  */
-export const actualizarSaldoTarjetaCredito = async (tarjetaId: string, montoTransaccion: number) => {
+export const actualizarSaldoTarjetaCredito = async (
+  tarjetaId: string, 
+  montoTransaccion: number,
+  descripcion?: string
+) => {
   try {
+    // Obtener el usuario actual
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Usuario no autenticado");
+
     // Obtener el saldo actual de la tarjeta
     const { data: tarjeta, error: fetchError } = await supabase
       .from("financiamientos")
-      .select("saldo_actual, monto_total")
+      .select("saldo_actual, monto_total, nombre, institucion_financiera")
       .eq("id", tarjetaId)
       .single();
 
@@ -28,6 +38,42 @@ export const actualizarSaldoTarjetaCredito = async (tarjetaId: string, montoTran
       .eq("id", tarjetaId);
 
     if (updateError) throw updateError;
+
+    // Generar asiento contable por el uso de la tarjeta
+    // Débito: Cuenta de gasto/activo (ya se hizo en la transacción original)
+    // Crédito: Pasivo Bancario (2101) - aquí se genera la deuda
+    
+    const { data: numeroAsiento } = await supabase
+      .rpc('generate_asiento_number', { p_user_id: user.id });
+
+    if (numeroAsiento) {
+      const { data: asiento } = await supabase
+        .from("asientos_contables")
+        .insert([{
+          user_id: user.id,
+          numero_asiento: numeroAsiento,
+          fecha: new Date().toISOString().split('T')[0],
+          descripcion: descripcion || `Cargo a tarjeta: ${tarjeta.nombre} - ${tarjeta.institucion_financiera}`,
+        }])
+        .select()
+        .single();
+
+      if (asiento) {
+        // Crédito a Pasivo Bancario (se genera la deuda)
+        await supabase
+          .from("detalle_asientos")
+          .insert([{
+            asiento_id: asiento.id,
+            cuenta_codigo: "2101",
+            debe: 0,
+            haber: montoTransaccion,
+            descripcion: `Cargo tarjeta ${tarjeta.nombre}`,
+          }]);
+
+        // El débito ya se registró en la transacción original (egreso/activo)
+        // Solo ajustamos el método de pago, no duplicamos el débito
+      }
+    }
 
     return { success: true, nuevoSaldo };
   } catch (error: any) {
