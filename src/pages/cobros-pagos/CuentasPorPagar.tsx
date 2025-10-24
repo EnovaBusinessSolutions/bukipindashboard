@@ -51,6 +51,8 @@ import {
   LabelList
 } from "recharts";
 import { useCuentasPorPagarConsolidadas, useAnalyticsCuentasPorPagarConsolidadas } from "@/hooks/useCuentasPorPagarConsolidadas";
+import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 
 const COLORS = {
   primary: "hsl(var(--primary))",
@@ -86,6 +88,7 @@ const CuentasPorPagar = () => {
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("todos");
 
   const { data: cuentasPorPagar, isLoading } = useCuentasPorPagarConsolidadas();
+  const { data: tarjetasCredito } = useTarjetasCredito();
 
   const queryClient = useQueryClient();
 
@@ -262,7 +265,7 @@ const CuentasPorPagar = () => {
     setMetodoPago("");
   };
 
-  const handleRegistrarPago = () => {
+  const handleRegistrarPago = async () => {
     if (!selectedCuenta || !montoPago || !metodoPago) {
       toast.error("Por favor completa todos los campos");
       return;
@@ -279,12 +282,33 @@ const CuentasPorPagar = () => {
       return;
     }
 
-    registrarPagoMutation.mutate({
-      cuentaId: selectedCuenta.id,
-      monto: monto,
-      metodo: metodoPago,
-      tipo: selectedCuenta.tipo_transaccion
-    });
+    // Validar límite de crédito si se seleccionó tarjeta de crédito
+    if (metodoPago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+      const tarjetaId = metodoPago.replace("tarjeta_credito_", "");
+      const validacion = validarLimiteCredito(tarjetaId, monto, tarjetasCredito);
+      
+      if (!validacion.valido) {
+        toast.error(validacion.mensaje);
+        return;
+      }
+    }
+
+    registrarPagoMutation.mutate(
+      {
+        cuentaId: selectedCuenta.id,
+        monto: monto,
+        metodo: metodoPago,
+        tipo: selectedCuenta.tipo_transaccion
+      },
+      {
+        onSuccess: async () => {
+          const tarjetaId = extraerIdTarjetaCredito(metodoPago);
+          if (tarjetaId) {
+            await actualizarSaldoTarjetaCredito(tarjetaId, monto);
+          }
+        }
+      }
+    );
   };
 
   const getEstadoBadge = (fechaVencimiento: string | null, montoPendiente: number) => {
@@ -1144,6 +1168,11 @@ const CuentasPorPagar = () => {
                       <SelectItem value="transferencia">Transferencia Bancaria</SelectItem>
                       <SelectItem value="tarjeta">Tarjeta</SelectItem>
                       <SelectItem value="cheque">Cheque</SelectItem>
+                      {tarjetasCredito?.map((tarjeta) => (
+                        <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                          {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

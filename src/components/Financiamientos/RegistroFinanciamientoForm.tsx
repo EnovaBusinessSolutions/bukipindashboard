@@ -111,7 +111,6 @@ const RegistroFinanciamientoForm = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="simple">Crédito Simple</SelectItem>
-                  <SelectItem value="arrendamiento">Arrendamiento</SelectItem>
                   <SelectItem value="revolvente">Crédito Revolvente</SelectItem>
                   <SelectItem value="tarjeta_corporativa">Tarjeta de Crédito Corporativa</SelectItem>
                 </SelectContent>

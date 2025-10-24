@@ -13,9 +13,12 @@ import { toast } from "@/hooks/use-toast";
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 import { useProveedores } from "@/hooks/useProveedores";
 import { supabase } from "@/integrations/supabase/client";
+import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 const RegistroEgresosPrecargados = () => {
   const { data: productos = [] } = useProductosEgresos();
   const { proveedores, createProveedor } = useProveedores();
+  const { data: tarjetasCredito } = useTarjetasCredito();
   const [selectedType, setSelectedType] = useState(""); // "costo" or "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -190,6 +193,21 @@ const RegistroEgresosPrecargados = () => {
       const montoTotal = parseFloat(totalAmount) || 0;
       const montoPagado = paymentType === "contado" ? montoTotal : paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0;
       const montoPendiente = montoTotal - montoPagado;
+
+      // Validar límite de crédito si se seleccionó tarjeta de crédito
+      if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+        const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
+        const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
+        
+        if (!validacion.valido) {
+          toast({
+            title: "⚠️ Límite de crédito excedido",
+            description: validacion.mensaje,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
       
       const { data, error } = await supabase.from('transacciones_egresos').insert({
         user_id: user.id,
@@ -213,6 +231,13 @@ const RegistroEgresosPrecargados = () => {
         comentarios: description || null
       });
       if (error) throw error;
+
+      // Actualizar saldo de tarjeta de crédito si se usó
+      const tarjetaId = extraerIdTarjetaCredito(paymentMethod);
+      if (tarjetaId && montoPagado > 0) {
+        await actualizarSaldoTarjetaCredito(tarjetaId, montoPagado);
+      }
+
       toast({
         title: "✅ Egreso registrado",
         description: "El costo/gasto precargado se ha registrado correctamente"
@@ -403,6 +428,11 @@ const RegistroEgresosPrecargados = () => {
                     <SelectContent>
                       <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
                       <SelectItem value="tarjeta-transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                      {tarjetasCredito?.map((tarjeta) => (
+                        <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                          {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

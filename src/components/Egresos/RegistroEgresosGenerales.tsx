@@ -12,6 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { supabase } from "@/integrations/supabase/client";
+import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 
 const RegistroEgresosGenerales = () => {
   const [concept, setConcept] = useState("");
@@ -30,6 +32,7 @@ const RegistroEgresosGenerales = () => {
 
   const { data: cuentasData } = useCuentas();
   const { data: subcuentasData } = useSubcuentas();
+  const { data: tarjetasCredito } = useTarjetasCredito();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +63,21 @@ const RegistroEgresosGenerales = () => {
       const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
       const montoPendiente = montoTotal - montoPagado;
 
+      // Validar límite de crédito si se seleccionó tarjeta de crédito
+      if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+        const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
+        const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
+        
+        if (!validacion.valido) {
+          toast({
+            title: "⚠️ Límite de crédito excedido",
+            description: validacion.mensaje,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
       // Determinar el tipo de egreso basado en el código de cuenta
       const tipoEgreso = cuentaSeleccionada.startsWith('5') ? 'costo' : 'gasto';
 
@@ -87,6 +105,12 @@ const RegistroEgresosGenerales = () => {
         });
 
       if (error) throw error;
+
+      // Actualizar saldo de tarjeta de crédito si se usó
+      const tarjetaId = extraerIdTarjetaCredito(paymentMethod);
+      if (tarjetaId && montoPagado > 0) {
+        await actualizarSaldoTarjetaCredito(tarjetaId, montoPagado);
+      }
 
       toast({
         title: "✅ Egreso registrado",
@@ -243,6 +267,11 @@ const RegistroEgresosGenerales = () => {
                     <SelectContent>
                       <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
                       <SelectItem value="tarjeta-transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                      {tarjetasCredito?.map((tarjeta) => (
+                        <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                          {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

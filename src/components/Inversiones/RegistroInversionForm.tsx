@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInversiones } from "@/hooks/useInversiones";
+import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 const RegistroInversionForm = () => {
   const { crearInversion, recomendaciones } = useInversiones();
+  const { data: tarjetasCredito } = useTarjetasCredito();
   const [fecha, setFecha] = useState<Date>(new Date());
   const [categoriaActivo, setCategoriaActivo] = useState<string>("");
   const [anosDepreciacion, setAnosDepreciacion] = useState<number | null>(null);
@@ -138,7 +141,7 @@ const RegistroInversionForm = () => {
     return valorTotal - montoPagado;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const valorTotal = parseFloat(formData.valor_total);
@@ -147,6 +150,21 @@ const RegistroInversionForm = () => {
       : formData.tipo_pago === "credito" 
         ? 0 
         : parseFloat(formData.monto_pagado);
+
+    // Validar límite de crédito si se seleccionó tarjeta de crédito
+    if (formData.metodo_pago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+      const tarjetaId = formData.metodo_pago.replace("tarjeta_credito_", "");
+      const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
+      
+      if (!validacion.valido) {
+        toast({
+          title: "⚠️ Límite de crédito excedido",
+          description: validacion.mensaje,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
     
     const valorDepreciacionAnual = valorTotal / (anosDepreciacion || 1);
     const valorDepreciacionMensual = valorDepreciacionAnual / 12;
@@ -164,7 +182,15 @@ const RegistroInversionForm = () => {
       fecha_inicio_depreciacion: format(fecha, "yyyy-MM-dd"),
       fecha_vencimiento: fechaVencimiento ? format(fechaVencimiento, "yyyy-MM-dd") : null,
       imagen_url: imagenUrl,
-    } as any);
+    } as any, {
+      onSuccess: async () => {
+        // Actualizar saldo de tarjeta de crédito si se usó
+        const tarjetaId = extraerIdTarjetaCredito(formData.metodo_pago);
+        if (tarjetaId && montoPagado > 0) {
+          await actualizarSaldoTarjetaCredito(tarjetaId, montoPagado);
+        }
+      }
+    });
 
     // Reset form
     setFormData({
@@ -375,6 +401,11 @@ const RegistroInversionForm = () => {
                       <SelectContent>
                         <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
                         <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                        {tarjetasCredito?.map((tarjeta) => (
+                          <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                            {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -412,6 +443,11 @@ const RegistroInversionForm = () => {
                           <SelectContent>
                             <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
                             <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                            {tarjetasCredito?.map((tarjeta) => (
+                              <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                                {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
