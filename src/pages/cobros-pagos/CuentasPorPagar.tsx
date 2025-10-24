@@ -102,6 +102,7 @@ const CuentasPorPagar = () => {
         () => {
           queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
           queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+          queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
         }
       )
       .on(
@@ -114,6 +115,7 @@ const CuentasPorPagar = () => {
         () => {
           queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
           queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+          queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
         }
       )
       .on(
@@ -126,6 +128,7 @@ const CuentasPorPagar = () => {
         () => {
           queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
           queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+          queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
         }
       )
       .subscribe();
@@ -218,6 +221,7 @@ const CuentasPorPagar = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-consolidadas"] });
       queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+      queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();
