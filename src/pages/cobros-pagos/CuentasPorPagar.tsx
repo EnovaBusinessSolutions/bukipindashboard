@@ -1006,8 +1006,8 @@ const CuentasPorPagar = () => {
                     <ResponsiveContainer width="100%" height={350}>
                       <LineChart data={analytics?.historicoCxP || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="fecha" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} />
-                        <YAxis stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => escalaHistorico === "miles" ? `$${(value / 1000).toFixed(0)}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toFixed(2)}M` : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`} />
+                        <XAxis dataKey="fecha" stroke="#000" tick={{ fill: '#000', fontSize: 12, fontWeight: 500 }} />
+                        <YAxis stroke="#000" tick={{ fill: '#000', fontSize: 12, fontWeight: 500 }} tickFormatter={(value) => escalaHistorico === "miles" ? `$${(value / 1000).toFixed(0)}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toFixed(2)}M` : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`} />
                         <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} formatter={(value: number) => [escalaHistorico === "miles" ? `$${(value / 1000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M` : `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Saldo CxP']} labelStyle={{ color: 'hsl(var(--foreground))' }} labelFormatter={(label) => label} />
                         <Line type="monotone" dataKey="saldo" stroke={COLORS.primary} strokeWidth={3} dot={{ fill: COLORS.primary, r: 5 }} />
                       </LineChart>
