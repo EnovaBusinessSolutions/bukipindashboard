@@ -1220,7 +1220,7 @@ const CuentasPorCobrar = () => {
                             } else if (escalaHistorico === "millones") {
                               return `$${(value / 1000000).toFixed(2)}M`;
                             }
-                            return `$${(value / 1000).toFixed(0)}k`;
+                            return `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
                           }}
                         />
                         <Tooltip
@@ -1264,7 +1264,7 @@ const CuentasPorCobrar = () => {
                               } else if (escalaHistorico === "millones") {
                                 return `$${(value / 1000000).toFixed(1)}M`;
                               }
-                              return `$${(value / 1000).toFixed(0)}k`;
+                              return `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
                             }
                           }}
                         />
