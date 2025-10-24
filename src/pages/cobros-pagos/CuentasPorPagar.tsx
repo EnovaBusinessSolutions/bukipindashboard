@@ -1020,7 +1020,7 @@ const CuentasPorPagar = () => {
                                 ? `$${(value / 1000).toFixed(1)}k` 
                                 : escalaHistorico === "millones" 
                                 ? `$${(value / 1000000).toFixed(2)}M` 
-                                : `$${(value / 1000).toFixed(0)}k`
+                                : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
                             }
                           />
                         </Line>
