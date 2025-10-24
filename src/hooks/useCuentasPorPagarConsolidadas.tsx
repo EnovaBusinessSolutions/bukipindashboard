@@ -285,10 +285,42 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
       
       if (periodo === "diario") {
         const hoy = new Date();
-        historicoCxP.push({
-          fecha: hoy.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-          saldo: saldoActual
-        });
+        hoy.setHours(23, 59, 59, 999);
+        const hace7Dias = new Date(hoy);
+        hace7Dias.setDate(hace7Dias.getDate() - 6);
+        hace7Dias.setHours(0, 0, 0, 0);
+        
+        let saldoInicial = 0;
+        if (detallesAsientos) {
+          for (const detalle of detallesAsientos) {
+            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+            if (fechaAsiento < hace7Dias) {
+              saldoInicial += Number(detalle.haber || 0) - Number(detalle.debe || 0);
+            }
+          }
+        }
+        
+        for (let i = 0; i < 7; i++) {
+          const fechaDia = new Date(hace7Dias);
+          fechaDia.setDate(fechaDia.getDate() + i);
+          fechaDia.setHours(23, 59, 59, 999);
+          
+          let saldoDia = saldoInicial;
+          
+          if (detallesAsientos) {
+            for (const detalle of detallesAsientos) {
+              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
+              if (fechaAsiento >= hace7Dias && fechaAsiento <= fechaDia) {
+                saldoDia += Number(detalle.haber || 0) - Number(detalle.debe || 0);
+              }
+            }
+          }
+          
+          historicoCxP.push({
+            fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+            saldo: Math.max(0, saldoDia)
+          });
+        }
       } else if (periodo === "mensual") {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
