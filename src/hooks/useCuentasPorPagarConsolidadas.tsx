@@ -290,16 +290,19 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
         hace7Dias.setDate(hace7Dias.getDate() - 6);
         hace7Dias.setHours(0, 0, 0, 0);
         
+        // Calcular saldo al inicio del periodo (hace 7 días)
         let saldoInicial = 0;
         if (detallesAsientos) {
           for (const detalle of detallesAsientos) {
             const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
             if (fechaAsiento < hace7Dias) {
+              // CxP: HABER aumenta, DEBE disminuye
               saldoInicial += Number(detalle.haber || 0) - Number(detalle.debe || 0);
             }
           }
         }
         
+        // Generar datos para cada uno de los últimos 7 días
         for (let i = 0; i < 7; i++) {
           const fechaDia = new Date(hace7Dias);
           fechaDia.setDate(fechaDia.getDate() + i);
@@ -307,10 +310,12 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
           
           let saldoDia = saldoInicial;
           
+          // Acumular movimientos desde el inicio del periodo hasta este día
           if (detallesAsientos) {
             for (const detalle of detallesAsientos) {
               const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
               if (fechaAsiento >= hace7Dias && fechaAsiento <= fechaDia) {
+                // CxP: HABER aumenta, DEBE disminuye
                 saldoDia += Number(detalle.haber || 0) - Number(detalle.debe || 0);
               }
             }
@@ -327,27 +332,31 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
         const diaActual = hoy.getDate();
         const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
         
+        // Calcular saldo al inicio del mes
         let saldoInicioMes = 0;
         if (detallesAsientos) {
           for (const detalle of detallesAsientos) {
             const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
             if (fechaAsiento < primerDiaMes) {
-              // Cuentas por pagar aumentan en HABER y disminuyen en DEBE
+              // CxP: HABER aumenta, DEBE disminuye
               saldoInicioMes += Number(detalle.haber || 0) - Number(detalle.debe || 0);
             }
           }
         }
         
+        // Generar datos para cada día del mes hasta hoy
         for (let dia = 1; dia <= diaActual; dia++) {
           const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
           fechaDia.setHours(23, 59, 59, 999);
           
           let saldoDia = saldoInicioMes;
           
+          // Acumular movimientos desde inicio de mes hasta este día
           if (detallesAsientos) {
             for (const detalle of detallesAsientos) {
               const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
               if (fechaAsiento >= primerDiaMes && fechaAsiento <= fechaDia) {
+                // CxP: HABER aumenta, DEBE disminuye
                 saldoDia += Number(detalle.haber || 0) - Number(detalle.debe || 0);
               }
             }
@@ -364,26 +373,31 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
         const mesActual = hoy.getMonth();
         const inicioAno = new Date(anioActual, 0, 1);
         
+        // Calcular saldo al inicio del año
         let saldoInicioAno = 0;
         if (detallesAsientos) {
           for (const detalle of detallesAsientos) {
             const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
             if (fechaAsiento < inicioAno) {
+              // CxP: HABER aumenta, DEBE disminuye
               saldoInicioAno += Number(detalle.haber || 0) - Number(detalle.debe || 0);
             }
           }
         }
         
+        // Generar datos para cada mes del año hasta el mes actual
         for (let mes = 0; mes <= mesActual; mes++) {
           const ultimoDiaMes = new Date(anioActual, mes + 1, 0);
           ultimoDiaMes.setHours(23, 59, 59, 999);
           
           let saldoMes = saldoInicioAno;
           
+          // Acumular movimientos desde inicio de año hasta fin de este mes
           if (detallesAsientos) {
             for (const detalle of detallesAsientos) {
               const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
               if (fechaAsiento >= inicioAno && fechaAsiento <= ultimoDiaMes) {
+                // CxP: HABER aumenta, DEBE disminuye
                 saldoMes += Number(detalle.haber || 0) - Number(detalle.debe || 0);
               }
             }
