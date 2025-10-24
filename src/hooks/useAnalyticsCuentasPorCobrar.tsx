@@ -9,6 +9,7 @@ interface CuentaPorCobrar {
   monto_pagado: number;
   fecha_vencimiento: string | null;
   created_at: string;
+  updated_at: string;
   descripcion: string;
   dias_vencimiento?: number | null;
 }
@@ -140,8 +141,7 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         };
       });
 
-      // Histórico de CxC (saldo al cierre real)
-      // Mostrar el saldo actual al cierre del período, sin estimaciones
+      // Histórico de CxC (saldo al cierre real basado en actividad real)
       const historicoCxC = [];
       const saldoActual = cuentasConDias.reduce((sum, c) => sum + c.monto_pendiente, 0);
       
@@ -153,75 +153,104 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
           saldo: saldoActual
         });
       } else if (periodo === "mensual") {
-        // Mostrar todos los días del mes actual
-        // Solo mostrar saldo real para el día actual, días anteriores se proyectan linealmente
+        // Para cada día del mes, calcular el saldo basado en transacciones creadas/actualizadas
         const hoy = new Date();
-        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        hoy.setHours(0, 0, 0, 0);
         const diaActual = hoy.getDate();
         
-        // Calcular saldo inicial del mes (transacciones que existían al inicio del mes)
-        const transaccionesInicioMes = cuentasConDias.filter(c => {
+        // Crear mapa de actividad por día (cuándo se crearon o actualizaron transacciones)
+        const actividadPorDia = new Map<number, { creadas: typeof cuentasConDias, actualizadas: typeof cuentasConDias }>();
+        
+        cuentasConDias.forEach(c => {
           const fechaCreacion = new Date(c.created_at);
-          return fechaCreacion < primerDiaMes;
-        });
-        
-        const saldoInicioMes = transaccionesInicioMes.reduce((sum, c) => {
-          // Para transacciones anteriores al mes, usamos monto_pendiente actual
-          return sum + c.monto_pendiente;
-        }, 0);
-        
-        // Para días del mes, interpolar linealmente desde inicio del mes hasta hoy
-        for (let dia = 1; dia <= diaActual; dia++) {
-          const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
+          fechaCreacion.setHours(0, 0, 0, 0);
+          const diaCreacion = fechaCreacion.getDate();
           
-          let saldo;
-          if (dia === diaActual) {
-            // Día actual = saldo real
-            saldo = saldoActual;
-          } else {
-            // Días anteriores = interpolación lineal
-            const proporcion = (dia - 1) / (diaActual - 1);
-            saldo = saldoInicioMes + (saldoActual - saldoInicioMes) * proporcion;
+          if (fechaCreacion.getMonth() === hoy.getMonth() && fechaCreacion.getFullYear() === hoy.getFullYear()) {
+            if (!actividadPorDia.has(diaCreacion)) {
+              actividadPorDia.set(diaCreacion, { creadas: [], actualizadas: [] });
+            }
+            actividadPorDia.get(diaCreacion)!.creadas.push(c);
           }
           
-          historicoCxC.push({
-            fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-            saldo: Math.max(0, saldo)
-          });
+          // Detectar actualizaciones (posibles pagos)
+          const fechaActualizacion = new Date(c.updated_at);
+          fechaActualizacion.setHours(0, 0, 0, 0);
+          const diaActualizacion = fechaActualizacion.getDate();
+          
+          if (fechaActualizacion.getMonth() === hoy.getMonth() && 
+              fechaActualizacion.getFullYear() === hoy.getFullYear() &&
+              fechaActualizacion.getTime() !== fechaCreacion.getTime()) {
+            if (!actividadPorDia.has(diaActualizacion)) {
+              actividadPorDia.set(diaActualizacion, { creadas: [], actualizadas: [] });
+            }
+            actividadPorDia.get(diaActualizacion)!.actualizadas.push(c);
+          }
+        });
+        
+        // Calcular saldo día por día manteniendo constante si no hubo actividad
+        let saldoAnterior = saldoActual; // Empezamos con el saldo actual y vamos hacia atrás
+        
+        for (let dia = diaActual; dia >= 1; dia--) {
+          const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
+          
+          if (dia === diaActual) {
+            // Día actual = saldo real
+            historicoCxC.unshift({
+              fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+              saldo: saldoActual
+            });
+            saldoAnterior = saldoActual;
+          } else {
+            // Para días anteriores: mantener el saldo del día siguiente si no hubo actividad
+            // Si hubo actividad, calcular el cambio
+            const actividad = actividadPorDia.get(dia + 1); // Actividad del día siguiente
+            
+            if (actividad && (actividad.creadas.length > 0 || actividad.actualizadas.length > 0)) {
+              // Hubo actividad el día siguiente, así que restamos las nuevas transacciones
+              // y ajustamos por los pagos (diferencia en updated_at)
+              const montoCreadoManana = actividad.creadas.reduce((sum, c) => sum + c.monto_pendiente, 0);
+              saldoAnterior = saldoAnterior - montoCreadoManana;
+            }
+            
+            historicoCxC.unshift({
+              fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+              saldo: Math.max(0, saldoAnterior)
+            });
+          }
         }
       } else if (periodo === "anual") {
-        // Mostrar meses del año actual
+        // Para cada mes, calcular basado en transacciones existentes
         const hoy = new Date();
         const anioActual = hoy.getFullYear();
         const mesActual = hoy.getMonth();
         
-        // Calcular saldo al inicio del año
-        const inicioAno = new Date(anioActual, 0, 1);
-        const transaccionesInicioAno = cuentasConDias.filter(c => {
-          const fechaCreacion = new Date(c.created_at);
-          return fechaCreacion < inicioAno;
-        });
-        
-        const saldoInicioAno = transaccionesInicioAno.reduce((sum, c) => sum + c.monto_pendiente, 0);
-        
-        // Interpolar linealmente desde inicio de año hasta mes actual
         for (let mes = 0; mes <= mesActual; mes++) {
           const fechaMes = new Date(anioActual, mes, 1);
           
-          let saldo;
           if (mes === mesActual) {
             // Mes actual = saldo real
-            saldo = saldoActual;
+            historicoCxC.push({
+              fecha: fechaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
+              saldo: saldoActual
+            });
           } else {
-            // Meses anteriores = interpolación lineal
-            const proporcion = mesActual > 0 ? mes / mesActual : 0;
-            saldo = saldoInicioAno + (saldoActual - saldoInicioAno) * proporcion;
+            // Meses pasados: sumar monto_pendiente de transacciones que ya existían ese mes
+            const finDeMes = new Date(anioActual, mes + 1, 0);
+            finDeMes.setHours(23, 59, 59, 999);
+            
+            const transaccionesHastaEseMes = cuentasConDias.filter(c => {
+              const fechaCreacion = new Date(c.created_at);
+              return fechaCreacion <= finDeMes;
+            });
+            
+            const saldoMes = transaccionesHastaEseMes.reduce((sum, c) => sum + c.monto_pendiente, 0);
+            
+            historicoCxC.push({
+              fecha: fechaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
+              saldo: Math.max(0, saldoMes)
+            });
           }
-          
-          historicoCxC.push({
-            fecha: fechaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
-            saldo: Math.max(0, saldo)
-          });
         }
       }
 
