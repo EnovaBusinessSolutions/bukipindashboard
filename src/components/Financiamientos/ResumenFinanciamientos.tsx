@@ -213,65 +213,6 @@ const ResumenFinanciamientos = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Historial de transacciones de financiamientos (no tarjetas) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Historial de Transacciones de Financiamientos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Financiamiento</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="text-right">Capital</TableHead>
-                <TableHead className="text-right">Interés</TableHead>
-                <TableHead className="text-right">Saldo Restante</TableHead>
-                <TableHead>Método</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transacciones.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    No hay transacciones registradas
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transacciones.map((transaccion) => (
-                  <TableRow key={transaccion.id}>
-                    <TableCell>{format(new Date(transaccion.fecha), "dd/MM/yyyy")}</TableCell>
-                    <TableCell className="font-medium">
-                      {getFinanciamientoNombre(transaccion.financiamiento_id)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getTipoTransaccionVariant(transaccion.tipo_transaccion)}>
-                        {getTipoTransaccionLabel(transaccion.tipo_transaccion, transaccion.financiamiento_id)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      ${transaccion.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ${transaccion.capital_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ${transaccion.interes_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ${transaccion.saldo_restante.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell>{transaccion.metodo_pago || "-"}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 };
