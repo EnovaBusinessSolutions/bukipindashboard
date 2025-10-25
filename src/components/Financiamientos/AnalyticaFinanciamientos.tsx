@@ -58,15 +58,6 @@ const AnalyticaFinanciamientos = () => {
 
   const dataPorTipo = Object.values(porTipo);
   
-  // Preparar datos para treemap
-  const totalDeudaPorTipo = dataPorTipo.reduce((sum, item) => sum + item.saldo, 0);
-  const treemapData = dataPorTipo.map((item, index) => ({
-    name: getTipoCreditoLabel(item.tipo),
-    value: item.saldo,
-    percentage: totalDeudaPorTipo > 0 ? (item.saldo / totalDeudaPorTipo * 100) : 0,
-    color: COLORS[index % COLORS.length]
-  }));
-
   const getTipoCreditoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
       simple: "Crédito Simple",
@@ -76,6 +67,15 @@ const AnalyticaFinanciamientos = () => {
     };
     return labels[tipo] || tipo;
   };
+  
+  // Preparar datos para treemap
+  const totalDeudaPorTipo = dataPorTipo.reduce((sum, item) => sum + item.saldo, 0);
+  const treemapData = dataPorTipo.map((item, index) => ({
+    name: getTipoCreditoLabel(item.tipo),
+    value: item.saldo,
+    percentage: totalDeudaPorTipo > 0 ? (item.saldo / totalDeudaPorTipo * 100) : 0,
+    color: COLORS[index % COLORS.length]
+  }));
 
   const dataComparacion = [
     { name: "Monto Original", valor: totalOriginal, color: "#3b82f6" },
