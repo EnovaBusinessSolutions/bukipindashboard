@@ -41,13 +41,19 @@ const AnalyticaFinanciamientos = () => {
   const totalOriginal = totalOriginalTradicional; // Tarjetas no cuentan como "monto original"
   const totalPagado = totalPagadoTradicional; // Solo financiamientos tradicionales tienen pagos
   
+  // Solo contar saldo real: para tarjetas corporativas, solo si se ha utilizado
   const porTipo = financiamientosActivos.reduce((acc, f) => {
     const tipo = f.tipo_credito;
-    if (!acc[tipo]) {
-      acc[tipo] = { tipo, saldo: 0, count: 0 };
+    const saldoReal = f.saldo_actual; // Este ya refleja solo lo utilizado
+    
+    // Solo agregar si hay deuda real
+    if (saldoReal > 0) {
+      if (!acc[tipo]) {
+        acc[tipo] = { tipo, saldo: 0, count: 0 };
+      }
+      acc[tipo].saldo += saldoReal;
+      acc[tipo].count += 1;
     }
-    acc[tipo].saldo += f.saldo_actual;
-    acc[tipo].count += 1;
     return acc;
   }, {} as Record<string, { tipo: string; saldo: number; count: number }>);
 
@@ -71,6 +77,9 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular amortizaciones futuras por crédito
   const calcularAmortizacionesFuturas = () => {
+    // Solo incluir financiamientos con saldo real > 0
+    const financiamientosConDeuda = financiamientosActivos.filter(f => f.saldo_actual > 0);
+    
     const periodos = periodoAmortizacion === "mensual" ? 12 : 20;
     const data: any[] = [];
     const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -92,16 +101,16 @@ const AnalyticaFinanciamientos = () => {
 
       const periodo: any = { periodo: nombrePeriodo };
       
-      // Inicializar cada crédito activo en 0
-      financiamientosActivos.forEach((f) => {
+      // Inicializar cada crédito con deuda en 0
+      financiamientosConDeuda.forEach((f) => {
         periodo[f.nombre] = 0;
       });
 
       data.push(periodo);
     }
 
-    // Calcular amortizaciones por cada crédito activo
-    financiamientosActivos.forEach((credito) => {
+    // Calcular amortizaciones por cada crédito con deuda
+    financiamientosConDeuda.forEach((credito) => {
       const fechaInicio = new Date(credito.fecha_inicio);
       const fechaVencimiento = new Date(credito.fecha_vencimiento);
       const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
@@ -156,7 +165,10 @@ const AnalyticaFinanciamientos = () => {
   };
 
   const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
-  const nombresCreditos = financiamientosActivos.map(f => f.nombre);
+  // Solo mostrar créditos con deuda real
+  const nombresCreditos = financiamientosActivos
+    .filter(f => f.saldo_actual > 0)
+    .map(f => f.nombre);
 
   return (
     <div className="space-y-6">
