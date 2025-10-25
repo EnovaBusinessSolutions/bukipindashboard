@@ -24,6 +24,10 @@ const ResumenEgresos = () => {
   const [filterProveedor, setFilterProveedor] = useState<string>("todos");
   const [filterPago, setFilterPago] = useState<string>("todos");
   const [filterEstado, setFilterEstado] = useState<string>("todos");
+  const [filterMes, setFilterMes] = useState<string>("todos");
+  const [filterAno, setFilterAno] = useState<string>("todos");
+  const [filterFechaInicio, setFilterFechaInicio] = useState<string>("");
+  const [filterFechaFin, setFilterFechaFin] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
 
   // Obtener valores únicos para filtros
@@ -35,11 +39,22 @@ const ResumenEgresos = () => {
     return Array.from(proveedores).sort();
   }, [transacciones]);
 
+  const anosUnicos = useMemo(() => {
+    const anos = new Set<number>();
+    transacciones.forEach(t => {
+      const fecha = new Date(t.created_at);
+      anos.add(fecha.getFullYear());
+    });
+    return Array.from(anos).sort((a, b) => b - a);
+  }, [transacciones]);
+
   // Filtrar transacciones
   const transaccionesFiltradas = useMemo(() => {
     return transacciones.filter((t) => {
       // Filtrar solo costos y gastos
       if (t.tipo_egreso !== 'costo' && t.tipo_egreso !== 'gasto') return false;
+      
+      const fecha = new Date(t.created_at);
       
       // Filtro por búsqueda
       if (searchTerm && !t.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) &&
@@ -60,9 +75,31 @@ const ResumenEgresos = () => {
       if (filterEstado === "pagado" && t.monto_pendiente > 0) return false;
       if (filterEstado === "pendiente" && t.monto_pendiente === 0) return false;
       
+      // Filtro por mes
+      if (filterMes !== "todos" && (fecha.getMonth() + 1) !== parseInt(filterMes)) return false;
+      
+      // Filtro por año
+      if (filterAno !== "todos" && fecha.getFullYear() !== parseInt(filterAno)) return false;
+      
+      // Filtro por rango de fechas
+      if (filterFechaInicio && fecha < new Date(filterFechaInicio)) return false;
+      if (filterFechaFin && fecha > new Date(filterFechaFin + 'T23:59:59')) return false;
+      
       return true;
     });
-  }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado]);
+  }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado, filterMes, filterAno, filterFechaInicio, filterFechaFin]);
+
+  // Calcular subtotales
+  const resumenFiltrado = useMemo(() => {
+    return {
+      totalTransacciones: transaccionesFiltradas.length,
+      montoTotal: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0),
+      montoPagado: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pagado, 0),
+      montoPendiente: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pendiente, 0),
+      totalCostos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0),
+      totalGastos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'gasto').reduce((sum, t) => sum + t.monto_total, 0),
+    };
+  }, [transaccionesFiltradas]);
 
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -93,6 +130,10 @@ const ResumenEgresos = () => {
     setFilterProveedor("todos");
     setFilterPago("todos");
     setFilterEstado("todos");
+    setFilterMes("todos");
+    setFilterAno("todos");
+    setFilterFechaInicio("");
+    setFilterFechaFin("");
   };
 
   const getCuentasAfectadas = (transaction: any) => {
@@ -187,7 +228,7 @@ const ResumenEgresos = () => {
           
           {showFilters && (
             <div className="mt-4 space-y-4 p-4 border rounded-lg bg-muted/30">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Buscar</label>
                   <Input
@@ -257,6 +298,65 @@ const ResumenEgresos = () => {
                   </Select>
                 </div>
                 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Mes</label>
+                  <Select value={filterMes} onValueChange={setFilterMes}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="1">Enero</SelectItem>
+                      <SelectItem value="2">Febrero</SelectItem>
+                      <SelectItem value="3">Marzo</SelectItem>
+                      <SelectItem value="4">Abril</SelectItem>
+                      <SelectItem value="5">Mayo</SelectItem>
+                      <SelectItem value="6">Junio</SelectItem>
+                      <SelectItem value="7">Julio</SelectItem>
+                      <SelectItem value="8">Agosto</SelectItem>
+                      <SelectItem value="9">Septiembre</SelectItem>
+                      <SelectItem value="10">Octubre</SelectItem>
+                      <SelectItem value="11">Noviembre</SelectItem>
+                      <SelectItem value="12">Diciembre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Año</label>
+                  <Select value={filterAno} onValueChange={setFilterAno}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {anosUnicos.map((ano) => (
+                        <SelectItem key={ano} value={ano.toString()}>
+                          {ano}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha Inicio</label>
+                  <Input
+                    type="date"
+                    value={filterFechaInicio}
+                    onChange={(e) => setFilterFechaInicio(e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha Fin</label>
+                  <Input
+                    type="date"
+                    value={filterFechaFin}
+                    onChange={(e) => setFilterFechaFin(e.target.value)}
+                  />
+                </div>
+                
                 <div className="flex items-end">
                   <Button
                     variant="ghost"
@@ -267,6 +367,44 @@ const ResumenEgresos = () => {
                     <X className="h-4 w-4 mr-2" />
                     Limpiar Filtros
                   </Button>
+                </div>
+              </div>
+              
+              {/* Resumen de datos filtrados */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Transacciones</div>
+                  <div className="text-lg font-semibold">{resumenFiltrado.totalTransacciones}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Monto Total</div>
+                  <div className="text-lg font-semibold text-primary">
+                    ${resumenFiltrado.montoTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Pagado</div>
+                  <div className="text-lg font-semibold text-green-600">
+                    ${resumenFiltrado.montoPagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Pendiente</div>
+                  <div className="text-lg font-semibold text-yellow-600">
+                    ${resumenFiltrado.montoPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Total Costos</div>
+                  <div className="text-lg font-semibold text-destructive">
+                    ${resumenFiltrado.totalCostos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Total Gastos</div>
+                  <div className="text-lg font-semibold text-orange-600">
+                    ${resumenFiltrado.totalGastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
                 </div>
               </div>
             </div>
