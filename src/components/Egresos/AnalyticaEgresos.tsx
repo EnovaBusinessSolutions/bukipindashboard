@@ -192,7 +192,7 @@ const AnalyticaEgresos = () => {
     ].filter(item => item.monto > 0);
   };
 
-  // Top proveedores
+  // Todos los proveedores
   const topProveedores = () => {
     const grouped = filteredTransactions.reduce((acc, t) => {
       const proveedor = t.proveedor_nombre || 'Sin proveedor';
@@ -205,15 +205,13 @@ const AnalyticaEgresos = () => {
 
     return Object.entries(grouped)
       .map(([proveedor, monto]) => ({ proveedor, monto }))
-      .sort((a, b) => b.monto - a.monto)
-      .slice(0, 10);
+      .sort((a, b) => b.monto - a.monto);
   };
 
-  // Top gastos
+  // Todos los gastos
   const topGastos = () => {
     return [...filteredTransactions]
-      .sort((a, b) => b.monto_total - a.monto_total)
-      .slice(0, 10);
+      .sort((a, b) => b.monto_total - a.monto_total);
   };
 
   if (loading) {
@@ -457,7 +455,7 @@ const AnalyticaEgresos = () => {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Egresos por Proveedor</CardTitle>
-            <CardDescription>Top proveedores por monto</CardDescription>
+            <CardDescription>Todos los proveedores ordenados por monto</CardDescription>
           </CardHeader>
           <CardContent>
             {topProveedores().length === 0 ? (
@@ -482,11 +480,11 @@ const AnalyticaEgresos = () => {
 
       {/* Tablas de Detalles */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Proveedores */}
+        {/* Todos los Proveedores */}
         <Card>
           <CardHeader>
-            <CardTitle>Top 10 Proveedores</CardTitle>
-            <CardDescription>Proveedores con mayor monto de egresos</CardDescription>
+            <CardTitle>Egresos por Proveedor</CardTitle>
+            <CardDescription>Todos los proveedores con egresos registrados</CardDescription>
           </CardHeader>
           <CardContent>
             {topProveedores().length === 0 ? (
@@ -519,11 +517,11 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* Top Gastos */}
+        {/* Todos los Gastos */}
         <Card>
           <CardHeader>
-            <CardTitle>Top 10 Gastos</CardTitle>
-            <CardDescription>Egresos con mayor monto individual</CardDescription>
+            <CardTitle>Gastos por Monto</CardTitle>
+            <CardDescription>Todos los egresos ordenados por monto</CardDescription>
           </CardHeader>
           <CardContent>
             {topGastos().length === 0 ? (
