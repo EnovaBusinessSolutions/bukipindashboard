@@ -470,32 +470,6 @@ const AnalyticaEgresos = () => {
             )}
           </CardContent>
         </Card>
-
-        {/* Egresos por Proveedor */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Egresos por Proveedor</CardTitle>
-            <CardDescription>Todos los proveedores ordenados por monto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topProveedores().length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay datos para mostrar</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={topProveedores()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="proveedor" angle={-45} textAnchor="end" height={100} />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
-                  <Bar dataKey="monto" fill="hsl(180 50% 55%)" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Tablas de Detalles */}
