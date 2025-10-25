@@ -15,7 +15,7 @@ const AnalyticaEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(1000);
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
-  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto">("total");
+  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "combinada">("total");
 
   // Filtrar solo costos y gastos
   const transaccionesFiltradas = transacciones.filter(
@@ -119,7 +119,72 @@ const AnalyticaEgresos = () => {
 
   // Generar datos para gráfica de evolución según período
   const generarDatosEvolucion = () => {
-    // Filtrar transacciones según el tipo de egreso seleccionado
+    // Modo combinada: mostrar costos y gastos por separado
+    if (tipoEgreso === "combinada") {
+      const costos = filteredTransactions.filter(t => t.tipo_egreso === 'costo');
+      const gastos = filteredTransactions.filter(t => t.tipo_egreso === 'gasto');
+
+      if (periodFilter === "diario") {
+        const totalCostos = costos.reduce((sum, t) => sum + t.monto_total, 0);
+        const totalGastos = gastos.reduce((sum, t) => sum + t.monto_total, 0);
+        
+        return [{
+          periodo: 'Hoy',
+          costos: formatearMonto(totalCostos),
+          gastos: formatearMonto(totalGastos)
+        }];
+      } else if (periodFilter === "mensual") {
+        const today = new Date();
+        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        const costosByDay: Record<number, number> = {};
+        const gastosByDay: Record<number, number> = {};
+
+        costos.forEach(t => {
+          const day = new Date(t.created_at).getDate();
+          if (!costosByDay[day]) costosByDay[day] = 0;
+          costosByDay[day] += t.monto_total;
+        });
+
+        gastos.forEach(t => {
+          const day = new Date(t.created_at).getDate();
+          if (!gastosByDay[day]) gastosByDay[day] = 0;
+          gastosByDay[day] += t.monto_total;
+        });
+
+        return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => {
+          const day = i + 1;
+          return {
+            periodo: `Día ${day}`,
+            costos: formatearMonto(costosByDay[day] || 0),
+            gastos: formatearMonto(gastosByDay[day] || 0)
+          };
+        });
+      } else {
+        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const costosByMonth: Record<number, number> = {};
+        const gastosByMonth: Record<number, number> = {};
+
+        costos.forEach(t => {
+          const month = new Date(t.created_at).getMonth();
+          if (!costosByMonth[month]) costosByMonth[month] = 0;
+          costosByMonth[month] += t.monto_total;
+        });
+
+        gastos.forEach(t => {
+          const month = new Date(t.created_at).getMonth();
+          if (!gastosByMonth[month]) gastosByMonth[month] = 0;
+          gastosByMonth[month] += t.monto_total;
+        });
+
+        return meses.map((mes, index) => ({
+          periodo: mes,
+          costos: formatearMonto(costosByMonth[index] || 0),
+          gastos: formatearMonto(gastosByMonth[index] || 0)
+        }));
+      }
+    }
+
+    // Modo normal: una sola línea
     const transaccionesFiltradas = tipoEgreso === "total" 
       ? filteredTransactions 
       : filteredTransactions.filter(t => t.tipo_egreso === tipoEgreso);
@@ -389,6 +454,7 @@ const AnalyticaEgresos = () => {
                       <TabsTrigger value="total">Total</TabsTrigger>
                       <TabsTrigger value="costo">Costos</TabsTrigger>
                       <TabsTrigger value="gasto">Gastos</TabsTrigger>
+                      <TabsTrigger value="combinada">Combinada</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -413,13 +479,51 @@ const AnalyticaEgresos = () => {
                   }}
                   labelStyle={{ color: 'hsl(var(--foreground))' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="monto" 
-                  stroke="#000000" 
-                  strokeWidth={2}
-                  dot={{ fill: '#000000' }}
-                />
+                {tipoEgreso === "combinada" ? (
+                  <>
+                    <Line 
+                      type="monotone" 
+                      dataKey="costos" 
+                      stroke="hsl(180, 25%, 50%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(180, 25%, 50%)' }}
+                      label={{ 
+                        position: 'top', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="gastos" 
+                      stroke="hsl(0, 70%, 55%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(0, 70%, 55%)' }}
+                      label={{ 
+                        position: 'bottom', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                      }}
+                    />
+                    <Legend />
+                  </>
+                ) : (
+                  <Line 
+                    type="monotone" 
+                    dataKey="monto" 
+                    stroke="hsl(180, 25%, 50%)" 
+                    strokeWidth={2}
+                    dot={{ fill: 'hsl(180, 25%, 50%)' }}
+                    label={{ 
+                      position: 'top', 
+                      fill: 'hsl(var(--foreground))',
+                      fontSize: 12,
+                      formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                    }}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
