@@ -25,8 +25,8 @@ const RegistroFinanciamientos = () => {
         <Tabs defaultValue="registro" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="registro">Registro</TabsTrigger>
-            <TabsTrigger value="resumen">Resumen</TabsTrigger>
             <TabsTrigger value="detalle">Detalle</TabsTrigger>
+            <TabsTrigger value="resumen">Resumen Transacciones</TabsTrigger>
             <TabsTrigger value="analitica">Analítica</TabsTrigger>
           </TabsList>
 
