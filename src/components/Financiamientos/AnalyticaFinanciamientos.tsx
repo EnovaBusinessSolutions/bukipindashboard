@@ -41,21 +41,19 @@ const AnalyticaFinanciamientos = () => {
   const totalOriginal = totalOriginalTradicional; // Tarjetas no cuentan como "monto original"
   const totalPagado = totalPagadoTradicional; // Solo financiamientos tradicionales tienen pagos
   
-  // Solo contar saldo real: para tarjetas corporativas, solo si se ha utilizado
+  // Mostrar todos los tipos activos con su saldo real (incluso si es 0)
   const porTipo = financiamientosActivos.reduce((acc, f) => {
     const tipo = f.tipo_credito;
-    const saldoReal = f.saldo_actual; // Este ya refleja solo lo utilizado
+    const saldoReal = f.saldo_actual; // Para tarjetas: solo lo utilizado, para otros: saldo actual
     
-    // Solo agregar si hay deuda real
-    if (saldoReal > 0) {
-      if (!acc[tipo]) {
-        acc[tipo] = { tipo, saldo: 0, count: 0 };
-      }
-      acc[tipo].saldo += saldoReal;
-      acc[tipo].count += 1;
+    if (!acc[tipo]) {
+      acc[tipo] = { tipo, saldo: 0, count: 0 };
     }
+    acc[tipo].saldo += saldoReal;
+    acc[tipo].count += 1;
+    
     return acc;
-  }, {} as Record<string, { tipo: string; saldo: number; count: number }>);
+  }, {} as Record<string, { tipo: string; saldo: number; count: 0 }>);
 
   const dataPorTipo = Object.values(porTipo);
 
