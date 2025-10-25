@@ -24,9 +24,22 @@ const AnalyticaFinanciamientos = () => {
 
   const financiamientosActivos = financiamientos.filter(f => f.estado === "activo");
   
-  const totalDeuda = financiamientosActivos.reduce((sum, f) => sum + f.saldo_actual, 0);
-  const totalOriginal = financiamientosActivos.reduce((sum, f) => sum + f.monto_total, 0);
-  const totalPagado = totalOriginal - totalDeuda;
+  // Separar tarjetas corporativas de financiamientos tradicionales
+  const tarjetasCorporativas = financiamientosActivos.filter(f => f.tipo_credito === "tarjeta_corporativa");
+  const financiamientosTradicionales = financiamientosActivos.filter(f => f.tipo_credito !== "tarjeta_corporativa");
+  
+  // Para tarjetas: solo el saldo actual cuenta como deuda (lo utilizado)
+  const deudaTarjetas = tarjetasCorporativas.reduce((sum, f) => sum + f.saldo_actual, 0);
+  
+  // Para financiamientos tradicionales: usar saldo_inicial como monto original
+  const totalOriginalTradicional = financiamientosTradicionales.reduce((sum, f) => sum + f.saldo_inicial, 0);
+  const deudaTradicional = financiamientosTradicionales.reduce((sum, f) => sum + f.saldo_actual, 0);
+  const totalPagadoTradicional = totalOriginalTradicional - deudaTradicional;
+  
+  // Totales combinados
+  const totalDeuda = deudaTradicional + deudaTarjetas;
+  const totalOriginal = totalOriginalTradicional; // Tarjetas no cuentan como "monto original"
+  const totalPagado = totalPagadoTradicional; // Solo financiamientos tradicionales tienen pagos
   
   const porTipo = financiamientosActivos.reduce((acc, f) => {
     const tipo = f.tipo_credito;
