@@ -105,26 +105,64 @@ const DetalleCreditosFinanciamientos = () => {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Progreso de Pago</span>
-                    <span className="font-medium">
-                      {((f.monto_total - f.saldo_actual) / f.monto_total * 100).toFixed(1)}% completado
-                    </span>
+                {/* Barra de progreso diferente para tarjetas y créditos revolventes */}
+                {f.tipo_credito === "tarjeta_corporativa" || f.tipo_credito === "revolvente" ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Uso de Línea de Crédito</span>
+                      <span className="font-medium">
+                        {(f.saldo_actual / f.monto_total * 100).toFixed(1)}% utilizado
+                      </span>
+                    </div>
+                    <div className="w-full bg-green-100 rounded-full h-3 flex overflow-hidden">
+                      <div
+                        className="bg-green-500 h-3 transition-all"
+                        style={{
+                          width: `${((f.monto_total - f.saldo_actual) / f.monto_total) * 100}%`,
+                        }}
+                        title="Línea Disponible"
+                      />
+                      <div
+                        className="bg-red-500 h-3 transition-all"
+                        style={{
+                          width: `${(f.saldo_actual / f.monto_total) * 100}%`,
+                        }}
+                        title="Saldo Pendiente"
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 bg-green-500 rounded"></span>
+                        Disponible: ${(f.monto_total - f.saldo_actual).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 bg-red-500 rounded"></span>
+                        Pendiente: ${f.saldo_actual.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-3">
-                    <div
-                      className="bg-primary h-3 rounded-full transition-all"
-                      style={{
-                        width: `${((f.monto_total - f.saldo_actual) / f.monto_total) * 100}%`,
-                      }}
-                    />
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Progreso de Pago</span>
+                      <span className="font-medium">
+                        {((f.monto_total - f.saldo_actual) / f.monto_total * 100).toFixed(1)}% completado
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-3">
+                      <div
+                        className="bg-primary h-3 rounded-full transition-all"
+                        style={{
+                          width: `${((f.monto_total - f.saldo_actual) / f.monto_total) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Pagado: ${(f.monto_total - f.saldo_actual).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                      <span>Pendiente: ${f.saldo_actual.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Pagado: ${(f.monto_total - f.saldo_actual).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                    <span>Pendiente: ${f.saldo_actual.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
+                )}
               </div>
             ))}
             {creditosActivos.length === 0 && (
