@@ -24,9 +24,9 @@ const RegistroDisposicionForm = () => {
   });
   const [fecha, setFecha] = useState<Date>(new Date());
 
-  // Filtrar solo líneas revolventes (tarjetas y créditos revolventes)
+  // Filtrar solo créditos revolventes (no tarjetas de crédito)
   const lineasRevolventes = financiamientos.filter(
-    (f) => (f.tipo_credito === "tarjeta_corporativa" || f.tipo_credito === "revolvente") && f.estado === "activo"
+    (f) => f.tipo_credito === "revolvente" && f.estado === "activo"
   );
 
   const financiamientoSeleccionado = lineasRevolventes.find(
@@ -76,7 +76,7 @@ const RegistroDisposicionForm = () => {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               No hay líneas de crédito revolventes disponibles para disponer.
-              Para utilizar esta opción, primero registra una Tarjeta de Crédito Corporativa o un Crédito Revolvente.
+              Para utilizar esta opción, primero registra un Crédito Revolvente.
             </AlertDescription>
           </Alert>
         </CardContent>

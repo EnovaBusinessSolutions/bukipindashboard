@@ -57,7 +57,7 @@ const RegistroFinanciamientos = () => {
                     </div>
                     <CardTitle className="text-center">Disposición</CardTitle>
                     <CardDescription className="text-center">
-                      Usa tu línea de crédito revolvente o tarjeta corporativa
+                      Dispón de tu línea de crédito revolvente
                     </CardDescription>
                   </CardHeader>
                 </Card>
