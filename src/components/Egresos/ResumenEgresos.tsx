@@ -1,22 +1,68 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon } from "lucide-react";
+import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useCuentas } from "@/hooks/useCuentas";
 
 const ResumenEgresos = () => {
-  const { transacciones, loading } = useTransaccionesEgresos(50);
+  const { transacciones, loading } = useTransaccionesEgresos(200);
+  const { data: cuentasData } = useCuentas();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterTipo, setFilterTipo] = useState<string>("todos");
+  const [filterProveedor, setFilterProveedor] = useState<string>("todos");
+  const [filterPago, setFilterPago] = useState<string>("todos");
+  const [filterEstado, setFilterEstado] = useState<string>("todos");
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Filtrar solo costos y gastos, excluyendo inventario
-  const transaccionesFiltradas = transacciones.filter(
-    (t) => t.tipo_egreso === 'costo' || t.tipo_egreso === 'gasto'
-  );
+  // Obtener valores únicos para filtros
+  const proveedoresUnicos = useMemo(() => {
+    const proveedores = new Set<string>();
+    transacciones.forEach(t => {
+      if (t.proveedor_nombre) proveedores.add(t.proveedor_nombre);
+    });
+    return Array.from(proveedores).sort();
+  }, [transacciones]);
+
+  // Filtrar transacciones
+  const transaccionesFiltradas = useMemo(() => {
+    return transacciones.filter((t) => {
+      // Filtrar solo costos y gastos
+      if (t.tipo_egreso !== 'costo' && t.tipo_egreso !== 'gasto') return false;
+      
+      // Filtro por búsqueda
+      if (searchTerm && !t.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) &&
+          !t.proveedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
+      
+      // Filtro por tipo
+      if (filterTipo !== "todos" && t.tipo_egreso !== filterTipo) return false;
+      
+      // Filtro por proveedor
+      if (filterProveedor !== "todos" && t.proveedor_nombre !== filterProveedor) return false;
+      
+      // Filtro por tipo de pago
+      if (filterPago !== "todos" && t.tipo_pago !== filterPago) return false;
+      
+      // Filtro por estado
+      if (filterEstado === "pagado" && t.monto_pendiente > 0) return false;
+      if (filterEstado === "pendiente" && t.monto_pendiente === 0) return false;
+      
+      return true;
+    });
+  }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado]);
 
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -41,6 +87,65 @@ const ResumenEgresos = () => {
     setDetailsOpen(true);
   };
 
+  const limpiarFiltros = () => {
+    setSearchTerm("");
+    setFilterTipo("todos");
+    setFilterProveedor("todos");
+    setFilterPago("todos");
+    setFilterEstado("todos");
+  };
+
+  const getCuentasAfectadas = (transaction: any) => {
+    const cuentas = [];
+    
+    // Cuenta de debe (gasto o costo)
+    if (transaction.cuenta_codigo) {
+      const cuenta = cuentasData?.cuentasFlat.find(c => c.codigo === transaction.cuenta_codigo);
+      cuentas.push({
+        tipo: "Debe (Cargo)",
+        codigo: transaction.cuenta_codigo,
+        nombre: cuenta?.nombre || "Cuenta de egreso",
+        monto: transaction.monto_total
+      });
+    }
+    
+    // Cuenta de haber (forma de pago)
+    if (transaction.metodo_pago === "efectivo") {
+      cuentas.push({
+        tipo: "Haber (Abono)",
+        codigo: "1001",
+        nombre: "Efectivo",
+        monto: transaction.monto_pagado
+      });
+    } else if (transaction.metodo_pago === "transferencia") {
+      cuentas.push({
+        tipo: "Haber (Abono)",
+        codigo: "1002",
+        nombre: "Bancos",
+        monto: transaction.monto_pagado
+      });
+    } else if (transaction.metodo_pago === "tarjeta_credito") {
+      cuentas.push({
+        tipo: "Haber (Abono)",
+        codigo: "2102",
+        nombre: "Tarjetas de Crédito",
+        monto: transaction.monto_pagado
+      });
+    }
+    
+    // Si hay monto pendiente, agregar cuenta por pagar
+    if (transaction.monto_pendiente > 0) {
+      cuentas.push({
+        tipo: "Haber (Abono)",
+        codigo: "2001",
+        nombre: "Cuentas por Pagar",
+        monto: transaction.monto_pendiente
+      });
+    }
+    
+    return cuentas;
+  };
+
   if (loading) {
     return (
       <Card>
@@ -63,10 +168,109 @@ const ResumenEgresos = () => {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Resumen de Egresos</CardTitle>
-          <CardDescription>
-            Historial de costos y gastos registrados ({transaccionesFiltradas.length} transacciones)
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Resumen de Egresos</CardTitle>
+              <CardDescription>
+                Historial de costos y gastos registrados ({transaccionesFiltradas.length} de {transacciones.filter(t => t.tipo_egreso === 'costo' || t.tipo_egreso === 'gasto').length} transacciones)
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+            </Button>
+          </div>
+          
+          {showFilters && (
+            <div className="mt-4 space-y-4 p-4 border rounded-lg bg-muted/30">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Buscar</label>
+                  <Input
+                    placeholder="Buscar por descripción o proveedor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Tipo de Egreso</label>
+                  <Select value={filterTipo} onValueChange={setFilterTipo}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="costo">Costos</SelectItem>
+                      <SelectItem value="gasto">Gastos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Proveedor</label>
+                  <Select value={filterProveedor} onValueChange={setFilterProveedor}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {proveedoresUnicos.map((prov) => (
+                        <SelectItem key={prov} value={prov}>
+                          {prov}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Tipo de Pago</label>
+                  <Select value={filterPago} onValueChange={setFilterPago}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="contado">Contado</SelectItem>
+                      <SelectItem value="credito">Crédito</SelectItem>
+                      <SelectItem value="parcial">Parcial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Estado de Pago</label>
+                  <Select value={filterEstado} onValueChange={setFilterEstado}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="pagado">Pagado</SelectItem>
+                      <SelectItem value="pendiente">Con Saldo Pendiente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={limpiarFiltros}
+                    className="w-full"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Limpiar Filtros
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {transaccionesFiltradas.length === 0 ? (
@@ -330,6 +534,42 @@ const ResumenEgresos = () => {
                   </div>
                 </div>
               )}
+
+              {/* Cuentas contables afectadas */}
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  Cuentas Contables Afectadas
+                </h4>
+                <div className="space-y-2">
+                  {getCuentasAfectadas(selectedTransaction).map((cuenta, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={cuenta.tipo.includes("Debe") ? "destructive" : "default"}>
+                            {cuenta.tipo}
+                          </Badge>
+                          <span className="font-mono text-sm font-medium">{cuenta.codigo}</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">{cuenta.nombre}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold">
+                          ${cuenta.monto.toLocaleString('es-MX', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                  <div className="text-xs text-muted-foreground">
+                    <strong>Nota:</strong> Este asiento contable registra el egreso de acuerdo al método de pago seleccionado.
+                  </div>
+                </div>
+              </div>
 
               {/* Comprobante fotográfico */}
               {selectedTransaction.imagen_comprobante && (
