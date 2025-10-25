@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 const AnalyticaEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(1000);
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
+  const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
+  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto">("total");
 
   // Filtrar solo costos y gastos
   const transaccionesFiltradas = transacciones.filter(
@@ -101,64 +103,71 @@ const AnalyticaEgresos = () => {
 
   const resumenes = calcularResumenes();
 
+  // Función para formatear montos según el filtro
+  const formatearMonto = (monto: number) => {
+    if (formatoMontos === "miles") return monto / 1000;
+    if (formatoMontos === "millones") return monto / 1000000;
+    return monto;
+  };
+
+  // Función para obtener el sufijo del formato
+  const getSufijoFormato = () => {
+    if (formatoMontos === "miles") return " (Miles)";
+    if (formatoMontos === "millones") return " (Millones)";
+    return "";
+  };
+
   // Generar datos para gráfica de evolución según período
   const generarDatosEvolucion = () => {
+    // Filtrar transacciones según el tipo de egreso seleccionado
+    const transaccionesFiltradas = tipoEgreso === "total" 
+      ? filteredTransactions 
+      : filteredTransactions.filter(t => t.tipo_egreso === tipoEgreso);
+
     if (periodFilter === "diario") {
-      const totalEgresos = filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0);
-      const totalPagado = filteredTransactions.reduce((sum, t) => sum + t.monto_pagado, 0);
-      const totalPendiente = filteredTransactions.reduce((sum, t) => sum + t.monto_pendiente, 0);
+      const total = transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0);
       
       return [{
         periodo: 'Hoy',
-        egresos: totalEgresos,
-        pagado: totalPagado,
-        pendiente: totalPendiente
+        monto: formatearMonto(total)
       }];
     } else if (periodFilter === "mensual") {
       // Agrupar por día del mes
       const today = new Date();
       const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const dataByDay: Record<number, { egresos: number; pagado: number; pendiente: number }> = {};
+      const dataByDay: Record<number, number> = {};
 
-      filteredTransactions.forEach(t => {
+      transaccionesFiltradas.forEach(t => {
         const day = new Date(t.created_at).getDate();
         if (!dataByDay[day]) {
-          dataByDay[day] = { egresos: 0, pagado: 0, pendiente: 0 };
+          dataByDay[day] = 0;
         }
-        dataByDay[day].egresos += t.monto_total;
-        dataByDay[day].pagado += t.monto_pagado;
-        dataByDay[day].pendiente += t.monto_pendiente;
+        dataByDay[day] += t.monto_total;
       });
 
       return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => {
         const day = i + 1;
         return {
           periodo: `Día ${day}`,
-          egresos: dataByDay[day]?.egresos || 0,
-          pagado: dataByDay[day]?.pagado || 0,
-          pendiente: dataByDay[day]?.pendiente || 0
+          monto: formatearMonto(dataByDay[day] || 0)
         };
       });
     } else {
       // Agrupar por mes
-      const dataByMonth: Record<number, { egresos: number; pagado: number; pendiente: number }> = {};
+      const dataByMonth: Record<number, number> = {};
       const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-      filteredTransactions.forEach(t => {
+      transaccionesFiltradas.forEach(t => {
         const month = new Date(t.created_at).getMonth();
         if (!dataByMonth[month]) {
-          dataByMonth[month] = { egresos: 0, pagado: 0, pendiente: 0 };
+          dataByMonth[month] = 0;
         }
-        dataByMonth[month].egresos += t.monto_total;
-        dataByMonth[month].pagado += t.monto_pagado;
-        dataByMonth[month].pendiente += t.monto_pendiente;
+        dataByMonth[month] += t.monto_total;
       });
 
       return meses.map((mes, index) => ({
         periodo: mes,
-        egresos: dataByMonth[index]?.egresos || 0,
-        pagado: dataByMonth[index]?.pagado || 0,
-        pendiente: dataByMonth[index]?.pendiente || 0
+        monto: formatearMonto(dataByMonth[index] || 0)
       }));
     }
   };
@@ -352,10 +361,39 @@ const AnalyticaEgresos = () => {
         {/* Evolución de Egresos */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Evolución de Egresos</CardTitle>
-            <CardDescription>
-              Tendencia de egresos en el período seleccionado
-            </CardDescription>
+            <div className="flex flex-col gap-4">
+              <div>
+                <CardTitle>Evolución de Egresos{getSufijoFormato()}</CardTitle>
+                <CardDescription>
+                  Tendencia de egresos en el período seleccionado
+                </CardDescription>
+              </div>
+              
+              {/* Filtros */}
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Formato:</span>
+                  <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)}>
+                    <TabsList>
+                      <TabsTrigger value="normal">Normal</TabsTrigger>
+                      <TabsTrigger value="miles">Miles</TabsTrigger>
+                      <TabsTrigger value="millones">Millones</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Tipo:</span>
+                  <Tabs value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)}>
+                    <TabsList>
+                      <TabsTrigger value="total">Total</TabsTrigger>
+                      <TabsTrigger value="costo">Costos</TabsTrigger>
+                      <TabsTrigger value="gasto">Gastos</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -363,11 +401,25 @@ const AnalyticaEgresos = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="periodo" />
                 <YAxis />
-                <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, '']} />
-                <Legend />
-                <Line type="monotone" dataKey="egresos" stroke="hsl(180 50% 55%)" name="Egresos Totales" strokeWidth={2} />
-                <Line type="monotone" dataKey="pagado" stroke="hsl(180 45% 45%)" name="Pagado" strokeWidth={2} />
-                <Line type="monotone" dataKey="pendiente" stroke="hsl(180 60% 70%)" name="Pendiente" strokeWidth={2} />
+                <Tooltip 
+                  formatter={(value) => {
+                    const formattedValue = Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+                    return [`$${formattedValue}${getSufijoFormato()}`, 'Monto'];
+                  }}
+                  contentStyle={{ 
+                    borderRadius: '8px', 
+                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'hsl(var(--background))'
+                  }}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="monto" 
+                  stroke="#000000" 
+                  strokeWidth={2}
+                  dot={{ fill: '#000000' }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
