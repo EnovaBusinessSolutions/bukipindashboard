@@ -427,9 +427,9 @@ const ResumenEgresos = () => {
                     <TableHead>Descripción</TableHead>
                     <TableHead>Proveedor</TableHead>
                     <TableHead>Monto Total</TableHead>
-                    <TableHead>Tipo de Pago</TableHead>
+                    <TableHead>Afectación Contable</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Cuentas Contables</TableHead>
+                    <TableHead>Detalle Asiento</TableHead>
                     <TableHead>Comprobante</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -468,9 +468,37 @@ const ResumenEgresos = () => {
                         })}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getTipoPagoBadge(transaccion.tipo_pago)}>
-                          {transaccion.tipo_pago}
-                        </Badge>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">Cargo:</span>
+                            <Badge variant="outline" className="text-xs">
+                              {transaccion.cuenta_codigo || '5001'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">Abono:</span>
+                            {transaccion.metodo_pago === "efectivo" && (
+                              <Badge variant="outline" className="text-xs bg-green-50">
+                                1001 - Efectivo
+                              </Badge>
+                            )}
+                            {transaccion.metodo_pago === "transferencia" && (
+                              <Badge variant="outline" className="text-xs bg-blue-50">
+                                1002 - Bancos
+                              </Badge>
+                            )}
+                            {transaccion.metodo_pago === "tarjeta_credito" && (
+                              <Badge variant="outline" className="text-xs bg-purple-50">
+                                2102 - T. Crédito
+                              </Badge>
+                            )}
+                            {transaccion.monto_pendiente > 0 && (
+                              <Badge variant="outline" className="text-xs bg-yellow-50 ml-1">
+                                2001 - Ctas x Pagar
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         {transaccion.monto_pendiente > 0 ? (
