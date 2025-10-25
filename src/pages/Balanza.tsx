@@ -249,6 +249,213 @@ const Balanza = () => {
         }
       });
 
+      // Obtener transacciones de financiamientos
+      const { data: financiamientos } = await supabase
+        .from("transacciones_financiamientos")
+        .select("*, financiamientos(nombre, tipo_credito, cuenta_codigo)")
+        .gte("fecha", startDate.toISOString().split('T')[0])
+        .lte("fecha", endDate.toISOString().split('T')[0])
+        .order("fecha", { ascending: true });
+
+      financiamientos?.forEach(transaccion => {
+        const financiamiento = transaccion.financiamientos as any;
+        const cuentaCredito = financiamiento?.cuenta_codigo || "2101";
+
+        if (transaccion.tipo_transaccion === 'disposicion') {
+          // Disposición: Debe en Bancos, Haber en Crédito
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Financiamiento",
+            descripcion: `Disposición ${financiamiento?.nombre || 'crédito'}`,
+            cuenta_codigo: "1002",
+            cuenta_nombre: "Bancos",
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `FIN-${transaccion.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Financiamiento",
+            descripcion: `Disposición ${financiamiento?.nombre || 'crédito'}`,
+            cuenta_codigo: cuentaCredito,
+            cuenta_nombre: "Crédito Bancario",
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `FIN-${transaccion.id.slice(0, 8)}`
+          });
+        } else if (transaccion.tipo_transaccion === 'amortizacion') {
+          // Amortización de capital: Debe en Crédito, Haber en Bancos
+          if (transaccion.capital_pagado > 0) {
+            movimientos.push({
+              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              tipo: "Financiamiento",
+              descripcion: `Amortización ${financiamiento?.nombre || 'crédito'}`,
+              cuenta_codigo: cuentaCredito,
+              cuenta_nombre: "Crédito Bancario",
+              debe: transaccion.capital_pagado,
+              haber: 0,
+              referencia: `FIN-${transaccion.id.slice(0, 8)}`
+            });
+
+            movimientos.push({
+              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              tipo: "Financiamiento",
+              descripcion: `Amortización ${financiamiento?.nombre || 'crédito'}`,
+              cuenta_codigo: "1002",
+              cuenta_nombre: "Bancos",
+              debe: 0,
+              haber: transaccion.capital_pagado,
+              referencia: `FIN-${transaccion.id.slice(0, 8)}`
+            });
+          }
+
+          // Pago de intereses: Debe en Gastos Financieros, Haber en Bancos
+          if (transaccion.interes_pagado > 0) {
+            movimientos.push({
+              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              tipo: "Financiamiento",
+              descripcion: `Intereses ${financiamiento?.nombre || 'crédito'}`,
+              cuenta_codigo: "5301",
+              cuenta_nombre: "Gastos Financieros",
+              debe: transaccion.interes_pagado,
+              haber: 0,
+              referencia: `INT-${transaccion.id.slice(0, 8)}`
+            });
+
+            movimientos.push({
+              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              tipo: "Financiamiento",
+              descripcion: `Intereses ${financiamiento?.nombre || 'crédito'}`,
+              cuenta_codigo: "1002",
+              cuenta_nombre: "Bancos",
+              debe: 0,
+              haber: transaccion.interes_pagado,
+              referencia: `INT-${transaccion.id.slice(0, 8)}`
+            });
+          }
+        } else if (transaccion.tipo_transaccion === 'cargo_interes') {
+          // Cargo de interés sin pago: Debe en Gastos Financieros, Haber en Crédito
+          if (transaccion.interes_pagado > 0) {
+            movimientos.push({
+              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              tipo: "Financiamiento",
+              descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
+              cuenta_codigo: "5301",
+              cuenta_nombre: "Gastos Financieros",
+              debe: transaccion.interes_pagado,
+              haber: 0,
+              referencia: `CIN-${transaccion.id.slice(0, 8)}`
+            });
+
+            movimientos.push({
+              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              tipo: "Financiamiento",
+              descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
+              cuenta_codigo: cuentaCredito,
+              cuenta_nombre: "Crédito Bancario",
+              debe: 0,
+              haber: transaccion.interes_pagado,
+              referencia: `CIN-${transaccion.id.slice(0, 8)}`
+            });
+          }
+        }
+      });
+
+      // Obtener transacciones de impuestos
+      const { data: impuestos } = await supabase
+        .from("transacciones_impuestos")
+        .select("*")
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .order("created_at", { ascending: true });
+
+      impuestos?.forEach(impuesto => {
+        // Provisión de ISR: Debe en ISR, Haber en Impuestos por Pagar
+        if (impuesto.isr_real > 0) {
+          movimientos.push({
+            fecha: format(new Date(impuesto.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Impuesto",
+            descripcion: `ISR ${impuesto.mes}/${impuesto.ano}`,
+            cuenta_codigo: "6001",
+            cuenta_nombre: "ISR",
+            debe: impuesto.isr_real,
+            haber: 0,
+            referencia: `ISR-${impuesto.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(impuesto.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Impuesto",
+            descripcion: `ISR ${impuesto.mes}/${impuesto.ano}`,
+            cuenta_codigo: "2002",
+            cuenta_nombre: "Impuestos por Pagar",
+            debe: 0,
+            haber: impuesto.isr_real,
+            referencia: `ISR-${impuesto.id.slice(0, 8)}`
+          });
+        }
+      });
+
+      // Calcular y registrar depreciaciones mensuales
+      const { data: inversionesActivas } = await supabase
+        .from("inversiones_capex")
+        .select("*")
+        .eq("estado", "activo")
+        .not("fecha_inicio_depreciacion", "is", null);
+
+      // Agrupar depreciaciones por mes
+      const depreciaciones: Record<string, number> = {};
+      
+      inversionesActivas?.forEach(inversion => {
+        if (!inversion.fecha_inicio_depreciacion || !inversion.valor_depreciacion_mensual) return;
+
+        const inicioDepr = new Date(inversion.fecha_inicio_depreciacion);
+        const finPeriodo = endDate;
+
+        // Iterar por cada mes desde el inicio de depreciación hasta el fin del periodo
+        let fechaActual = new Date(inicioDepr);
+        while (fechaActual <= finPeriodo && fechaActual >= startDate) {
+          const mesKey = format(fechaActual, "yyyy-MM");
+          
+          if (!depreciaciones[mesKey]) {
+            depreciaciones[mesKey] = 0;
+          }
+          depreciaciones[mesKey] += Number(inversion.valor_depreciacion_mensual);
+
+          // Avanzar al siguiente mes
+          fechaActual.setMonth(fechaActual.getMonth() + 1);
+        }
+      });
+
+      // Crear asientos de depreciación por mes
+      Object.entries(depreciaciones).forEach(([mesKey, monto]) => {
+        const [ano, mes] = mesKey.split('-');
+        const fechaDep = new Date(Number(ano), Number(mes) - 1, 1);
+
+        movimientos.push({
+          fecha: format(fechaDep, "dd/MM/yyyy"),
+          tipo: "Depreciación",
+          descripcion: `Depreciación del mes ${mes}/${ano}`,
+          cuenta_codigo: "5201",
+          cuenta_nombre: "Depreciaciones",
+          debe: monto,
+          haber: 0,
+          referencia: `DEP-${mesKey}`
+        });
+
+        movimientos.push({
+          fecha: format(fechaDep, "dd/MM/yyyy"),
+          tipo: "Depreciación",
+          descripcion: `Depreciación del mes ${mes}/${ano}`,
+          cuenta_codigo: "1304",
+          cuenta_nombre: "Depreciación Acumulada",
+          debe: 0,
+          haber: monto,
+          referencia: `DEP-${mesKey}`
+        });
+      });
+
       // Agrupar movimientos por referencia
       const asientosMap = new Map<string, AsientoAgrupado>();
       
