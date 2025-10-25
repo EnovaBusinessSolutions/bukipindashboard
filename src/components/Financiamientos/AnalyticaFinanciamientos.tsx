@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -57,6 +57,15 @@ const AnalyticaFinanciamientos = () => {
   }, {} as Record<string, { tipo: string; saldo: number; count: 0 }>);
 
   const dataPorTipo = Object.values(porTipo);
+  
+  // Preparar datos para treemap
+  const totalDeudaPorTipo = dataPorTipo.reduce((sum, item) => sum + item.saldo, 0);
+  const treemapData = dataPorTipo.map((item, index) => ({
+    name: getTipoCreditoLabel(item.tipo),
+    value: item.saldo,
+    percentage: totalDeudaPorTipo > 0 ? (item.saldo / totalDeudaPorTipo * 100) : 0,
+    color: COLORS[index % COLORS.length]
+  }));
 
   const getTipoCreditoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
@@ -88,6 +97,64 @@ const AnalyticaFinanciamientos = () => {
 
   const formatearValorCompleto = (valor: number): string => {
     return `$${valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  };
+
+  // Componente personalizado para el contenido del Treemap
+  const CustomTreemapContent = (props: any) => {
+    const { x, y, width, height, name, value, percentage, color } = props;
+    
+    if (width < 80 || height < 80) return null;
+    
+    const formattedValue = formatoVisualizacion === "miles" 
+      ? `${(value / 1000).toFixed(1)}K`
+      : formatoVisualizacion === "millones"
+      ? `${(value / 1000000).toFixed(2)}M`
+      : value.toLocaleString('es-MX', { minimumFractionDigits: 0 });
+    
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: color,
+            stroke: '#fff',
+            strokeWidth: 2,
+          }}
+        />
+        <text
+          x={x + width / 2}
+          y={y + height / 2 - 20}
+          textAnchor="middle"
+          fill="#fff"
+          fontSize={14}
+          fontWeight="bold"
+        >
+          {name}
+        </text>
+        <text
+          x={x + width / 2}
+          y={y + height / 2}
+          textAnchor="middle"
+          fill="#fff"
+          fontSize={16}
+          fontWeight="bold"
+        >
+          ${formattedValue}
+        </text>
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + 20}
+          textAnchor="middle"
+          fill="#fff"
+          fontSize={13}
+        >
+          {percentage.toFixed(1)}%
+        </text>
+      </g>
+    );
   };
 
   // Calcular amortizaciones futuras por crédito
@@ -251,27 +318,32 @@ const AnalyticaFinanciamientos = () => {
       <div className="grid grid-cols-2 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Deuda por Tipo de Crédito</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Deuda por Tipo de Crédito</CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="formato-treemap" className="text-xs">Formato:</Label>
+                <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
+                  <SelectTrigger id="formato-treemap" className="w-24 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="miles">Miles</SelectItem>
+                    <SelectItem value="millones">Millones</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={dataPorTipo}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="tipo" 
-                  tickFormatter={(value) => getTipoCreditoLabel(value)}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
-                  labelFormatter={(label) => getTipoCreditoLabel(label)}
-                />
-                <Legend />
-                <Bar dataKey="saldo" fill="#10b981" name="Saldo Actual" />
-              </BarChart>
+              <Treemap
+                data={treemapData}
+                dataKey="value"
+                stroke="#fff"
+                fill="#10b981"
+                content={<CustomTreemapContent />}
+              />
             </ResponsiveContainer>
           </CardContent>
         </Card>
