@@ -11,6 +11,7 @@ import { Plus, Trash2, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas, useCreateSubcuenta, useDeleteSubcuenta } from "@/hooks/useSubcuentas";
 import FriendlyAccountSelector from "@/components/ui/friendly-account-selector";
+import MatrizContable from "@/components/PlanCuentas/MatrizContable";
 
 const PlanCuentas = () => {
   // Hooks para datos
@@ -99,9 +100,10 @@ const PlanCuentas = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="catalogo" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="catalogo">Catálogo de Cuentas</TabsTrigger>
             <TabsTrigger value="subcuentas">Gestión de Subcuentas</TabsTrigger>
+            <TabsTrigger value="matriz">Matriz Contable</TabsTrigger>
           </TabsList>
 
           <TabsContent value="catalogo" className="mt-6">
@@ -317,6 +319,10 @@ const PlanCuentas = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="matriz" className="mt-6">
+            <MatrizContable />
           </TabsContent>
         </Tabs>
       </div>
