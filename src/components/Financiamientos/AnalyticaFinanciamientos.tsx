@@ -95,7 +95,7 @@ const AnalyticaFinanciamientos = () => {
     // Solo incluir financiamientos con saldo real > 0
     const financiamientosConDeuda = financiamientosActivos.filter(f => f.saldo_actual > 0);
     
-    const periodos = periodoAmortizacion === "mensual" ? 12 : 20;
+    const periodos = periodoAmortizacion === "mensual" ? 12 : 10;
     const data: any[] = [];
     const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     const hoy = new Date();
@@ -143,7 +143,7 @@ const AnalyticaFinanciamientos = () => {
           }
         } else {
           const anosRestantes = Math.ceil(mesesRestantes / 12);
-          const anosAMostrar = Math.min(20, anosRestantes);
+          const anosAMostrar = Math.min(10, anosRestantes);
           
           // Calcular cuántos meses quedan en el año actual
           const mesesRestantesAnoActual = 12 - hoy.getMonth();
@@ -177,7 +177,7 @@ const AnalyticaFinanciamientos = () => {
           data[mesesHastaVencimiento][credito.nombre] += credito.saldo_actual;
         } else if (periodoAmortizacion === "anual") {
           const anosHastaVencimiento = Math.floor(mesesHastaVencimiento / 12);
-          if (anosHastaVencimiento < 20) {
+          if (anosHastaVencimiento < 10) {
             data[anosHastaVencimiento][credito.nombre] += credito.saldo_actual;
           }
         }
@@ -339,7 +339,7 @@ const AnalyticaFinanciamientos = () => {
             <div>
               <CardTitle>Amortizaciones Futuras por Crédito</CardTitle>
               <CardDescription>
-                Proyección de pagos pendientes {periodoAmortizacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 20 años"}
+                Proyección de pagos pendientes {periodoAmortizacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 10 años"}
               </CardDescription>
             </div>
             <div className="flex items-center gap-4">
