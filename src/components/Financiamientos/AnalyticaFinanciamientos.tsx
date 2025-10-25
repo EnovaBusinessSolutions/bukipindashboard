@@ -12,6 +12,7 @@ const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 const AnalyticaFinanciamientos = () => {
   const { financiamientos, isLoading } = useFinanciamientos();
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
+  const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
 
   if (isLoading) {
     return (
@@ -73,6 +74,22 @@ const AnalyticaFinanciamientos = () => {
     { name: "Saldo Pendiente", valor: totalDeuda, color: "#ef4444" },
   ];
 
+  // Función para formatear valores según el formato seleccionado
+  const formatearValor = (valor: number): string => {
+    if (formatoVisualizacion === "miles") {
+      return `${(valor / 1000).toFixed(1)}K`;
+    } else if (formatoVisualizacion === "millones") {
+      return `${(valor / 1000000).toFixed(1)}M`;
+    } else {
+      // Formato normal con comas
+      return valor.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+  };
+
+  const formatearValorCompleto = (valor: number): string => {
+    return `$${valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  };
+
   // Calcular amortizaciones futuras por crédito
   const calcularAmortizacionesFuturas = () => {
     // Solo incluir financiamientos con saldo real > 0
@@ -128,13 +145,28 @@ const AnalyticaFinanciamientos = () => {
           const anosRestantes = Math.ceil(mesesRestantes / 12);
           const anosAMostrar = Math.min(20, anosRestantes);
           
+          // Calcular cuántos meses quedan en el año actual
+          const mesesRestantesAnoActual = 12 - hoy.getMonth();
+          let mesesContados = 0;
+          
           for (let i = 0; i < anosAMostrar; i++) {
-            if (i === anosRestantes - 1) {
-              const mesesEnUltimoAno = mesesRestantes % 12 || 12;
-              data[i][credito.nombre] += amortizacionMensual * mesesEnUltimoAno;
+            let mesesEnEsteAno: number;
+            
+            if (i === 0) {
+              // Primer año: solo meses restantes del año actual
+              mesesEnEsteAno = Math.min(mesesRestantesAnoActual, mesesRestantes);
+            } else if (mesesContados + 12 <= mesesRestantes) {
+              // Años completos intermedios
+              mesesEnEsteAno = 12;
             } else {
-              data[i][credito.nombre] += amortizacionMensual * 12;
+              // Último año parcial
+              mesesEnEsteAno = mesesRestantes - mesesContados;
             }
+            
+            data[i][credito.nombre] += amortizacionMensual * mesesEnEsteAno;
+            mesesContados += mesesEnEsteAno;
+            
+            if (mesesContados >= mesesRestantes) break;
           }
         }
       } else if (credito.tipo_credito === "revolvente") {
@@ -310,17 +342,32 @@ const AnalyticaFinanciamientos = () => {
                 Proyección de pagos pendientes {periodoAmortizacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 20 años"}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="periodo-amortizacion">Vista:</Label>
-              <Select value={periodoAmortizacion} onValueChange={(value: "mensual" | "anual") => setPeriodoAmortizacion(value)}>
-                <SelectTrigger id="periodo-amortizacion" className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="mensual">Mensual</SelectItem>
-                  <SelectItem value="anual">Anual</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="periodo-amortizacion">Periodo:</Label>
+                <Select value={periodoAmortizacion} onValueChange={(value: "mensual" | "anual") => setPeriodoAmortizacion(value)}>
+                  <SelectTrigger id="periodo-amortizacion" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mensual">Mensual</SelectItem>
+                    <SelectItem value="anual">Anual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="formato-visualizacion">Formato:</Label>
+                <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
+                  <SelectTrigger id="formato-visualizacion" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="miles">Miles (K)</SelectItem>
+                    <SelectItem value="millones">Millones (M)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -331,7 +378,7 @@ const AnalyticaFinanciamientos = () => {
               <XAxis dataKey="periodo" />
               <YAxis />
               <Tooltip 
-                formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                formatter={(value: number) => formatearValorCompleto(value)}
               />
               <Legend />
               {nombresCreditos.map((nombre: string, index: number) => {
@@ -351,8 +398,7 @@ const AnalyticaFinanciamientos = () => {
                       fontWeight="bold"
                       formatter={(value: number) => {
                         if (value === 0) return '';
-                        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-                        return `$${value.toFixed(0)}`;
+                        return `$${formatearValor(value)}`;
                       }}
                     />
                     {esUltimaBarra && (
@@ -366,9 +412,7 @@ const AnalyticaFinanciamientos = () => {
                           
                           if (total === 0) return null;
                           
-                          const textoTotal = total >= 1000000 
-                            ? `$${(total / 1000000).toFixed(1)}M`
-                            : `$${total.toFixed(0)}`;
+                          const textoTotal = `$${formatearValor(total)}`;
                           
                           return (
                             <text
