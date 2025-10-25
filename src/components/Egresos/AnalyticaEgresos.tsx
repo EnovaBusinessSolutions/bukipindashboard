@@ -386,15 +386,17 @@ const AnalyticaEgresos = () => {
                 <p>No hay datos para mostrar</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={320}>
                 <PieChart>
                   <Pie
                     data={egresosPorTipo()}
                     cx="50%"
                     cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={3}
                     labelLine={false}
-                    label={({ tipo, percent }) => `${tipo} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
+                    label={({ tipo, percent }) => `${tipo}\n${(percent * 100).toFixed(1)}%`}
                     fill="#8884d8"
                     dataKey="monto"
                   >
@@ -408,7 +410,15 @@ const AnalyticaEgresos = () => {
                       return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
                     })}
                   </Pie>
-                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                  <Tooltip 
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    formatter={(value) => <span className="text-sm">{value}</span>}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -428,23 +438,33 @@ const AnalyticaEgresos = () => {
                 <p>No hay datos para mostrar</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={320}>
                 <PieChart>
                   <Pie
                     data={estadoPagos()}
                     cx="50%"
                     cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={3}
                     labelLine={false}
-                    label={({ estado, percent }) => `${estado} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
+                    label={({ estado, percent }) => `${estado}\n${(percent * 100).toFixed(1)}%`}
                     fill="#8884d8"
                     dataKey="monto"
                   >
-                    <Cell fill="hsl(180 50% 55%)" />
-                    <Cell fill="hsl(180 55% 65%)" />
-                    <Cell fill="hsl(180 45% 45%)" />
+                    <Cell fill="hsl(142 76% 36%)" />
+                    <Cell fill="hsl(48 96% 53%)" />
+                    <Cell fill="hsl(0 84% 60%)" />
                   </Pie>
-                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                  <Tooltip 
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    formatter={(value) => <span className="text-sm">{value}</span>}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             )}
