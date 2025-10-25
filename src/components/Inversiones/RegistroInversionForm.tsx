@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useInversiones } from "@/hooks/useInversiones";
 import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
+import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
@@ -21,7 +23,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const RegistroInversionForm = () => {
   const { crearInversion, recomendaciones } = useInversiones();
   const { data: tarjetasCredito } = useTarjetasCredito();
+  const { data: saldosDisponibles } = useSaldosDisponibles();
   const [fecha, setFecha] = useState<Date>(new Date());
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState<any>(null);
   const [categoriaActivo, setCategoriaActivo] = useState<string>("");
   const [anosDepreciacion, setAnosDepreciacion] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -151,6 +156,29 @@ const RegistroInversionForm = () => {
         ? 0 
         : parseFloat(formData.monto_pagado);
 
+    // Validar saldo disponible para efectivo o bancos
+    if (formData.metodo_pago === "efectivo" && saldosDisponibles) {
+      if (montoPagado > saldosDisponibles.efectivo) {
+        toast({
+          title: "⚠️ Saldo insuficiente en efectivo",
+          description: `Saldo disponible: $${saldosDisponibles.efectivo.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
+    if (formData.metodo_pago === "transferencia" && saldosDisponibles) {
+      if (montoPagado > saldosDisponibles.bancos) {
+        toast({
+          title: "⚠️ Saldo insuficiente en bancos",
+          description: `Saldo disponible: $${saldosDisponibles.bancos.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     // Validar límite de crédito si se seleccionó tarjeta de crédito
     if (formData.metodo_pago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
       const tarjetaId = formData.metodo_pago.replace("tarjeta_credito_", "");
@@ -164,6 +192,10 @@ const RegistroInversionForm = () => {
         });
         return;
       }
+
+      setPendingSubmit({ formData, montoPagado, valorTotal });
+      setShowConfirmDialog(true);
+      return;
     }
     
     const valorDepreciacionAnual = valorTotal / (anosDepreciacion || 1);
@@ -402,15 +434,21 @@ const RegistroInversionForm = () => {
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar método" />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
-                        <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
-                        {tarjetasCredito?.map((tarjeta) => (
-                          <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                            {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                          <SelectContent>
+                            <SelectItem value="efectivo">
+                              Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
+                            </SelectItem>
+                            <SelectItem value="transferencia">
+                              Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                            </SelectItem>
+                            {tarjetasCredito && tarjetasCredito.length > 0 ? (
+                              tarjetasCredito.map((tarjeta) => (
+                                <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                                  {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                                </SelectItem>
+                              ))
+                            ) : null}
+                          </SelectContent>
                     </Select>
                   </div>
                 )}
@@ -445,13 +483,19 @@ const RegistroInversionForm = () => {
                             <SelectValue placeholder="Seleccionar método" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
-                            <SelectItem value="transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
-                            {tarjetasCredito?.map((tarjeta) => (
-                              <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                                {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="efectivo">
+                              Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
+                            </SelectItem>
+                            <SelectItem value="transferencia">
+                              Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                            </SelectItem>
+                            {tarjetasCredito && tarjetasCredito.length > 0 ? (
+                              tarjetasCredito.map((tarjeta) => (
+                                <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                                  {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                                </SelectItem>
+                              ))
+                            ) : null}
                           </SelectContent>
                         </Select>
                       </div>
@@ -666,6 +710,97 @@ const RegistroInversionForm = () => {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar pago con tarjeta de crédito</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingSubmit?.formData?.metodo_pago?.startsWith("tarjeta_credito_") && tarjetasCredito && (() => {
+                const tarjetaId = pendingSubmit.formData.metodo_pago.replace("tarjeta_credito_", "");
+                const tarjeta = tarjetasCredito.find(t => t.id === tarjetaId);
+                return tarjeta ? (
+                  <>
+                    <div className="space-y-2 my-4">
+                      <p><strong>Tarjeta:</strong> {tarjeta.nombre}</p>
+                      <p><strong>Límite disponible actual:</strong> ${tarjeta.limite_disponible.toFixed(2)}</p>
+                      <p><strong>Monto del cargo:</strong> ${pendingSubmit?.montoPagado?.toFixed(2)}</p>
+                      <p><strong>Límite disponible después:</strong> ${(tarjeta.limite_disponible - (pendingSubmit?.montoPagado || 0)).toFixed(2)}</p>
+                    </div>
+                    <p>¿Deseas continuar con este pago?</p>
+                  </>
+                ) : null;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowConfirmDialog(false);
+              setPendingSubmit(null);
+            }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              if (pendingSubmit) {
+                const { formData, montoPagado, valorTotal } = pendingSubmit;
+                const valorDepreciacionAnual = valorTotal / (anosDepreciacion || 1);
+                const valorDepreciacionMensual = valorDepreciacionAnual / 12;
+
+                crearInversion.mutate({
+                  ...formData,
+                  categoria_activo: categoriaActivo,
+                  anos_depreciacion: anosDepreciacion || 0,
+                  valor_total: valorTotal,
+                  monto_pagado: montoPagado,
+                  monto_pendiente: valorTotal - montoPagado,
+                  valor_depreciacion_anual: valorDepreciacionAnual,
+                  valor_depreciacion_mensual: valorDepreciacionMensual,
+                  fecha_adquisicion: format(fecha, "yyyy-MM-dd"),
+                  fecha_inicio_depreciacion: format(fecha, "yyyy-MM-dd"),
+                  fecha_vencimiento: fechaVencimiento ? format(fechaVencimiento, "yyyy-MM-dd") : null,
+                  imagen_url: imagenUrl,
+                } as any, {
+                  onSuccess: async () => {
+                    const tarjetaId = extraerIdTarjetaCredito(formData.metodo_pago);
+                    if (tarjetaId && montoPagado > 0) {
+                      await actualizarSaldoTarjetaCredito(
+                        tarjetaId, 
+                        montoPagado,
+                        `Pago de inversión: ${formData.producto_nombre}`
+                      );
+                    }
+                    
+                    setFormData({
+                      producto_nombre: "",
+                      descripcion: "",
+                      valor_total: "",
+                      monto_pagado: "",
+                      tipo_pago: "",
+                      metodo_pago: "",
+                      proveedor_nombre: "",
+                      proveedor_email: "",
+                      proveedor_telefono: "",
+                      proveedor_rfc: "",
+                      cuenta_codigo: "",
+                      comentarios: "",
+                    });
+                    setCategoriaActivo("");
+                    setAnosDepreciacion(null);
+                    setImagenUrl("");
+                    setFechaVencimiento(undefined);
+                    setValorTotalDisplay("");
+                    setMontoPagadoDisplay("");
+                    setShowConfirmDialog(false);
+                    setPendingSubmit(null);
+                  }
+                });
+              }
+            }}>
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
