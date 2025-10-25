@@ -429,6 +429,7 @@ const ResumenEgresos = () => {
                     <TableHead>Monto Total</TableHead>
                     <TableHead>Tipo de Pago</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Cuentas Contables</TableHead>
                     <TableHead>Comprobante</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -481,6 +482,70 @@ const ResumenEgresos = () => {
                             Pagado
                           </Badge>
                         )}
+                      </TableCell>
+                      <TableCell className="max-w-xs">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 px-2">
+                              <BookOpen className="h-4 w-4 mr-1" />
+                              Ver Asiento
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-96" align="start">
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">Asiento Contable</h4>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                  {transaccion.descripcion}
+                                </p>
+                              </div>
+                              
+                              {getCuentasAfectadas(transaccion).map((cuenta, idx) => (
+                                <div 
+                                  key={idx} 
+                                  className={`p-3 rounded-lg border ${
+                                    cuenta.tipo.includes('Debe') 
+                                      ? 'bg-red-50 border-red-200' 
+                                      : 'bg-green-50 border-green-200'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-start mb-1">
+                                    <Badge 
+                                      variant="outline" 
+                                      className={cuenta.tipo.includes('Debe') 
+                                        ? 'bg-red-100 text-red-700 border-red-300' 
+                                        : 'bg-green-100 text-green-700 border-green-300'
+                                      }
+                                    >
+                                      {cuenta.tipo}
+                                    </Badge>
+                                    <span className="font-semibold text-sm">
+                                      ${cuenta.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm font-medium mt-2">
+                                    {cuenta.codigo} - {cuenta.nombre}
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              <div className="pt-2 border-t">
+                                <div className="flex justify-between text-xs font-medium">
+                                  <span>Total Debe:</span>
+                                  <span className="text-red-600">
+                                    ${transaccion.monto_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs font-medium mt-1">
+                                  <span>Total Haber:</span>
+                                  <span className="text-green-600">
+                                    ${transaccion.monto_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell>
                         {transaccion.imagen_comprobante ? (
