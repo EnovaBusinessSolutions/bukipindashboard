@@ -13,6 +13,7 @@ const AnalyticaFinanciamientos = () => {
   const { financiamientos, isLoading } = useFinanciamientos();
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
+  const [creditoSeleccionado, setCreditoSeleccionado] = useState<string>("todos");
 
   if (isLoading) {
     return (
@@ -25,9 +26,14 @@ const AnalyticaFinanciamientos = () => {
 
   const financiamientosActivos = financiamientos.filter(f => f.estado === "activo");
   
+  // Filtrar financiamientos según selección
+  const financiamientosFiltrados = creditoSeleccionado === "todos" 
+    ? financiamientosActivos 
+    : financiamientosActivos.filter(f => f.id === creditoSeleccionado);
+  
   // Separar tarjetas corporativas de financiamientos tradicionales
-  const tarjetasCorporativas = financiamientosActivos.filter(f => f.tipo_credito === "tarjeta_corporativa");
-  const financiamientosTradicionales = financiamientosActivos.filter(f => f.tipo_credito !== "tarjeta_corporativa");
+  const tarjetasCorporativas = financiamientosFiltrados.filter(f => f.tipo_credito === "tarjeta_corporativa");
+  const financiamientosTradicionales = financiamientosFiltrados.filter(f => f.tipo_credito !== "tarjeta_corporativa");
   
   // Para tarjetas: solo el saldo actual cuenta como deuda (lo utilizado)
   const deudaTarjetas = tarjetasCorporativas.reduce((sum, f) => sum + f.saldo_actual, 0);
@@ -358,7 +364,40 @@ const AnalyticaFinanciamientos = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Flujo del Financiamiento</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Flujo del Financiamiento</CardTitle>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="filtro-credito" className="text-xs">Crédito:</Label>
+                  <Select value={creditoSeleccionado} onValueChange={setCreditoSeleccionado}>
+                    <SelectTrigger id="filtro-credito" className="w-40 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {financiamientosActivos.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="formato-flujo" className="text-xs">Formato:</Label>
+                  <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
+                    <SelectTrigger id="formato-flujo" className="w-24 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="miles">Miles</SelectItem>
+                      <SelectItem value="millones">Millones</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -371,12 +410,20 @@ const AnalyticaFinanciamientos = () => {
                 <XAxis type="number" />
                 <YAxis type="category" dataKey="name" width={120} />
                 <Tooltip 
-                  formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                  formatter={(value: number) => formatearValorCompleto(value)}
                 />
                 <Bar dataKey="valor" name="Monto">
                   {dataComparacion.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
+                  <LabelList 
+                    dataKey="valor" 
+                    position="right"
+                    fill="#000"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: number) => `$${formatearValor(value)}`}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
