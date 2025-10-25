@@ -101,9 +101,17 @@ const AnalyticaFinanciamientos = () => {
 
   // Componente personalizado para el contenido del Treemap
   const CustomTreemapContent = (props: any) => {
-    const { x, y, width, height, name, value, percentage, color } = props;
+    const { x, y, width, height, root, depth, index, name: nodeName } = props;
     
     if (width < 80 || height < 80) return null;
+    if (!root) return null;
+    
+    // Encontrar el nodo actual en los datos
+    const currentNode = treemapData[index] as { name: string; value: number; percentage: number; color: string } | undefined;
+    const name = currentNode?.name || nodeName || '';
+    const value = currentNode?.value || 0;
+    const percentage = currentNode?.percentage || 0;
+    const color = currentNode?.color || COLORS[0];
     
     const formattedValue = formatoVisualizacion === "miles" 
       ? `${(value / 1000).toFixed(1)}K`
