@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { DollarSign, FileText, TrendingDown, TrendingUp } from "lucide-react";
+import { DollarSign, FileText, TrendingDown, TrendingUp, Eye } from "lucide-react";
 import { useState } from "react";
 
 interface TransaccionesFinanciamientoProps {
@@ -27,6 +27,8 @@ const TransaccionesFinanciamiento = ({
 }: TransaccionesFinanciamientoProps) => {
   const [detalleAsientoOpen, setDetalleAsientoOpen] = useState(false);
   const [asientoSeleccionado, setAsientoSeleccionado] = useState<any>(null);
+  const [detalleTransaccionOpen, setDetalleTransaccionOpen] = useState(false);
+  const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
   
   // Obtener transacciones del financiamiento
   const { data: transacciones, isLoading } = useQuery({
@@ -98,6 +100,31 @@ const TransaccionesFinanciamiento = ({
       cargo_interes: "destructive",
     };
     return variants[tipo] || "default";
+  };
+
+  const getCuentasAfectadas = (transaccion: any) => {
+    if (transaccion.tipo_transaccion === 'desembolso') {
+      return {
+        cargo: '1002 - Bancos',
+        abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`
+      };
+    } else if (transaccion.tipo_transaccion === 'amortizacion') {
+      return {
+        cargo: `2101 - Créditos Bancarios (${nombreFinanciamiento})`,
+        abono: transaccion.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos',
+        adicional: transaccion.interes_pagado > 0 ? {
+          cargo: '5006 - Intereses Pagados',
+          abono: transaccion.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos',
+          monto: transaccion.interes_pagado
+        } : null
+      };
+    } else if (transaccion.tipo_transaccion === 'cargo_interes') {
+      return {
+        cargo: '5006 - Intereses Pagados',
+        abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`
+      };
+    }
+    return { cargo: 'N/A', abono: 'N/A' };
   };
 
   return (
@@ -185,7 +212,8 @@ const TransaccionesFinanciamiento = ({
                   <TableHead className="text-right">Interés</TableHead>
                   <TableHead className="text-right">Saldo Restante</TableHead>
                   <TableHead>Método</TableHead>
-                  <TableHead>Asiento</TableHead>
+                  <TableHead className="text-center">Asiento</TableHead>
+                  <TableHead className="text-center">Detalle</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -212,13 +240,25 @@ const TransaccionesFinanciamiento = ({
                       ${transaccion.saldo_restante.toLocaleString('es-MX')}
                     </TableCell>
                     <TableCell>{transaccion.metodo_pago || "-"}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleVerAsiento(transaccion)}
                       >
                         <FileText className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setTransaccionSeleccionada(transaccion);
+                          setDetalleTransaccionOpen(true);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -304,6 +344,122 @@ const TransaccionesFinanciamiento = ({
                   </Table>
                 </CardContent>
               </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para ver detalle de la transacción con cuentas contables */}
+      <Dialog open={detalleTransaccionOpen} onOpenChange={setDetalleTransaccionOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de Transacción</DialogTitle>
+          </DialogHeader>
+          {transaccionSeleccionada && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha</p>
+                  <p className="font-medium">
+                    {format(new Date(transaccionSeleccionada.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tipo</p>
+                  <Badge variant={getTipoVariant(transaccionSeleccionada.tipo_transaccion)}>
+                    {getTipoLabel(transaccionSeleccionada.tipo_transaccion)}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Descripción</p>
+                  <p className="font-medium">{transaccionSeleccionada.descripcion || getTipoLabel(transaccionSeleccionada.tipo_transaccion)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Monto Total</p>
+                  <p className="font-medium text-lg">
+                    ${transaccionSeleccionada.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {transaccionSeleccionada.capital_pagado > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Capital Pagado</p>
+                    <p className="font-medium">
+                      ${transaccionSeleccionada.capital_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+                {transaccionSeleccionada.interes_pagado > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Interés Pagado</p>
+                    <p className="font-medium">
+                      ${transaccionSeleccionada.interes_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Saldo Restante</p>
+                  <p className="font-medium">
+                    ${transaccionSeleccionada.saldo_restante.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {transaccionSeleccionada.metodo_pago && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Método de Pago</p>
+                    <p className="font-medium">
+                      {transaccionSeleccionada.metodo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia/Bancos'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t">
+                <h4 className="font-semibold mb-3">Afectación Contable</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cuenta</TableHead>
+                      <TableHead className="text-right">Cargo (Debe)</TableHead>
+                      <TableHead className="text-right">Abono (Haber)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).cargo}</td>
+                      <td className="text-right py-2 text-destructive">
+                        ${(transaccionSeleccionada.tipo_transaccion === 'amortizacion' ? 
+                          transaccionSeleccionada.capital_pagado : transaccionSeleccionada.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="text-right py-2">-</td>
+                    </TableRow>
+                    <TableRow>
+                      <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).abono}</td>
+                      <td className="text-right py-2">-</td>
+                      <td className="text-right py-2 text-success">
+                        ${(transaccionSeleccionada.tipo_transaccion === 'amortizacion' ? 
+                          transaccionSeleccionada.capital_pagado : transaccionSeleccionada.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </td>
+                    </TableRow>
+                    {getCuentasAfectadas(transaccionSeleccionada).adicional && (
+                      <>
+                        <TableRow>
+                          <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).adicional.cargo}</td>
+                          <td className="text-right py-2 text-destructive">
+                            ${getCuentasAfectadas(transaccionSeleccionada).adicional.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="text-right py-2">-</td>
+                        </TableRow>
+                        <TableRow>
+                          <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).adicional.abono}</td>
+                          <td className="text-right py-2">-</td>
+                          <td className="text-right py-2 text-success">
+                            ${getCuentasAfectadas(transaccionSeleccionada).adicional.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </td>
+                        </TableRow>
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </DialogContent>

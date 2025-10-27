@@ -1,11 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CreditCard, TrendingUp, Calendar } from "lucide-react";
+import { CreditCard, TrendingUp, Calendar, Eye } from "lucide-react";
+import { useState } from "react";
 
 interface TransaccionesTarjetaCreditoProps {
   financiamientoId: string;
@@ -20,6 +23,8 @@ const TransaccionesTarjetaCredito = ({
   limiteCredito,
   saldoActual 
 }: TransaccionesTarjetaCreditoProps) => {
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [detalleOpen, setDetalleOpen] = useState(false);
   
   // Obtener todas las transacciones donde se usó esta tarjeta
   const { data: transacciones, isLoading } = useQuery({
@@ -41,6 +46,13 @@ const TransaccionesTarjetaCredito = ({
         .eq("metodo_pago", metodoPagoBuscar)
         .order("created_at", { ascending: false });
 
+      // Buscar transacciones del financiamiento (amortizaciones, cargos de interés, etc.)
+      const { data: transaccionesFinanciamiento } = await supabase
+        .from("transacciones_financiamientos")
+        .select("*")
+        .eq("financiamiento_id", financiamientoId)
+        .order("fecha", { ascending: false });
+
       const todasTransacciones = [
         ...(egresos || []).map(e => ({
           id: e.id,
@@ -48,7 +60,9 @@ const TransaccionesTarjetaCredito = ({
           descripcion: e.descripcion,
           monto: e.monto_pagado,
           tipo: 'egreso' as const,
-          proveedor: e.proveedor_nombre
+          proveedor: e.proveedor_nombre,
+          detalle: e,
+          tipoTransaccion: 'cargo'
         })),
         ...(inversiones || []).map(i => ({
           id: i.id,
@@ -56,7 +70,19 @@ const TransaccionesTarjetaCredito = ({
           descripcion: i.producto_nombre,
           monto: i.monto_pagado,
           tipo: 'capex' as const,
-          proveedor: i.proveedor_nombre
+          proveedor: i.proveedor_nombre,
+          detalle: i,
+          tipoTransaccion: 'cargo'
+        })),
+        ...(transaccionesFinanciamiento || []).map(t => ({
+          id: t.id,
+          fecha: t.fecha,
+          descripcion: t.descripcion || getTipoLabel(t.tipo_transaccion),
+          monto: t.tipo_transaccion === 'amortizacion' ? t.capital_pagado : t.monto,
+          tipo: t.tipo_transaccion,
+          proveedor: null,
+          detalle: t,
+          tipoTransaccion: t.tipo_transaccion
         }))
       ];
 
@@ -65,6 +91,43 @@ const TransaccionesTarjetaCredito = ({
       );
     }
   });
+
+  const getTipoLabel = (tipo: string) => {
+    const labels: Record<string, string> = {
+      amortizacion: "Pago de Tarjeta",
+      cargo_interes: "Cargo por Intereses",
+      desembolso: "Disposición",
+    };
+    return labels[tipo] || tipo;
+  };
+
+  const handleVerDetalle = (transaccion: any) => {
+    setSelectedTransaction(transaccion);
+    setDetalleOpen(true);
+  };
+
+  const getCuentasAfectadas = (transaccion: any) => {
+    if (transaccion.tipoTransaccion === 'cargo') {
+      // Cargo a la tarjeta (egreso o capex)
+      return {
+        cargo: transaccion.detalle.cuenta_codigo || "Cuenta de gasto/inversión",
+        abono: `2102 - Tarjeta de Crédito (${nombreTarjeta})`
+      };
+    } else if (transaccion.tipoTransaccion === 'amortizacion') {
+      // Pago de tarjeta
+      return {
+        cargo: `2102 - Tarjeta de Crédito (${nombreTarjeta})`,
+        abono: transaccion.detalle.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos'
+      };
+    } else if (transaccion.tipoTransaccion === 'cargo_interes') {
+      // Cargo por intereses
+      return {
+        cargo: '5006 - Intereses Pagados',
+        abono: `2102 - Tarjeta de Crédito (${nombreTarjeta})`
+      };
+    }
+    return { cargo: 'N/A', abono: 'N/A' };
+  };
 
   const limiteDisponible = limiteCredito - saldoActual;
   const porcentajeUso = (saldoActual / limiteCredito) * 100;
@@ -139,6 +202,7 @@ const TransaccionesTarjetaCredito = ({
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -150,12 +214,29 @@ const TransaccionesTarjetaCredito = ({
                     <TableCell>{transaccion.descripcion}</TableCell>
                     <TableCell>{transaccion.proveedor || "-"}</TableCell>
                     <TableCell>
-                      <Badge variant={transaccion.tipo === 'egreso' ? 'secondary' : 'default'}>
-                        {transaccion.tipo === 'egreso' ? 'Egreso' : 'CAPEX'}
+                      <Badge variant={
+                        transaccion.tipo === 'egreso' ? 'secondary' : 
+                        transaccion.tipo === 'capex' ? 'default' :
+                        transaccion.tipo === 'amortizacion' ? 'default' :
+                        'destructive'
+                      }>
+                        {transaccion.tipo === 'egreso' ? 'Egreso' : 
+                         transaccion.tipo === 'capex' ? 'CAPEX' :
+                         transaccion.tipo === 'amortizacion' ? 'Pago' :
+                         transaccion.tipo === 'cargo_interes' ? 'Interés' : transaccion.tipo}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       ${transaccion.monto.toLocaleString('es-MX')}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleVerDetalle(transaccion)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -164,6 +245,115 @@ const TransaccionesTarjetaCredito = ({
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de detalle de transacción */}
+      <Dialog open={detalleOpen} onOpenChange={setDetalleOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de Transacción</DialogTitle>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha</p>
+                  <p className="font-medium">
+                    {format(new Date(selectedTransaction.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tipo</p>
+                  <Badge variant={
+                    selectedTransaction.tipo === 'egreso' ? 'secondary' : 
+                    selectedTransaction.tipo === 'capex' ? 'default' :
+                    selectedTransaction.tipo === 'amortizacion' ? 'default' :
+                    'destructive'
+                  }>
+                    {selectedTransaction.tipo === 'egreso' ? 'Egreso' : 
+                     selectedTransaction.tipo === 'capex' ? 'CAPEX' :
+                     selectedTransaction.tipo === 'amortizacion' ? 'Pago de Tarjeta' :
+                     selectedTransaction.tipo === 'cargo_interes' ? 'Cargo por Intereses' : selectedTransaction.tipo}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Descripción</p>
+                  <p className="font-medium">{selectedTransaction.descripcion}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Monto</p>
+                  <p className="font-medium text-lg">
+                    ${selectedTransaction.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                {selectedTransaction.proveedor && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Proveedor</p>
+                    <p className="font-medium">{selectedTransaction.proveedor}</p>
+                  </div>
+                )}
+                {selectedTransaction.tipo === 'amortizacion' && (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Capital Pagado</p>
+                      <p className="font-medium">
+                        ${selectedTransaction.detalle.capital_pagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Interés Pagado</p>
+                      <p className="font-medium">
+                        ${selectedTransaction.detalle.interes_pagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Método de Pago</p>
+                      <p className="font-medium">
+                        {selectedTransaction.detalle.metodo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia/Bancos'}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="pt-4 border-t">
+                <h4 className="font-semibold mb-3">Afectación Contable</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cuenta</TableHead>
+                      <TableHead className="text-right">Cargo (Debe)</TableHead>
+                      <TableHead className="text-right">Abono (Haber)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <td className="font-medium py-2">{getCuentasAfectadas(selectedTransaction).cargo}</td>
+                      <td className="text-right py-2 text-destructive">
+                        ${selectedTransaction.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="text-right py-2">-</td>
+                    </TableRow>
+                    <TableRow>
+                      <td className="font-medium py-2">{getCuentasAfectadas(selectedTransaction).abono}</td>
+                      <td className="text-right py-2">-</td>
+                      <td className="text-right py-2 text-success">
+                        ${selectedTransaction.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </td>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+
+              {selectedTransaction.detalle.comentarios && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Comentarios</p>
+                  <p className="text-sm">{selectedTransaction.detalle.comentarios}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
