@@ -11,9 +11,13 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { Textarea } from "@/components/ui/textarea";
+import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
+import { useToast } from "@/hooks/use-toast";
 
 const RegistroAmortizacionForm = () => {
   const { financiamientos, crearTransaccion } = useFinanciamientos();
+  const { data: saldos } = useSaldosDisponibles();
+  const { toast } = useToast();
   const [financiamientoId, setFinanciamientoId] = useState("");
   const [monto, setMonto] = useState("");
   const [capitalPagado, setCapitalPagado] = useState("");
@@ -33,6 +37,26 @@ const RegistroAmortizacionForm = () => {
     const montoTotal = parseFloat(monto);
     const capital = parseFloat(capitalPagado);
     const interes = parseFloat(interesPagado);
+
+    // Validar fondos suficientes
+    if (metodoPago === "efectivo" && saldos && montoTotal > saldos.efectivo) {
+      toast({
+        title: "Fondos insuficientes",
+        description: `No tienes suficiente efectivo. Disponible: $${saldos.efectivo.toFixed(2)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (metodoPago === "transferencia" && saldos && montoTotal > saldos.bancos) {
+      toast({
+        title: "Fondos insuficientes",
+        description: `No tienes suficiente saldo en bancos. Disponible: $${saldos.bancos.toFixed(2)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const nuevoSaldo = financiamientoSeleccionado.saldo_actual - capital;
 
     crearTransaccion.mutate({
@@ -142,10 +166,12 @@ const RegistroAmortizacionForm = () => {
                   <SelectValue placeholder="Selecciona método" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="transferencia">Transferencia</SelectItem>
-                  <SelectItem value="efectivo">Efectivo</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                  <SelectItem value="domiciliacion">Domiciliación</SelectItem>
+                  <SelectItem value="efectivo">
+                    Efectivo {saldos && `(Disponible: $${saldos.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2 })})`}
+                  </SelectItem>
+                  <SelectItem value="transferencia">
+                    Transferencia/Bancos {saldos && `(Disponible: $${saldos.bancos.toLocaleString('es-MX', { minimumFractionDigits: 2 })})`}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
