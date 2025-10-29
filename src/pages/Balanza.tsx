@@ -5,12 +5,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CalendarIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Filter } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface BalanzaEntry {
   fecha: string;
@@ -37,6 +39,9 @@ interface AsientoAgrupado {
 const Balanza = () => {
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()));
+  const [filtroTipo, setFiltroTipo] = useState<string>("todos");
+  const [filtroEstado, setFiltroEstado] = useState<string>("todos");
+  const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
   const { data: balanzaData, isLoading } = useQuery({
     queryKey: ["balanza", startDate, endDate],
@@ -589,6 +594,30 @@ const Balanza = () => {
     }
   });
 
+  // Filtrar asientos
+  const asientosFiltrados = balanzaData?.asientos.filter(asiento => {
+    // Filtro por tipo
+    if (filtroTipo !== "todos" && asiento.tipo !== filtroTipo) return false;
+    
+    // Filtro por estado (cuadrado/descuadrado)
+    const descuadrado = Math.abs(asiento.totalDebe - asiento.totalHaber) >= 0.01;
+    if (filtroEstado === "descuadrado" && !descuadrado) return false;
+    if (filtroEstado === "cuadrado" && descuadrado) return false;
+    
+    // Filtro por búsqueda
+    if (filtroBusqueda) {
+      const busqueda = filtroBusqueda.toLowerCase();
+      return asiento.referencia.toLowerCase().includes(busqueda) ||
+             asiento.descripcion.toLowerCase().includes(busqueda);
+    }
+    
+    return true;
+  }) || [];
+
+  // Obtener tipos únicos para el filtro
+  const tiposUnicos = Array.from(new Set(balanzaData?.asientos.map(a => a.tipo) || []));
+  const asientosDescuadrados = balanzaData?.asientos.filter(a => Math.abs(a.totalDebe - a.totalHaber) >= 0.01).length || 0;
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
@@ -653,18 +682,73 @@ const Balanza = () => {
         </div>
       </div>
 
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por referencia o descripción..."
+            value={filtroBusqueda}
+            onChange={(e) => setFiltroBusqueda(e.target.value)}
+            className="flex-1"
+          />
+        </div>
+
+        <div className="min-w-[180px]">
+          <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+            <SelectTrigger>
+              <SelectValue placeholder="Tipo de transacción" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los tipos</SelectItem>
+              {tiposUnicos.map(tipo => (
+                <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="min-w-[180px]">
+          <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+            <SelectTrigger>
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="cuadrado">Cuadrados</SelectItem>
+              <SelectItem value="descuadrado">Descuadrados ({asientosDescuadrados})</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="text-center py-8">Cargando balanza...</div>
       ) : (
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Asientos Contables</CardTitle>
+              <CardTitle>
+                Asientos Contables
+                {asientosDescuadrados > 0 && (
+                  <span className="ml-3 text-sm font-normal text-red-600">
+                    ({asientosDescuadrados} asiento{asientosDescuadrados > 1 ? 's' : ''} descuadrado{asientosDescuadrados > 1 ? 's' : ''})
+                  </span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="text-sm text-muted-foreground mb-4">
+                Mostrando {asientosFiltrados.length} de {balanzaData?.asientos.length || 0} asientos
+              </div>
               <div className="space-y-2">
-                {balanzaData?.asientos.map((asiento, index) => (
-                  <Collapsible key={index} className="border rounded-lg">
+                {asientosFiltrados.map((asiento, index) => {
+                  const descuadrado = Math.abs(asiento.totalDebe - asiento.totalHaber) >= 0.01;
+                  return (
+                  <Collapsible key={index} className={cn(
+                    "border rounded-lg",
+                    descuadrado && "border-red-500 bg-red-50 dark:bg-red-950/20"
+                  )}>
                     <CollapsibleTrigger className="w-full">
                       <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-4 flex-1">
@@ -688,16 +772,24 @@ const Balanza = () => {
                         <div className="flex gap-6 mr-4">
                           <div className="text-right">
                             <div className="text-xs text-muted-foreground">Debe</div>
-                            <div className="font-medium">
+                            <div className={cn("font-medium", descuadrado && "text-red-600 dark:text-red-400")}>
                               ${asiento.totalDebe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                             </div>
                           </div>
                           <div className="text-right">
                             <div className="text-xs text-muted-foreground">Haber</div>
-                            <div className="font-medium">
+                            <div className={cn("font-medium", descuadrado && "text-red-600 dark:text-red-400")}>
                               ${asiento.totalHaber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                             </div>
                           </div>
+                          {descuadrado && (
+                            <div className="text-right">
+                              <div className="text-xs text-muted-foreground">Diferencia</div>
+                              <div className="font-medium text-red-600 dark:text-red-400">
+                                ${Math.abs(asiento.totalDebe - asiento.totalHaber).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CollapsibleTrigger>
@@ -730,7 +822,8 @@ const Balanza = () => {
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
