@@ -457,31 +457,6 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         }
       });
 
-      // Obtener movimientos de CxC históricos con código 1201 (para datos antiguos)
-      // Solo incluir los que NO estén duplicados en las transacciones anteriores
-      const { data: cxcHistoricos } = await supabase
-        .from("detalle_asientos")
-        .select("*, asientos_contables(fecha, descripcion)")
-        .eq("cuenta_codigo", "1201")
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
-
-      cxcHistoricos?.forEach((detalle: any) => {
-        if (detalle.asientos_contables) {
-          const asiento = detalle.asientos_contables;
-          movimientos.push({
-            fecha: format(new Date(asiento.fecha), "dd/MM/yyyy"),
-            tipo: "CxC Histórico",
-            descripcion: detalle.descripcion || asiento.descripcion || "Cuenta por Cobrar",
-            cuenta_codigo: "1003", // Reclasificar a 1003 para consistencia
-            cuenta_nombre: "Cuentas por Cobrar",
-            debe: detalle.debe || 0,
-            haber: detalle.haber || 0,
-            referencia: `CXC-${detalle.id.slice(0, 8)}`
-          });
-        }
-      });
-
       // Calcular saldos por cuenta
       const saldosPorCuenta: { [key: string]: SaldoCuenta } = {};
 
