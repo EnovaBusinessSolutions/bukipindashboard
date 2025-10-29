@@ -58,13 +58,6 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
     const saldo = saldosPorCuenta[codigo]?.saldo || 0;
     return sum + saldo;
   }, 0);
-  
-  // Calcular utilidad del ejercicio desde los saldos de la balanza
-  const ingresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("4"));
-  const egresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("5"));
-  const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const utilidadEjercicio = ingresos - egresos;
 
   // Desglosar activos por tipo para mostrar
   const activoCirculante = cuentasFlat.filter(cuenta => 
@@ -99,9 +92,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
   const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   
-  const totalCapitalContableConUtilidad = totalCapitalContable + utilidadEjercicio;
-  
-  const totalPasivoMasCapital = totalPasivos + totalCapitalContableConUtilidad;
+  const totalPasivoMasCapital = totalPasivos + totalCapitalContable;
 
   const balanceCuadrado = Math.abs(totalActivos - totalPasivoMasCapital) < 0.01;
 
@@ -386,16 +377,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                 <span className="text-right">{totalActivos > 0 ? ((obtenerSaldo("3002") / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
               </div>
               
-              <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
-                <span className="text-sm font-medium">Utilidad del Ejercicio</span>
-                <span className="text-right">${utilidadEjercicio.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalActivos > 0 ? ((utilidadEjercicio / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
-              </div>
-              
               <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-bold text-green-600 text-lg">
                 <span>Total Capital Contable</span>
-                <span className="text-right">${totalCapitalContableConUtilidad.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalActivos > 0 ? ((totalCapitalContableConUtilidad / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
+                <span className="text-right">${totalCapitalContable.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalActivos > 0 ? ((totalCapitalContable / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
               </div>
             </div>
           </CardContent>

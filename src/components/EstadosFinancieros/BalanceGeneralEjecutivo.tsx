@@ -57,13 +57,6 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
     const saldo = saldosPorCuenta[codigo]?.saldo || 0;
     return sum + saldo;
   }, 0);
-  
-  // Calcular utilidad del ejercicio desde los saldos de la balanza
-  const ingresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("4"));
-  const egresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("5"));
-  const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const utilidadEjercicio = ingresos - egresos;
 
   // Desglosar activos por tipo para mostrar
   const activoCirculante = cuentasFlat.filter(cuenta => 
@@ -98,9 +91,7 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
   const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   
-  const totalCapitalContableConUtilidad = totalCapitalContable + utilidadEjercicio;
-  
-  const totalPasivoMasCapital = totalPasivos + totalCapitalContableConUtilidad;
+  const totalPasivoMasCapital = totalPasivos + totalCapitalContable;
 
   const balanceCuadrado = Math.abs(totalActivos - totalPasivoMasCapital) < 0.01;
 
@@ -226,10 +217,14 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
                 </div>
 
                 {/* Capital Contable */}
-                <LineItem label="Capital Social" value={obtenerSaldo("3001")} />
-                <LineItem label="Utilidades Retenidas" value={obtenerSaldo("3002")} />
-                <LineItem label="Utilidad del Ejercicio" value={utilidadEjercicio} />
-                <LineItem label="Total Capital Contable" value={totalCapitalContableConUtilidad} isSubtotal />
+                {capitalContable.map((cuenta) => (
+                  <LineItem 
+                    key={cuenta.codigo}
+                    label={cuenta.nombre} 
+                    value={obtenerSaldo(cuenta.codigo)} 
+                  />
+                ))}
+                <LineItem label="Total Capital Contable" value={totalCapitalContable} isSubtotal />
               </div>
             </CardContent>
           </Card>
