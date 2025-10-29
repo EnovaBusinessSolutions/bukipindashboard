@@ -60,31 +60,21 @@ const Balanza = () => {
           cuentaNombre = "Bancos";
         }
 
-        // Cuenta de efectivo/banco (Debe)
-        movimientos.push({
-          fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
-          tipo: "Ingreso",
-          descripcion: ingreso.descripcion,
-          cuenta_codigo: ingreso.cuenta_principal_codigo,
-          cuenta_nombre: cuentaNombre,
-          debe: ingreso.monto_neto,
-          haber: 0,
-          referencia: `ING-${ingreso.id.slice(0, 8)}`
-        });
+        // Si hay monto pagado: Debe en Efectivo/Bancos
+        if (ingreso.monto_pagado > 0) {
+          movimientos.push({
+            fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
+            tipo: "Ingreso",
+            descripcion: ingreso.descripcion,
+            cuenta_codigo: ingreso.cuenta_principal_codigo,
+            cuenta_nombre: cuentaNombre,
+            debe: ingreso.monto_pagado,
+            haber: 0,
+            referencia: `ING-${ingreso.id.slice(0, 8)}`
+          });
+        }
 
-        // Cuenta de ingreso (Haber)
-        movimientos.push({
-          fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
-          tipo: "Ingreso",
-          descripcion: ingreso.descripcion,
-          cuenta_codigo: "4001", // Ingresos por ventas
-          cuenta_nombre: "Ingresos",
-          debe: 0,
-          haber: ingreso.monto_neto,
-          referencia: `ING-${ingreso.id.slice(0, 8)}`
-        });
-
-        // Si hay cuentas por cobrar
+        // Si hay cuentas por cobrar: Debe en Cuentas por Cobrar
         if (ingreso.monto_pendiente > 0) {
           movimientos.push({
             fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
@@ -97,6 +87,18 @@ const Balanza = () => {
             referencia: `ING-${ingreso.id.slice(0, 8)}`
           });
         }
+
+        // Haber en Ingresos por el monto total
+        movimientos.push({
+          fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
+          tipo: "Ingreso",
+          descripcion: ingreso.descripcion,
+          cuenta_codigo: "4001", // Ingresos por ventas
+          cuenta_nombre: "Ingresos",
+          debe: 0,
+          haber: ingreso.monto_total,
+          referencia: `ING-${ingreso.id.slice(0, 8)}`
+        });
       });
 
       // Obtener egresos
@@ -108,7 +110,7 @@ const Balanza = () => {
         .order("created_at", { ascending: true });
 
       egresos?.forEach(egreso => {
-        // Cuenta de gasto/costo (Debe)
+        // Debe en Gasto/Costo por el monto total
         movimientos.push({
           fecha: format(new Date(egreso.created_at), "dd/MM/yyyy HH:mm"),
           tipo: "Egreso",
@@ -120,13 +122,13 @@ const Balanza = () => {
           referencia: `EGR-${egreso.id.slice(0, 8)}`
         });
 
-        // Cuenta de efectivo/banco (Haber)
+        // Si hay monto pagado: Haber en Efectivo/Bancos
         if (egreso.monto_pagado > 0) {
           movimientos.push({
             fecha: format(new Date(egreso.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Egreso",
             descripcion: egreso.descripcion,
-            cuenta_codigo: egreso.cuenta_codigo || "1001",
+            cuenta_codigo: "1001",
             cuenta_nombre: "Efectivo/Bancos",
             debe: 0,
             haber: egreso.monto_pagado,
@@ -134,7 +136,7 @@ const Balanza = () => {
           });
         }
 
-        // Si hay cuentas por pagar
+        // Si hay cuentas por pagar: Haber en Cuentas por Pagar
         if (egreso.monto_pendiente > 0) {
           movimientos.push({
             fecha: format(new Date(egreso.created_at), "dd/MM/yyyy HH:mm"),
