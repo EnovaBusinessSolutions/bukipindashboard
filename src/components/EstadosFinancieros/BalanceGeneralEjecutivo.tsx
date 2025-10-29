@@ -37,7 +37,35 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
     return saldosPorCuenta[codigoCuenta]?.saldo || 0;
   };
 
-  // Filtrar cuentas por agrupación
+  // Calcular TODOS los activos desde los saldos de la balanza (cuentas 1xxx)
+  const codigosActivos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("1"));
+  const totalActivos = codigosActivos.reduce((sum, codigo) => {
+    const saldo = saldosPorCuenta[codigo]?.saldo || 0;
+    return sum + saldo;
+  }, 0);
+
+  // Calcular TODOS los pasivos desde los saldos de la balanza (cuentas 2xxx)
+  const codigosPasivos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("2"));
+  const totalPasivos = codigosPasivos.reduce((sum, codigo) => {
+    const saldo = saldosPorCuenta[codigo]?.saldo || 0;
+    return sum + saldo;
+  }, 0);
+
+  // Calcular TODOS los capital contable desde los saldos de la balanza (cuentas 3xxx)
+  const codigosCapital = Object.keys(saldosPorCuenta).filter(c => c.startsWith("3"));
+  const totalCapitalContable = codigosCapital.reduce((sum, codigo) => {
+    const saldo = saldosPorCuenta[codigo]?.saldo || 0;
+    return sum + saldo;
+  }, 0);
+  
+  // Calcular utilidad del ejercicio desde los saldos de la balanza
+  const ingresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("4"));
+  const egresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("5"));
+  const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const utilidadEjercicio = ingresos - egresos;
+
+  // Desglosar activos por tipo para mostrar
   const activoCirculante = cuentasFlat.filter(cuenta => 
     cuenta.subgrupo === "Activo Circulante" && cuenta.estado_financiero === "Balance General"
   );
@@ -62,24 +90,13 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
     cuenta.codigo.startsWith("3") && cuenta.estado_financiero === "Balance General"
   );
 
-  // Calcular totales
+  // Calcular subtotales para mostrar (solo para display, los totales ya los tenemos)
   const totalActivoCirculante = activoCirculante.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const totalActivoFijo = activoFijo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const totalActivoDiferido = activoDiferido.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalActivos = totalActivoCirculante + totalActivoFijo + totalActivoDiferido;
 
   const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalPasivos = totalPasivoCortoPlazo + totalPasivoLargoPlazo;
-
-  const totalCapitalContable = capitalContable.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  
-  // Calcular utilidad del ejercicio desde los saldos
-  const ingresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("4"));
-  const egresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("5"));
-  const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const utilidadEjercicio = ingresos - egresos;
   
   const totalCapitalContableConUtilidad = totalCapitalContable + utilidadEjercicio;
   
