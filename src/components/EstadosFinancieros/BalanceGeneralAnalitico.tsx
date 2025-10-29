@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, Treemap, ResponsiveContainer, Tooltip } from "recharts";
@@ -10,12 +11,14 @@ interface BalanceGeneralAnaliticoProps {
 }
 
 const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) => {
+  const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
+  
   // Usar la misma lógica que los otros componentes del Balance
   const startDate = new Date(0); // Desde el inicio
-  const { data: asientosData, isLoading } = useAsientosBalanza(startDate, cutoffDate);
+  const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, cutoffDate);
   const [selectedView, setSelectedView] = useState<"activos" | "pasivos" | "capital">("activos");
 
-  if (isLoading) {
+  if (cuentasLoading || asientosLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -23,8 +26,9 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     );
   }
 
-  if (!asientosData) return null;
+  if (!asientosData || !cuentasData) return null;
 
+  const cuentasFlat = cuentasData.cuentasFlat || [];
   const saldosPorCuenta = asientosData.saldosPorCuenta || {};
 
   // Función para obtener el saldo de una cuenta desde los asientos de balanza
@@ -39,18 +43,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     return sum + saldo;
   }, 0);
 
-  // Calcular activos circulantes y fijos
+  // Clasificar activos por subgrupo usando la tabla cuentas
+  const activoCirculante = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Activo Circulante" && cuenta.estado_financiero === "Balance General"
+  );
+  
+  const activoFijo = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Activo No Circulante" && cuenta.estado_financiero === "Balance General"
+  );
+
+  const activoDiferido = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Activo Diferido" && cuenta.estado_financiero === "Balance General"
+  );
+
+  // Calcular totales por subgrupo
+  const activosCirculantes = activoCirculante.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const activosFijos = activoFijo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const activosDiferidos = activoDiferido.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  
+  // Obtener saldos individuales para los treemaps
   const caja = obtenerSaldo("1001");
   const bancos = obtenerSaldo("1002");
   const cuentasPorCobrar = obtenerSaldo("1003");
   const inventario = obtenerSaldo("1005");
-  const activosCirculantes = caja + bancos + cuentasPorCobrar + inventario;
-  
-  const activosFijos = Object.keys(saldosPorCuenta)
-    .filter(codigo => codigo.startsWith("10") && parseInt(codigo) >= 1007)
-    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
-  
-  const activosDiferidos = totalActivos - activosCirculantes - activosFijos;
 
   // Calcular TODOS los pasivos desde los saldos de la balanza (cuentas 2xxx)
   const codigosPasivos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("2"));
@@ -59,9 +74,21 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     return sum + saldo;
   }, 0);
 
+  // Clasificar pasivos por subgrupo usando la tabla cuentas
+  const pasivoCortoPlazo = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Pasivo Circulante" && cuenta.estado_financiero === "Balance General"
+  );
+
+  const pasivoLargoPlazo = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Pasivo No Circulante" && cuenta.estado_financiero === "Balance General"
+  );
+
+  // Calcular totales por subgrupo
+  const pasivosCirculantes = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const pasivosLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  
+  // Obtener saldo individual de proveedores para el treemap
   const proveedores = obtenerSaldo("2001");
-  const pasivosCirculantes = proveedores;
-  const pasivosLargoPlazo = totalPasivos - pasivosCirculantes;
 
   // Calcular TODOS los capital contable desde los saldos de la balanza (cuentas 3xxx)
   const codigosCapital = Object.keys(saldosPorCuenta).filter(c => c.startsWith("3"));
