@@ -46,19 +46,27 @@ const Balanza = () => {
       // Obtener ingresos
       const { data: ingresos } = await supabase
         .from("transacciones_ingresos")
-        .select("*, cuentas(nombre)")
+        .select("*")
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString())
         .order("created_at", { ascending: true });
 
       ingresos?.forEach(ingreso => {
+        // Determinar nombre de cuenta según el método de pago
+        let cuentaNombre = "Efectivo/Bancos";
+        if (ingreso.metodo_pago === "efectivo") {
+          cuentaNombre = "Efectivo";
+        } else if (ingreso.metodo_pago === "transferencia") {
+          cuentaNombre = "Bancos";
+        }
+
         // Cuenta de efectivo/banco (Debe)
         movimientos.push({
           fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
           tipo: "Ingreso",
           descripcion: ingreso.descripcion,
           cuenta_codigo: ingreso.cuenta_principal_codigo,
-          cuenta_nombre: (ingreso.cuentas as any)?.nombre || "Efectivo/Bancos",
+          cuenta_nombre: cuentaNombre,
           debe: ingreso.monto_neto,
           haber: 0,
           referencia: `ING-${ingreso.id.slice(0, 8)}`
@@ -94,7 +102,7 @@ const Balanza = () => {
       // Obtener egresos
       const { data: egresos } = await supabase
         .from("transacciones_egresos")
-        .select("*, cuentas(nombre)")
+        .select("*")
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString())
         .order("created_at", { ascending: true });
@@ -106,7 +114,7 @@ const Balanza = () => {
           tipo: "Egreso",
           descripcion: egreso.descripcion,
           cuenta_codigo: egreso.cuenta_codigo || "5001",
-          cuenta_nombre: (egreso.cuentas as any)?.nombre || "Gastos",
+          cuenta_nombre: egreso.tipo_egreso === "costo_venta" ? "Costo de Ventas" : "Gastos",
           debe: egreso.monto_total,
           haber: 0,
           referencia: `EGR-${egreso.id.slice(0, 8)}`
