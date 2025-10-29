@@ -346,29 +346,50 @@ const Balanza = () => {
           }
         } else if (transaccion.tipo_transaccion === 'cargo_interes') {
           // Cargo de interés sin pago: Debe en Gastos Financieros, Haber en Crédito
-          if (transaccion.interes_pagado > 0) {
-            movimientos.push({
-              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
-              tipo: "Financiamiento",
-              descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
-              cuenta_codigo: "5301",
-              cuenta_nombre: "Gastos Financieros",
-              debe: transaccion.interes_pagado,
-              haber: 0,
-              referencia: `CIN-${transaccion.id.slice(0, 8)}`
-            });
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Financiamiento",
+            descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
+            cuenta_codigo: "5301",
+            cuenta_nombre: "Gastos Financieros",
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `CIN-${transaccion.id.slice(0, 8)}`
+          });
 
-            movimientos.push({
-              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
-              tipo: "Financiamiento",
-              descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
-              cuenta_codigo: cuentaCredito,
-              cuenta_nombre: "Crédito Bancario",
-              debe: 0,
-              haber: transaccion.interes_pagado,
-              referencia: `CIN-${transaccion.id.slice(0, 8)}`
-            });
-          }
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Financiamiento",
+            descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
+            cuenta_codigo: cuentaCredito,
+            cuenta_nombre: "Crédito Bancario",
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `CIN-${transaccion.id.slice(0, 8)}`
+          });
+        } else if (transaccion.tipo_transaccion === 'desembolso') {
+          // Desembolso: Debe en Bancos, Haber en Crédito (renombrando 'disposicion')
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Financiamiento",
+            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
+            cuenta_codigo: "1002",
+            cuenta_nombre: "Bancos",
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `FIN-${transaccion.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Financiamiento",
+            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
+            cuenta_codigo: cuentaCredito,
+            cuenta_nombre: "Crédito Bancario",
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `FIN-${transaccion.id.slice(0, 8)}`
+          });
         }
       });
 
