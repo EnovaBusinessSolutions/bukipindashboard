@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { PeriodType } from "@/pages/EstadoResultados";
 
@@ -21,102 +20,10 @@ interface SaldoCuenta {
 const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecutivoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
 
-  // Saldos automáticos de transacciones
-  const { data: saldosAutomaticos, isLoading: saldosAutomaticosLoading } = useQuery({
-    queryKey: ["saldos-automaticos-ejecutivo", startDate, endDate],
-    queryFn: async () => {
-      const startDateStr = startDate.toISOString();
-      const endDateStr = endDate.toISOString();
+  // Usar la misma lógica que la balanza
+  const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
 
-      // Ingresos
-      const { data: ingresosData } = await supabase
-        .from('transacciones_ingresos')
-        .select('monto_neto')
-        .gte('created_at', startDateStr)
-        .lte('created_at', endDateStr);
-
-      const ingresos = ingresosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
-
-      // Costos
-      const { data: costosData } = await supabase
-        .from('transacciones_egresos')
-        .select('monto_total')
-        .eq('tipo_egreso', 'costo')
-        .gte('created_at', startDateStr)
-        .lte('created_at', endDateStr);
-
-      const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
-
-      // Gastos
-      const { data: gastosData } = await supabase
-        .from('transacciones_egresos')
-        .select('monto_total')
-        .eq('tipo_egreso', 'gasto')
-        .gte('created_at', startDateStr)
-        .lte('created_at', endDateStr);
-
-      const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
-
-      return { ingresos, costos, gastos };
-    },
-  });
-
-  // Saldos de asientos contables manuales
-  const { data: saldosAsientos, isLoading: saldosLoading } = useQuery({
-    queryKey: ["saldos-asientos-ejecutivo", startDate, endDate],
-    queryFn: async () => {
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
-
-      const { data: asientos } = await supabase
-        .from("asientos_contables")
-        .select("id")
-        .gte('fecha', startDateStr)
-        .lte('fecha', endDateStr);
-
-      if (!asientos || asientos.length === 0) return {};
-
-      const asientoIds = asientos.map(a => a.id);
-
-      const { data, error } = await supabase
-        .from("detalle_asientos")
-        .select("cuenta_codigo, debe, haber")
-        .in("asiento_id", asientoIds);
-
-      if (error) throw error;
-
-      const saldosPorCuenta: { [key: string]: SaldoCuenta } = {};
-
-      data?.forEach((detalle) => {
-        const codigo = detalle.cuenta_codigo;
-        if (!saldosPorCuenta[codigo]) {
-          saldosPorCuenta[codigo] = {
-            cuenta_codigo: codigo,
-            debe_total: 0,
-            haber_total: 0,
-            saldo: 0,
-          };
-        }
-        saldosPorCuenta[codigo].debe_total += Number(detalle.debe || 0);
-        saldosPorCuenta[codigo].haber_total += Number(detalle.haber || 0);
-      });
-
-      // Calcular saldos finales según naturaleza de la cuenta
-      Object.values(saldosPorCuenta).forEach((cuenta) => {
-        const codigo = cuenta.cuenta_codigo;
-        
-        if (codigo.startsWith("4")) {
-          cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
-        } else if (codigo.startsWith("5")) {
-          cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
-        }
-      });
-
-      return saldosPorCuenta;
-    },
-  });
-
-  if (cuentasLoading || saldosLoading || saldosAutomaticosLoading) {
+  if (cuentasLoading || asientosLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -125,33 +32,11 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   }
 
   const cuentasFlat = cuentasData?.cuentasFlat || [];
+  const saldosPorCuenta = asientosData?.saldosPorCuenta || {};
 
-  // Función para obtener el saldo de una cuenta (combinando asientos manuales y automáticos)
+  // Función para obtener el saldo de una cuenta desde los asientos de balanza
   const obtenerSaldo = (codigoCuenta: string): number => {
-    const saldoAsiento = saldosAsientos?.[codigoCuenta]?.saldo || 0;
-    let saldoAutomatico = 0;
-
-    if (!saldosAutomaticos) return saldoAsiento;
-
-    // Mapear saldos automáticos a cuentas específicas
-    if (codigoCuenta.startsWith("4")) {
-      if (codigoCuenta === "4001") {
-        saldoAutomatico = saldosAutomaticos.ingresos;
-      }
-    } else if (codigoCuenta.startsWith("5")) {
-      const codigoNum = parseInt(codigoCuenta);
-      if (codigoNum >= 5001 && codigoNum <= 5099) {
-        if (codigoCuenta === "5001") {
-          saldoAutomatico = saldosAutomaticos.costos;
-        }
-      } else if (codigoNum >= 5100) {
-        if (codigoCuenta === "5100") {
-          saldoAutomatico = saldosAutomaticos.gastos;
-        }
-      }
-    }
-
-    return saldoAsiento + saldoAutomatico;
+    return saldosPorCuenta[codigoCuenta]?.saldo || 0;
   };
 
   // Filtrar y calcular totales
