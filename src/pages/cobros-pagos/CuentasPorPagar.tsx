@@ -195,6 +195,7 @@ const CuentasPorPagar = () => {
       const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
 
       let error;
+      let tablaReferencia = '';
       
       if (tipo === 'egreso') {
         const result = await supabase
@@ -206,6 +207,7 @@ const CuentasPorPagar = () => {
           })
           .eq('id', cuentaId);
         error = result.error;
+        tablaReferencia = 'transacciones_egresos';
       } else if (tipo === 'capex') {
         const result = await supabase
           .from('inversiones_capex')
@@ -216,9 +218,29 @@ const CuentasPorPagar = () => {
           })
           .eq('id', cuentaId);
         error = result.error;
+        tablaReferencia = 'inversiones_capex';
       }
 
       if (error) throw error;
+
+      // Registrar el pago en la tabla de cobros/pagos
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      const { error: insertError } = await supabase
+        .from('transacciones_cobros_pagos')
+        .insert({
+          user_id: user.id,
+          tipo_transaccion: 'pago',
+          referencia_id: cuentaId,
+          referencia_tabla: tablaReferencia,
+          monto: monto,
+          metodo_pago: metodo,
+          fecha: new Date().toISOString().split('T')[0],
+          descripcion: `Pago a ${cuenta.proveedor_nombre || 'Proveedor'}: ${cuenta.descripcion}`
+        });
+
+      if (insertError) throw insertError;
       
       return { cuentaId, monto, metodo, tipo };
     },

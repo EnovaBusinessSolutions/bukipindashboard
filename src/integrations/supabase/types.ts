@@ -741,6 +741,48 @@ export type Database = {
           },
         ]
       }
+      transacciones_cobros_pagos: {
+        Row: {
+          created_at: string
+          descripcion: string | null
+          fecha: string
+          id: string
+          metodo_pago: string
+          monto: number
+          referencia_id: string
+          referencia_tabla: string
+          tipo_transaccion: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          metodo_pago: string
+          monto: number
+          referencia_id: string
+          referencia_tabla: string
+          tipo_transaccion: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          metodo_pago?: string
+          monto?: number
+          referencia_id?: string
+          referencia_tabla?: string
+          tipo_transaccion?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transacciones_egresos: {
         Row: {
           cantidad: number | null

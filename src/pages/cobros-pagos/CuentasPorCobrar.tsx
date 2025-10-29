@@ -154,7 +154,8 @@ const CuentasPorCobrar = () => {
       const nuevoMontoPendiente = (cuenta.monto_pendiente || 0) - monto;
       const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
 
-      const { error } = await supabase
+      // Actualizar la transacción de ingreso
+      const { error: updateError } = await supabase
         .from('transacciones_ingresos')
         .update({
           monto_pendiente: Math.max(0, nuevoMontoPendiente),
@@ -163,7 +164,26 @@ const CuentasPorCobrar = () => {
         })
         .eq('id', cuentaId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // Registrar el cobro en la tabla de cobros/pagos
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      const { error: insertError } = await supabase
+        .from('transacciones_cobros_pagos')
+        .insert({
+          user_id: user.id,
+          tipo_transaccion: 'cobro',
+          referencia_id: cuentaId,
+          referencia_tabla: 'transacciones_ingresos',
+          monto: monto,
+          metodo_pago: metodo,
+          fecha: new Date().toISOString().split('T')[0],
+          descripcion: `Cobro de ${cuenta.cliente_nombre || 'Cliente'}: ${cuenta.descripcion}`
+        });
+
+      if (insertError) throw insertError;
       
       return { cuentaId, monto, metodo };
     },

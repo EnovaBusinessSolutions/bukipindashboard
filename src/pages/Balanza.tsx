@@ -456,6 +456,72 @@ const Balanza = () => {
         });
       });
 
+      // Obtener transacciones de cobros y pagos
+      const { data: cobrosPagos } = await supabase
+        .from("transacciones_cobros_pagos")
+        .select("*")
+        .gte("fecha", startDate.toISOString().split('T')[0])
+        .lte("fecha", endDate.toISOString().split('T')[0])
+        .order("fecha", { ascending: true });
+
+      cobrosPagos?.forEach(transaccion => {
+        if (transaccion.tipo_transaccion === 'cobro') {
+          // Cobro: Debe en Efectivo/Bancos, Haber en Cuentas por Cobrar
+          const esEfectivo = transaccion.metodo_pago === 'efectivo';
+          const cuentaCaja = esEfectivo ? '1001' : '1002';
+          const nombreCaja = esEfectivo ? 'Efectivo' : 'Bancos';
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Cobro",
+            descripcion: transaccion.descripcion || 'Cobro de cuenta',
+            cuenta_codigo: cuentaCaja,
+            cuenta_nombre: nombreCaja,
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `COB-${transaccion.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Cobro",
+            descripcion: transaccion.descripcion || 'Cobro de cuenta',
+            cuenta_codigo: "1003",
+            cuenta_nombre: "Cuentas por Cobrar",
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `COB-${transaccion.id.slice(0, 8)}`
+          });
+        } else if (transaccion.tipo_transaccion === 'pago') {
+          // Pago: Debe en Cuentas por Pagar, Haber en Efectivo/Bancos
+          const esEfectivo = transaccion.metodo_pago === 'efectivo';
+          const cuentaCaja = esEfectivo ? '1001' : '1002';
+          const nombreCaja = esEfectivo ? 'Efectivo' : 'Bancos';
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Pago",
+            descripcion: transaccion.descripcion || 'Pago de cuenta',
+            cuenta_codigo: "2001",
+            cuenta_nombre: "Cuentas por Pagar",
+            debe: transaccion.monto,
+            haber: 0,
+            referencia: `PAG-${transaccion.id.slice(0, 8)}`
+          });
+
+          movimientos.push({
+            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            tipo: "Pago",
+            descripcion: transaccion.descripcion || 'Pago de cuenta',
+            cuenta_codigo: cuentaCaja,
+            cuenta_nombre: nombreCaja,
+            debe: 0,
+            haber: transaccion.monto,
+            referencia: `PAG-${transaccion.id.slice(0, 8)}`
+          });
+        }
+      });
+
       // Agrupar movimientos por referencia
       const asientosMap = new Map<string, AsientoAgrupado>();
       
