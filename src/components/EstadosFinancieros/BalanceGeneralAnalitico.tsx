@@ -33,8 +33,10 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const pasivosLargoPlazo = saldos.financiamientos;
   const totalPasivos = pasivosCirculantes + pasivosLargoPlazo;
   
-  const capital = saldos.capitalSocial + saldos.utilidadesRetenidas + saldos.utilidad;
+  // Utilidad del ejercicio se calcula como ingresos (saldos.ingresos) - egresos (saldos.costos + saldos.gastos) - impuestos
+  // Nota: En Balance General esto ya viene como "saldos.utilidad" calculado en el hook
   const utilidadEjercicio = saldos.utilidad;
+  const capital = saldos.capitalSocial + saldos.utilidadesRetenidas + utilidadEjercicio;
   const capitalSocialInicial = saldos.capitalSocial;
   const utilidadesRetenidas = saldos.utilidadesRetenidas;
 

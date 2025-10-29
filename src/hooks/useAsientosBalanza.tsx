@@ -377,7 +377,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           fecha: format(new Date(impuesto.created_at), "dd/MM/yyyy HH:mm"),
           tipo: "Impuesto",
           descripcion: `ISR ${impuesto.mes}/${impuesto.ano}`,
-          cuenta_codigo: "5200",
+          cuenta_codigo: "6001",
           cuenta_nombre: "ISR",
           debe: impuesto.isr_real,
           haber: 0,
@@ -487,8 +487,8 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         } else if (codigo.startsWith("4")) {
           // Ingresos: Haber - Debe
           cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
-        } else if (codigo.startsWith("5")) {
-          // Egresos/Gastos: Debe - Haber
+        } else if (codigo.startsWith("5") || codigo.startsWith("6")) {
+          // Egresos/Gastos/Impuestos: Debe - Haber
           cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
         }
       });

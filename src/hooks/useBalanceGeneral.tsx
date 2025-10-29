@@ -24,6 +24,7 @@ interface SaldosBalance {
   ingresos: number;
   costos: number;
   gastos: number;
+  impuestos: number;
   utilidad: number;
 }
 
@@ -69,7 +70,11 @@ export const useBalanceGeneral = () => {
     .filter(codigo => codigo.startsWith("5") && parseInt(codigo) >= 5100)
     .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
 
-  const utilidad = ingresos - (costos + gastos);
+  const impuestos = Object.keys(saldosPorCuenta)
+    .filter(codigo => codigo.startsWith("6"))
+    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
+
+  const utilidad = ingresos - (costos + gastos + impuestos);
 
   return {
     data: asientosData ? {
@@ -85,6 +90,7 @@ export const useBalanceGeneral = () => {
       ingresos,
       costos,
       gastos,
+      impuestos,
       utilidad
     } : undefined,
     ...queryProps

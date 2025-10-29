@@ -61,9 +61,11 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
   // Calcular utilidad del ejercicio desde los saldos de la balanza (cuentas 4xxx - 5xxx)
   const ingresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("4"));
   const egresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("5"));
+  const impuestosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("6"));
   const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
   const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
-  const utilidadEjercicio = ingresos - egresos;
+  const impuestos = impuestosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const utilidadEjercicio = ingresos - egresos - impuestos;
 
   // Desglosar activos por tipo para mostrar
   const activoCirculante = cuentasFlat.filter(cuenta => 

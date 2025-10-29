@@ -76,8 +76,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   });
   
   const cuentasImpuestos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return (codigo === 5200 || codigo >= 5204) && cuenta.estado_financiero === "Estado de Resultados";
+    return cuenta.codigo.startsWith("6") && cuenta.estado_financiero === "Estado de Resultados";
   });
 
   const ventas = cuentasIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);

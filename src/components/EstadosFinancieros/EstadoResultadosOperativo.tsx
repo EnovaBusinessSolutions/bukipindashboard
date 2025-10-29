@@ -69,10 +69,9 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
     return ((codigo >= 5111 && codigo <= 5199) || codigo === 5201) && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  // Filtrar cuentas de impuestos (5200, 5204+)
+  // Filtrar cuentas de impuestos (6xxx)
   const cuentasImpuestos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return (codigo === 5200 || codigo >= 5204) && cuenta.estado_financiero === "Estado de Resultados";
+    return cuenta.codigo.startsWith("6") && cuenta.estado_financiero === "Estado de Resultados";
   });
 
   const calcularTotalIngresos = () => {
