@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useBalanceGeneral } from "@/hooks/useBalanceGeneral";
+import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, Treemap, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -10,7 +10,9 @@ interface BalanceGeneralAnaliticoProps {
 }
 
 const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) => {
-  const { data: saldos, isLoading } = useBalanceGeneral();
+  // Usar la misma lógica que los otros componentes del Balance
+  const startDate = new Date(0); // Desde el inicio
+  const { data: asientosData, isLoading } = useAsientosBalanza(startDate, cutoffDate);
   const [selectedView, setSelectedView] = useState<"activos" | "pasivos" | "capital">("activos");
 
   if (isLoading) {
@@ -21,24 +23,65 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     );
   }
 
-  if (!saldos) return null;
+  if (!asientosData) return null;
 
-  // Cálculos de totales
-  const activosCirculantes = saldos.caja + saldos.bancos + saldos.cuentasPorCobrar + saldos.inventario;
-  const activosFijos = saldos.activosFijos;
-  const activosDiferidos = 0; // No implementado aún
-  const totalActivos = activosCirculantes + activosFijos + activosDiferidos;
+  const saldosPorCuenta = asientosData.saldosPorCuenta || {};
+
+  // Función para obtener el saldo de una cuenta desde los asientos de balanza
+  const obtenerSaldo = (codigoCuenta: string): number => {
+    return saldosPorCuenta[codigoCuenta]?.saldo || 0;
+  };
+
+  // Calcular TODOS los activos desde los saldos de la balanza (cuentas 1xxx)
+  const codigosActivos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("1"));
+  const totalActivos = codigosActivos.reduce((sum, codigo) => {
+    const saldo = saldosPorCuenta[codigo]?.saldo || 0;
+    return sum + saldo;
+  }, 0);
+
+  // Calcular activos circulantes y fijos
+  const caja = obtenerSaldo("1001");
+  const bancos = obtenerSaldo("1002");
+  const cuentasPorCobrar = obtenerSaldo("1003");
+  const inventario = obtenerSaldo("1005");
+  const activosCirculantes = caja + bancos + cuentasPorCobrar + inventario;
   
-  const pasivosCirculantes = saldos.proveedores;
-  const pasivosLargoPlazo = saldos.financiamientos;
-  const totalPasivos = pasivosCirculantes + pasivosLargoPlazo;
+  const activosFijos = Object.keys(saldosPorCuenta)
+    .filter(codigo => codigo.startsWith("10") && parseInt(codigo) >= 1007)
+    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
   
-  // Utilidad del ejercicio se calcula como ingresos (saldos.ingresos) - egresos (saldos.costos + saldos.gastos) - impuestos
-  // Nota: En Balance General esto ya viene como "saldos.utilidad" calculado en el hook
-  const utilidadEjercicio = saldos.utilidad;
-  const capital = saldos.capitalSocial + saldos.utilidadesRetenidas + utilidadEjercicio;
-  const capitalSocialInicial = saldos.capitalSocial;
-  const utilidadesRetenidas = saldos.utilidadesRetenidas;
+  const activosDiferidos = totalActivos - activosCirculantes - activosFijos;
+
+  // Calcular TODOS los pasivos desde los saldos de la balanza (cuentas 2xxx)
+  const codigosPasivos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("2"));
+  const totalPasivos = codigosPasivos.reduce((sum, codigo) => {
+    const saldo = saldosPorCuenta[codigo]?.saldo || 0;
+    return sum + saldo;
+  }, 0);
+
+  const proveedores = obtenerSaldo("2001");
+  const pasivosCirculantes = proveedores;
+  const pasivosLargoPlazo = totalPasivos - pasivosCirculantes;
+
+  // Calcular TODOS los capital contable desde los saldos de la balanza (cuentas 3xxx)
+  const codigosCapital = Object.keys(saldosPorCuenta).filter(c => c.startsWith("3"));
+  const totalCapitalContable = codigosCapital.reduce((sum, codigo) => {
+    const saldo = saldosPorCuenta[codigo]?.saldo || 0;
+    return sum + saldo;
+  }, 0);
+  
+  // Calcular utilidad del ejercicio desde los saldos de la balanza
+  const ingresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("4"));
+  const egresosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("5"));
+  const impuestosCodigos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("6"));
+  const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const impuestos = impuestosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const utilidadEjercicio = ingresos - egresos - impuestos;
+
+  const capitalSocialInicial = obtenerSaldo("3001");
+  const utilidadesRetenidas = obtenerSaldo("3002");
+  const capital = totalCapitalContable + utilidadEjercicio;
 
   // 1. Estructura del Balance (Activos, Pasivos, Capital)
   const estructuraBalanceData = [
@@ -56,10 +99,10 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
 
   // 3. Desglose de Activos Circulantes
   const activosCirculantesData = [
-    { name: "Caja", size: saldos.caja, color: "hsl(var(--chart-1))" },
-    { name: "Bancos", size: saldos.bancos, color: "hsl(var(--chart-2))" },
-    { name: "Cuentas por Cobrar", size: saldos.cuentasPorCobrar, color: "hsl(var(--chart-3))" },
-    { name: "Inventario", size: saldos.inventario, color: "hsl(var(--chart-4))" },
+    { name: "Caja", size: caja, color: "hsl(var(--chart-1))" },
+    { name: "Bancos", size: bancos, color: "hsl(var(--chart-2))" },
+    { name: "Cuentas por Cobrar", size: cuentasPorCobrar, color: "hsl(var(--chart-3))" },
+    { name: "Inventario", size: inventario, color: "hsl(var(--chart-4))" },
   ];
 
   // 3B. Desglose de Activos Fijos
@@ -80,7 +123,7 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
 
   // 5. Desglose de Pasivos Circulantes
   const pasivosCirculantesData = [
-    { name: "Proveedores", size: saldos.proveedores, color: "hsl(var(--chart-5))" },
+    { name: "Proveedores", size: proveedores, color: "hsl(var(--chart-5))" },
   ];
 
   // 5B. Desglose de Pasivos Largo Plazo
