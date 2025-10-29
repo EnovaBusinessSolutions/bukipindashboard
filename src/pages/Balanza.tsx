@@ -41,6 +41,7 @@ const Balanza = () => {
   const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()));
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
+  const [filtroEstadoFinanciero, setFiltroEstadoFinanciero] = useState<string>("todos");
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
   const { data: balanzaData, isLoading } = useQuery({
@@ -604,6 +605,22 @@ const Balanza = () => {
     if (filtroEstado === "descuadrado" && !descuadrado) return false;
     if (filtroEstado === "cuadrado" && descuadrado) return false;
     
+    // Filtro por estado financiero
+    if (filtroEstadoFinanciero !== "todos") {
+      const afectaBalance = asiento.movimientos.some(movimiento => {
+        const primerDigito = movimiento.cuenta_codigo[0];
+        return primerDigito === "1" || primerDigito === "2" || primerDigito === "3";
+      });
+      
+      const afectaResultados = asiento.movimientos.some(movimiento => {
+        const primerDigito = movimiento.cuenta_codigo[0];
+        return primerDigito === "4" || primerDigito === "5";
+      });
+      
+      if (filtroEstadoFinanciero === "balance" && !afectaBalance) return false;
+      if (filtroEstadoFinanciero === "resultados" && !afectaResultados) return false;
+    }
+    
     // Filtro por búsqueda
     if (filtroBusqueda) {
       const busqueda = filtroBusqueda.toLowerCase();
@@ -704,6 +721,19 @@ const Balanza = () => {
               {tiposUnicos.map(tipo => (
                 <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="min-w-[200px]">
+          <Select value={filtroEstadoFinanciero} onValueChange={setFiltroEstadoFinanciero}>
+            <SelectTrigger>
+              <SelectValue placeholder="Estado financiero" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los estados</SelectItem>
+              <SelectItem value="balance">Balance General (1,2,3)</SelectItem>
+              <SelectItem value="resultados">Estado de Resultados (4,5)</SelectItem>
             </SelectContent>
           </Select>
         </div>
