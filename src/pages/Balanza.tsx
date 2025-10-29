@@ -263,20 +263,20 @@ const Balanza = () => {
       const { data: financiamientos } = await supabase
         .from("transacciones_financiamientos")
         .select("*, financiamientos(nombre, tipo_credito, cuenta_codigo)")
-        .gte("fecha", startDate.toISOString().split('T')[0])
-        .lte("fecha", endDate.toISOString().split('T')[0])
-        .order("fecha", { ascending: true });
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .order("created_at", { ascending: true });
 
       financiamientos?.forEach(transaccion => {
         const financiamiento = transaccion.financiamientos as any;
         const cuentaCredito = financiamiento?.cuenta_codigo || "2101";
 
-        if (transaccion.tipo_transaccion === 'disposicion') {
-          // Disposición: Debe en Bancos, Haber en Crédito
+        if (transaccion.tipo_transaccion === 'desembolso' || transaccion.tipo_transaccion === 'disposicion') {
+          // Desembolso/Disposición: Debe en Bancos, Haber en Crédito
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Financiamiento",
-            descripcion: `Disposición ${financiamiento?.nombre || 'crédito'}`,
+            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
             cuenta_codigo: "1002",
             cuenta_nombre: "Bancos",
             debe: transaccion.monto,
@@ -285,9 +285,9 @@ const Balanza = () => {
           });
 
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Financiamiento",
-            descripcion: `Disposición ${financiamiento?.nombre || 'crédito'}`,
+            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
             cuenta_codigo: cuentaCredito,
             cuenta_nombre: "Crédito Bancario",
             debe: 0,
@@ -298,7 +298,7 @@ const Balanza = () => {
           // Amortización de capital: Debe en Crédito, Haber en Bancos
           if (transaccion.capital_pagado > 0) {
             movimientos.push({
-              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
               tipo: "Financiamiento",
               descripcion: `Amortización ${financiamiento?.nombre || 'crédito'}`,
               cuenta_codigo: cuentaCredito,
@@ -309,7 +309,7 @@ const Balanza = () => {
             });
 
             movimientos.push({
-              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
               tipo: "Financiamiento",
               descripcion: `Amortización ${financiamiento?.nombre || 'crédito'}`,
               cuenta_codigo: "1002",
@@ -323,7 +323,7 @@ const Balanza = () => {
           // Pago de intereses: Debe en Gastos Financieros, Haber en Bancos
           if (transaccion.interes_pagado > 0) {
             movimientos.push({
-              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
               tipo: "Financiamiento",
               descripcion: `Intereses ${financiamiento?.nombre || 'crédito'}`,
               cuenta_codigo: "5301",
@@ -334,7 +334,7 @@ const Balanza = () => {
             });
 
             movimientos.push({
-              fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
               tipo: "Financiamiento",
               descripcion: `Intereses ${financiamiento?.nombre || 'crédito'}`,
               cuenta_codigo: "1002",
@@ -347,7 +347,7 @@ const Balanza = () => {
         } else if (transaccion.tipo_transaccion === 'cargo_interes') {
           // Cargo de interés sin pago: Debe en Gastos Financieros, Haber en Crédito
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Financiamiento",
             descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
             cuenta_codigo: "5301",
@@ -358,7 +358,7 @@ const Balanza = () => {
           });
 
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Financiamiento",
             descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
             cuenta_codigo: cuentaCredito,
@@ -366,29 +366,6 @@ const Balanza = () => {
             debe: 0,
             haber: transaccion.monto,
             referencia: `CIN-${transaccion.id.slice(0, 8)}`
-          });
-        } else if (transaccion.tipo_transaccion === 'desembolso') {
-          // Desembolso: Debe en Bancos, Haber en Crédito (renombrando 'disposicion')
-          movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
-            tipo: "Financiamiento",
-            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
-            cuenta_codigo: "1002",
-            cuenta_nombre: "Bancos",
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `FIN-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
-            tipo: "Financiamiento",
-            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
-            cuenta_codigo: cuentaCredito,
-            cuenta_nombre: "Crédito Bancario",
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `FIN-${transaccion.id.slice(0, 8)}`
           });
         }
       });
@@ -491,9 +468,9 @@ const Balanza = () => {
       const { data: cobrosPagos } = await supabase
         .from("transacciones_cobros_pagos")
         .select("*")
-        .gte("fecha", startDate.toISOString().split('T')[0])
-        .lte("fecha", endDate.toISOString().split('T')[0])
-        .order("fecha", { ascending: true });
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .order("created_at", { ascending: true });
 
       cobrosPagos?.forEach(transaccion => {
         if (transaccion.tipo_transaccion === 'cobro') {
@@ -503,7 +480,7 @@ const Balanza = () => {
           const nombreCaja = esEfectivo ? 'Efectivo' : 'Bancos';
 
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Cobro",
             descripcion: transaccion.descripcion || 'Cobro de cuenta',
             cuenta_codigo: cuentaCaja,
@@ -514,7 +491,7 @@ const Balanza = () => {
           });
 
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Cobro",
             descripcion: transaccion.descripcion || 'Cobro de cuenta',
             cuenta_codigo: "1003",
@@ -530,7 +507,7 @@ const Balanza = () => {
           const nombreCaja = esEfectivo ? 'Efectivo' : 'Bancos';
 
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Pago",
             descripcion: transaccion.descripcion || 'Pago de cuenta',
             cuenta_codigo: "2001",
@@ -541,7 +518,7 @@ const Balanza = () => {
           });
 
           movimientos.push({
-            fecha: format(new Date(transaccion.fecha), "dd/MM/yyyy"),
+            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
             tipo: "Pago",
             descripcion: transaccion.descripcion || 'Pago de cuenta',
             cuenta_codigo: cuentaCaja,
