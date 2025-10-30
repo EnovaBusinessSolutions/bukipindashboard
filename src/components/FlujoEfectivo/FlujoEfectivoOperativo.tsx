@@ -39,22 +39,36 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       });
       saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
 
-      // Obtener todos los asientos del período
-      const { data: asientos } = await supabase
-        .from("asientos_contables")
-        .select(`
-          id,
-          fecha,
-          detalle_asientos(cuenta_codigo, debe, haber)
-        `)
-        .gte("fecha", startDate.toISOString().split('T')[0])
-        .lte("fecha", endDate.toISOString().split('T')[0]);
+      // Calcular movimiento neto en efectivo durante el período
+      const { data: movimientosEfectivo } = await supabase
+        .from("detalle_asientos")
+        .select("debe, haber, asientos_contables!inner(fecha)")
+        .eq("cuenta_codigo", "1001")
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
 
-      // Inicializar contadores
+      let flujoEfectivo = 0;
+      movimientosEfectivo?.forEach(mov => {
+        flujoEfectivo += (mov.debe || 0) - (mov.haber || 0);
+      });
+
+      // Calcular movimiento neto en bancos durante el período
+      const { data: movimientosBancos } = await supabase
+        .from("detalle_asientos")
+        .select("debe, haber, asientos_contables!inner(fecha)")
+        .eq("cuenta_codigo", "1002")
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+
+      let flujoBancos = 0;
+      movimientosBancos?.forEach(mov => {
+        flujoBancos += (mov.debe || 0) - (mov.haber || 0);
+      });
+
       const operativo = {
-        ingresos: 0,
-        ingresosEfectivo: 0,
-        ingresosBancos: 0,
+        ingresos: flujoEfectivo + flujoBancos,
+        ingresosEfectivo: flujoEfectivo,
+        ingresosBancos: flujoBancos,
         costos: 0,
         costosEfectivo: 0,
         costosBancos: 0,
@@ -76,88 +90,6 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         interesesEfectivo: 0,
         interesesBancos: 0
       };
-
-      // Procesar cada asiento
-      asientos?.forEach((asiento: any) => {
-        const detalles = asiento.detalle_asientos || [];
-        
-        let impactoEfectivo = 0;
-        let impactoBancos = 0;
-        let afectaEfectivo = false;
-        let afectaBancos = false;
-
-        // Calcular impacto en efectivo/bancos
-        detalles.forEach((det: any) => {
-          if (det.cuenta_codigo === "1001") {
-            afectaEfectivo = true;
-            impactoEfectivo += (det.debe || 0) - (det.haber || 0);
-          } else if (det.cuenta_codigo === "1002") {
-            afectaBancos = true;
-            impactoBancos += (det.debe || 0) - (det.haber || 0);
-          }
-        });
-
-        if (!afectaEfectivo && !afectaBancos) return;
-
-        // Clasificar según contrapartidas
-        detalles.forEach((det: any) => {
-          const codigo = det.cuenta_codigo;
-          if (codigo === "1001" || codigo === "1002") return;
-
-          // Ingresos (4XXX)
-          if (codigo.startsWith("4")) {
-            const monto = Math.abs(impactoEfectivo + impactoBancos);
-            operativo.ingresos += monto;
-            if (afectaEfectivo) operativo.ingresosEfectivo += impactoEfectivo;
-            if (afectaBancos) operativo.ingresosBancos += impactoBancos;
-          }
-          // Costos (5XXX)
-          else if (codigo.startsWith("5")) {
-            const monto = Math.abs(impactoEfectivo + impactoBancos);
-            operativo.costos += monto;
-            if (afectaEfectivo) operativo.costosEfectivo += Math.abs(impactoEfectivo);
-            if (afectaBancos) operativo.costosBancos += Math.abs(impactoBancos);
-          }
-          // Gastos (6XXX)
-          else if (codigo.startsWith("6")) {
-            const monto = Math.abs(impactoEfectivo + impactoBancos);
-            operativo.gastos += monto;
-            if (afectaEfectivo) operativo.gastosEfectivo += Math.abs(impactoEfectivo);
-            if (afectaBancos) operativo.gastosBancos += Math.abs(impactoBancos);
-          }
-          // Inversiones (1004, 15XX)
-          else if (codigo === "1004" || codigo.startsWith("15")) {
-            const categoria = codigo === "1004" ? "inversiones_capex" : "activos_fijos";
-            const monto = Math.abs(impactoEfectivo + impactoBancos);
-            inversion[categoria] = (inversion[categoria] || 0) + monto;
-            if (afectaEfectivo) {
-              inversionEfectivo[categoria] = (inversionEfectivo[categoria] || 0) + Math.abs(impactoEfectivo);
-            }
-            if (afectaBancos) {
-              inversionBancos[categoria] = (inversionBancos[categoria] || 0) + Math.abs(impactoBancos);
-            }
-          }
-          // Financiamiento
-          else if (codigo.startsWith("20") || codigo.startsWith("21")) {
-            // Disposiciones (aumento de pasivo = entrada de dinero)
-            // Amortizaciones (disminución de pasivo = salida de dinero)
-            if (impactoEfectivo + impactoBancos > 0) {
-              financiamiento.disposiciones += impactoEfectivo + impactoBancos;
-            } else {
-              const monto = Math.abs(impactoEfectivo + impactoBancos);
-              financiamiento.amortizaciones += monto;
-              if (afectaEfectivo) financiamiento.amortizacionesEfectivo += Math.abs(impactoEfectivo);
-              if (afectaBancos) financiamiento.amortizacionesBancos += Math.abs(impactoBancos);
-            }
-          }
-          else if (codigo === "3001" || codigo === "3002") {
-            // Capital: entrada o retiro
-            if (impactoEfectivo + impactoBancos > 0) {
-              financiamiento.disposiciones += impactoEfectivo + impactoBancos;
-            }
-          }
-        });
-      });
 
       return {
         saldoInicial,
