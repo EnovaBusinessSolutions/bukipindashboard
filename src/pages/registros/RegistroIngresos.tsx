@@ -81,6 +81,18 @@ const RegistroIngresos = () => {
   // Estado para el período de análisis
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
 
+  // Estados para filtros del resumen
+  const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
+  const [filtroFechaFin, setFiltroFechaFin] = useState("");
+  const [filtroTipoIngreso, setFiltroTipoIngreso] = useState("");
+  const [filtroCuenta, setFiltroCuenta] = useState("");
+  const [filtroSubcuenta, setFiltroSubcuenta] = useState("");
+  
+  // Estado para diálogo de asientos contables
+  const [asientosDialogOpen, setAsientosDialogOpen] = useState(false);
+  const [asientosContables, setAsientosContables] = useState<any[]>([]);
+  const [loadingAsientos, setLoadingAsientos] = useState(false);
+
   // Estados para productos de inventario
   const [selectedInventoryProductId, setSelectedInventoryProductId] = useState("");
   const [inventoryProductPrice, setInventoryProductPrice] = useState("");
@@ -305,6 +317,65 @@ const RegistroIngresos = () => {
       setDuplicateWarnings([]);
     }
   }, [clienteTelefono, clienteEmail, clienteRFC, tipoCliente, clientes]);
+
+  // Función para cargar asientos contables relacionados con una transacción
+  const loadAsientosContables = async (transaccionId: string) => {
+    setLoadingAsientos(true);
+    try {
+      // Buscar el asiento contable por número de asiento
+      const { data: asientos, error: asientosError } = await supabase
+        .from('asientos_contables')
+        .select('*')
+        .eq('numero_asiento', `ING-${transaccionId}`)
+        .single();
+
+      if (asientosError) {
+        console.error("Error loading asiento:", asientosError);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los asientos contables",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (asientos) {
+        // Obtener los detalles del asiento
+        const { data: detalles, error: detallesError } = await supabase
+          .from('detalle_asientos')
+          .select('*')
+          .eq('asiento_id', asientos.id);
+
+        if (detallesError) {
+          console.error("Error loading detalles:", detallesError);
+          return;
+        }
+
+        // Obtener nombres de cuentas
+        const { data: cuentas } = await supabase
+          .from('cuentas')
+          .select('codigo, nombre');
+
+        const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
+
+        // Enriquecer detalles con nombres de cuentas
+        const detallesEnriquecidos = detalles?.map(d => ({
+          ...d,
+          cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
+        })) || [];
+
+        setAsientosContables([{
+          ...asientos,
+          detalles: detallesEnriquecidos
+        }]);
+        setAsientosDialogOpen(true);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoadingAsientos(false);
+    }
+  };
 
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
@@ -1585,16 +1656,157 @@ const RegistroIngresos = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Filtros */}
+                <div className="mb-6 p-4 border rounded-lg bg-muted/30 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="filtro-fecha-inicio">Fecha Inicio</Label>
+                      <Input 
+                        id="filtro-fecha-inicio"
+                        type="date" 
+                        value={filtroFechaInicio}
+                        onChange={(e) => setFiltroFechaInicio(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="filtro-fecha-fin">Fecha Fin</Label>
+                      <Input 
+                        id="filtro-fecha-fin"
+                        type="date" 
+                        value={filtroFechaFin}
+                        onChange={(e) => setFiltroFechaFin(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="filtro-tipo">Tipo de Ingreso</Label>
+                      <Select value={filtroTipoIngreso} onValueChange={setFiltroTipoIngreso}>
+                        <SelectTrigger id="filtro-tipo">
+                          <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="precargados">Precargados</SelectItem>
+                          <SelectItem value="inventariados">Inventariados</SelectItem>
+                          <SelectItem value="general">General</SelectItem>
+                          <SelectItem value="otros">Otros</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="filtro-cuenta">Cuenta</Label>
+                      <Select value={filtroCuenta} onValueChange={setFiltroCuenta}>
+                        <SelectTrigger id="filtro-cuenta">
+                          <SelectValue placeholder="Todas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todas">Todas</SelectItem>
+                          <SelectItem value="4001">4001 - Ventas</SelectItem>
+                          <SelectItem value="4004">4004 - Otros Ingresos</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="filtro-subcuenta">Subcuenta</Label>
+                      <Select value={filtroSubcuenta} onValueChange={setFiltroSubcuenta}>
+                        <SelectTrigger id="filtro-subcuenta">
+                          <SelectValue placeholder="Todas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todas">Todas</SelectItem>
+                          <SelectItem value="sin-subcuenta">Sin subcuenta</SelectItem>
+                          {subcuentas.map(sub => (
+                            <SelectItem key={sub.id} value={sub.id}>{sub.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setFiltroFechaInicio("");
+                        setFiltroFechaFin("");
+                        setFiltroTipoIngreso("");
+                        setFiltroCuenta("");
+                        setFiltroSubcuenta("");
+                      }}
+                    >
+                      Limpiar Filtros
+                    </Button>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">
+                        Resultados: {(() => {
+                          const filtered = transacciones.filter(t => {
+                            const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
+                                             (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                            const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
+                            const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
+                            const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
+                                                 (filtroSubcuenta === 'sin-subcuenta' && !t.subcuenta_id) ||
+                                                 t.subcuenta_id === filtroSubcuenta;
+                            return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
+                          });
+                          return filtered.length;
+                        })()}
+                      </p>
+                      <p className="text-lg font-bold text-primary">
+                        Total: ${(() => {
+                          const filtered = transacciones.filter(t => {
+                            const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
+                                             (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                            const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
+                            const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
+                            const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
+                                                 (filtroSubcuenta === 'sin-subcuenta' && !t.subcuenta_id) ||
+                                                 t.subcuenta_id === filtroSubcuenta;
+                            return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
+                          });
+                          return filtered.reduce((sum, t) => sum + t.monto_total, 0).toFixed(2);
+                        })()}
+                      </p>
+                      <p className="text-sm font-medium text-green-600">
+                        Neto: ${(() => {
+                          const filtered = transacciones.filter(t => {
+                            const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
+                                             (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                            const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
+                            const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
+                            const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
+                                                 (filtroSubcuenta === 'sin-subcuenta' && !t.subcuenta_id) ||
+                                                 t.subcuenta_id === filtroSubcuenta;
+                            return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
+                          });
+                          return filtered.reduce((sum, t) => sum + t.monto_neto, 0).toFixed(2);
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {loadingTransacciones ? <div className="text-center py-8 text-muted-foreground">
                     Cargando transacciones...
-                  </div> : transacciones.length === 0 ? <div className="text-center py-8 text-muted-foreground">
-                    No hay ventas registradas aún
-                  </div> : <div className="space-y-4">
-                    <div className="text-sm font-medium text-muted-foreground mb-4">
-                      Últimas {transacciones.length} transacciones
-                    </div>
-                    <div className="space-y-3">
-                       {transacciones.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
+                  </div> : (() => {
+                    const transaccionesFiltradas = transacciones.filter(t => {
+                      const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
+                                       (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                      const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
+                      const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
+                      const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
+                                           (filtroSubcuenta === 'sin-subcuenta' && !t.subcuenta_id) ||
+                                           t.subcuenta_id === filtroSubcuenta;
+                      return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
+                    });
+
+                    return transaccionesFiltradas.length === 0 ? <div className="text-center py-8 text-muted-foreground">
+                        No hay transacciones que coincidan con los filtros
+                      </div> : <div className="space-y-4">
+                        <div className="text-sm font-medium text-muted-foreground mb-4">
+                          Mostrando {transaccionesFiltradas.length} transacción(es)
+                        </div>
+                        <div className="space-y-3">
+                           {transaccionesFiltradas.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
                            <div className="flex items-start gap-3 mb-2">
                               {/* Imagen del producto si es precargado o inventariado */}
                               {(transaccion.tipo_ingreso === 'precargados' || transaccion.tipo_ingreso === 'inventariados') && (() => {
@@ -1616,90 +1828,102 @@ const RegistroIngresos = () => {
                              
                              <div className="flex justify-between items-start flex-1">
                                <div className="flex-1">
-                                 <div className="flex items-center gap-2">
-                                   <p className="font-medium">{transaccion.descripcion}</p>
-                                   <Dialog>
-                                     <DialogTrigger asChild>
-                                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                         <FileText className="h-3 w-3" />
-                                       </Button>
-                                     </DialogTrigger>
-                                     <DialogContent className="max-w-2xl">
-                                       <DialogHeader>
-                                         <DialogTitle>Detalles de la Transacción</DialogTitle>
-                                       </DialogHeader>
-                                       <div className="space-y-4">
-                                         <div className="grid grid-cols-2 gap-4">
-                                           <div>
-                                             <h4 className="font-semibold text-sm">Información General</h4>
-                                             <div className="space-y-1 text-sm">
-                                               <p><span className="font-medium">Descripción:</span> {transaccion.descripcion}</p>
-                                               <p><span className="font-medium">Tipo:</span> {transaccion.tipo_ingreso}</p>
-                                               <p><span className="font-medium">Método de Pago:</span> {transaccion.metodo_pago || 'N/A'}</p>
-                                               <p><span className="font-medium">Tipo de Pago:</span> {transaccion.tipo_pago}</p>
-                                               <p><span className="font-medium">Fecha:</span> {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
-                                                 day: '2-digit',
-                                                 month: '2-digit', 
-                                                 year: 'numeric',
-                                                 hour: '2-digit',
-                                                 minute: '2-digit'
-                                               })}</p>
-                                             </div>
-                                           </div>
-                                           <div>
-                                             <h4 className="font-semibold text-sm">Montos</h4>
-                                             <div className="space-y-1 text-sm">
-                                               <p><span className="font-medium">Total:</span> ${transaccion.monto_total.toFixed(2)}</p>
-                                               <p><span className="font-medium">Descuento:</span> ${transaccion.monto_descuento.toFixed(2)}</p>
-                                               <p><span className="font-medium">Neto:</span> ${transaccion.monto_neto.toFixed(2)}</p>
-                                                <p><span className="font-medium">Pagado:</span> ${(transaccion as any).monto_pagado?.toFixed(2) || '0.00'}</p>
-                                                <p><span className="font-medium">Pendiente:</span> ${(transaccion as any).monto_pendiente?.toFixed(2) || '0.00'}</p>
-                                             </div>
-                                           </div>
-                                         </div>
-
-                                          {/* Información del Cliente */}
-                                          {((transaccion as any).cliente_nombre || (transaccion as any).cliente_telefono || (transaccion as any).cliente_email) && (
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium">{transaccion.descripcion}</p>
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                          <FileText className="h-3 w-3" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="max-w-2xl">
+                                        <DialogHeader>
+                                          <DialogTitle>Detalles de la Transacción</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4">
+                                          <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                              <h4 className="font-semibold text-sm mb-2">Información del Cliente</h4>
-                                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                                {(transaccion as any).cliente_nombre && <p><span className="font-medium">Nombre:</span> {(transaccion as any).cliente_nombre}</p>}
-                                                {(transaccion as any).cliente_telefono && <p><span className="font-medium">Teléfono:</span> {(transaccion as any).cliente_telefono}</p>}
-                                                {(transaccion as any).cliente_email && <p><span className="font-medium">Email:</span> {(transaccion as any).cliente_email}</p>}
-                                                {(transaccion as any).cliente_rfc && <p><span className="font-medium">RFC:</span> {(transaccion as any).cliente_rfc}</p>}
+                                              <h4 className="font-semibold text-sm">Información General</h4>
+                                              <div className="space-y-1 text-sm">
+                                                <p><span className="font-medium">Descripción:</span> {transaccion.descripcion}</p>
+                                                <p><span className="font-medium">Tipo:</span> {transaccion.tipo_ingreso}</p>
+                                                <p><span className="font-medium">Método de Pago:</span> {transaccion.metodo_pago || 'N/A'}</p>
+                                                <p><span className="font-medium">Tipo de Pago:</span> {transaccion.tipo_pago}</p>
+                                                <p><span className="font-medium">Fecha:</span> {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
+                                                  day: '2-digit',
+                                                  month: '2-digit', 
+                                                  year: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit'
+                                                })}</p>
                                               </div>
                                             </div>
-                                          )}
-
-                                         {/* Información Contable */}
-                                         <div>
-                                           <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
-                                           <div className="text-sm space-y-1">
-                                             <p><span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo} - {transaccion.cuenta_principal_codigo === '4001' ? 'Ventas' : transaccion.cuenta_principal_codigo === '4004' ? 'Otros Ingresos' : ''}</p>
-                                             {transaccion.subcuenta_id ? (
-                                               <p><span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
-                                                 const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
-                                                 return subcuenta?.nombre || 'Subcuenta no encontrada';
-                                               })()}</p>
-                                             ) : (
-                                               <p><span className="font-medium">Subcuenta:</span> Sin subcuenta asignada</p>
-                                             )}
-                                           </div>
-                                         </div>
-
-                                          {/* Comentarios */}
-                                          {(transaccion as any).comentarios && (
                                             <div>
-                                              <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
-                                              <div className="p-3 bg-muted rounded-md">
-                                                <p className="text-sm">{(transaccion as any).comentarios}</p>
+                                              <h4 className="font-semibold text-sm">Montos</h4>
+                                              <div className="space-y-1 text-sm">
+                                                <p><span className="font-medium">Total:</span> ${transaccion.monto_total.toFixed(2)}</p>
+                                                <p><span className="font-medium">Descuento:</span> ${transaccion.monto_descuento.toFixed(2)}</p>
+                                                <p><span className="font-medium">Neto:</span> ${transaccion.monto_neto.toFixed(2)}</p>
+                                                 <p><span className="font-medium">Pagado:</span> ${(transaccion as any).monto_pagado?.toFixed(2) || '0.00'}</p>
+                                                 <p><span className="font-medium">Pendiente:</span> ${(transaccion as any).monto_pendiente?.toFixed(2) || '0.00'}</p>
                                               </div>
                                             </div>
-                                          )}
-                                       </div>
-                                     </DialogContent>
-                                   </Dialog>
-                                 </div>
+                                          </div>
+
+                                           {/* Información del Cliente */}
+                                           {((transaccion as any).cliente_nombre || (transaccion as any).cliente_telefono || (transaccion as any).cliente_email) && (
+                                             <div>
+                                               <h4 className="font-semibold text-sm mb-2">Información del Cliente</h4>
+                                               <div className="grid grid-cols-2 gap-4 text-sm">
+                                                 {(transaccion as any).cliente_nombre && <p><span className="font-medium">Nombre:</span> {(transaccion as any).cliente_nombre}</p>}
+                                                 {(transaccion as any).cliente_telefono && <p><span className="font-medium">Teléfono:</span> {(transaccion as any).cliente_telefono}</p>}
+                                                 {(transaccion as any).cliente_email && <p><span className="font-medium">Email:</span> {(transaccion as any).cliente_email}</p>}
+                                                 {(transaccion as any).cliente_rfc && <p><span className="font-medium">RFC:</span> {(transaccion as any).cliente_rfc}</p>}
+                                               </div>
+                                             </div>
+                                           )}
+
+                                          {/* Información Contable */}
+                                          <div>
+                                            <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
+                                            <div className="text-sm space-y-1">
+                                              <p><span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo} - {transaccion.cuenta_principal_codigo === '4001' ? 'Ventas' : transaccion.cuenta_principal_codigo === '4004' ? 'Otros Ingresos' : ''}</p>
+                                              {transaccion.subcuenta_id ? (
+                                                <p><span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
+                                                  const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
+                                                  return subcuenta?.nombre || 'Subcuenta no encontrada';
+                                                })()}</p>
+                                              ) : (
+                                                <p><span className="font-medium">Subcuenta:</span> Sin subcuenta asignada</p>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                           {/* Comentarios */}
+                                           {(transaccion as any).comentarios && (
+                                             <div>
+                                               <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
+                                               <div className="p-3 bg-muted rounded-md">
+                                                 <p className="text-sm">{(transaccion as any).comentarios}</p>
+                                               </div>
+                                             </div>
+                                           )}
+
+                                           {/* Botón para ver asientos contables */}
+                                           <div className="pt-4 border-t">
+                                             <Button 
+                                               onClick={() => loadAsientosContables(transaccion.id)}
+                                               disabled={loadingAsientos}
+                                               variant="outline"
+                                               className="w-full"
+                                             >
+                                               {loadingAsientos ? "Cargando..." : "Ver Asientos en Balanza de Comprobación"}
+                                             </Button>
+                                           </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                  </div>
 
                                   {/* Comentarios resumidos */}
                                   {(transaccion as any).comentarios && (
@@ -1762,12 +1986,13 @@ const RegistroIngresos = () => {
                                Neto: ${transaccion.monto_neto.toFixed(2)}
                              </span>
                            </div>
-                         </div>)}
-                    </div>
-                  </div>}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                          </div>)}
+                     </div>
+                   </div>;
+                  })()}
+               </CardContent>
+             </Card>
+           </TabsContent>
 
           {/* TAB 3: ANALÍTICA DE VENTAS - GRÁFICAS Y DESTACADOS */}
           <TabsContent value="analitica" className="mt-6">
@@ -2517,6 +2742,103 @@ const RegistroIngresos = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Dialog para mostrar asientos contables */}
+        <Dialog open={asientosDialogOpen} onOpenChange={setAsientosDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Asientos en Balanza de Comprobación</DialogTitle>
+              <DialogDescription>
+                Cuentas afectadas por esta transacción en la contabilidad
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {asientosContables.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No se encontraron asientos contables para esta transacción
+                </p>
+              ) : (
+                asientosContables.map((asiento) => (
+                  <div key={asiento.id} className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Número de Asiento:</span> {asiento.numero_asiento}
+                        </div>
+                        <div>
+                          <span className="font-medium">Fecha:</span>{' '}
+                          {new Date(asiento.fecha).toLocaleDateString('es-ES')}
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium">Descripción:</span> {asiento.descripcion}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="text-left p-3 text-sm font-medium">Cuenta</th>
+                            <th className="text-left p-3 text-sm font-medium">Descripción</th>
+                            <th className="text-right p-3 text-sm font-medium">Debe</th>
+                            <th className="text-right p-3 text-sm font-medium">Haber</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {asiento.detalles?.map((detalle: any, idx: number) => (
+                            <tr key={idx} className="border-t">
+                              <td className="p-3 text-sm">
+                                <div className="font-medium">{detalle.cuenta_codigo}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {detalle.cuenta_nombre}
+                                </div>
+                              </td>
+                              <td className="p-3 text-sm">{detalle.descripcion}</td>
+                              <td className="p-3 text-sm text-right font-medium">
+                                {detalle.debe > 0 ? `$${Number(detalle.debe).toFixed(2)}` : '-'}
+                              </td>
+                              <td className="p-3 text-sm text-right font-medium">
+                                {detalle.haber > 0 ? `$${Number(detalle.haber).toFixed(2)}` : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 bg-muted/50 font-bold">
+                            <td colSpan={2} className="p-3 text-sm">
+                              TOTALES
+                            </td>
+                            <td className="p-3 text-sm text-right">
+                              $
+                              {asiento.detalles
+                                ?.reduce((sum: number, d: any) => sum + Number(d.debe), 0)
+                                .toFixed(2)}
+                            </td>
+                            <td className="p-3 text-sm text-right">
+                              $
+                              {asiento.detalles
+                                ?.reduce((sum: number, d: any) => sum + Number(d.haber), 0)
+                                .toFixed(2)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
+                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                        💡 Información
+                      </p>
+                      <p className="text-blue-600 dark:text-blue-400">
+                        Este asiento contable refleja cómo esta transacción afecta a las diferentes
+                        cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>;
 };
