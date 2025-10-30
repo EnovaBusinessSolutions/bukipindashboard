@@ -20,6 +20,13 @@ import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
+
+// Función helper para formatear montos con separador de comas
+const formatMonto = (value: number | string): string => {
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 const RegistroIngresos = () => {
   const {
     ventasResumen,
@@ -663,7 +670,7 @@ const RegistroIngresos = () => {
                                </div>
                                <div className="flex-1 min-w-0">
                                  <p className="font-medium text-sm truncate mb-1">{producto.nombre}</p>
-                                 <p className="text-xs text-muted-foreground">${producto.precio.toFixed(2)}</p>
+                                 <p className="text-xs text-muted-foreground">${formatMonto(producto.precio)}</p>
                                </div>
                              </div>
                            </SelectItem>)}
@@ -714,7 +721,7 @@ const RegistroIngresos = () => {
                     <Label>Subtotal con Descuento</Label>
                     <Input 
                       type="text" 
-                      value={selectedProductId && productUnitPrice ? `$${Math.max(0, (parseFloat(productUnitPrice) * parseFloat(productQuantity || "1")) - parseFloat(productDiscount || "0")).toFixed(2)}` : "$0.00"} 
+                      value={selectedProductId && productUnitPrice ? `$${formatMonto(Math.max(0, (parseFloat(productUnitPrice) * parseFloat(productQuantity || "1")) - parseFloat(productDiscount || "0")))}` : "$0.00"} 
                       readOnly 
                       className="bg-muted font-medium" 
                     />
@@ -740,7 +747,7 @@ const RegistroIngresos = () => {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span>Productos en la Venta ({selectedProducts.length})</span>
-                    <span className="text-primary">${selectedProducts.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2)}</span>
+                    <span className="text-primary">${formatMonto(selectedProducts.reduce((sum, p) => sum + p.subtotal, 0))}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -763,11 +770,11 @@ const RegistroIngresos = () => {
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{producto.nombre}</p>
                             <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                              <span>{producto.cantidad} x ${producto.precio.toFixed(2)} = ${(producto.cantidad * producto.precio).toFixed(2)}</span>
-                              {producto.descuento > 0 && (
-                                <span className="text-orange-600">Descuento: -${producto.descuento.toFixed(2)}</span>
-                              )}
-                              <span className="text-primary font-medium">Total: ${producto.subtotal.toFixed(2)}</span>
+                          <span>{producto.cantidad} x ${formatMonto(producto.precio)} = ${formatMonto(producto.cantidad * producto.precio)}</span>
+                          {producto.descuento > 0 && (
+                            <span className="text-orange-600">Descuento: -${formatMonto(producto.descuento)}</span>
+                          )}
+                          <span className="text-primary font-medium">Total: ${formatMonto(producto.subtotal)}</span>
                             </div>
                           </div>
                         </div>
@@ -930,13 +937,13 @@ const RegistroIngresos = () => {
                   <div>
                     <span className="text-muted-foreground">Ganancia por unidad:</span>
                     <span className="ml-2 font-medium text-green-600">
-                      ${(parseFloat(inventoryProductPrice || '0') - (productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0)).toFixed(2)}
+                      ${formatMonto(parseFloat(inventoryProductPrice || '0') - (productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0))}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Ganancia total:</span>
                     <span className="ml-2 font-medium text-green-600">
-                      ${((parseFloat(inventoryProductPrice || '0') - (productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0)) * parseFloat(inventoryQuantity)).toFixed(2)}
+                      ${formatMonto((parseFloat(inventoryProductPrice || '0') - (productosInventario.find(p => p.id === selectedInventoryProductId)?.costo_unitario || 0)) * parseFloat(inventoryQuantity))}
                     </span>
                   </div>
                 </div>
@@ -1097,7 +1104,7 @@ const RegistroIngresos = () => {
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="historico" id="costo-historico" />
                         <Label htmlFor="costo-historico" className="text-sm cursor-pointer">
-                          Usar costo histórico: <strong className="text-blue-700 dark:text-blue-400">${negativeStockData.costoPorUnidad.toFixed(2)}</strong> por unidad
+                          Usar costo histórico: <strong className="text-blue-700 dark:text-blue-400">${formatMonto(negativeStockData.costoPorUnidad)}</strong> por unidad
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -1131,19 +1138,19 @@ const RegistroIngresos = () => {
                         <span className="text-muted-foreground">Costo por unidad aplicado:</span>
                         <span className="font-medium">
                           ${tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado 
-                            ? Number(costoPersonalizado).toFixed(2)
-                            : negativeStockData.costoPorUnidad.toFixed(2)}
+                        ? formatMonto(costoPersonalizado)
+                        : formatMonto(negativeStockData.costoPorUnidad)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Valor inventario negativo:</span>
                         <span className="font-bold text-destructive">
-                          -${(
+                          -${formatMonto(
                             (tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado 
                               ? Number(costoPersonalizado) 
                               : negativeStockData.costoPorUnidad) * 
                             ((negativeStockData?.requested || 0) - (negativeStockData?.available || 0))
-                          ).toFixed(2)}
+                      )}
                         </span>
                       </div>
                     </div>
@@ -1172,7 +1179,7 @@ const RegistroIngresos = () => {
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Valor inventario negativo:</span>
                           <span className="font-bold text-destructive">
-                            -${(Number(costoPersonalizado) * ((negativeStockData?.requested || 0) - (negativeStockData?.available || 0))).toFixed(2)}
+                            -${formatMonto(Number(costoPersonalizado) * ((negativeStockData?.requested || 0) - (negativeStockData?.available || 0)))}
                           </span>
                         </div>
                       </>
@@ -1352,7 +1359,7 @@ const RegistroIngresos = () => {
                                 <strong>Contabilización automática:</strong><br />
                                 • Ventas: +${montoTotal || '0'}<br />
                                 {hasDiscount && discountAmount && <span>• Descuento sobre ventas: +${discountAmount}<br /></span>}
-                                • {paymentMethod === 'efectivo' ? 'Caja' : 'Bancos'}: +${(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0')).toFixed(2)}
+                                • {paymentMethod === 'efectivo' ? 'Caja' : 'Bancos'}: +${formatMonto(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))}
                               </AlertDescription>
                             </Alert>
                           </div>
@@ -1360,7 +1367,7 @@ const RegistroIngresos = () => {
                             <div className="text-center">
                               <p className="text-sm font-medium text-muted-foreground mb-1">Total a cobrar al cliente</p>
                               <p className="text-2xl font-bold text-primary">
-                                ${(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0')).toFixed(2)}
+                                ${formatMonto(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))}
                               </p>
                             </div>
                           </div>
@@ -1411,35 +1418,35 @@ const RegistroIngresos = () => {
                               {hasDiscount && discountAmount ? <>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Total original</p>
-                                    <p className="text-sm line-through text-muted-foreground">${parseFloat(montoTotal).toFixed(2)}</p>
-                                    <p className="text-sm text-muted-foreground">Descuento: -${parseFloat(discountAmount).toFixed(2)}</p>
-                                    <p className="text-lg font-semibold text-primary">
-                                      ${(parseFloat(montoTotal) - parseFloat(discountAmount)).toFixed(2)}
+                                <p className="text-sm line-through text-muted-foreground">${formatMonto(montoTotal)}</p>
+                                <p className="text-sm text-muted-foreground">Descuento: -${formatMonto(discountAmount)}</p>
+                                <p className="text-lg font-semibold text-primary">
+                                  ${formatMonto(parseFloat(montoTotal) - parseFloat(discountAmount))}
                                     </p>
                                   </div>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Se pagará ahora</p>
-                                    <p className="text-lg font-semibold text-green-600">${parseFloat(montoAbonado).toFixed(2)}</p>
+                                <p className="text-lg font-semibold text-green-600">${formatMonto(montoAbonado)}</p>
                                   </div>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Queda pendiente</p>
                                     <p className="text-lg font-semibold text-orange-600">
-                                      ${(parseFloat(montoTotal) - parseFloat(discountAmount) - parseFloat(montoAbonado)).toFixed(2)}
+                                      ${formatMonto(parseFloat(montoTotal) - parseFloat(discountAmount) - parseFloat(montoAbonado))}
                                     </p>
                                   </div>
                                 </> : <>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Total de la venta</p>
-                                    <p className="text-lg font-semibold text-primary">${parseFloat(montoTotal).toFixed(2)}</p>
+                                    <p className="text-lg font-semibold text-primary">${formatMonto(montoTotal)}</p>
                                   </div>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Se pagará ahora</p>
-                                    <p className="text-lg font-semibold text-green-600">${parseFloat(montoAbonado).toFixed(2)}</p>
+                                    <p className="text-lg font-semibold text-green-600">${formatMonto(montoAbonado)}</p>
                                   </div>
                                   <div className="text-center">
                                     <p className="text-sm text-muted-foreground">Queda pendiente</p>
                                     <p className="text-lg font-semibold text-orange-600">
-                                      ${(parseFloat(montoTotal) - parseFloat(montoAbonado)).toFixed(2)}
+                                      ${formatMonto(parseFloat(montoTotal) - parseFloat(montoAbonado))}
                                     </p>
                                   </div>
                                 </>}
@@ -1787,7 +1794,7 @@ const RegistroIngresos = () => {
                                                  t.subcuenta_id === filtroSubcuenta;
                             return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
                           });
-                          return filtered.reduce((sum, t) => sum + t.monto_total, 0).toFixed(2);
+                          return formatMonto(filtered.reduce((sum, t) => sum + t.monto_total, 0));
                         })()}
                       </p>
                       <p className="text-sm font-medium text-green-600">
@@ -1802,7 +1809,7 @@ const RegistroIngresos = () => {
                                                  t.subcuenta_id === filtroSubcuenta;
                             return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
                           });
-                          return filtered.reduce((sum, t) => sum + t.monto_neto, 0).toFixed(2);
+                          return formatMonto(filtered.reduce((sum, t) => sum + t.monto_neto, 0));
                         })()}
                       </p>
                     </div>
@@ -1894,11 +1901,11 @@ const RegistroIngresos = () => {
                                             <div>
                                               <h4 className="font-semibold text-sm">Montos</h4>
                                               <div className="space-y-1 text-sm">
-                                                <p><span className="font-medium">Total:</span> ${transaccion.monto_total.toFixed(2)}</p>
-                                                <p><span className="font-medium">Descuento:</span> ${transaccion.monto_descuento.toFixed(2)}</p>
-                                                <p><span className="font-medium">Neto:</span> ${transaccion.monto_neto.toFixed(2)}</p>
-                                                 <p><span className="font-medium">Pagado:</span> ${(transaccion as any).monto_pagado?.toFixed(2) || '0.00'}</p>
-                                                 <p><span className="font-medium">Pendiente:</span> ${(transaccion as any).monto_pendiente?.toFixed(2) || '0.00'}</p>
+                                            <p><span className="font-medium">Total:</span> ${formatMonto(transaccion.monto_total)}</p>
+                                            <p><span className="font-medium">Descuento:</span> ${formatMonto(transaccion.monto_descuento)}</p>
+                                            <p><span className="font-medium">Neto:</span> ${formatMonto(transaccion.monto_neto)}</p>
+                                             <p><span className="font-medium">Pagado:</span> ${formatMonto((transaccion as any).monto_pagado || 0)}</p>
+                                             <p><span className="font-medium">Pendiente:</span> ${formatMonto((transaccion as any).monto_pendiente || 0)}</p>
                                               </div>
                                             </div>
                                           </div>
@@ -1990,30 +1997,28 @@ const RegistroIngresos = () => {
                                                              </div>
                                                            </td>
                                                            <td className="p-3 text-sm">{detalle.descripcion}</td>
-                                                           <td className="p-3 text-sm text-right font-medium">
-                                                             {detalle.debe > 0 ? `$${Number(detalle.debe).toFixed(2)}` : '-'}
-                                                           </td>
-                                                           <td className="p-3 text-sm text-right font-medium">
-                                                             {detalle.haber > 0 ? `$${Number(detalle.haber).toFixed(2)}` : '-'}
-                                                           </td>
+                                                        <td className="p-3 text-sm text-right font-medium">
+                                                          {detalle.debe > 0 ? `$${formatMonto(detalle.debe)}` : '-'}
+                                                        </td>
+                                                        <td className="p-3 text-sm text-right font-medium">
+                                                          {detalle.haber > 0 ? `$${formatMonto(detalle.haber)}` : '-'}
+                                                        </td>
                                                          </tr>
                                                        ))}
                                                        <tr className="border-t-2 bg-muted/50 font-bold">
                                                          <td colSpan={2} className="p-3 text-sm">
                                                            TOTALES
                                                          </td>
-                                                         <td className="p-3 text-sm text-right">
-                                                           $
-                                                           {currentAsientos.detalles
-                                                             ?.reduce((sum: number, d: any) => sum + Number(d.debe), 0)
-                                                             .toFixed(2)}
-                                                         </td>
-                                                         <td className="p-3 text-sm text-right">
-                                                           $
-                                                           {currentAsientos.detalles
-                                                             ?.reduce((sum: number, d: any) => sum + Number(d.haber), 0)
-                                                             .toFixed(2)}
-                                                         </td>
+                                                      <td className="p-3 text-sm text-right">
+                                                        $
+                                                        {formatMonto(currentAsientos.detalles
+                                                          ?.reduce((sum: number, d: any) => sum + Number(d.debe), 0))}
+                                                      </td>
+                                                      <td className="p-3 text-sm text-right">
+                                                        $
+                                                        {formatMonto(currentAsientos.detalles
+                                                          ?.reduce((sum: number, d: any) => sum + Number(d.haber), 0))}
+                                                      </td>
                                                        </tr>
                                                      </tbody>
                                                    </table>
@@ -2075,12 +2080,12 @@ const RegistroIngresos = () => {
                                    </div>
                                  </div>
                                </div>
-                               <div className="text-right ml-4">
-                                 <p className="font-bold text-primary">${transaccion.monto_total.toFixed(2)}</p>
-                                 {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
-                                     -${transaccion.monto_descuento.toFixed(2)} desc.
-                                   </p>}
-                               </div>
+                            <div className="text-right ml-4">
+                              <p className="font-bold text-primary">${formatMonto(transaccion.monto_total)}</p>
+                              {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
+                                  -${formatMonto(transaccion.monto_descuento)} desc.
+                                </p>}
+                            </div>
                              </div>
                            </div>
                            <div className="flex justify-between items-center text-xs text-muted-foreground">
