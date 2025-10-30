@@ -322,11 +322,11 @@ const RegistroIngresos = () => {
     setLoadingAsientos(true);
     setCurrentAsientos(null);
     try {
-      // Buscar el asiento contable por número de asiento
+      // Buscar el asiento contable por transaccion_ingreso_id
       const { data: asientos, error: asientosError } = await supabase
         .from('asientos_contables')
         .select('*')
-        .eq('numero_asiento', `ING-${transaccionId}`)
+        .eq('transaccion_ingreso_id', transaccionId)
         .maybeSingle();
 
       if (asientosError) {
