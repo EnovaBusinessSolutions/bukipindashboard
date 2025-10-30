@@ -9,10 +9,9 @@ import { CalendarIcon, ChevronDown, ChevronRight, Filter } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 
 interface BalanzaEntry {
   fecha: string;
@@ -44,852 +43,454 @@ const Balanza = () => {
   const [filtroEstadoFinanciero, setFiltroEstadoFinanciero] = useState<string>("todos");
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
-  const { data: balanzaData, isLoading } = useQuery({
-    queryKey: ["balanza", startDate, endDate],
-    queryFn: async () => {
-      const movimientos: BalanzaEntry[] = [];
+  // Usar el hook simplificado que lee de detalle_asientos
+  const { data: balanzaData, isLoading } = useAsientosBalanza(startDate, endDate);
 
-      // Obtener ingresos
-      const { data: ingresos } = await supabase
-        .from("transacciones_ingresos")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(value);
+  };
 
-      ingresos?.forEach(ingreso => {
-        // Determinar nombre de cuenta según el método de pago
-        let cuentaNombre = "Efectivo/Bancos";
-        if (ingreso.metodo_pago === "efectivo") {
-          cuentaNombre = "Efectivo";
-        } else if (ingreso.metodo_pago === "transferencia") {
-          cuentaNombre = "Bancos";
-        }
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando balanza...</p>
+        </div>
+      </div>
+    );
+  }
 
-        // Si hay monto pagado: Debe en Efectivo/Bancos
-        if (ingreso.monto_pagado > 0) {
-          movimientos.push({
-            fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Ingreso",
-            descripcion: ingreso.descripcion,
-            cuenta_codigo: ingreso.cuenta_principal_codigo,
-            cuenta_nombre: cuentaNombre,
-            debe: ingreso.monto_pagado,
-            haber: 0,
-            referencia: `ING-${ingreso.id.slice(0, 8)}`
-          });
-        }
+  if (!balanzaData) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">
+              No se pudieron cargar los datos de la balanza
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-        // Si hay cuentas por cobrar: Debe en Cuentas por Cobrar
-        if (ingreso.monto_pendiente > 0) {
-          movimientos.push({
-            fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Ingreso",
-            descripcion: `${ingreso.descripcion} (Por cobrar)`,
-            cuenta_codigo: "1003",
-            cuenta_nombre: "Cuentas por Cobrar",
-            debe: ingreso.monto_pendiente,
-            haber: 0,
-            referencia: `ING-${ingreso.id.slice(0, 8)}`
-          });
-        }
+  const { movimientos, saldosPorCuenta } = balanzaData;
 
-        // Haber en Ingresos por el monto total
-        movimientos.push({
-          fecha: format(new Date(ingreso.created_at), "dd/MM/yyyy HH:mm"),
-          tipo: "Ingreso",
-          descripcion: ingreso.descripcion,
-          cuenta_codigo: "4001", // Ingresos por ventas
-          cuenta_nombre: "Ingresos",
-          debe: 0,
-          haber: ingreso.monto_total,
-          referencia: `ING-${ingreso.id.slice(0, 8)}`
-        });
-      });
+  // Agrupar movimientos por referencia (asiento)
+  const asientosAgrupados: Record<string, AsientoAgrupado> = {};
 
-      // Obtener egresos
-      const { data: egresos } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
-
-      egresos?.forEach(egreso => {
-        // Debe en Gasto/Costo por el monto total
-        movimientos.push({
-          fecha: format(new Date(egreso.created_at), "dd/MM/yyyy HH:mm"),
-          tipo: "Egreso",
-          descripcion: egreso.descripcion,
-          cuenta_codigo: egreso.cuenta_codigo || "5001",
-          cuenta_nombre: egreso.tipo_egreso === "costo_venta" ? "Costo de Ventas" : "Gastos",
-          debe: egreso.monto_total,
-          haber: 0,
-          referencia: `EGR-${egreso.id.slice(0, 8)}`
-        });
-
-        // Si hay monto pagado: Haber en Efectivo/Bancos
-        if (egreso.monto_pagado > 0) {
-          movimientos.push({
-            fecha: format(new Date(egreso.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Egreso",
-            descripcion: egreso.descripcion,
-            cuenta_codigo: "1001",
-            cuenta_nombre: "Efectivo/Bancos",
-            debe: 0,
-            haber: egreso.monto_pagado,
-            referencia: `EGR-${egreso.id.slice(0, 8)}`
-          });
-        }
-
-        // Si hay cuentas por pagar: Haber en Cuentas por Pagar
-        if (egreso.monto_pendiente > 0) {
-          movimientos.push({
-            fecha: format(new Date(egreso.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Egreso",
-            descripcion: `${egreso.descripcion} (Por pagar)`,
-            cuenta_codigo: "2001",
-            cuenta_nombre: "Cuentas por Pagar",
-            debe: 0,
-            haber: egreso.monto_pendiente,
-            referencia: `EGR-${egreso.id.slice(0, 8)}`
-          });
-        }
-      });
-
-      // Obtener inversiones
-      const { data: inversiones } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
-
-      inversiones?.forEach(inversion => {
-        // Cuenta de activo fijo (Debe)
-        movimientos.push({
-          fecha: format(new Date(inversion.created_at), "dd/MM/yyyy HH:mm"),
-          tipo: "Inversión",
-          descripcion: inversion.producto_nombre,
-          cuenta_codigo: inversion.cuenta_codigo || "1007",
-          cuenta_nombre: "Activos Fijos",
-          debe: inversion.valor_total,
-          haber: 0,
-          referencia: `INV-${inversion.id.slice(0, 8)}`
-        });
-
-        // Cuenta de efectivo (Haber)
-        if (inversion.monto_pagado > 0) {
-          movimientos.push({
-            fecha: format(new Date(inversion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Inversión",
-            descripcion: inversion.producto_nombre,
-            cuenta_codigo: "1001",
-            cuenta_nombre: "Efectivo/Bancos",
-            debe: 0,
-            haber: inversion.monto_pagado,
-            referencia: `INV-${inversion.id.slice(0, 8)}`
-          });
-        }
-
-        // Si hay monto pendiente
-        if (inversion.monto_pendiente > 0) {
-          movimientos.push({
-            fecha: format(new Date(inversion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Inversión",
-            descripcion: `${inversion.producto_nombre} (Por pagar)`,
-            cuenta_codigo: "2001",
-            cuenta_nombre: "Cuentas por Pagar",
-            debe: 0,
-            haber: inversion.monto_pendiente,
-            referencia: `INV-${inversion.id.slice(0, 8)}`
-          });
-        }
-      });
-
-      // Obtener transacciones de capital
-      const { data: capital } = await supabase
-        .from("transacciones_capital")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
-
-      capital?.forEach(transaccion => {
-        if (transaccion.tipo_movimiento === 'aportacion') {
-          // Aportación: Debe en Efectivo, Haber en Capital Social
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Capital",
-            descripcion: `Aportación de ${transaccion.socio}`,
-            cuenta_codigo: "1001",
-            cuenta_nombre: "Efectivo/Bancos",
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `CAP-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Capital",
-            descripcion: `Aportación de ${transaccion.socio}`,
-            cuenta_codigo: "3001",
-            cuenta_nombre: "Capital Social",
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `CAP-${transaccion.id.slice(0, 8)}`
-          });
-        } else if (transaccion.tipo_movimiento === 'dividendo') {
-          // Dividendo: Debe en Utilidades Retenidas, Haber en Efectivo
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Capital",
-            descripcion: `Dividendo pagado a ${transaccion.socio}`,
-            cuenta_codigo: "3002",
-            cuenta_nombre: "Utilidades Retenidas",
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `DIV-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Capital",
-            descripcion: `Dividendo pagado a ${transaccion.socio}`,
-            cuenta_codigo: "1001",
-            cuenta_nombre: "Efectivo/Bancos",
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `DIV-${transaccion.id.slice(0, 8)}`
-          });
-        }
-      });
-
-      // Obtener transacciones de financiamientos
-      const { data: financiamientos } = await supabase
-        .from("transacciones_financiamientos")
-        .select("*, financiamientos(nombre, tipo_credito, cuenta_codigo)")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
-
-      financiamientos?.forEach(transaccion => {
-        const financiamiento = transaccion.financiamientos as any;
-        const cuentaCredito = financiamiento?.cuenta_codigo || "2101";
-
-        if (transaccion.tipo_transaccion === 'desembolso' || transaccion.tipo_transaccion === 'disposicion') {
-          // Desembolso/Disposición: Debe en Bancos, Haber en Crédito
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Financiamiento",
-            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
-            cuenta_codigo: "1002",
-            cuenta_nombre: "Bancos",
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `FIN-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Financiamiento",
-            descripcion: `Desembolso ${financiamiento?.nombre || 'crédito'}`,
-            cuenta_codigo: cuentaCredito,
-            cuenta_nombre: "Crédito Bancario",
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `FIN-${transaccion.id.slice(0, 8)}`
-          });
-        } else if (transaccion.tipo_transaccion === 'amortizacion') {
-          // Amortización de capital: Debe en Crédito, Haber en Bancos
-          if (transaccion.capital_pagado > 0) {
-            movimientos.push({
-              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-              tipo: "Financiamiento",
-              descripcion: `Amortización ${financiamiento?.nombre || 'crédito'}`,
-              cuenta_codigo: cuentaCredito,
-              cuenta_nombre: "Crédito Bancario",
-              debe: transaccion.capital_pagado,
-              haber: 0,
-              referencia: `FIN-${transaccion.id.slice(0, 8)}`
-            });
-
-            movimientos.push({
-              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-              tipo: "Financiamiento",
-              descripcion: `Amortización ${financiamiento?.nombre || 'crédito'}`,
-              cuenta_codigo: "1002",
-              cuenta_nombre: "Bancos",
-              debe: 0,
-              haber: transaccion.capital_pagado,
-              referencia: `FIN-${transaccion.id.slice(0, 8)}`
-            });
-          }
-
-          // Pago de intereses: Debe en Gastos Financieros, Haber en Bancos
-          if (transaccion.interes_pagado > 0) {
-            movimientos.push({
-              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-              tipo: "Financiamiento",
-              descripcion: `Intereses ${financiamiento?.nombre || 'crédito'}`,
-              cuenta_codigo: "5301",
-              cuenta_nombre: "Gastos Financieros",
-              debe: transaccion.interes_pagado,
-              haber: 0,
-              referencia: `INT-${transaccion.id.slice(0, 8)}`
-            });
-
-            movimientos.push({
-              fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-              tipo: "Financiamiento",
-              descripcion: `Intereses ${financiamiento?.nombre || 'crédito'}`,
-              cuenta_codigo: "1002",
-              cuenta_nombre: "Bancos",
-              debe: 0,
-              haber: transaccion.interes_pagado,
-              referencia: `INT-${transaccion.id.slice(0, 8)}`
-            });
-          }
-        } else if (transaccion.tipo_transaccion === 'cargo_interes') {
-          // Cargo de interés sin pago: Debe en Gastos Financieros, Haber en Crédito
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Financiamiento",
-            descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
-            cuenta_codigo: "5301",
-            cuenta_nombre: "Gastos Financieros",
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `CIN-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Financiamiento",
-            descripcion: `Cargo intereses ${financiamiento?.nombre || 'crédito'}`,
-            cuenta_codigo: cuentaCredito,
-            cuenta_nombre: "Crédito Bancario",
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `CIN-${transaccion.id.slice(0, 8)}`
-          });
-        }
-      });
-
-      // Obtener transacciones de impuestos
-      const { data: impuestos } = await supabase
-        .from("transacciones_impuestos")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
-
-      impuestos?.forEach(impuesto => {
-        // Provisión de ISR: Debe en ISR, Haber en Impuestos por Pagar
-        if (impuesto.isr_real > 0) {
-          movimientos.push({
-            fecha: format(new Date(impuesto.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Impuesto",
-            descripcion: `ISR ${impuesto.mes}/${impuesto.ano}`,
-            cuenta_codigo: "6001",
-            cuenta_nombre: "ISR",
-            debe: impuesto.isr_real,
-            haber: 0,
-            referencia: `ISR-${impuesto.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(impuesto.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Impuesto",
-            descripcion: `ISR ${impuesto.mes}/${impuesto.ano}`,
-            cuenta_codigo: "2002",
-            cuenta_nombre: "Impuestos por Pagar",
-            debe: 0,
-            haber: impuesto.isr_real,
-            referencia: `ISR-${impuesto.id.slice(0, 8)}`
-          });
-        }
-      });
-
-      // Calcular y registrar depreciaciones mensuales
-      const { data: inversionesActivas } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .eq("estado", "activo")
-        .not("fecha_inicio_depreciacion", "is", null);
-
-      // Agrupar depreciaciones por mes
-      const depreciaciones: Record<string, number> = {};
-      
-      inversionesActivas?.forEach(inversion => {
-        if (!inversion.fecha_inicio_depreciacion || !inversion.valor_depreciacion_mensual) return;
-
-        const inicioDepr = new Date(inversion.fecha_inicio_depreciacion);
-        const finPeriodo = endDate;
-
-        // Iterar por cada mes desde el inicio de depreciación hasta el fin del periodo
-        let fechaActual = new Date(inicioDepr);
-        while (fechaActual <= finPeriodo && fechaActual >= startDate) {
-          const mesKey = format(fechaActual, "yyyy-MM");
-          
-          if (!depreciaciones[mesKey]) {
-            depreciaciones[mesKey] = 0;
-          }
-          depreciaciones[mesKey] += Number(inversion.valor_depreciacion_mensual);
-
-          // Avanzar al siguiente mes
-          fechaActual.setMonth(fechaActual.getMonth() + 1);
-        }
-      });
-
-      // Crear asientos de depreciación por mes
-      Object.entries(depreciaciones).forEach(([mesKey, monto]) => {
-        const [ano, mes] = mesKey.split('-');
-        const fechaDep = new Date(Number(ano), Number(mes) - 1, 1);
-
-        movimientos.push({
-          fecha: format(fechaDep, "dd/MM/yyyy"),
-          tipo: "Depreciación",
-          descripcion: `Depreciación del mes ${mes}/${ano}`,
-          cuenta_codigo: "5201",
-          cuenta_nombre: "Depreciaciones",
-          debe: monto,
-          haber: 0,
-          referencia: `DEP-${mesKey}`
-        });
-
-        movimientos.push({
-          fecha: format(fechaDep, "dd/MM/yyyy"),
-          tipo: "Depreciación",
-          descripcion: `Depreciación del mes ${mes}/${ano}`,
-          cuenta_codigo: "1304",
-          cuenta_nombre: "Depreciación Acumulada",
-          debe: 0,
-          haber: monto,
-          referencia: `DEP-${mesKey}`
-        });
-      });
-
-      // Obtener transacciones de cobros y pagos
-      const { data: cobrosPagos } = await supabase
-        .from("transacciones_cobros_pagos")
-        .select("*")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
-        .order("created_at", { ascending: true });
-
-      cobrosPagos?.forEach(transaccion => {
-        if (transaccion.tipo_transaccion === 'cobro') {
-          // Cobro: Debe en Efectivo/Bancos, Haber en Cuentas por Cobrar
-          const esEfectivo = transaccion.metodo_pago === 'efectivo';
-          const cuentaCaja = esEfectivo ? '1001' : '1002';
-          const nombreCaja = esEfectivo ? 'Efectivo' : 'Bancos';
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Cobro",
-            descripcion: transaccion.descripcion || 'Cobro de cuenta',
-            cuenta_codigo: cuentaCaja,
-            cuenta_nombre: nombreCaja,
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `COB-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Cobro",
-            descripcion: transaccion.descripcion || 'Cobro de cuenta',
-            cuenta_codigo: "1003",
-            cuenta_nombre: "Cuentas por Cobrar",
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `COB-${transaccion.id.slice(0, 8)}`
-          });
-        } else if (transaccion.tipo_transaccion === 'pago') {
-          // Pago: Debe en Cuentas por Pagar, Haber en Efectivo/Bancos
-          const esEfectivo = transaccion.metodo_pago === 'efectivo';
-          const cuentaCaja = esEfectivo ? '1001' : '1002';
-          const nombreCaja = esEfectivo ? 'Efectivo' : 'Bancos';
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Pago",
-            descripcion: transaccion.descripcion || 'Pago de cuenta',
-            cuenta_codigo: "2001",
-            cuenta_nombre: "Cuentas por Pagar",
-            debe: transaccion.monto,
-            haber: 0,
-            referencia: `PAG-${transaccion.id.slice(0, 8)}`
-          });
-
-          movimientos.push({
-            fecha: format(new Date(transaccion.created_at), "dd/MM/yyyy HH:mm"),
-            tipo: "Pago",
-            descripcion: transaccion.descripcion || 'Pago de cuenta',
-            cuenta_codigo: cuentaCaja,
-            cuenta_nombre: nombreCaja,
-            debe: 0,
-            haber: transaccion.monto,
-            referencia: `PAG-${transaccion.id.slice(0, 8)}`
-          });
-        }
-      });
-
-      // Agrupar movimientos por referencia
-      const asientosMap = new Map<string, AsientoAgrupado>();
-      
-      movimientos.forEach(mov => {
-        if (!asientosMap.has(mov.referencia)) {
-          // Determinar categoría de flujo de efectivo
-          let categoriaFlujo: string | undefined;
-          const afectaEfectivo = movimientos.some(m => 
-            m.referencia === mov.referencia && 
-            (m.cuenta_codigo === '1001' || m.cuenta_codigo === '1002')
-          );
-          
-          if (afectaEfectivo) {
-            if (mov.tipo === 'Inversión') {
-              categoriaFlujo = 'Inversión';
-            } else if (mov.tipo === 'Financiamiento') {
-              categoriaFlujo = 'Financiamiento';
-            } else if (mov.tipo === 'Capital') {
-              categoriaFlujo = 'Financiamiento';
-            } else {
-              categoriaFlujo = 'Operativo';
-            }
-          }
-          
-          asientosMap.set(mov.referencia, {
-            referencia: mov.referencia,
-            fecha: mov.fecha,
-            tipo: mov.tipo,
-            descripcion: mov.descripcion,
-            movimientos: [],
-            totalDebe: 0,
-            totalHaber: 0,
-            categoriaFlujo
-          });
-        }
-        
-        const asiento = asientosMap.get(mov.referencia)!;
-        asiento.movimientos.push(mov);
-        asiento.totalDebe += mov.debe;
-        asiento.totalHaber += mov.haber;
-      });
-
-      const asientosAgrupados = Array.from(asientosMap.values());
-
-      // Calcular totales
-      const totalDebe = movimientos.reduce((sum, m) => sum + m.debe, 0);
-      const totalHaber = movimientos.reduce((sum, m) => sum + m.haber, 0);
-
-      return {
-        asientos: asientosAgrupados,
-        totales: {
-          debe: totalDebe,
-          haber: totalHaber,
-          diferencia: totalDebe - totalHaber
-        }
+  movimientos.forEach((mov) => {
+    if (!asientosAgrupados[mov.referencia]) {
+      asientosAgrupados[mov.referencia] = {
+        referencia: mov.referencia,
+        fecha: mov.fecha,
+        tipo: mov.tipo,
+        descripcion: mov.descripcion,
+        movimientos: [],
+        totalDebe: 0,
+        totalHaber: 0,
       };
     }
+
+    asientosAgrupados[mov.referencia].movimientos.push(mov);
+    asientosAgrupados[mov.referencia].totalDebe += mov.debe;
+    asientosAgrupados[mov.referencia].totalHaber += mov.haber;
   });
 
-  // Filtrar asientos
-  const asientosFiltrados = balanzaData?.asientos.filter(asiento => {
-    // Filtro por tipo
-    if (filtroTipo !== "todos" && asiento.tipo !== filtroTipo) return false;
-    
-    // Filtro por estado (cuadrado/descuadrado)
-    const descuadrado = Math.abs(asiento.totalDebe - asiento.totalHaber) >= 0.01;
-    if (filtroEstado === "descuadrado" && !descuadrado) return false;
-    if (filtroEstado === "cuadrado" && descuadrado) return false;
-    
-    // Filtro por estado financiero
-    if (filtroEstadoFinanciero !== "todos") {
-      const afectaBalance = asiento.movimientos.some(movimiento => {
-        const primerDigito = movimiento.cuenta_codigo[0];
-        return primerDigito === "1" || primerDigito === "2" || primerDigito === "3";
-      });
-      
-      const afectaResultados = asiento.movimientos.some(movimiento => {
-        const primerDigito = movimiento.cuenta_codigo[0];
-        return primerDigito === "4" || primerDigito === "5";
-      });
-      
-      if (filtroEstadoFinanciero === "balance" && !afectaBalance) return false;
-      if (filtroEstadoFinanciero === "resultados" && !afectaResultados) return false;
-    }
-    
-    // Filtro por búsqueda
-    if (filtroBusqueda) {
-      const busqueda = filtroBusqueda.toLowerCase();
-      return asiento.referencia.toLowerCase().includes(busqueda) ||
-             asiento.descripcion.toLowerCase().includes(busqueda);
-    }
-    
-    return true;
-  }) || [];
+  const asientosArray = Object.values(asientosAgrupados);
 
-  // Obtener tipos únicos para el filtro
-  const tiposUnicos = Array.from(new Set(balanzaData?.asientos.map(a => a.tipo) || []));
-  const asientosDescuadrados = balanzaData?.asientos.filter(a => Math.abs(a.totalDebe - a.totalHaber) >= 0.01).length || 0;
+  // Aplicar filtros
+  let asientosFiltrados = asientosArray;
+
+  if (filtroTipo !== "todos") {
+    asientosFiltrados = asientosFiltrados.filter((a) => a.tipo === filtroTipo);
+  }
+
+  if (filtroEstado !== "todos") {
+    asientosFiltrados = asientosFiltrados.filter((a) => {
+      const diferencia = Math.abs(a.totalDebe - a.totalHaber);
+      if (filtroEstado === "cuadrado") return diferencia < 0.01;
+      if (filtroEstado === "descuadrado") return diferencia >= 0.01;
+      return true;
+    });
+  }
+
+  if (filtroEstadoFinanciero !== "todos") {
+    asientosFiltrados = asientosFiltrados.filter((a) => {
+      return a.movimientos.some((mov) => {
+        const primerDigito = mov.cuenta_codigo.charAt(0);
+        if (filtroEstadoFinanciero === "balance") {
+          return ["1", "2", "3"].includes(primerDigito);
+        } else if (filtroEstadoFinanciero === "resultados") {
+          return ["4", "5", "6"].includes(primerDigito);
+        }
+        return true;
+      });
+    });
+  }
+
+  if (filtroBusqueda) {
+    const busquedaLower = filtroBusqueda.toLowerCase();
+    asientosFiltrados = asientosFiltrados.filter(
+      (a) =>
+        a.descripcion.toLowerCase().includes(busquedaLower) ||
+        a.referencia.toLowerCase().includes(busquedaLower) ||
+        a.movimientos.some(
+          (m) =>
+            m.cuenta_nombre.toLowerCase().includes(busquedaLower) ||
+            m.cuenta_codigo.toLowerCase().includes(busquedaLower)
+        )
+    );
+  }
+
+  // Calcular totales
+  const totalDebe = Object.values(saldosPorCuenta).reduce(
+    (sum, cuenta) => sum + cuenta.debe_total,
+    0
+  );
+  const totalHaber = Object.values(saldosPorCuenta).reduce(
+    (sum, cuenta) => sum + cuenta.haber_total,
+    0
+  );
+  const diferencia = Math.abs(totalDebe - totalHaber);
+  const cuadra = diferencia < 0.01;
+
+  const tiposUnicos = Array.from(new Set(asientosArray.map((a) => a.tipo))).sort();
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Balanza de Comprobación</h1>
-        <p className="text-muted-foreground">Detalle de todos los movimientos contables y su afectación por cuenta</p>
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Balanza de Comprobación</h1>
+        <p className="text-muted-foreground mt-2">
+          Vista detallada de todos los movimientos contables del periodo
+        </p>
       </div>
 
-      {/* Selector de Fechas */}
-      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
-        <div className="flex-1 min-w-[200px]">
-          <label className="text-sm font-medium mb-2 block">Fecha Inicio</label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !startDate && "text-muted-foreground"
-                )}
+      {/* Controles */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filtros y Rango de Fechas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fecha Inicio</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={(date) => date && setStartDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fecha Fin</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={(date) => date && setEndDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Transacción</label>
+              <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {tiposUnicos.map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Estado del Asiento</label>
+              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="cuadrado">Cuadrado</SelectItem>
+                  <SelectItem value="descuadrado">Descuadrado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Estado Financiero</label>
+              <Select
+                value={filtroEstadoFinanciero}
+                onValueChange={setFiltroEstadoFinanciero}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={startDate}
-                onSelect={(date) => date && setStartDate(date)}
-                initialFocus
-                locale={es}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="balance">Balance General</SelectItem>
+                  <SelectItem value="resultados">Estado de Resultados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="flex-1 min-w-[200px]">
-          <label className="text-sm font-medium mb-2 block">Fecha Fin</label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !endDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={endDate}
-                onSelect={(date) => date && setEndDate(date)}
-                initialFocus
-                locale={es}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Búsqueda</label>
+              <Input
+                placeholder="Buscar..."
+                value={filtroBusqueda}
+                onChange={(e) => setFiltroBusqueda(e.target.value)}
               />
-            </PopoverContent>
-          </Popover>
-        </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Resumen */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Total Debe</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalDebe)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Total Haber</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalHaber)}</p>
+          </CardContent>
+        </Card>
+
+        <Card className={cuadra ? "border-green-500" : "border-red-500"}>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Estado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-bold ${cuadra ? "text-green-600" : "text-red-600"}`}>
+              {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
+            </p>
+            {!cuadra && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Diferencia: {formatCurrency(diferencia)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
-        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por referencia o descripción..."
-            value={filtroBusqueda}
-            onChange={(e) => setFiltroBusqueda(e.target.value)}
-            className="flex-1"
-          />
-        </div>
+      {/* Tabla de Asientos */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Asientos Contables ({asientosFiltrados.length} de {asientosArray.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {asientosFiltrados.map((asiento) => {
+              const diferencia = Math.abs(asiento.totalDebe - asiento.totalHaber);
+              const cuadrado = diferencia < 0.01;
 
-        <div className="min-w-[180px]">
-          <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-            <SelectTrigger>
-              <SelectValue placeholder="Tipo de transacción" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los tipos</SelectItem>
-              {tiposUnicos.map(tipo => (
-                <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="min-w-[200px]">
-          <Select value={filtroEstadoFinanciero} onValueChange={setFiltroEstadoFinanciero}>
-            <SelectTrigger>
-              <SelectValue placeholder="Estado financiero" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los estados</SelectItem>
-              <SelectItem value="balance">Balance General (1,2,3)</SelectItem>
-              <SelectItem value="resultados">Estado de Resultados (4,5)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="min-w-[180px]">
-          <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-            <SelectTrigger>
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="cuadrado">Cuadrados</SelectItem>
-              <SelectItem value="descuadrado">Descuadrados ({asientosDescuadrados})</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="text-center py-8">Cargando balanza...</div>
-      ) : (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Asientos Contables
-                {asientosDescuadrados > 0 && (
-                  <span className="ml-3 text-sm font-normal text-red-600">
-                    ({asientosDescuadrados} asiento{asientosDescuadrados > 1 ? 's' : ''} descuadrado{asientosDescuadrados > 1 ? 's' : ''})
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground mb-4">
-                Mostrando {asientosFiltrados.length} de {balanzaData?.asientos.length || 0} asientos
-              </div>
-              <div className="space-y-2">
-                {asientosFiltrados.map((asiento, index) => {
-                  const descuadrado = Math.abs(asiento.totalDebe - asiento.totalHaber) >= 0.01;
-                  return (
-                  <Collapsible key={index} className={cn(
-                    "border rounded-lg",
-                    descuadrado && "border-red-500 bg-red-50 dark:bg-red-950/20"
-                  )}>
-                    <CollapsibleTrigger className="w-full">
-                      <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-4 flex-1">
-                          <ChevronRight className="h-4 w-4 transition-transform [&[data-state=open]]:rotate-90" />
-                          <div className="text-left">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-sm font-medium">{asiento.referencia}</span>
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                                {asiento.tipo}
-                              </span>
-                              {asiento.categoriaFlujo && (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                  Flujo: {asiento.categoriaFlujo}
-                                </span>
-                              )}
-                              <span className="text-sm text-muted-foreground">{asiento.fecha}</span>
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">{asiento.descripcion}</div>
-                          </div>
-                        </div>
-                        <div className="flex gap-6 mr-4">
-                          <div className="text-right">
-                            <div className="text-xs text-muted-foreground">Debe</div>
-                            <div className={cn("font-medium", descuadrado && "text-red-600 dark:text-red-400")}>
-                              ${asiento.totalDebe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs text-muted-foreground">Haber</div>
-                            <div className={cn("font-medium", descuadrado && "text-red-600 dark:text-red-400")}>
-                              ${asiento.totalHaber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                          {descuadrado && (
-                            <div className="text-right">
-                              <div className="text-xs text-muted-foreground">Diferencia</div>
-                              <div className="font-medium text-red-600 dark:text-red-400">
-                                ${Math.abs(asiento.totalDebe - asiento.totalHaber).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              return (
+                <Collapsible key={asiento.referencia}>
+                  <Card className={cuadrado ? "" : "border-red-300"}>
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                              <div>
+                                <p className="text-sm font-medium">{asiento.referencia}</p>
+                                <p className="text-xs text-muted-foreground">{asiento.fecha}</p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <p className="text-sm">{asiento.descripcion}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-medium text-green-600">
+                                  {formatCurrency(asiento.totalDebe)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Debe</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-medium text-red-600">
+                                  {formatCurrency(asiento.totalHaber)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Haber</p>
                               </div>
                             </div>
-                          )}
+                            {!cuadrado && (
+                              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                Descuadrado
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      </CardHeader>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="border-t bg-muted/30">
+                      <CardContent>
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Código</TableHead>
                               <TableHead>Cuenta</TableHead>
+                              <TableHead>Descripción</TableHead>
                               <TableHead className="text-right">Debe</TableHead>
                               <TableHead className="text-right">Haber</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {asiento.movimientos.map((mov, movIndex) => (
-                              <TableRow key={movIndex}>
-                                <TableCell className="font-mono text-sm">{mov.cuenta_codigo}</TableCell>
-                                <TableCell>{mov.cuenta_nombre}</TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {mov.debe > 0 ? `$${mov.debe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}
+                            {asiento.movimientos.map((mov, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {mov.cuenta_nombre}
+                                    </p>
+                                  </div>
                                 </TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {mov.haber > 0 ? `$${mov.haber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}
+                                <TableCell>{mov.descripcion}</TableCell>
+                                <TableCell className="text-right">
+                                  {mov.debe > 0 && (
+                                    <span className="text-green-600 font-medium">
+                                      {formatCurrency(mov.debe)}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {mov.haber > 0 && (
+                                    <span className="text-red-600 font-medium">
+                                      {formatCurrency(mov.haber)}
+                                    </span>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}
+                            <TableRow className="font-bold bg-muted/50">
+                              <TableCell colSpan={2}>Total</TableCell>
+                              <TableCell className="text-right text-green-600">
+                                {formatCurrency(asiento.totalDebe)}
+                              </TableCell>
+                              <TableCell className="text-right text-red-600">
+                                {formatCurrency(asiento.totalHaber)}
+                              </TableCell>
+                            </TableRow>
                           </TableBody>
                         </Table>
-                      </div>
+                      </CardContent>
                     </CollapsibleContent>
-                  </Collapsible>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                  </Card>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
-          <Card className="mt-6 bg-primary/5">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Total Debe</div>
-                  <div className="text-2xl font-bold">
-                    ${balanzaData?.totales.debe.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Total Haber</div>
-                  <div className="text-2xl font-bold">
-                    ${balanzaData?.totales.haber.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Diferencia</div>
-                  <div className={cn(
-                    "text-2xl font-bold",
-                    Math.abs(balanzaData?.totales.diferencia || 0) < 0.01 ? "text-green-600" : "text-red-600"
-                  )}>
-                    ${Math.abs(balanzaData?.totales.diferencia || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </div>
-                  {Math.abs(balanzaData?.totales.diferencia || 0) < 0.01 && (
-                    <div className="text-sm text-green-600 mt-1">✓ Balanza cuadrada</div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+      {/* Saldos por Cuenta */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Saldos por Cuenta</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Total Debe</TableHead>
+                <TableHead>Total Haber</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.values(saldosPorCuenta)
+                .sort((a, b) => a.cuenta_codigo.localeCompare(b.cuenta_codigo))
+                .map((cuenta) => (
+                  <TableRow key={cuenta.cuenta_codigo}>
+                    <TableCell className="font-mono">{cuenta.cuenta_codigo}</TableCell>
+                    <TableCell className="text-green-600">
+                      {formatCurrency(cuenta.debe_total)}
+                    </TableCell>
+                    <TableCell className="text-red-600">
+                      {formatCurrency(cuenta.haber_total)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(cuenta.saldo)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              <TableRow className="font-bold bg-muted/50">
+                <TableCell>TOTALES</TableCell>
+                <TableCell className="text-green-600">
+                  {formatCurrency(totalDebe)}
+                </TableCell>
+                <TableCell className="text-red-600">
+                  {formatCurrency(totalHaber)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(Math.abs(totalDebe - totalHaber))}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 };
