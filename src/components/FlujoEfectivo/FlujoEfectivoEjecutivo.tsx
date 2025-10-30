@@ -39,75 +39,91 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       });
       saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
 
-      // Obtener TODOS los movimientos del período agrupados por asiento
+      // Obtener TODOS los movimientos de efectivo y bancos del período
+      const { data: movimientosEfectivo } = await supabase
+        .from("detalle_asientos")
+        .select("debe, haber, asientos_contables!inner(fecha, id)")
+        .eq("cuenta_codigo", "1001")
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+
+      const { data: movimientosBancos } = await supabase
+        .from("detalle_asientos")
+        .select("debe, haber, asientos_contables!inner(fecha, id)")
+        .eq("cuenta_codigo", "1002")
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+
+      // Calcular impacto total en efectivo
+      let totalEfectivo = 0;
+      movimientosEfectivo?.forEach(mov => {
+        totalEfectivo += (mov.debe || 0) - (mov.haber || 0);
+      });
+
+      // Calcular impacto total en bancos
+      let totalBancos = 0;
+      movimientosBancos?.forEach(mov => {
+        totalBancos += (mov.debe || 0) - (mov.haber || 0);
+      });
+
+      // Para la clasificación, obtener todos los asientos y clasificar
       const { data: asientos } = await supabase
         .from("asientos_contables")
         .select(`
           id,
-          fecha,
           detalle_asientos(cuenta_codigo, debe, haber)
         `)
         .gte("fecha", startDate.toISOString().split('T')[0])
         .lte("fecha", endDate.toISOString().split('T')[0]);
 
-      // Inicializar contadores
       const operativo = { efectivo: 0, bancos: 0, total: 0 };
       const inversion = { efectivo: 0, bancos: 0, total: 0 };
       const financiamiento = { efectivo: 0, bancos: 0, total: 0 };
 
-      // Procesar cada asiento
+      // Clasificar cada asiento
       asientos?.forEach((asiento: any) => {
         const detalles = asiento.detalle_asientos || [];
         
-        // Verificar si el asiento afecta efectivo o bancos
-        let afectaEfectivo = false;
-        let afectaBancos = false;
         let impactoEfectivo = 0;
         let impactoBancos = 0;
+        let tieneEfectivo = false;
+        let tieneBancos = false;
 
+        // Calcular impacto en efectivo/bancos
         detalles.forEach((det: any) => {
           if (det.cuenta_codigo === "1001") {
-            afectaEfectivo = true;
-            impactoEfectivo += (det.debe || 0) - (det.haber || 0);
+            tieneEfectivo = true;
+            impactoEfectivo = (det.debe || 0) - (det.haber || 0);
           } else if (det.cuenta_codigo === "1002") {
-            afectaBancos = true;
-            impactoBancos += (det.debe || 0) - (det.haber || 0);
+            tieneBancos = true;
+            impactoBancos = (det.debe || 0) - (det.haber || 0);
           }
         });
 
-        // Si no afecta efectivo ni bancos, saltar
-        if (!afectaEfectivo && !afectaBancos) return;
+        if (!tieneEfectivo && !tieneBancos) return;
 
-        // Clasificar el asiento según las contrapartidas
-        let categorizado = false;
-
+        // Clasificar según contrapartida
+        let clasificado = false;
         detalles.forEach((det: any) => {
           const codigo = det.cuenta_codigo;
-          
-          // Ignorar las cuentas de efectivo/bancos (ya las contamos)
           if (codigo === "1001" || codigo === "1002") return;
 
-          // Clasificar según el código de cuenta
           if (codigo.startsWith("4") || codigo.startsWith("5") || codigo.startsWith("6")) {
-            // Operativo
             operativo.efectivo += impactoEfectivo;
             operativo.bancos += impactoBancos;
-            categorizado = true;
+            clasificado = true;
           } else if (codigo === "1004" || codigo.startsWith("15")) {
-            // Inversión (1004 = Inversiones, 15XX = Activos Fijos)
             inversion.efectivo += impactoEfectivo;
             inversion.bancos += impactoBancos;
-            categorizado = true;
+            clasificado = true;
           } else if (codigo.startsWith("20") || codigo.startsWith("21") || codigo === "3001" || codigo === "3002") {
-            // Financiamiento (20XX-21XX = Pasivos, 3001 = Capital, 3002 = Utilidades Retenidas)
             financiamiento.efectivo += impactoEfectivo;
             financiamiento.bancos += impactoBancos;
-            categorizado = true;
+            clasificado = true;
           }
         });
 
-        // Si no se pudo categorizar, asumir operativo
-        if (!categorizado && (afectaEfectivo || afectaBancos)) {
+        if (!clasificado) {
           operativo.efectivo += impactoEfectivo;
           operativo.bancos += impactoBancos;
         }
