@@ -88,9 +88,8 @@ const RegistroIngresos = () => {
   const [filtroCuenta, setFiltroCuenta] = useState("");
   const [filtroSubcuenta, setFiltroSubcuenta] = useState("");
   
-  // Estado para diálogo de asientos contables
-  const [asientosDialogOpen, setAsientosDialogOpen] = useState(false);
-  const [asientosContables, setAsientosContables] = useState<any[]>([]);
+  // Estado para asientos contables en diálogo
+  const [currentAsientos, setCurrentAsientos] = useState<any>(null);
   const [loadingAsientos, setLoadingAsientos] = useState(false);
 
   // Estados para productos de inventario
@@ -321,22 +320,18 @@ const RegistroIngresos = () => {
   // Función para cargar asientos contables relacionados con una transacción
   const loadAsientosContables = async (transaccionId: string) => {
     setLoadingAsientos(true);
+    setCurrentAsientos(null);
     try {
       // Buscar el asiento contable por número de asiento
       const { data: asientos, error: asientosError } = await supabase
         .from('asientos_contables')
         .select('*')
         .eq('numero_asiento', `ING-${transaccionId}`)
-        .single();
+        .maybeSingle();
 
       if (asientosError) {
         console.error("Error loading asiento:", asientosError);
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los asientos contables",
-          variant: "destructive"
-        });
-        return;
+        return null;
       }
 
       if (asientos) {
@@ -348,7 +343,7 @@ const RegistroIngresos = () => {
 
         if (detallesError) {
           console.error("Error loading detalles:", detallesError);
-          return;
+          return null;
         }
 
         // Obtener nombres de cuentas
@@ -364,14 +359,18 @@ const RegistroIngresos = () => {
           cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
         })) || [];
 
-        setAsientosContables([{
+        const asientoCompleto = {
           ...asientos,
           detalles: detallesEnriquecidos
-        }]);
-        setAsientosDialogOpen(true);
+        };
+        
+        setCurrentAsientos(asientoCompleto);
+        return asientoCompleto;
       }
+      return null;
     } catch (error) {
       console.error("Error:", error);
+      return null;
     } finally {
       setLoadingAsientos(false);
     }
@@ -1830,15 +1829,24 @@ const RegistroIngresos = () => {
                                <div className="flex-1">
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium">{transaccion.descripcion}</p>
-                                    <Dialog>
+                                    <Dialog onOpenChange={(open) => {
+                                      if (open) {
+                                        loadAsientosContables(transaccion.id);
+                                      } else {
+                                        setCurrentAsientos(null);
+                                      }
+                                    }}>
                                       <DialogTrigger asChild>
                                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                                           <FileText className="h-3 w-3" />
                                         </Button>
                                       </DialogTrigger>
-                                      <DialogContent className="max-w-2xl">
+                                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                                         <DialogHeader>
                                           <DialogTitle>Detalles de la Transacción</DialogTitle>
+                                          <DialogDescription>
+                                            Información completa y asientos contables en balanza
+                                          </DialogDescription>
                                         </DialogHeader>
                                         <div className="space-y-4">
                                           <div className="grid grid-cols-2 gap-4">
@@ -1909,16 +1917,94 @@ const RegistroIngresos = () => {
                                              </div>
                                            )}
 
-                                           {/* Botón para ver asientos contables */}
+                                           {/* Asientos Contables en Balanza */}
                                            <div className="pt-4 border-t">
-                                             <Button 
-                                               onClick={() => loadAsientosContables(transaccion.id)}
-                                               disabled={loadingAsientos}
-                                               variant="outline"
-                                               className="w-full"
-                                             >
-                                               {loadingAsientos ? "Cargando..." : "Ver Asientos en Balanza de Comprobación"}
-                                             </Button>
+                                             <h4 className="font-semibold text-sm mb-3">Asientos en Balanza de Comprobación</h4>
+                                             {loadingAsientos ? (
+                                               <div className="text-center py-8 text-muted-foreground">
+                                                 Cargando asientos contables...
+                                               </div>
+                                             ) : !currentAsientos ? (
+                                               <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center">
+                                                 No se encontraron asientos contables para esta transacción
+                                               </div>
+                                             ) : (
+                                               <div className="space-y-4">
+                                                 <div className="p-4 bg-muted rounded-lg">
+                                                   <div className="grid grid-cols-2 gap-4 text-sm">
+                                                     <div>
+                                                       <span className="font-medium">Número de Asiento:</span> {currentAsientos.numero_asiento}
+                                                     </div>
+                                                     <div>
+                                                       <span className="font-medium">Fecha:</span>{' '}
+                                                       {new Date(currentAsientos.fecha).toLocaleDateString('es-ES')}
+                                                     </div>
+                                                     <div className="col-span-2">
+                                                       <span className="font-medium">Descripción:</span> {currentAsientos.descripcion}
+                                                     </div>
+                                                   </div>
+                                                 </div>
+
+                                                 <div className="border rounded-lg overflow-hidden">
+                                                   <table className="w-full">
+                                                     <thead className="bg-muted">
+                                                       <tr>
+                                                         <th className="text-left p-3 text-sm font-medium">Cuenta</th>
+                                                         <th className="text-left p-3 text-sm font-medium">Descripción</th>
+                                                         <th className="text-right p-3 text-sm font-medium">Debe</th>
+                                                         <th className="text-right p-3 text-sm font-medium">Haber</th>
+                                                       </tr>
+                                                     </thead>
+                                                     <tbody>
+                                                       {currentAsientos.detalles?.map((detalle: any, idx: number) => (
+                                                         <tr key={idx} className="border-t">
+                                                           <td className="p-3 text-sm">
+                                                             <div className="font-medium">{detalle.cuenta_codigo}</div>
+                                                             <div className="text-xs text-muted-foreground">
+                                                               {detalle.cuenta_nombre}
+                                                             </div>
+                                                           </td>
+                                                           <td className="p-3 text-sm">{detalle.descripcion}</td>
+                                                           <td className="p-3 text-sm text-right font-medium">
+                                                             {detalle.debe > 0 ? `$${Number(detalle.debe).toFixed(2)}` : '-'}
+                                                           </td>
+                                                           <td className="p-3 text-sm text-right font-medium">
+                                                             {detalle.haber > 0 ? `$${Number(detalle.haber).toFixed(2)}` : '-'}
+                                                           </td>
+                                                         </tr>
+                                                       ))}
+                                                       <tr className="border-t-2 bg-muted/50 font-bold">
+                                                         <td colSpan={2} className="p-3 text-sm">
+                                                           TOTALES
+                                                         </td>
+                                                         <td className="p-3 text-sm text-right">
+                                                           $
+                                                           {currentAsientos.detalles
+                                                             ?.reduce((sum: number, d: any) => sum + Number(d.debe), 0)
+                                                             .toFixed(2)}
+                                                         </td>
+                                                         <td className="p-3 text-sm text-right">
+                                                           $
+                                                           {currentAsientos.detalles
+                                                             ?.reduce((sum: number, d: any) => sum + Number(d.haber), 0)
+                                                             .toFixed(2)}
+                                                         </td>
+                                                       </tr>
+                                                     </tbody>
+                                                   </table>
+                                                 </div>
+
+                                                 <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
+                                                   <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                                     💡 Información
+                                                   </p>
+                                                   <p className="text-blue-600 dark:text-blue-400">
+                                                     Este asiento contable refleja cómo esta transacción afecta a las diferentes
+                                                     cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                                                   </p>
+                                                 </div>
+                                               </div>
+                                             )}
                                            </div>
                                         </div>
                                       </DialogContent>
@@ -2742,103 +2828,6 @@ const RegistroIngresos = () => {
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Dialog para mostrar asientos contables */}
-        <Dialog open={asientosDialogOpen} onOpenChange={setAsientosDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Asientos en Balanza de Comprobación</DialogTitle>
-              <DialogDescription>
-                Cuentas afectadas por esta transacción en la contabilidad
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {asientosContables.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  No se encontraron asientos contables para esta transacción
-                </p>
-              ) : (
-                asientosContables.map((asiento) => (
-                  <div key={asiento.id} className="space-y-4">
-                    <div className="p-4 bg-muted rounded-lg">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">Número de Asiento:</span> {asiento.numero_asiento}
-                        </div>
-                        <div>
-                          <span className="font-medium">Fecha:</span>{' '}
-                          {new Date(asiento.fecha).toLocaleDateString('es-ES')}
-                        </div>
-                        <div className="col-span-2">
-                          <span className="font-medium">Descripción:</span> {asiento.descripcion}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="text-left p-3 text-sm font-medium">Cuenta</th>
-                            <th className="text-left p-3 text-sm font-medium">Descripción</th>
-                            <th className="text-right p-3 text-sm font-medium">Debe</th>
-                            <th className="text-right p-3 text-sm font-medium">Haber</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {asiento.detalles?.map((detalle: any, idx: number) => (
-                            <tr key={idx} className="border-t">
-                              <td className="p-3 text-sm">
-                                <div className="font-medium">{detalle.cuenta_codigo}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {detalle.cuenta_nombre}
-                                </div>
-                              </td>
-                              <td className="p-3 text-sm">{detalle.descripcion}</td>
-                              <td className="p-3 text-sm text-right font-medium">
-                                {detalle.debe > 0 ? `$${Number(detalle.debe).toFixed(2)}` : '-'}
-                              </td>
-                              <td className="p-3 text-sm text-right font-medium">
-                                {detalle.haber > 0 ? `$${Number(detalle.haber).toFixed(2)}` : '-'}
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="border-t-2 bg-muted/50 font-bold">
-                            <td colSpan={2} className="p-3 text-sm">
-                              TOTALES
-                            </td>
-                            <td className="p-3 text-sm text-right">
-                              $
-                              {asiento.detalles
-                                ?.reduce((sum: number, d: any) => sum + Number(d.debe), 0)
-                                .toFixed(2)}
-                            </td>
-                            <td className="p-3 text-sm text-right">
-                              $
-                              {asiento.detalles
-                                ?.reduce((sum: number, d: any) => sum + Number(d.haber), 0)
-                                .toFixed(2)}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
-                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
-                        💡 Información
-                      </p>
-                      <p className="text-blue-600 dark:text-blue-400">
-                        Este asiento contable refleja cómo esta transacción afecta a las diferentes
-                        cuentas en la balanza de comprobación y posteriormente en los estados financieros.
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>;
 };
