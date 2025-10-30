@@ -36,8 +36,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           )
         `)
         .gte("asientos_contables.fecha", startDate.toISOString().split("T")[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split("T")[0])
-        .order("asientos_contables.fecha", { ascending: true });
+        .lte("asientos_contables.fecha", endDate.toISOString().split("T")[0]);
 
       if (error) {
         console.error("Error fetching detalle_asientos:", error);
