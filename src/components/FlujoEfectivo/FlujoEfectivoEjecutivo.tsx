@@ -16,10 +16,7 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
   const { data: flujoData, isLoading } = useQuery({
     queryKey: ["flujo-efectivo-ejecutivo", startDate, endDate, vistaColumnas],
     queryFn: async () => {
-      const startDateStr = startDate.toISOString();
-      const endDateStr = endDate.toISOString();
-
-      // Calcular saldo inicial
+      // Calcular saldo inicial (antes del período)
       const { data: saldoInicialData } = await supabase
         .from("detalle_asientos")
         .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
@@ -42,115 +39,114 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       });
       saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
 
-      // Actividades Operativas por cuenta
-      const { data: ingresos } = await supabase
-        .from("transacciones_ingresos")
-        .select("monto_pagado, metodo_pago")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
+      // Obtener TODOS los movimientos del período desde detalle_asientos
+      const { data: movimientos } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          cuenta_codigo,
+          debe,
+          haber,
+          asientos_contables!inner(fecha)
+        `)
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
 
-      const { data: egresos } = await supabase
-        .from("transacciones_egresos")
-        .select("monto_pagado, metodo_pago")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
-
+      // Inicializar contadores
       const operativo = { efectivo: 0, bancos: 0, total: 0 };
-      
-      ingresos?.forEach(i => {
-        const monto = i.monto_pagado || 0;
-        if (i.metodo_pago === "efectivo") {
-          operativo.efectivo += monto;
-        } else {
-          // transferencia, cheque, tarjeta, etc van a bancos
-          operativo.bancos += monto;
-        }
-      });
-      
-      egresos?.forEach(e => {
-        const monto = e.monto_pagado || 0;
-        if (e.metodo_pago === "efectivo") {
-          operativo.efectivo -= monto;
-        } else {
-          // transferencia, cheque, tarjeta, etc van a bancos
-          operativo.bancos -= monto;
-        }
-      });
-      
-      // El total SIEMPRE es la suma de efectivo + bancos
-      operativo.total = operativo.efectivo + operativo.bancos;
-
-      // Actividades de Inversión
-      const { data: inversiones } = await supabase
-        .from("inversiones_capex")
-        .select("monto_pagado, metodo_pago")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
-
       const inversion = { efectivo: 0, bancos: 0, total: 0 };
-      inversiones?.forEach(i => {
-        const monto = i.monto_pagado || 0;
-        if (i.metodo_pago === "efectivo") {
-          inversion.efectivo -= monto;
-        } else {
-          // transferencia, cheque, etc van a bancos
-          inversion.bancos -= monto;
-        }
-      });
-      
-      // El total SIEMPRE es la suma de efectivo + bancos
-      inversion.total = inversion.efectivo + inversion.bancos;
-
-      // Actividades de Financiamiento  
-      const { data: financiamientos } = await supabase
-        .from("financiamientos")
-        .select("saldo_inicial")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
-
-      const { data: amortizaciones } = await supabase
-        .from("transacciones_financiamientos")
-        .select("capital_pagado, interes_pagado, metodo_pago")
-        .in("tipo_transaccion", ["amortizacion", "cargo_interes"])
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
-
       const financiamiento = { efectivo: 0, bancos: 0, total: 0 };
-      
-      // Los financiamientos siempre van a bancos (disposiciones)
-      financiamientos?.forEach(f => {
-        const monto = f.saldo_inicial || 0;
-        financiamiento.bancos += monto;
-      });
-      
-      // Pagos de financiamiento según método de pago
-      amortizaciones?.forEach(a => {
-        const monto = (a.capital_pagado || 0) + (a.interes_pagado || 0);
-        if (a.metodo_pago === "efectivo") {
-          financiamiento.efectivo -= monto;
+
+      // Procesar cada movimiento
+      movimientos?.forEach(mov => {
+        const cuentaCodigo = mov.cuenta_codigo;
+        const debe = mov.debe || 0;
+        const haber = mov.haber || 0;
+
+        // Determinar si afecta efectivo o bancos y calcular el impacto
+        let impactoEfectivo = 0;
+        let impactoBancos = 0;
+
+        if (cuentaCodigo === "1001") {
+          // Movimiento en Caja: debe incrementa, haber disminuye
+          impactoEfectivo = debe - haber;
+        } else if (cuentaCodigo === "1002") {
+          // Movimiento en Bancos: debe incrementa, haber disminuye
+          impactoBancos = debe - haber;
         } else {
-          financiamiento.bancos -= monto;
+          // Para otras cuentas, necesitamos ver la contrapartida
+          // Si la cuenta tiene DEBE, significa que salió efectivo/bancos (está en el HABER de 1001/1002)
+          // Si la cuenta tiene HABER, significa que entró efectivo/bancos (está en el DEBE de 1001/1002)
+          
+          // Clasificar por tipo de actividad según el código de cuenta
+          const esOperativo = cuentaCodigo.startsWith("4") || // Ingresos
+                             cuentaCodigo.startsWith("5") || // Costos
+                             cuentaCodigo.startsWith("6");   // Gastos
+          
+          const esInversion = cuentaCodigo === "1004"; // Inversiones CAPEX
+          
+          const esFinanciamiento = cuentaCodigo === "2002" || // Créditos bancarios
+                                  cuentaCodigo === "2003" || // Créditos de proveedores
+                                  cuentaCodigo === "2004" || // Tarjetas de crédito
+                                  cuentaCodigo === "3001";   // Capital social
+
+          // Determinar el impacto (positivo = entrada de efectivo, negativo = salida)
+          // Si la cuenta tiene HABER, entra efectivo (cuenta aumenta su haber = entra dinero)
+          // Si la cuenta tiene DEBE, sale efectivo (cuenta aumenta su debe = sale dinero)
+          let impacto = 0;
+          
+          if (cuentaCodigo.startsWith("4")) {
+            // Ingresos: HABER en ingreso = entrada de efectivo
+            impacto = haber - debe;
+          } else if (cuentaCodigo.startsWith("5") || cuentaCodigo.startsWith("6")) {
+            // Costos y Gastos: DEBE en gasto = salida de efectivo
+            impacto = -(debe - haber);
+          } else if (cuentaCodigo === "1004") {
+            // Inversiones: DEBE en inversión = salida de efectivo
+            impacto = -(debe - haber);
+          } else if (cuentaCodigo === "2002" || cuentaCodigo === "2003" || cuentaCodigo === "2004") {
+            // Créditos: HABER en pasivo = entrada de efectivo, DEBE = salida (pago)
+            impacto = haber - debe;
+          } else if (cuentaCodigo === "3001") {
+            // Capital: HABER en capital = entrada de efectivo (aportación), DEBE = salida (retiro)
+            impacto = haber - debe;
+          }
+
+          // Para simplificar, asumimos que todo va a bancos excepto que sea efectivo explícito
+          // (Podríamos mejorar esto leyendo el método de pago de la transacción original)
+          impactoBancos = impacto;
+
+          // Asignar a la categoría correspondiente
+          if (esOperativo) {
+            operativo.bancos += impactoBancos;
+          } else if (esInversion) {
+            inversion.bancos += impactoBancos;
+          } else if (esFinanciamiento) {
+            financiamiento.bancos += impactoBancos;
+          }
+          
+          return; // Saltar al siguiente movimiento
         }
+
+        // Si llegamos aquí, es porque el movimiento es directamente en 1001 o 1002
+        // No lo contamos dos veces - solo procesamos las contrapartidas arriba
       });
-      
-      // El total SIEMPRE es la suma de efectivo + bancos
+
+      // Calcular totales
+      operativo.total = operativo.efectivo + operativo.bancos;
+      inversion.total = inversion.efectivo + inversion.bancos;
       financiamiento.total = financiamiento.efectivo + financiamiento.bancos;
 
       const flujoNeto = {
         efectivo: operativo.efectivo + inversion.efectivo + financiamiento.efectivo,
         bancos: operativo.bancos + inversion.bancos + financiamiento.bancos,
-        total: 0 // se calculará después
+        total: operativo.total + inversion.total + financiamiento.total
       };
-      // El total SIEMPRE es la suma de efectivo + bancos
-      flujoNeto.total = flujoNeto.efectivo + flujoNeto.bancos;
 
       const saldoFinal = {
         efectivo: saldoInicial.efectivo + flujoNeto.efectivo,
         bancos: saldoInicial.bancos + flujoNeto.bancos,
-        total: 0 // se calculará después
+        total: saldoInicial.total + flujoNeto.total
       };
-      // El total SIEMPRE es la suma de efectivo + bancos
-      saldoFinal.total = saldoFinal.efectivo + saldoFinal.bancos;
 
       return {
         saldoInicial,
