@@ -68,145 +68,89 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate, filtroMetodoPago }: FlujoE
   const { data: transacciones, isLoading } = useQuery({
     queryKey: ["flujo-efectivo-analitico", startDate, endDate, filtroMetodoPago],
     queryFn: async () => {
-      const startDateStr = startDate.toISOString();
-      const endDateStr = endDate.toISOString();
       const trans: Transaccion[] = [];
 
-      // Ingresos
-      const { data: ingresos } = await supabase
-        .from("transacciones_ingresos")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: true });
+      // Determinar qué cuentas filtrar
+      const cuentasFiltro = filtroMetodoPago === "consolidado" 
+        ? ["1001", "1002"] 
+        : filtroMetodoPago === "efectivo" 
+          ? ["1001"] 
+          : ["1002"];
 
-      ingresos?.forEach(ing => {
-        if (ing.monto_pagado > 0) {
-          // Filtrar según método de pago
-          if (filtroMetodoPago === "consolidado" || 
-              (filtroMetodoPago === "efectivo" && ing.metodo_pago === "efectivo") ||
-              (filtroMetodoPago === "bancos" && ing.metodo_pago === "bancos")) {
-            trans.push({
-              fecha: format(new Date(ing.created_at), "dd/MM/yyyy"),
-              referencia: `ING-${ing.id.slice(0, 8)}`,
-              tipo: "Cobro",
-              descripcion: ing.descripcion,
-              monto: ing.monto_pagado,
-              categoria: "Operativo",
-              metodoPago: ing.metodo_pago
-            });
+      // Obtener todos los asientos que afectan efectivo/bancos
+      const { data: asientos } = await supabase
+        .from("asientos_contables")
+        .select(`
+          id,
+          numero_asiento,
+          fecha,
+          descripcion,
+          detalle_asientos(cuenta_codigo, debe, haber, descripcion)
+        `)
+        .gte("fecha", startDate.toISOString().split('T')[0])
+        .lte("fecha", endDate.toISOString().split('T')[0])
+        .order("fecha", { ascending: true });
+
+      // Procesar cada asiento
+      asientos?.forEach((asiento: any) => {
+        const detalles = asiento.detalle_asientos || [];
+        
+        // Ver si afecta efectivo/bancos
+        let impactoEfectivo = 0;
+        let impactoBancos = 0;
+        let afectaEfectivo = false;
+        let afectaBancos = false;
+        let metodoPago = "";
+
+        detalles.forEach((det: any) => {
+          if (det.cuenta_codigo === "1001") {
+            afectaEfectivo = true;
+            impactoEfectivo = (det.debe || 0) - (det.haber || 0);
+            metodoPago = "efectivo";
+          } else if (det.cuenta_codigo === "1002") {
+            afectaBancos = true;
+            impactoBancos = (det.debe || 0) - (det.haber || 0);
+            metodoPago = "bancos";
           }
-        }
+        });
+
+        // Filtrar según método de pago
+        if (!afectaEfectivo && !afectaBancos) return;
+        if (filtroMetodoPago === "efectivo" && !afectaEfectivo) return;
+        if (filtroMetodoPago === "bancos" && !afectaBancos) return;
+
+        const montoTotal = impactoEfectivo + impactoBancos;
+        if (montoTotal === 0) return;
+
+        // Determinar categoría y tipo
+        let categoria = "Operativo";
+        let tipo = montoTotal > 0 ? "Cobro" : "Pago";
+
+        detalles.forEach((det: any) => {
+          const codigo = det.cuenta_codigo;
+          if (codigo === "1001" || codigo === "1002") return;
+
+          if (codigo === "1004" || codigo.startsWith("15")) {
+            categoria = "Inversión";
+            tipo = "Inversión";
+          } else if (codigo.startsWith("20") || codigo.startsWith("21") || codigo === "3001" || codigo === "3002") {
+            categoria = "Financiamiento";
+            tipo = montoTotal > 0 ? "Disposición" : "Amortización";
+          }
+        });
+
+        trans.push({
+          fecha: format(new Date(asiento.fecha), "dd/MM/yyyy"),
+          referencia: asiento.numero_asiento,
+          tipo,
+          descripcion: asiento.descripcion,
+          monto: montoTotal,
+          categoria,
+          metodoPago
+        });
       });
 
-      // Egresos
-      const { data: egresos } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: true });
-
-      egresos?.forEach(egr => {
-        if (egr.monto_pagado > 0) {
-          // Filtrar según método de pago
-          if (filtroMetodoPago === "consolidado" || 
-              (filtroMetodoPago === "efectivo" && egr.metodo_pago === "efectivo") ||
-              (filtroMetodoPago === "bancos" && egr.metodo_pago === "bancos")) {
-            trans.push({
-              fecha: format(new Date(egr.created_at), "dd/MM/yyyy"),
-              referencia: `EGR-${egr.id.slice(0, 8)}`,
-              tipo: "Pago",
-              descripcion: egr.descripcion,
-              monto: -egr.monto_pagado,
-              categoria: "Operativo",
-              metodoPago: egr.metodo_pago
-            });
-          }
-        }
-      });
-
-      // Inversiones
-      const { data: inversiones } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: true });
-
-      inversiones?.forEach(inv => {
-        if (inv.monto_pagado > 0) {
-          // Filtrar según método de pago
-          if (filtroMetodoPago === "consolidado" || 
-              (filtroMetodoPago === "efectivo" && inv.metodo_pago === "efectivo") ||
-              (filtroMetodoPago === "bancos" && inv.metodo_pago === "bancos")) {
-            trans.push({
-              fecha: format(new Date(inv.created_at), "dd/MM/yyyy"),
-              referencia: `INV-${inv.id.slice(0, 8)}`,
-              tipo: "Inversión",
-              descripcion: inv.producto_nombre,
-              monto: -inv.monto_pagado,
-              categoria: "Inversión",
-              metodoPago: inv.metodo_pago
-            });
-          }
-        }
-      });
-
-      // Financiamientos - Disposiciones
-      const { data: financiamientos } = await supabase
-        .from("financiamientos")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: true });
-
-      financiamientos?.forEach(fin => {
-        if (fin.saldo_inicial > 0) {
-          // Para financiamientos, siempre asumimos bancos
-          if (filtroMetodoPago === "consolidado" || filtroMetodoPago === "bancos") {
-            trans.push({
-              fecha: format(new Date(fin.created_at), "dd/MM/yyyy"),
-              referencia: `FIN-${fin.id.slice(0, 8)}`,
-              tipo: "Disposición",
-              descripcion: fin.nombre,
-              monto: fin.saldo_inicial,
-              categoria: "Financiamiento",
-              metodoPago: "bancos"
-            });
-          }
-        }
-      });
-
-      // Financiamientos - Pagos
-      const { data: pagos } = await supabase
-        .from("transacciones_financiamientos")
-        .select("*, financiamientos(nombre)")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: true });
-
-      pagos?.forEach(pago => {
-        const monto = (pago.capital_pagado || 0) + (pago.interes_pagado || 0);
-        if (monto > 0) {
-          // Filtrar según método de pago
-          if (filtroMetodoPago === "consolidado" || 
-              (filtroMetodoPago === "efectivo" && pago.metodo_pago === "efectivo") ||
-              (filtroMetodoPago === "bancos" && pago.metodo_pago === "bancos")) {
-            trans.push({
-              fecha: format(new Date(pago.created_at), "dd/MM/yyyy"),
-              referencia: `PAG-${pago.id.slice(0, 8)}`,
-              tipo: pago.tipo_transaccion === 'amortizacion' ? 'Amortización' : 'Interés',
-              descripcion: (pago.financiamientos as any)?.nombre || pago.descripcion || "",
-              monto: -monto,
-              categoria: "Financiamiento",
-              metodoPago: pago.metodo_pago
-            });
-          }
-        }
-      });
-
-      return trans.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+      return trans;
     },
   });
 

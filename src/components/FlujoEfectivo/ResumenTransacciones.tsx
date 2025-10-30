@@ -17,96 +17,150 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
   const { data, isLoading } = useQuery({
     queryKey: ["resumen-transacciones", startDate, endDate, filtroMetodoPago],
     queryFn: async () => {
-      const startDateStr = startDate.toISOString();
-      const endDateStr = endDate.toISOString();
+      // Determinar qué cuentas filtrar
+      const cuentasFiltro = filtroMetodoPago === "consolidado" 
+        ? ["1001", "1002"] 
+        : filtroMetodoPago === "efectivo" 
+          ? ["1001"] 
+          : ["1002"];
 
-      // Ingresos
-      const { data: ingresos } = await supabase
-        .from("transacciones_ingresos")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: false });
+      // Obtener todos los asientos que afectan efectivo/bancos
+      const { data: asientos } = await supabase
+        .from("asientos_contables")
+        .select(`
+          id,
+          numero_asiento,
+          fecha,
+          descripcion,
+          detalle_asientos(cuenta_codigo, debe, haber, descripcion)
+        `)
+        .gte("fecha", startDate.toISOString().split('T')[0])
+        .lte("fecha", endDate.toISOString().split('T')[0])
+        .order("fecha", { ascending: false });
 
-      // Filtrar ingresos según método de pago
-      const ingresosFiltrados = filtroMetodoPago === "consolidado" 
-        ? ingresos 
-        : ingresos?.filter(ing => ing.metodo_pago === filtroMetodoPago);
+      const ingresos: any[] = [];
+      const egresos: any[] = [];
+      const inversiones: any[] = [];
+      const financiamientos: any[] = [];
+      const amortizaciones: any[] = [];
 
-      // Egresos
-      const { data: egresos } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: false });
+      // Procesar cada asiento
+      asientos?.forEach((asiento: any) => {
+        const detalles = asiento.detalle_asientos || [];
+        
+        // Ver si afecta efectivo/bancos según filtro
+        let impactoEfectivo = 0;
+        let impactoBancos = 0;
+        let afectaEfectivo = false;
+        let afectaBancos = false;
+        let metodoPago = "";
 
-      // Filtrar egresos según método de pago
-      const egresosFiltrados = filtroMetodoPago === "consolidado" 
-        ? egresos 
-        : egresos?.filter(egr => egr.metodo_pago === filtroMetodoPago);
+        detalles.forEach((det: any) => {
+          if (det.cuenta_codigo === "1001") {
+            afectaEfectivo = true;
+            impactoEfectivo = (det.debe || 0) - (det.haber || 0);
+            metodoPago = "efectivo";
+          } else if (det.cuenta_codigo === "1002") {
+            afectaBancos = true;
+            impactoBancos = (det.debe || 0) - (det.haber || 0);
+            metodoPago = "bancos";
+          }
+        });
 
-      // Inversiones
-      const { data: inversiones } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: false });
+        // Filtrar según método de pago
+        if (!afectaEfectivo && !afectaBancos) return;
+        if (filtroMetodoPago === "efectivo" && !afectaEfectivo) return;
+        if (filtroMetodoPago === "bancos" && !afectaBancos) return;
 
-      // Filtrar inversiones según método de pago
-      const inversionesFiltradas = filtroMetodoPago === "consolidado" 
-        ? inversiones 
-        : inversiones?.filter(inv => inv.metodo_pago === filtroMetodoPago);
+        const montoTotal = impactoEfectivo + impactoBancos;
+        if (montoTotal === 0) return;
 
-      // Financiamientos (siempre asumimos que son bancos)
-      const { data: financiamientos } = await supabase
-        .from("financiamientos")
-        .select("*")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: false });
+        // Clasificar según contrapartidas
+        let clasificado = false;
 
-      // Filtrar financiamientos: solo si es consolidado o bancos
-      const financiamientosFiltrados = (filtroMetodoPago === "consolidado" || filtroMetodoPago === "bancos") 
-        ? financiamientos 
-        : [];
+        detalles.forEach((det: any) => {
+          const codigo = det.cuenta_codigo;
+          if (codigo === "1001" || codigo === "1002") return;
 
-      // Amortizaciones
-      const { data: amortizaciones } = await supabase
-        .from("transacciones_financiamientos")
-        .select("*, financiamientos(nombre)")
-        .eq("tipo_transaccion", "amortizacion")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: false });
+          const transaccion = {
+            id: asiento.id,
+            created_at: asiento.fecha,
+            descripcion: asiento.descripcion,
+            metodo_pago: metodoPago,
+            monto_total: Math.abs(montoTotal),
+            monto_pagado: Math.abs(montoTotal)
+          };
 
-      // Filtrar amortizaciones según método de pago
-      const amortizacionesFiltradas = filtroMetodoPago === "consolidado" 
-        ? amortizaciones 
-        : amortizaciones?.filter(amort => amort.metodo_pago === filtroMetodoPago);
-
-      // Cargos de interés
-      const { data: intereses } = await supabase
-        .from("transacciones_financiamientos")
-        .select("*, financiamientos(nombre)")
-        .eq("tipo_transaccion", "cargo_interes")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr)
-        .order("created_at", { ascending: false });
-
-      // Filtrar intereses según método de pago
-      const interesesFiltrados = filtroMetodoPago === "consolidado" 
-        ? intereses 
-        : intereses?.filter(int => int.metodo_pago === filtroMetodoPago);
+          // Ingresos (4XXX)
+          if (codigo.startsWith("4") && montoTotal > 0) {
+            ingresos.push({
+              ...transaccion,
+              tipo_ingreso: "venta",
+              cliente_nombre: ""
+            });
+            clasificado = true;
+          }
+          // Egresos (5XXX, 6XXX)
+          else if ((codigo.startsWith("5") || codigo.startsWith("6")) && montoTotal < 0) {
+            egresos.push({
+              ...transaccion,
+              tipo_egreso: codigo.startsWith("5") ? "costo" : "gasto"
+            });
+            clasificado = true;
+          }
+          // Inversiones (1004, 15XX)
+          else if ((codigo === "1004" || codigo.startsWith("15")) && montoTotal < 0) {
+            inversiones.push({
+              ...transaccion,
+              producto_nombre: asiento.descripcion,
+              categoria_activo: "activo_fijo",
+              valor_total: Math.abs(montoTotal)
+            });
+            clasificado = true;
+          }
+          // Financiamientos
+          else if (codigo.startsWith("20") || codigo.startsWith("21")) {
+            if (montoTotal > 0) {
+              financiamientos.push({
+                ...transaccion,
+                nombre: asiento.descripcion,
+                institucion_financiera: "N/A",
+                tipo_credito: "credito",
+                saldo_inicial: montoTotal
+              });
+            } else {
+              amortizaciones.push({
+                ...transaccion,
+                capital_pagado: Math.abs(montoTotal),
+                interes_pagado: 0,
+                financiamientos: { nombre: asiento.descripcion }
+              });
+            }
+            clasificado = true;
+          }
+          // Capital (3001, 3002)
+          else if (codigo === "3001" || codigo === "3002") {
+            if (montoTotal > 0) {
+              financiamientos.push({
+                ...transaccion,
+                nombre: "Aportación de Capital",
+                institucion_financiera: "N/A",
+                tipo_credito: "capital",
+                saldo_inicial: montoTotal
+              });
+            }
+            clasificado = true;
+          }
+        });
+      });
 
       return {
-        ingresos: ingresosFiltrados || [],
-        egresos: egresosFiltrados || [],
-        inversiones: inversionesFiltradas || [],
-        financiamientos: financiamientosFiltrados || [],
-        amortizaciones: amortizacionesFiltradas || [],
-        intereses: interesesFiltrados || []
+        ingresos,
+        egresos,
+        inversiones,
+        financiamientos,
+        amortizaciones,
+        intereses: []
       };
     }
   });

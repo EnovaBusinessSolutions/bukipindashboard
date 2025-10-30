@@ -39,96 +39,78 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       });
       saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
 
-      // Obtener TODOS los movimientos del período desde detalle_asientos
-      const { data: movimientos } = await supabase
-        .from("detalle_asientos")
+      // Obtener TODOS los movimientos del período agrupados por asiento
+      const { data: asientos } = await supabase
+        .from("asientos_contables")
         .select(`
-          cuenta_codigo,
-          debe,
-          haber,
-          asientos_contables!inner(fecha)
+          id,
+          fecha,
+          detalle_asientos(cuenta_codigo, debe, haber)
         `)
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+        .gte("fecha", startDate.toISOString().split('T')[0])
+        .lte("fecha", endDate.toISOString().split('T')[0]);
 
       // Inicializar contadores
       const operativo = { efectivo: 0, bancos: 0, total: 0 };
       const inversion = { efectivo: 0, bancos: 0, total: 0 };
       const financiamiento = { efectivo: 0, bancos: 0, total: 0 };
 
-      // Procesar cada movimiento
-      movimientos?.forEach(mov => {
-        const cuentaCodigo = mov.cuenta_codigo;
-        const debe = mov.debe || 0;
-        const haber = mov.haber || 0;
-
-        // Determinar si afecta efectivo o bancos y calcular el impacto
+      // Procesar cada asiento
+      asientos?.forEach((asiento: any) => {
+        const detalles = asiento.detalle_asientos || [];
+        
+        // Verificar si el asiento afecta efectivo o bancos
+        let afectaEfectivo = false;
+        let afectaBancos = false;
         let impactoEfectivo = 0;
         let impactoBancos = 0;
 
-        if (cuentaCodigo === "1001") {
-          // Movimiento en Caja: debe incrementa, haber disminuye
-          impactoEfectivo = debe - haber;
-        } else if (cuentaCodigo === "1002") {
-          // Movimiento en Bancos: debe incrementa, haber disminuye
-          impactoBancos = debe - haber;
-        } else {
-          // Para otras cuentas, necesitamos ver la contrapartida
-          // Si la cuenta tiene DEBE, significa que salió efectivo/bancos (está en el HABER de 1001/1002)
-          // Si la cuenta tiene HABER, significa que entró efectivo/bancos (está en el DEBE de 1001/1002)
-          
-          // Clasificar por tipo de actividad según el código de cuenta
-          const esOperativo = cuentaCodigo.startsWith("4") || // Ingresos
-                             cuentaCodigo.startsWith("5") || // Costos
-                             cuentaCodigo.startsWith("6");   // Gastos
-          
-          const esInversion = cuentaCodigo === "1004"; // Inversiones CAPEX
-          
-          const esFinanciamiento = cuentaCodigo === "2002" || // Créditos bancarios
-                                  cuentaCodigo === "2003" || // Créditos de proveedores
-                                  cuentaCodigo === "2004" || // Tarjetas de crédito
-                                  cuentaCodigo === "3001";   // Capital social
-
-          // Determinar el impacto (positivo = entrada de efectivo, negativo = salida)
-          // Si la cuenta tiene HABER, entra efectivo (cuenta aumenta su haber = entra dinero)
-          // Si la cuenta tiene DEBE, sale efectivo (cuenta aumenta su debe = sale dinero)
-          let impacto = 0;
-          
-          if (cuentaCodigo.startsWith("4")) {
-            // Ingresos: HABER en ingreso = entrada de efectivo
-            impacto = haber - debe;
-          } else if (cuentaCodigo.startsWith("5") || cuentaCodigo.startsWith("6")) {
-            // Costos y Gastos: DEBE en gasto = salida de efectivo
-            impacto = -(debe - haber);
-          } else if (cuentaCodigo === "1004") {
-            // Inversiones: DEBE en inversión = salida de efectivo
-            impacto = -(debe - haber);
-          } else if (cuentaCodigo === "2002" || cuentaCodigo === "2003" || cuentaCodigo === "2004") {
-            // Créditos: HABER en pasivo = entrada de efectivo, DEBE = salida (pago)
-            impacto = haber - debe;
-          } else if (cuentaCodigo === "3001") {
-            // Capital: HABER en capital = entrada de efectivo (aportación), DEBE = salida (retiro)
-            impacto = haber - debe;
+        detalles.forEach((det: any) => {
+          if (det.cuenta_codigo === "1001") {
+            afectaEfectivo = true;
+            impactoEfectivo += (det.debe || 0) - (det.haber || 0);
+          } else if (det.cuenta_codigo === "1002") {
+            afectaBancos = true;
+            impactoBancos += (det.debe || 0) - (det.haber || 0);
           }
+        });
 
-          // Para simplificar, asumimos que todo va a bancos excepto que sea efectivo explícito
-          // (Podríamos mejorar esto leyendo el método de pago de la transacción original)
-          impactoBancos = impacto;
+        // Si no afecta efectivo ni bancos, saltar
+        if (!afectaEfectivo && !afectaBancos) return;
 
-          // Asignar a la categoría correspondiente
-          if (esOperativo) {
+        // Clasificar el asiento según las contrapartidas
+        let categorizado = false;
+
+        detalles.forEach((det: any) => {
+          const codigo = det.cuenta_codigo;
+          
+          // Ignorar las cuentas de efectivo/bancos (ya las contamos)
+          if (codigo === "1001" || codigo === "1002") return;
+
+          // Clasificar según el código de cuenta
+          if (codigo.startsWith("4") || codigo.startsWith("5") || codigo.startsWith("6")) {
+            // Operativo
+            operativo.efectivo += impactoEfectivo;
             operativo.bancos += impactoBancos;
-          } else if (esInversion) {
+            categorizado = true;
+          } else if (codigo === "1004" || codigo.startsWith("15")) {
+            // Inversión (1004 = Inversiones, 15XX = Activos Fijos)
+            inversion.efectivo += impactoEfectivo;
             inversion.bancos += impactoBancos;
-          } else if (esFinanciamiento) {
+            categorizado = true;
+          } else if (codigo.startsWith("20") || codigo.startsWith("21") || codigo === "3001" || codigo === "3002") {
+            // Financiamiento (20XX-21XX = Pasivos, 3001 = Capital, 3002 = Utilidades Retenidas)
+            financiamiento.efectivo += impactoEfectivo;
             financiamiento.bancos += impactoBancos;
+            categorizado = true;
           }
-          
-          return; // Saltar al siguiente movimiento
-        }
+        });
 
-        // Si llegamos aquí, es porque el movimiento es directamente en 1001 o 1002
-        // No lo contamos dos veces - solo procesamos las contrapartidas arriba
+        // Si no se pudo categorizar, asumir operativo
+        if (!categorizado && (afectaEfectivo || afectaBancos)) {
+          operativo.efectivo += impactoEfectivo;
+          operativo.bancos += impactoBancos;
+        }
       });
 
       // Calcular totales
