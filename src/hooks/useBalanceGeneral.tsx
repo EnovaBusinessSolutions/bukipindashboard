@@ -37,6 +37,7 @@ export const useBalanceGeneral = () => {
   const saldosPorCuenta = asientosData?.saldosPorCuenta || {};
 
   // Extraer saldos de cuentas específicas
+  // Activos (naturaleza deudora - mantener como está)
   const caja = saldosPorCuenta["1001"]?.saldo || 0;
   const bancos = saldosPorCuenta["1002"]?.saldo || 0;
   const cuentasPorCobrar = saldosPorCuenta["1003"]?.saldo || 0;
@@ -47,21 +48,24 @@ export const useBalanceGeneral = () => {
     .filter(codigo => codigo.startsWith("10") && parseInt(codigo) >= 1007)
     .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
 
-  const proveedores = saldosPorCuenta["2001"]?.saldo || 0;
+  // Pasivos (naturaleza acreedora - convertir a positivo)
+  const proveedores = Math.abs(saldosPorCuenta["2001"]?.saldo || 0);
   
   // Financiamientos - sumar todas las cuentas de pasivos largo plazo
-  const financiamientos = Object.keys(saldosPorCuenta)
+  const financiamientos = Math.abs(Object.keys(saldosPorCuenta)
     .filter(codigo => codigo.startsWith("21"))
-    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
+    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0));
 
-  const capitalSocial = saldosPorCuenta["3001"]?.saldo || 0;
-  const utilidadesRetenidas = saldosPorCuenta["3002"]?.saldo || 0;
+  // Capital (naturaleza acreedora - convertir a positivo)
+  const capitalSocial = Math.abs(saldosPorCuenta["3001"]?.saldo || 0);
+  const utilidadesRetenidas = Math.abs(saldosPorCuenta["3002"]?.saldo || 0);
 
-  // Calcular ingresos, costos, gastos desde saldos
-  const ingresos = Object.keys(saldosPorCuenta)
+  // Ingresos (naturaleza acreedora - convertir a positivo)
+  const ingresos = Math.abs(Object.keys(saldosPorCuenta)
     .filter(codigo => codigo.startsWith("4"))
-    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
+    .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0));
 
+  // Costos y Gastos (naturaleza deudora - mantener como está)
   const costos = Object.keys(saldosPorCuenta)
     .filter(codigo => codigo.startsWith("5") && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099)
     .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
@@ -70,6 +74,7 @@ export const useBalanceGeneral = () => {
     .filter(codigo => codigo.startsWith("5") && parseInt(codigo) >= 5100)
     .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);
 
+  // Impuestos (naturaleza deudora - mantener como está)
   const impuestos = Object.keys(saldosPorCuenta)
     .filter(codigo => codigo.startsWith("6"))
     .reduce((sum, codigo) => sum + (saldosPorCuenta[codigo]?.saldo || 0), 0);

@@ -36,7 +36,16 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
   // Función para obtener el saldo de una cuenta desde los asientos de balanza
   const obtenerSaldo = (codigoCuenta: string): number => {
-    return saldosPorCuenta[codigoCuenta]?.saldo || 0;
+    const saldo = saldosPorCuenta[codigoCuenta]?.saldo || 0;
+    const primerDigito = codigoCuenta.charAt(0);
+    
+    // Cuentas acreedoras (Pasivos, Capital, Ingresos) - convertir a positivo
+    if (["2", "3", "4"].includes(primerDigito)) {
+      return Math.abs(saldo);
+    }
+    
+    // Cuentas deudoras (Activos, Costos, Gastos) - mantener como está
+    return saldo;
   };
 
   // Filtrar y calcular totales
