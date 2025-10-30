@@ -39,95 +39,35 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       });
       saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
 
-      // Obtener TODOS los movimientos de efectivo y bancos del período
+      // Calcular movimiento neto en efectivo durante el período
       const { data: movimientosEfectivo } = await supabase
         .from("detalle_asientos")
-        .select("debe, haber, asientos_contables!inner(fecha, id)")
+        .select("debe, haber, asientos_contables!inner(fecha)")
         .eq("cuenta_codigo", "1001")
         .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
         .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
 
+      let flujoEfectivo = 0;
+      movimientosEfectivo?.forEach(mov => {
+        flujoEfectivo += (mov.debe || 0) - (mov.haber || 0);
+      });
+
+      // Calcular movimiento neto en bancos durante el período
       const { data: movimientosBancos } = await supabase
         .from("detalle_asientos")
-        .select("debe, haber, asientos_contables!inner(fecha, id)")
+        .select("debe, haber, asientos_contables!inner(fecha)")
         .eq("cuenta_codigo", "1002")
         .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
         .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
 
-      // Calcular impacto total en efectivo
-      let totalEfectivo = 0;
-      movimientosEfectivo?.forEach(mov => {
-        totalEfectivo += (mov.debe || 0) - (mov.haber || 0);
-      });
-
-      // Calcular impacto total en bancos
-      let totalBancos = 0;
+      let flujoBancos = 0;
       movimientosBancos?.forEach(mov => {
-        totalBancos += (mov.debe || 0) - (mov.haber || 0);
+        flujoBancos += (mov.debe || 0) - (mov.haber || 0);
       });
 
-      // Para la clasificación, obtener todos los asientos y clasificar
-      const { data: asientos } = await supabase
-        .from("asientos_contables")
-        .select(`
-          id,
-          detalle_asientos(cuenta_codigo, debe, haber)
-        `)
-        .gte("fecha", startDate.toISOString().split('T')[0])
-        .lte("fecha", endDate.toISOString().split('T')[0]);
-
-      const operativo = { efectivo: 0, bancos: 0, total: 0 };
+      const operativo = { efectivo: flujoEfectivo, bancos: flujoBancos, total: flujoEfectivo + flujoBancos };
       const inversion = { efectivo: 0, bancos: 0, total: 0 };
       const financiamiento = { efectivo: 0, bancos: 0, total: 0 };
-
-      // Clasificar cada asiento
-      asientos?.forEach((asiento: any) => {
-        const detalles = asiento.detalle_asientos || [];
-        
-        let impactoEfectivo = 0;
-        let impactoBancos = 0;
-        let tieneEfectivo = false;
-        let tieneBancos = false;
-
-        // Calcular impacto en efectivo/bancos
-        detalles.forEach((det: any) => {
-          if (det.cuenta_codigo === "1001") {
-            tieneEfectivo = true;
-            impactoEfectivo = (det.debe || 0) - (det.haber || 0);
-          } else if (det.cuenta_codigo === "1002") {
-            tieneBancos = true;
-            impactoBancos = (det.debe || 0) - (det.haber || 0);
-          }
-        });
-
-        if (!tieneEfectivo && !tieneBancos) return;
-
-        // Clasificar según contrapartida
-        let clasificado = false;
-        detalles.forEach((det: any) => {
-          const codigo = det.cuenta_codigo;
-          if (codigo === "1001" || codigo === "1002") return;
-
-          if (codigo.startsWith("4") || codigo.startsWith("5") || codigo.startsWith("6")) {
-            operativo.efectivo += impactoEfectivo;
-            operativo.bancos += impactoBancos;
-            clasificado = true;
-          } else if (codigo === "1004" || codigo.startsWith("15")) {
-            inversion.efectivo += impactoEfectivo;
-            inversion.bancos += impactoBancos;
-            clasificado = true;
-          } else if (codigo.startsWith("20") || codigo.startsWith("21") || codigo === "3001" || codigo === "3002") {
-            financiamiento.efectivo += impactoEfectivo;
-            financiamiento.bancos += impactoBancos;
-            clasificado = true;
-          }
-        });
-
-        if (!clasificado) {
-          operativo.efectivo += impactoEfectivo;
-          operativo.bancos += impactoBancos;
-        }
-      });
 
       // Calcular totales
       operativo.total = operativo.efectivo + operativo.bancos;
