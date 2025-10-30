@@ -322,6 +322,8 @@ const RegistroIngresos = () => {
     setLoadingAsientos(true);
     setCurrentAsientos(null);
     try {
+      console.log("Cargando asientos para transacción:", transaccionId);
+      
       // Buscar el asiento contable por transaccion_ingreso_id
       const { data: asientos, error: asientosError } = await supabase
         .from('asientos_contables')
@@ -329,48 +331,71 @@ const RegistroIngresos = () => {
         .eq('transaccion_ingreso_id', transaccionId)
         .maybeSingle();
 
+      console.log("Resultado de asientos:", { asientos, asientosError });
+
       if (asientosError) {
         console.error("Error loading asiento:", asientosError);
-        return null;
+        toast({
+          title: "Error",
+          description: "Error al cargar asientos contables",
+          variant: "destructive"
+        });
+        setLoadingAsientos(false);
+        return;
       }
 
-      if (asientos) {
-        // Obtener los detalles del asiento
-        const { data: detalles, error: detallesError } = await supabase
-          .from('detalle_asientos')
-          .select('*')
-          .eq('asiento_id', asientos.id);
-
-        if (detallesError) {
-          console.error("Error loading detalles:", detallesError);
-          return null;
-        }
-
-        // Obtener nombres de cuentas
-        const { data: cuentas } = await supabase
-          .from('cuentas')
-          .select('codigo, nombre');
-
-        const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
-
-        // Enriquecer detalles con nombres de cuentas
-        const detallesEnriquecidos = detalles?.map(d => ({
-          ...d,
-          cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
-        })) || [];
-
-        const asientoCompleto = {
-          ...asientos,
-          detalles: detallesEnriquecidos
-        };
-        
-        setCurrentAsientos(asientoCompleto);
-        return asientoCompleto;
+      if (!asientos) {
+        console.warn("No se encontró asiento para la transacción:", transaccionId);
+        setLoadingAsientos(false);
+        return;
       }
-      return null;
+
+      // Obtener los detalles del asiento
+      const { data: detalles, error: detallesError } = await supabase
+        .from('detalle_asientos')
+        .select('*')
+        .eq('asiento_id', asientos.id);
+
+      console.log("Resultado de detalles:", { detalles, detallesError });
+
+      if (detallesError) {
+        console.error("Error loading detalles:", detallesError);
+        toast({
+          title: "Error",
+          description: "Error al cargar detalles de asientos",
+          variant: "destructive"
+        });
+        setLoadingAsientos(false);
+        return;
+      }
+
+      // Obtener nombres de cuentas
+      const { data: cuentas } = await supabase
+        .from('cuentas')
+        .select('codigo, nombre');
+
+      const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
+
+      // Enriquecer detalles con nombres de cuentas
+      const detallesEnriquecidos = detalles?.map(d => ({
+        ...d,
+        cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
+      })) || [];
+
+      const asientoCompleto = {
+        ...asientos,
+        detalles: detallesEnriquecidos
+      };
+      
+      console.log("Asiento completo cargado:", asientoCompleto);
+      setCurrentAsientos(asientoCompleto);
     } catch (error) {
-      console.error("Error:", error);
-      return null;
+      console.error("Error en loadAsientosContables:", error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al cargar asientos",
+        variant: "destructive"
+      });
     } finally {
       setLoadingAsientos(false);
     }
