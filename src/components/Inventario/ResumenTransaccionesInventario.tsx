@@ -142,13 +142,13 @@ const ResumenTransaccionesInventario = () => {
   // Aplicar filtros
   const movimientosFiltrados = movimientos.filter((mov) => {
     if (tipoMovimiento !== "todos") {
-      // Aceptar tanto "entrada" como "compra" para el filtro de entrada
+      // "entrada" incluye compras
       if (tipoMovimiento === "entrada" && 
           mov.tipo_movimiento !== "entrada" && 
           mov.tipo_movimiento !== "compra") {
         return false;
       }
-      // Aceptar "salida" o "venta" para el filtro de salida
+      // "salida" incluye ventas
       if (tipoMovimiento === "salida" && 
           mov.tipo_movimiento !== "salida" && 
           mov.tipo_movimiento !== "venta") {
@@ -226,9 +226,9 @@ const ResumenTransaccionesInventario = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="entrada">Entradas</SelectItem>
-                  <SelectItem value="salida">Salidas</SelectItem>
+                  <SelectItem value="todos">Todos los Movimientos</SelectItem>
+                  <SelectItem value="entrada">Entradas (Compras)</SelectItem>
+                  <SelectItem value="salida">Salidas (Ventas)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
