@@ -1,6 +1,4 @@
 import React, { useState } from "react";
-import Navbar from "@/components/Layout/Navbar";
-import Sidebar from "@/components/Layout/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -86,20 +84,16 @@ const Configuracion = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 p-8 ml-64">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-              <Settings className="h-8 w-8" />
-              Configuración
-            </h1>
-            <p className="text-muted-foreground">
-              Gestiona las preferencias y configuración del sistema
-            </p>
-          </div>
+    <div className="min-h-screen bg-background p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+          <Settings className="h-8 w-8" />
+          Configuración
+        </h1>
+        <p className="text-muted-foreground">
+          Gestiona las preferencias y configuración del sistema
+        </p>
+      </div>
           
           <div className="space-y-6 max-w-4xl">
             {/* Información del Usuario */}
@@ -202,8 +196,6 @@ const Configuracion = () => {
               </CardContent>
             </Card>
           </div>
-        </main>
-      </div>
     </div>
   );
 };
