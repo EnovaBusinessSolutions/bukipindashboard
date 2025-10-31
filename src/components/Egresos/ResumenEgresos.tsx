@@ -11,12 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useCuentas } from "@/hooks/useCuentas";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const ResumenEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(200);
   const { data: cuentasData } = useCuentas();
+  const { toast } = useToast();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [loadingAsientos, setLoadingAsientos] = useState(false);
+  const [currentAsientos, setCurrentAsientos] = useState<any>(null);
   
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -119,9 +124,83 @@ const ResumenEgresos = () => {
     return variants[tipo] || 'default';
   };
 
-  const handleViewDetails = (transaction: any) => {
+  const formatMonto = (value: number) => {
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const handleViewDetails = async (transaction: any) => {
     setSelectedTransaction(transaction);
     setDetailsOpen(true);
+    await loadAsientosContables(transaction.id);
+  };
+
+  const loadAsientosContables = async (transaccionId: string) => {
+    setLoadingAsientos(true);
+    setCurrentAsientos(null);
+    try {
+      // Buscar el asiento contable relacionado con esta transacción de egreso
+      // Buscaremos por descripción que contenga el ID de la transacción
+      const { data: asientos, error: asientosError } = await supabase
+        .from('asientos_contables')
+        .select('*')
+        .ilike('descripcion', `%${transaccionId}%`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (asientosError) {
+        console.error("Error loading asiento:", asientosError);
+        setLoadingAsientos(false);
+        return;
+      }
+
+      if (!asientos) {
+        console.warn("No se encontró asiento para la transacción:", transaccionId);
+        setLoadingAsientos(false);
+        return;
+      }
+
+      // Obtener los detalles del asiento
+      const { data: detalles, error: detallesError } = await supabase
+        .from('detalle_asientos')
+        .select('*')
+        .eq('asiento_id', asientos.id);
+
+      if (detallesError) {
+        console.error("Error loading detalles:", detallesError);
+        setLoadingAsientos(false);
+        return;
+      }
+
+      // Obtener nombres de cuentas
+      const { data: cuentas } = await supabase
+        .from('cuentas')
+        .select('codigo, nombre');
+
+      const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
+
+      // Enriquecer detalles con nombres de cuentas
+      const detallesEnriquecidos = detalles?.map(d => ({
+        ...d,
+        cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
+      })) || [];
+
+      const asientoCompleto = {
+        ...asientos,
+        detalles: detallesEnriquecidos
+      };
+      
+      setCurrentAsientos(asientoCompleto);
+    } catch (error) {
+      console.error("Error en loadAsientosContables:", error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al cargar asientos",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingAsientos(false);
+    }
   };
 
   const limpiarFiltros = () => {
@@ -379,31 +458,31 @@ const ResumenEgresos = () => {
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Monto Total</div>
                   <div className="text-lg font-semibold text-primary">
-                    ${resumenFiltrado.montoTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${formatMonto(resumenFiltrado.montoTotal)}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Pagado</div>
                   <div className="text-lg font-semibold text-green-600">
-                    ${resumenFiltrado.montoPagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${formatMonto(resumenFiltrado.montoPagado)}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Pendiente</div>
                   <div className="text-lg font-semibold text-yellow-600">
-                    ${resumenFiltrado.montoPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${formatMonto(resumenFiltrado.montoPendiente)}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Total Costos</div>
                   <div className="text-lg font-semibold text-destructive">
-                    ${resumenFiltrado.totalCostos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${formatMonto(resumenFiltrado.totalCostos)}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Total Gastos</div>
                   <div className="text-lg font-semibold text-orange-600">
-                    ${resumenFiltrado.totalGastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${formatMonto(resumenFiltrado.totalGastos)}
                   </div>
                 </div>
               </div>
@@ -503,7 +582,7 @@ const ResumenEgresos = () => {
                       <TableCell>
                         {transaccion.monto_pendiente > 0 ? (
                           <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            Pendiente: ${transaccion.monto_pendiente.toFixed(2)}
+                            Pendiente: ${formatMonto(transaccion.monto_pendiente)}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
@@ -548,7 +627,7 @@ const ResumenEgresos = () => {
                                       {cuenta.tipo}
                                     </Badge>
                                     <span className="font-semibold text-sm">
-                                      ${cuenta.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                      ${formatMonto(cuenta.monto)}
                                     </span>
                                   </div>
                                   <div className="text-sm font-medium mt-2">
@@ -561,13 +640,13 @@ const ResumenEgresos = () => {
                                 <div className="flex justify-between text-xs font-medium">
                                   <span>Total Debe:</span>
                                   <span className="text-red-600">
-                                    ${transaccion.monto_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    ${formatMonto(transaccion.monto_total)}
                                   </span>
                                 </div>
                                 <div className="flex justify-between text-xs font-medium mt-1">
                                   <span>Total Haber:</span>
                                   <span className="text-green-600">
-                                    ${transaccion.monto_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    ${formatMonto(transaccion.monto_total)}
                                   </span>
                                 </div>
                               </div>
@@ -666,13 +745,13 @@ const ResumenEgresos = () => {
                   <div className="space-y-1">
                     <div className="text-sm text-muted-foreground">Precio Unitario</div>
                     <div className="font-medium">
-                      ${selectedTransaction.precio_unitario?.toFixed(2)}
+                      ${formatMonto(selectedTransaction.precio_unitario || 0)}
                     </div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-sm text-muted-foreground">Total</div>
                     <div className="font-medium text-lg">
-                      ${selectedTransaction.monto_total.toFixed(2)}
+                      ${formatMonto(selectedTransaction.monto_total)}
                     </div>
                   </div>
                 </div>
@@ -700,14 +779,14 @@ const ResumenEgresos = () => {
                   <div className="space-y-1">
                     <div className="text-sm text-muted-foreground">Monto Pagado</div>
                     <div className="font-medium text-green-600">
-                      ${selectedTransaction.monto_pagado.toFixed(2)}
+                      ${formatMonto(selectedTransaction.monto_pagado)}
                     </div>
                   </div>
                   {selectedTransaction.monto_pendiente > 0 && (
                     <div className="space-y-1">
                       <div className="text-sm text-muted-foreground">Monto Pendiente</div>
                       <div className="font-medium text-yellow-600">
-                        ${selectedTransaction.monto_pendiente.toFixed(2)}
+                        ${formatMonto(selectedTransaction.monto_pendiente)}
                       </div>
                     </div>
                   )}
@@ -766,40 +845,91 @@ const ResumenEgresos = () => {
                 </div>
               )}
 
-              {/* Cuentas contables afectadas */}
+              {/* Asientos Contables en Balanza */}
               <div className="border-t pt-4">
                 <h4 className="font-semibold mb-3 flex items-center gap-2">
                   <BookOpen className="h-4 w-4" />
-                  Cuentas Contables Afectadas
+                  Asientos en Balanza de Comprobación
                 </h4>
-                <div className="space-y-2">
-                  {getCuentasAfectadas(selectedTransaction).map((cuenta, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={cuenta.tipo.includes("Debe") ? "destructive" : "default"}>
-                            {cuenta.tipo}
-                          </Badge>
-                          <span className="font-mono text-sm font-medium">{cuenta.codigo}</span>
+                {loadingAsientos ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Cargando asientos contables...
+                  </div>
+                ) : !currentAsientos ? (
+                  <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center">
+                    No se encontraron asientos contables para esta transacción
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Número de Asiento:</span> {currentAsientos.numero_asiento}
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1">{cuenta.nombre}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold">
-                          ${cuenta.monto.toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
+                        <div>
+                          <span className="font-medium">Fecha:</span>{' '}
+                          {new Date(currentAsientos.fecha).toLocaleDateString('es-ES')}
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium">Descripción:</span> {currentAsientos.descripcion}
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
-                  <div className="text-xs text-muted-foreground">
-                    <strong>Nota:</strong> Este asiento contable registra el egreso de acuerdo al método de pago seleccionado.
+
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="text-left p-3 text-sm font-medium">Cuenta</th>
+                            <th className="text-left p-3 text-sm font-medium">Descripción</th>
+                            <th className="text-right p-3 text-sm font-medium">Debe</th>
+                            <th className="text-right p-3 text-sm font-medium">Haber</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {currentAsientos.detalles?.map((detalle: any, idx: number) => (
+                            <tr key={idx} className="border-t">
+                              <td className="p-3 text-sm">
+                                <div className="font-medium">{detalle.cuenta_codigo}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {detalle.cuenta_nombre}
+                                </div>
+                              </td>
+                              <td className="p-3 text-sm">{detalle.descripcion}</td>
+                              <td className="p-3 text-sm text-right font-medium">
+                                {detalle.debe > 0 ? `$${formatMonto(detalle.debe)}` : '-'}
+                              </td>
+                              <td className="p-3 text-sm text-right font-medium">
+                                {detalle.haber > 0 ? `$${formatMonto(detalle.haber)}` : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 bg-muted/50 font-bold">
+                            <td colSpan={2} className="p-3 text-sm">
+                              TOTALES
+                            </td>
+                            <td className="p-3 text-sm text-right">
+                              ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.debe), 0))}
+                            </td>
+                            <td className="p-3 text-sm text-right">
+                              ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.haber), 0))}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
+                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                        💡 Información
+                      </p>
+                      <p className="text-blue-600 dark:text-blue-400">
+                        Este asiento contable refleja cómo esta transacción afecta a las diferentes
+                        cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Comprobante fotográfico */}
