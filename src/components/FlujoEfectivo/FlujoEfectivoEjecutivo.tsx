@@ -105,6 +105,25 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
     );
   }
 
+  // Verificar si hay datos
+  const hayDatos = flujoData && (
+    Math.abs(flujoData.saldoInicial.total) > 0.01 ||
+    Math.abs(flujoData.operativo.total) > 0.01 ||
+    Math.abs(flujoData.saldoFinal.total) > 0.01
+  );
+
+  if (!hayDatos) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          No hay movimientos de efectivo registrados en el período seleccionado. 
+          Comienza registrando transacciones para ver el flujo de efectivo.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   const mostrarDetalle = vistaColumnas === "detallada";
 
   return (

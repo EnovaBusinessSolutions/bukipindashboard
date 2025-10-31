@@ -31,6 +31,26 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const cuentasFlat = cuentasData.cuentasFlat || [];
   const saldosPorCuenta = asientosData.saldosPorCuenta || {};
 
+  // Verificar si hay datos
+  const hayDatos = asientosData?.movimientos && asientosData.movimientos.length > 0;
+
+  if (!hayDatos) {
+    return (
+      <Card>
+        <CardContent className="p-12">
+          <div className="text-center space-y-2">
+            <p className="text-xl font-medium text-muted-foreground">
+              No hay datos financieros registrados
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Comienza registrando transacciones para ver el balance general
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Función para obtener el saldo de una cuenta desde los asientos de balanza
   const obtenerSaldo = (codigoCuenta: string): number => {
     return saldosPorCuenta[codigoCuenta]?.saldo || 0;

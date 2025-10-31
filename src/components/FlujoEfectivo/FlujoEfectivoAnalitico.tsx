@@ -162,6 +162,21 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate, filtroMetodoPago }: FlujoE
     );
   }
 
+  // Verificar si hay datos
+  const hayDatos = transacciones && transacciones.length > 0;
+
+  if (!hayDatos) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          No hay transacciones registradas en el período seleccionado. 
+          Comienza registrando transacciones para ver el análisis detallado del flujo de efectivo.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   const porCategoria = {
     operativo: transacciones?.filter(t => t.categoria === 'Operativo') || [],
     inversion: transacciones?.filter(t => t.categoria === 'Inversión') || [],
