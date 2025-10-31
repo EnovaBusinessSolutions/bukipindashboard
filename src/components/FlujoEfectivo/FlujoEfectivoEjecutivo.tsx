@@ -16,6 +16,24 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
   const { data: flujoData, isLoading } = useQuery({
     queryKey: ["flujo-efectivo-ejecutivo", startDate, endDate, vistaColumnas],
     queryFn: async () => {
+      // PRIMERO: Verificar si existen asientos contables en TODO el sistema
+      const { data: existenAsientos, count } = await supabase
+        .from("asientos_contables")
+        .select("*", { count: 'exact', head: true });
+
+      // Si no hay ningún asiento contable, retornar estructura vacía
+      if (!count || count === 0) {
+        return {
+          saldoInicial: { efectivo: 0, bancos: 0, total: 0 },
+          operativo: { efectivo: 0, bancos: 0, total: 0 },
+          inversion: { efectivo: 0, bancos: 0, total: 0 },
+          financiamiento: { efectivo: 0, bancos: 0, total: 0 },
+          flujoNeto: { efectivo: 0, bancos: 0, total: 0 },
+          saldoFinal: { efectivo: 0, bancos: 0, total: 0 },
+          sinDatos: true
+        };
+      }
+
       // Calcular saldo inicial (antes del período)
       const { data: saldoInicialData } = await supabase
         .from("detalle_asientos")
@@ -105,12 +123,8 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
     );
   }
 
-  // Verificar si hay datos
-  const hayDatos = flujoData && (
-    Math.abs(flujoData.saldoInicial.total) > 0.01 ||
-    Math.abs(flujoData.operativo.total) > 0.01 ||
-    Math.abs(flujoData.saldoFinal.total) > 0.01
-  );
+  // Verificar si hay datos - si sinDatos es true, no hay asientos contables en el sistema
+  const hayDatos = flujoData && !flujoData.sinDatos;
 
   if (!hayDatos) {
     return (
