@@ -35,6 +35,19 @@ export type CreateProductoEgresoData = {
   imagen?: File;
 };
 
+export type UpdateProductoEgresoData = {
+  id: string;
+  nombre?: string;
+  descripcion?: string;
+  tipo?: "gasto" | "costo";
+  unidad?: string;
+  proveedor_principal?: string;
+  es_recurrente?: boolean;
+  subcuenta_id?: string;
+  cuenta_contable?: string;
+  imagen?: File;
+};
+
 export const useProductosEgresos = () => {
   return useQuery({
     queryKey: ["productos-egresos"],
@@ -126,6 +139,90 @@ export const useCreateProductoEgreso = () => {
       toast({
         title: "⚠️ Error",
         description: "Hubo un problema al agregar el producto",
+        variant: "destructive"
+      });
+    }
+  });
+};
+
+export const useUpdateProductoEgreso = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (productData: UpdateProductoEgresoData) => {
+      console.log("🔍 Starting product update with data:", productData);
+      
+      let imagenUrl: string | undefined = undefined;
+
+      // Subir nueva imagen si se seleccionó una
+      if (productData.imagen) {
+        console.log("📸 Uploading new image...");
+        const fileExt = productData.imagen.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(fileName, productData.imagen);
+
+        if (uploadError) {
+          console.error("❌ Error uploading image:", uploadError);
+          throw new Error("Error al subir la imagen");
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(uploadData.path);
+        
+        imagenUrl = publicUrl;
+        console.log("✅ Image uploaded successfully:", imagenUrl);
+      }
+
+      const updateData: any = {
+        nombre: productData.nombre,
+        descripcion: productData.descripcion,
+        tipo: productData.tipo,
+        unidad: productData.unidad,
+        proveedor_principal: productData.proveedor_principal,
+        es_recurrente: productData.es_recurrente,
+        subcuenta_id: productData.subcuenta_id,
+        cuenta_contable: productData.cuenta_contable,
+      };
+
+      if (imagenUrl) {
+        updateData.imagen_url = imagenUrl;
+      }
+
+      console.log("💾 Updating product data:", updateData);
+
+      // Actualizar producto en la base de datos
+      const { data, error } = await supabase
+        .from("productos_egresos")
+        .update(updateData)
+        .eq("id", productData.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("❌ Database update error:", error);
+        throw error;
+      }
+      
+      console.log("✅ Product updated successfully:", data);
+      return data;
+    },
+    onSuccess: (data) => {
+      console.log("🎉 Update success, invalidating queries...");
+      queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
+      toast({
+        title: "✅ Producto actualizado",
+        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" actualizado correctamente`
+      });
+    },
+    onError: (error) => {
+      console.error("❌ Update error:", error);
+      toast({
+        title: "⚠️ Error",
+        description: "Hubo un problema al actualizar el producto",
         variant: "destructive"
       });
     }

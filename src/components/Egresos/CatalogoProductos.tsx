@@ -13,16 +13,19 @@ import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
 import { supabase } from "@/integrations/supabase/client";
-import { useProductosEgresos, useCreateProductoEgreso, useDeleteProductoEgreso, CreateProductoEgresoData } from "@/hooks/useProductosEgresos";
+import { useProductosEgresos, useCreateProductoEgreso, useUpdateProductoEgreso, useDeleteProductoEgreso, CreateProductoEgresoData, UpdateProductoEgresoData } from "@/hooks/useProductosEgresos";
 
 const CatalogoProductos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
   const navigate = useNavigate();
   
   // Use real data hooks
   const { data: productosEgresos = [], isLoading } = useProductosEgresos();
   const createProducto = useCreateProductoEgreso();
+  const updateProducto = useUpdateProductoEgreso();
   const deleteProducto = useDeleteProductoEgreso();
 
   const [newProduct, setNewProduct] = useState({
@@ -162,6 +165,59 @@ const CatalogoProductos = () => {
     }
   };
 
+  const handleEditProduct = (producto: any) => {
+    setEditingProduct({
+      id: producto.id,
+      nombre: producto.nombre,
+      descripcion: producto.descripcion || "",
+      tipo: producto.tipo,
+      unidad: producto.unidad,
+      proveedorPrincipal: producto.proveedor_principal || "",
+      esRecurrente: producto.es_recurrente,
+      subcuentaId: producto.subcuenta_id || "",
+      cuentaContable: producto.cuenta_contable,
+      imagen: null
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingProduct.nombre || !editingProduct.tipo || !editingProduct.unidad) {
+      toast({
+        title: "⚠️ Campos requeridos",
+        description: "Completa al menos el nombre, tipo y unidad",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const updateData: UpdateProductoEgresoData = {
+      id: editingProduct.id,
+      nombre: editingProduct.nombre,
+      descripcion: editingProduct.descripcion,
+      tipo: editingProduct.tipo,
+      unidad: editingProduct.unidad,
+      proveedor_principal: editingProduct.proveedorPrincipal,
+      es_recurrente: editingProduct.esRecurrente,
+      subcuenta_id: editingProduct.subcuentaId,
+      cuenta_contable: editingProduct.cuentaContable,
+      imagen: editingProduct.imagen || undefined,
+    };
+
+    try {
+      updateProducto.mutate(updateData, {
+        onSuccess: () => {
+          setEditingProduct(null);
+          setIsEditDialogOpen(false);
+        }
+      });
+    } catch (error) {
+      console.error("❌ Error updating product:", error);
+    }
+  };
+
   const renderProductCard = (producto: any) => (
     <Card key={producto.id} className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
@@ -239,7 +295,12 @@ const CatalogoProductos = () => {
             <Eye className="h-3 w-3 mr-1" />
             Analíticas
           </Button>
-          <Button size="sm" variant="outline" className="flex-1">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="flex-1"
+            onClick={() => handleEditProduct(producto)}
+          >
             <Edit className="h-3 w-3 mr-1" />
             Editar
           </Button>
@@ -443,6 +504,162 @@ const CatalogoProductos = () => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Diálogo de Edición */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Gasto/Costo</DialogTitle>
+            <DialogDescription>
+              Modifica la información del producto o servicio
+            </DialogDescription>
+          </DialogHeader>
+          {editingProduct && (
+            <form onSubmit={handleUpdateProduct} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-nombre">Nombre *</Label>
+                  <Input
+                    id="edit-nombre"
+                    value={editingProduct.nombre}
+                    onChange={(e) => setEditingProduct({...editingProduct, nombre: e.target.value})}
+                    placeholder="Nombre del producto/servicio"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-tipo">Tipo *</Label>
+                  <Select value={editingProduct.tipo} onValueChange={(value) => {
+                    const updated = {...editingProduct, tipo: value, subcuentaId: ""};
+                    if (value === "costo") {
+                      updated.cuentaContable = "5001";
+                    } else {
+                      updated.cuentaContable = "";
+                    }
+                    setEditingProduct(updated);
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gasto">Gasto</SelectItem>
+                      <SelectItem value="costo">Costo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {editingProduct.tipo === "gasto" && (
+                <div className="space-y-2">
+                  <Label>Cuenta Contable a Afectar *</Label>
+                  <Select value={editingProduct.cuentaContable} onValueChange={(value) => setEditingProduct({...editingProduct, cuentaContable: value, subcuentaId: ""})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar cuenta contable" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getCuentasAfectadas(editingProduct.tipo).map((cuenta) => (
+                        <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                          {cuenta.codigo} - {cuenta.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {editingProduct.tipo === "costo" && (
+                <div className="space-y-2">
+                  <Label>Cuenta Contable Asignada</Label>
+                  <div className="p-3 bg-muted rounded-md border">
+                    <p className="text-sm font-medium">5001 - Costo de Ventas</p>
+                    <p className="text-xs text-muted-foreground">
+                      ✓ Cuenta asignada automáticamente para costos
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {editingProduct.tipo && (
+                <FriendlySubcuentaSelector
+                  value={editingProduct.subcuentaId}
+                  onValueChange={(subcuentaId, cuentaCodigo) => 
+                    setEditingProduct({...editingProduct, subcuentaId, cuentaContable: cuentaCodigo})
+                  }
+                  accountType={editingProduct.tipo as "gasto" | "costo"}
+                />
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-descripcion">Descripción</Label>
+                <Textarea
+                  id="edit-descripcion"
+                  value={editingProduct.descripcion}
+                  onChange={(e) => setEditingProduct({...editingProduct, descripcion: e.target.value})}
+                  placeholder="Descripción del producto/servicio"
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-imagen">Imagen (Opcional)</Label>
+                <Input
+                  id="edit-imagen"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setEditingProduct({...editingProduct, imagen: file});
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground">
+                  📸 Sube una nueva imagen o deja vacío para mantener la actual
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-unidad">Unidad de Medida *</Label>
+                  <Select value={editingProduct.unidad} onValueChange={(value) => setEditingProduct({...editingProduct, unidad: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar unidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                      <SelectItem value="litros">Litros (L)</SelectItem>
+                      <SelectItem value="metros">Metros (m)</SelectItem>
+                      <SelectItem value="piezas">Piezas (pz)</SelectItem>
+                      <SelectItem value="horas">Horas (hrs)</SelectItem>
+                      <SelectItem value="servicios">Servicios</SelectItem>
+                      <SelectItem value="otros">Otros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-proveedor">Proveedor Principal</Label>
+                <Input
+                  id="edit-proveedor"
+                  value={editingProduct.proveedorPrincipal}
+                  onChange={(e) => setEditingProduct({...editingProduct, proveedorPrincipal: e.target.value})}
+                  placeholder="Nombre del proveedor"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Actualizar
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Sección de Gastos */}
       <div className="space-y-4">
