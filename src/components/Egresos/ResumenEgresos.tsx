@@ -4,8 +4,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen } from "lucide-react";
+import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
+import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,9 +14,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useCuentas } from "@/hooks/useCuentas";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ResumenEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(200);
+  const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
   const { data: cuentasData } = useCuentas();
   const { toast } = useToast();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
@@ -97,6 +100,8 @@ const ResumenEgresos = () => {
 
   // Calcular subtotales
   const resumenFiltrado = useMemo(() => {
+    const totalCostosVentaInventario = costosVentaInventario?.reduce((sum, c) => sum + c.monto, 0) || 0;
+    
     return {
       totalTransacciones: transaccionesFiltradas.length,
       montoTotal: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0),
@@ -104,8 +109,10 @@ const ResumenEgresos = () => {
       montoPendiente: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pendiente, 0),
       totalCostos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0),
       totalGastos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'gasto').reduce((sum, t) => sum + t.monto_total, 0),
+      totalCostosVentaInventario,
+      totalCostosGlobal: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0) + totalCostosVentaInventario,
     };
-  }, [transaccionesFiltradas]);
+  }, [transaccionesFiltradas, costosVentaInventario]);
 
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -500,7 +507,7 @@ const ResumenEgresos = () => {
               </div>
               
               {/* Resumen de datos filtrados */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 pt-4 border-t">
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Transacciones</div>
                   <div className="text-lg font-semibold">{resumenFiltrado.totalTransacciones}</div>
@@ -524,9 +531,15 @@ const ResumenEgresos = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Total Costos</div>
+                  <div className="text-xs text-muted-foreground">Costos Manuales</div>
                   <div className="text-lg font-semibold text-destructive">
                     ${formatMonto(resumenFiltrado.totalCostos)}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Costo Venta Inventario</div>
+                  <div className="text-lg font-semibold text-purple-600">
+                    ${formatMonto(resumenFiltrado.totalCostosVentaInventario)}
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -540,109 +553,192 @@ const ResumenEgresos = () => {
           )}
         </CardHeader>
         <CardContent>
-          {transaccionesFiltradas.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No hay costos o gastos registrados aún</p>
-              <p className="text-sm mt-2">Los costos y gastos que registres aparecerán aquí</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">Imagen</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Proveedor</TableHead>
-                    <TableHead>Monto Total</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transaccionesFiltradas.map((transaccion) => (
-                    <TableRow key={transaccion.id}>
-                      <TableCell>
-                        <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
-                          {transaccion.imagen_comprobante ? (
-                            <img 
-                              src={transaccion.imagen_comprobante} 
-                              alt="Imagen" 
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getTipoEgresoBadge(transaccion.tipo_egreso)}>
-                          {transaccion.tipo_egreso}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <div className="font-medium truncate">{transaccion.descripcion}</div>
-                        {transaccion.comentarios && (
-                          <div className="text-xs text-muted-foreground truncate mt-1">
-                            {transaccion.comentarios.substring(0, 50)}
-                            {transaccion.comentarios.length > 50 && '...'}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {transaccion.proveedor_nombre || '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="font-semibold">
-                          ${formatMonto(transaccion.monto_total)}
-                        </span>
-                        {transaccion.monto_pagado > 0 && (
-                          <div className="text-xs text-green-600">
-                            Pagado: ${formatMonto(transaccion.monto_pagado)}
-                          </div>
-                        )}
-                        {transaccion.monto_pendiente > 0 && (
-                          <div className="text-xs text-yellow-600">
-                            Pendiente: ${formatMonto(transaccion.monto_pendiente)}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {transaccion.monto_pendiente > 0 ? (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            Pendiente
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            Pagado
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewDetails(transaccion)}
-                        >
-                          <FileText className="h-4 w-4 mr-1" />
-                          Ver Detalle
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <Tabs defaultValue="egresos-manuales" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="egresos-manuales">
+                <FileText className="h-4 w-4 mr-2" />
+                Egresos Manuales
+              </TabsTrigger>
+              <TabsTrigger value="costos-inventario">
+                <Package className="h-4 w-4 mr-2" />
+                Costos Venta Inventario
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="egresos-manuales">
+              {transaccionesFiltradas.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>No hay costos o gastos manuales registrados aún</p>
+                  <p className="text-sm mt-2">Los costos y gastos que registres aparecerán aquí</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">Imagen</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead>Proveedor</TableHead>
+                        <TableHead>Monto Total</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transaccionesFiltradas.map((transaccion) => (
+                        <TableRow key={transaccion.id}>
+                          <TableCell>
+                            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
+                              {transaccion.imagen_comprobante ? (
+                                <img 
+                                  src={transaccion.imagen_comprobante} 
+                                  alt="Imagen" 
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getTipoEgresoBadge(transaccion.tipo_egreso)}>
+                              {transaccion.tipo_egreso}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs">
+                            <div className="font-medium truncate">{transaccion.descripcion}</div>
+                            {transaccion.comentarios && (
+                              <div className="text-xs text-muted-foreground truncate mt-1">
+                                {transaccion.comentarios.substring(0, 50)}
+                                {transaccion.comentarios.length > 50 && '...'}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {transaccion.proveedor_nombre || '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-semibold">
+                              ${formatMonto(transaccion.monto_total)}
+                            </span>
+                            {transaccion.monto_pagado > 0 && (
+                              <div className="text-xs text-green-600">
+                                Pagado: ${formatMonto(transaccion.monto_pagado)}
+                              </div>
+                            )}
+                            {transaccion.monto_pendiente > 0 && (
+                              <div className="text-xs text-yellow-600">
+                                Pendiente: ${formatMonto(transaccion.monto_pendiente)}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {transaccion.monto_pendiente > 0 ? (
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                Pendiente
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                Pagado
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewDetails(transaccion)}
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              Ver Detalle
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="costos-inventario">
+              {loadingCostosVenta ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>Cargando costos de venta...</p>
+                </div>
+              ) : !costosVentaInventario || costosVentaInventario.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>No hay costos de venta de inventario registrados</p>
+                  <p className="text-sm mt-2">Los costos se generan automáticamente al vender productos inventariados</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead>Número de Asiento</TableHead>
+                        <TableHead className="text-right">Costo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {costosVentaInventario.map((costo) => (
+                        <TableRow key={costo.id}>
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(costo.fecha).toLocaleDateString('es-MX', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-purple-600" />
+                              {costo.producto_nombre}
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate text-muted-foreground">
+                            {costo.descripcion}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {costo.numero_asiento}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-semibold text-purple-600">
+                              ${formatMonto(costo.monto)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Total de costos de venta de inventario
+                    </div>
+                    <div className="text-2xl font-bold text-purple-600">
+                      ${formatMonto(resumenFiltrado.totalCostosVentaInventario)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
