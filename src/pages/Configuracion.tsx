@@ -33,7 +33,7 @@ const Configuracion = () => {
 
       const asientoIds = asientos?.map(a => a.id) || [];
 
-      // 2. Borrar detalle_asientos
+      // 2. Borrar detalle_asientos primero (depende de asientos)
       if (asientoIds.length > 0) {
         await supabase
           .from('detalle_asientos')
@@ -41,8 +41,9 @@ const Configuracion = () => {
           .in('asiento_id', asientoIds);
       }
 
-      // 3-10. Borrar todas las transacciones
+      // 3. Borrar TODAS las transacciones y registros maestros
       await Promise.all([
+        // Transacciones
         supabase.from('asientos_contables').delete().eq('user_id', user.id),
         supabase.from('transacciones_cobros_pagos').delete().eq('user_id', user.id),
         supabase.from('transacciones_impuestos').delete().eq('user_id', user.id),
@@ -51,12 +52,19 @@ const Configuracion = () => {
         supabase.from('transacciones_capital').delete().eq('user_id', user.id),
         supabase.from('transacciones_egresos').delete().eq('user_id', user.id),
         supabase.from('transacciones_ingresos').delete().eq('user_id', user.id),
+        
+        // Registros Maestros que afectan reportes financieros
+        supabase.from('inversiones_capex').delete().eq('user_id', user.id),
+        supabase.from('financiamientos').delete().eq('user_id', user.id),
+        
+        // Resetear inventario de productos a cero
         supabase.from('productos').update({
           cantidad_stock: 0,
           cantidad_comprada: 0,
           valor_total_inventario: 0,
-          costo_unitario: 0
-        }).in('cuenta_codigo', ['1005', '1006'])
+          costo_unitario: 0,
+          precio_venta: 0
+        }).eq('user_id', user.id)
       ]);
 
       toast({
@@ -164,7 +172,9 @@ const Configuracion = () => {
                               <li>Todos los asientos contables</li>
                               <li>Transacciones de capital, financiamientos e impuestos</li>
                               <li>Cobros y pagos registrados</li>
-                              <li>Se resetearán los valores de inventario a cero</li>
+                              <li>Todas las inversiones CAPEX registradas</li>
+                              <li>Todos los financiamientos y créditos registrados</li>
+                              <li>Se resetearán los valores de inventario de todos los productos a cero</li>
                             </ul>
                             <p className="text-sm font-semibold text-green-600 bg-green-50 p-3 rounded mt-3">
                               ✅ Se mantendrán: Plan de cuentas, catálogos de productos, clientes, proveedores, 
