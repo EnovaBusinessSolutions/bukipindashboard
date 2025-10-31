@@ -1,11 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, LogOut } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, User, Settings, Trash2, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Sidebar = () => {
   const location = useLocation();
@@ -18,6 +21,8 @@ const Sidebar = () => {
     estadosFinancieros: false,
     analisisFinanciero: false
   });
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -26,6 +31,77 @@ const Sidebar = () => {
       description: "Has cerrado sesión correctamente"
     });
     navigate('/auth');
+  };
+
+  const handleResetData = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Debes estar autenticado",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsResetting(true);
+
+    try {
+      // 1. Obtener todos los asientos del usuario
+      const { data: asientos } = await supabase
+        .from('asientos_contables')
+        .select('id')
+        .eq('user_id', user.id);
+
+      const asientoIds = asientos?.map(a => a.id) || [];
+
+      // 2. Borrar detalle_asientos
+      if (asientoIds.length > 0) {
+        await supabase
+          .from('detalle_asientos')
+          .delete()
+          .in('asiento_id', asientoIds);
+      }
+
+      // 3-10. Borrar todas las transacciones
+      await Promise.all([
+        supabase.from('asientos_contables').delete().eq('user_id', user.id),
+        supabase.from('transacciones_cobros_pagos').delete().eq('user_id', user.id),
+        supabase.from('transacciones_impuestos').delete().eq('user_id', user.id),
+        supabase.from('movimientos_inventario').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('transacciones_financiamientos').delete().eq('user_id', user.id),
+        supabase.from('transacciones_capital').delete().eq('user_id', user.id),
+        supabase.from('transacciones_egresos').delete().eq('user_id', user.id),
+        supabase.from('transacciones_ingresos').delete().eq('user_id', user.id),
+        supabase.from('productos').update({
+          cantidad_stock: 0,
+          cantidad_comprada: 0,
+          valor_total_inventario: 0,
+          costo_unitario: 0
+        }).in('cuenta_codigo', ['1005', '1006'])
+      ]);
+
+      toast({
+        title: "✅ Datos reseteados",
+        description: "Todas las transacciones han sido eliminadas. La página se recargará.",
+      });
+
+      setShowResetDialog(false);
+      
+      // Recargar después de 1 segundo
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error al resetear datos:', error);
+      toast({
+        title: "❌ Error",
+        description: "Hubo un error al borrar los datos. Intenta nuevamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   const toggleSection = (section: keyof typeof openSections) => {
@@ -282,30 +358,95 @@ const Sidebar = () => {
         </Collapsible>
       </div>
 
-      {/* Bottom Section */}
-      <div className="p-6 border-t border-sidebar-border space-y-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-sidebar-primary rounded-full flex items-center justify-center">
-            <span className="text-sidebar-primary-foreground font-medium text-sm">
-              {user?.email?.charAt(0).toUpperCase() || 'U'}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">
-              {user?.email?.split('@')[0] || 'Usuario'}
-            </p>
-            <p className="text-xs text-sidebar-foreground opacity-70">Administrador</p>
-          </div>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={handleSignOut}
-          className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Cerrar Sesión
-        </Button>
+      {/* Bottom Section - User Menu */}
+      <div className="p-4 border-t border-sidebar-border">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start hover:bg-sidebar-accent p-2"
+            >
+              <div className="flex items-center space-x-3 w-full">
+                <div className="w-8 h-8 bg-sidebar-primary rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-sidebar-primary-foreground font-medium text-sm">
+                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    {user?.email?.split('@')[0] || 'Usuario'}
+                  </p>
+                  <p className="text-xs text-sidebar-foreground opacity-70">Administrador</p>
+                </div>
+                <ChevronDown className="h-4 w-4 text-sidebar-foreground opacity-50" />
+              </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 mb-2">
+            <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled>
+              <User className="h-4 w-4 mr-2" />
+              Perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              <Settings className="h-4 w-4 mr-2" />
+              Configuración
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              className="text-red-600 focus:text-red-600"
+              onClick={() => setShowResetDialog(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Resetear Datos
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar Sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Alert Dialog for Reset Confirmation */}
+        <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                ¿Resetear todas las transacciones?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                <div className="space-y-3">
+                  <p className="font-semibold">
+                    Esta acción NO se puede deshacer. Se borrarán permanentemente:
+                  </p>
+                  <ul className="text-sm space-y-1 list-disc list-inside">
+                    <li>Todas las transacciones de ingresos y egresos</li>
+                    <li>Todos los movimientos de inventario</li>
+                    <li>Todos los asientos contables</li>
+                    <li>Transacciones de capital, financiamientos e impuestos</li>
+                    <li>Se resetearán los valores de inventario a cero</li>
+                  </ul>
+                  <p className="text-sm font-semibold text-green-600 mt-3">
+                    ✅ Se mantendrán: Plan de cuentas, catálogos, clientes y proveedores
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isResetting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleResetData}
+                disabled={isResetting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isResetting ? "Borrando..." : "Sí, borrar todo"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

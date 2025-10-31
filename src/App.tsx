@@ -29,7 +29,6 @@ import AnalyticasClientes from "./pages/clientes/AnalyticasClientes";
 import Proveedores from "./pages/Proveedores";
 import AnalisisResultados from "./pages/analisis/AnalisisResultados";
 import AnalisisBalance from "./pages/analisis/AnalisisBalance";
-import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -70,7 +69,6 @@ const App = () => (
                         <Route path="/clientes" element={<Clientes />} />
                         <Route path="/clientes/analiticas" element={<AnalyticasClientes />} />
                         <Route path="/proveedores" element={<Proveedores />} />
-                        <Route path="/admin" element={<Admin />} />
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </main>
