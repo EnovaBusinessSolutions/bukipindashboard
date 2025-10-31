@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useInversiones } from "@/hooks/useInversiones";
+import { useAsientosInversion } from "@/hooks/useAsientosInversion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,10 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { format } from "date-fns";
 import { Eye, ImageIcon } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
 
 const ResumenInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
   const [selectedInversion, setSelectedInversion] = useState<any>(null);
+  const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(selectedInversion?.id);
 
   const getCategoriaLabel = (categoria: string) => {
     const labels: Record<string, string> = {
@@ -292,6 +295,94 @@ const ResumenInversiones = () => {
                                 <p className="text-base">{selectedInversion.descripcion}</p>
                               </div>
                             )}
+                            
+                            <Separator className="my-4" />
+                            
+                            <div>
+                              <h3 className="text-lg font-semibold mb-3">Asiento Contable Generado</h3>
+                              {loadingAsiento ? (
+                                <Skeleton className="h-32 w-full" />
+                              ) : asientoInversion ? (
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                      <span className="text-muted-foreground">Número:</span>{" "}
+                                      <span className="font-medium">{asientoInversion.numero_asiento}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Fecha:</span>{" "}
+                                      <span className="font-medium">
+                                        {format(new Date(asientoInversion.fecha), "dd/MM/yyyy")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="border rounded-lg overflow-hidden">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Cuenta</TableHead>
+                                          <TableHead className="text-right">Debe</TableHead>
+                                          <TableHead className="text-right">Haber</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {asientoInversion.detalle_asientos.map((detalle) => (
+                                          <TableRow key={detalle.id}>
+                                            <TableCell>
+                                              <div>
+                                                <div className="font-medium text-sm">
+                                                  {detalle.cuenta_codigo} - {detalle.cuenta?.nombre}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                  {detalle.descripcion}
+                                                </div>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono">
+                                              {detalle.debe > 0 ? (
+                                                <span className="text-green-600">
+                                                  ${Number(detalle.debe).toLocaleString("es-MX", {
+                                                    minimumFractionDigits: 2,
+                                                  })}
+                                                </span>
+                                              ) : (
+                                                "-"
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono">
+                                              {detalle.haber > 0 ? (
+                                                <span className="text-red-600">
+                                                  ${Number(detalle.haber).toLocaleString("es-MX", {
+                                                    minimumFractionDigits: 2,
+                                                  })}
+                                                </span>
+                                              ) : (
+                                                "-"
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                  
+                                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                                    <p className="text-muted-foreground">
+                                      Este asiento se generó automáticamente al registrar la inversión y se 
+                                      refleja en la Balanza de Comprobación.
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center py-8 text-muted-foreground">
+                                  <p>No se encontró asiento contable para esta inversión.</p>
+                                  <p className="text-sm mt-2">
+                                    Las inversiones antiguas deben ser eliminadas y registradas nuevamente.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </DialogContent>
