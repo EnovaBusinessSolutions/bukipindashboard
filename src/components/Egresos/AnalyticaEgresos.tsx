@@ -296,11 +296,14 @@ const AnalyticaEgresos = () => {
       : filteredTransactions.filter(t => t.tipo_egreso === tipoEgreso);
 
     if (periodFilter === "diario") {
-      const total = transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0);
+      const totalEgresos = transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0);
+      const totalCostosInventario = tipoEgreso === "total" 
+        ? filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0)
+        : 0;
       
       return [{
         periodo: 'Hoy',
-        monto: formatearMonto(total)
+        monto: formatearMonto(totalEgresos + totalCostosInventario)
       }];
     } else if (periodFilter === "mensual") {
       // Agrupar por día del mes
@@ -315,6 +318,15 @@ const AnalyticaEgresos = () => {
         }
         dataByDay[day] += t.monto_total;
       });
+
+      // Agregar costos de inventario si es "total"
+      if (tipoEgreso === "total") {
+        filteredCostosInventario.forEach(c => {
+          const day = new Date(c.fecha).getDate();
+          if (!dataByDay[day]) dataByDay[day] = 0;
+          dataByDay[day] += c.monto;
+        });
+      }
 
       return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => {
         const day = i + 1;
@@ -335,6 +347,15 @@ const AnalyticaEgresos = () => {
         }
         dataByMonth[month] += t.monto_total;
       });
+
+      // Agregar costos de inventario si es "total"
+      if (tipoEgreso === "total") {
+        filteredCostosInventario.forEach(c => {
+          const month = new Date(c.fecha).getMonth();
+          if (!dataByMonth[month]) dataByMonth[month] = 0;
+          dataByMonth[month] += c.monto;
+        });
+      }
 
       return meses.map((mes, index) => ({
         periodo: mes,
