@@ -86,9 +86,24 @@ const ResumenTransaccionesInventario = () => {
   const { data: asientoDetalle } = useQuery({
     queryKey: ["asiento-movimiento", selectedMovimiento?.id],
     queryFn: async () => {
-      if (!selectedMovimiento) return null;
+      if (!selectedMovimiento || selectedMovimiento.tipo_movimiento !== 'venta') return null;
 
-      // Buscar asiento que contenga referencia al movimiento
+      // Para movimientos de venta, buscar la transacción de ingreso relacionada
+      const { data: transaccion, error: transError } = await supabase
+        .from("transacciones_ingresos")
+        .select("id")
+        .ilike("descripcion", `%${selectedMovimiento.productos?.nombre || ""}%`)
+        .gte("created_at", `${selectedMovimiento.fecha}T00:00:00`)
+        .lte("created_at", `${selectedMovimiento.fecha}T23:59:59`)
+        .limit(1)
+        .maybeSingle();
+
+      if (transError || !transaccion) {
+        console.error("Error fetching transaccion:", transError);
+        return null;
+      }
+
+      // Buscar el asiento contable asociado a esta transacción
       const { data, error } = await supabase
         .from("asientos_contables")
         .select(`
@@ -107,9 +122,7 @@ const ResumenTransaccionesInventario = () => {
             )
           )
         `)
-        .contains("descripcion", selectedMovimiento.productos?.nombre || "")
-        .eq("fecha", selectedMovimiento.fecha)
-        .limit(1)
+        .eq("transaccion_ingreso_id", transaccion.id)
         .maybeSingle();
 
       if (error) {
@@ -128,8 +141,19 @@ const ResumenTransaccionesInventario = () => {
 
   // Aplicar filtros
   const movimientosFiltrados = movimientos.filter((mov) => {
-    if (tipoMovimiento !== "todos" && mov.tipo_movimiento !== tipoMovimiento) {
-      return false;
+    if (tipoMovimiento !== "todos") {
+      // Aceptar tanto "entrada" como "compra" para el filtro de entrada
+      if (tipoMovimiento === "entrada" && 
+          mov.tipo_movimiento !== "entrada" && 
+          mov.tipo_movimiento !== "compra") {
+        return false;
+      }
+      // Aceptar "salida" o "venta" para el filtro de salida
+      if (tipoMovimiento === "salida" && 
+          mov.tipo_movimiento !== "salida" && 
+          mov.tipo_movimiento !== "venta") {
+        return false;
+      }
     }
     if (productoFiltro !== "todos" && mov.productos?.nombre !== productoFiltro) {
       return false;
@@ -139,19 +163,19 @@ const ResumenTransaccionesInventario = () => {
 
   // Calcular subtotales
   const totalEntradas = movimientosFiltrados
-    .filter((m) => m.tipo_movimiento === "entrada")
-    .reduce((sum, m) => sum + m.costo_total, 0);
+    .filter((m) => m.tipo_movimiento === "entrada" || m.tipo_movimiento === "compra")
+    .reduce((sum, m) => sum + Math.abs(m.costo_total), 0);
 
   const totalSalidas = movimientosFiltrados
-    .filter((m) => m.tipo_movimiento === "salida")
-    .reduce((sum, m) => sum + m.costo_total, 0);
+    .filter((m) => m.tipo_movimiento === "salida" || m.tipo_movimiento === "venta")
+    .reduce((sum, m) => sum + Math.abs(m.costo_total), 0);
 
   const cantidadEntradas = movimientosFiltrados.filter(
-    (m) => m.tipo_movimiento === "entrada"
+    (m) => m.tipo_movimiento === "entrada" || m.tipo_movimiento === "compra"
   ).length;
 
   const cantidadSalidas = movimientosFiltrados.filter(
-    (m) => m.tipo_movimiento === "salida"
+    (m) => m.tipo_movimiento === "salida" || m.tipo_movimiento === "venta"
   ).length;
 
   if (isLoading) {
@@ -327,20 +351,24 @@ const ResumenTransaccionesInventario = () => {
                   <TableCell className="font-medium">
                     {movimiento.productos?.nombre || "Producto eliminado"}
                   </TableCell>
-                  <TableCell>
+                                  <TableCell>
                     <Badge
                       variant={
-                        movimiento.tipo_movimiento === "entrada"
+                        movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
                           ? "default"
                           : "destructive"
                       }
                     >
-                      {movimiento.tipo_movimiento === "entrada" ? (
+                      {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" ? (
                         <TrendingUp className="h-3 w-3 mr-1" />
                       ) : (
                         <TrendingDown className="h-3 w-3 mr-1" />
                       )}
-                      {movimiento.tipo_movimiento === "entrada" ? "Entrada" : "Salida"}
+                      {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" 
+                        ? "Entrada" 
+                        : movimiento.tipo_movimiento === "venta"
+                        ? "Venta"
+                        : "Salida"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -392,13 +420,17 @@ const ResumenTransaccionesInventario = () => {
                                   <p className="text-sm text-muted-foreground">Tipo</p>
                                   <Badge
                                     variant={
-                                      selectedMovimiento.tipo_movimiento === "entrada"
+                                      selectedMovimiento.tipo_movimiento === "entrada" || 
+                                      selectedMovimiento.tipo_movimiento === "compra"
                                         ? "default"
                                         : "destructive"
                                     }
                                   >
-                                    {selectedMovimiento.tipo_movimiento === "entrada"
+                                    {selectedMovimiento.tipo_movimiento === "entrada" || 
+                                     selectedMovimiento.tipo_movimiento === "compra"
                                       ? "Entrada"
+                                      : selectedMovimiento.tipo_movimiento === "venta"
+                                      ? "Venta"
                                       : "Salida"}
                                   </Badge>
                                 </div>
