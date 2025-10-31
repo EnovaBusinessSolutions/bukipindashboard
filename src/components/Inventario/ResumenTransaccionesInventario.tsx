@@ -86,50 +86,86 @@ const ResumenTransaccionesInventario = () => {
   const { data: asientoDetalle } = useQuery({
     queryKey: ["asiento-movimiento", selectedMovimiento?.id],
     queryFn: async () => {
-      if (!selectedMovimiento || selectedMovimiento.tipo_movimiento !== 'venta') return null;
+      if (!selectedMovimiento) return null;
 
-      // Para movimientos de venta, buscar la transacción de ingreso relacionada
-      const { data: transaccion, error: transError } = await supabase
-        .from("transacciones_ingresos")
-        .select("id")
-        .ilike("descripcion", `%${selectedMovimiento.productos?.nombre || ""}%`)
-        .gte("created_at", `${selectedMovimiento.fecha}T00:00:00`)
-        .lte("created_at", `${selectedMovimiento.fecha}T23:59:59`)
-        .limit(1)
-        .maybeSingle();
+      // Para movimientos de venta (salidas)
+      if (selectedMovimiento.tipo_movimiento === 'venta') {
+        const { data: transaccion, error: transError } = await supabase
+          .from("transacciones_ingresos")
+          .select("id")
+          .ilike("descripcion", `%${selectedMovimiento.productos?.nombre || ""}%`)
+          .gte("created_at", `${selectedMovimiento.fecha}T00:00:00`)
+          .lte("created_at", `${selectedMovimiento.fecha}T23:59:59`)
+          .limit(1)
+          .maybeSingle();
 
-      if (transError || !transaccion) {
-        console.error("Error fetching transaccion:", transError);
-        return null;
-      }
+        if (transError || !transaccion) {
+          console.error("Error fetching transaccion ingreso:", transError);
+          return null;
+        }
 
-      // Buscar el asiento contable asociado a esta transacción
-      const { data, error } = await supabase
-        .from("asientos_contables")
-        .select(`
-          id,
-          numero_asiento,
-          descripcion,
-          fecha,
-          detalle_asientos (
+        const { data, error } = await supabase
+          .from("asientos_contables")
+          .select(`
             id,
-            cuenta_codigo,
-            debe,
-            haber,
+            numero_asiento,
             descripcion,
-            cuentas (
-              nombre
+            fecha,
+            detalle_asientos (
+              id,
+              cuenta_codigo,
+              debe,
+              haber,
+              descripcion,
+              cuentas (
+                nombre
+              )
             )
-          )
-        `)
-        .eq("transaccion_ingreso_id", transaccion.id)
-        .maybeSingle();
+          `)
+          .eq("transaccion_ingreso_id", transaccion.id)
+          .maybeSingle();
 
-      if (error) {
-        console.error("Error fetching asiento:", error);
-        return null;
+        if (error) {
+          console.error("Error fetching asiento:", error);
+          return null;
+        }
+        return data as AsientoContable | null;
       }
-      return data as AsientoContable | null;
+
+      // Para movimientos de compra (entradas)
+      if (selectedMovimiento.tipo_movimiento === 'compra') {
+        const { data, error } = await supabase
+          .from("asientos_contables")
+          .select(`
+            id,
+            numero_asiento,
+            descripcion,
+            fecha,
+            detalle_asientos (
+              id,
+              cuenta_codigo,
+              debe,
+              haber,
+              descripcion,
+              cuentas (
+                nombre
+              )
+            )
+          `)
+          .ilike("descripcion", `%${selectedMovimiento.productos?.nombre || ""}%`)
+          .eq("fecha", selectedMovimiento.fecha)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error fetching asiento compra:", error);
+          return null;
+        }
+        return data as AsientoContable | null;
+      }
+
+      return null;
     },
     enabled: !!selectedMovimiento,
   });
@@ -573,7 +609,8 @@ const ResumenTransaccionesInventario = () => {
                                     transacción.
                                   </p>
                                   <p className="text-sm mt-2">
-                                    Las salidas de inventario (ventas) generan asientos automáticamente.
+                                    Las entradas (compras) y salidas (ventas) de inventario generan asientos automáticamente 
+                                    que afectan tus cuentas de inventario, efectivo/bancos y cuentas por pagar.
                                   </p>
                                 </div>
                               )}
