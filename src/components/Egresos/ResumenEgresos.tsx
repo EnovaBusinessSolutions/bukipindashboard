@@ -22,6 +22,7 @@ const ResumenEgresos = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [loadingAsientos, setLoadingAsientos] = useState(false);
   const [currentAsientos, setCurrentAsientos] = useState<any>(null);
+  const [uploadingComprobante, setUploadingComprobante] = useState(false);
   
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -200,6 +201,55 @@ const ResumenEgresos = () => {
       });
     } finally {
       setLoadingAsientos(false);
+    }
+  };
+
+  const handleUploadComprobante = async (file: File) => {
+    if (!selectedTransaction) return;
+    
+    setUploadingComprobante(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${selectedTransaction.id}-${Date.now()}.${fileExt}`;
+      const filePath = `comprobantes/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('transacciones_egresos')
+        .update({ imagen_comprobante: publicUrl })
+        .eq('id', selectedTransaction.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Comprobante cargado",
+        description: "El comprobante se ha cargado exitosamente"
+      });
+
+      // Actualizar la transacción seleccionada
+      setSelectedTransaction({
+        ...selectedTransaction,
+        imagen_comprobante: publicUrl
+      });
+
+    } catch (error: any) {
+      console.error('Error uploading comprobante:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar el comprobante",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingComprobante(false);
     }
   };
 
@@ -501,21 +551,32 @@ const ResumenEgresos = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-16">Imagen</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead>Proveedor</TableHead>
                     <TableHead>Monto Total</TableHead>
-                    <TableHead>Afectación Contable</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Detalle Asiento</TableHead>
-                    <TableHead>Comprobante</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transaccionesFiltradas.map((transaccion) => (
                     <TableRow key={transaccion.id}>
+                      <TableCell>
+                        <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
+                          {transaccion.imagen_comprobante ? (
+                            <img 
+                              src={transaccion.imagen_comprobante} 
+                              alt="Imagen" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
                           year: 'numeric',
@@ -540,132 +601,30 @@ const ResumenEgresos = () => {
                       <TableCell className="max-w-xs truncate">
                         {transaccion.proveedor_nombre || '-'}
                       </TableCell>
-                      <TableCell className="font-semibold">
-                        ${transaccion.monto_total.toLocaleString('es-MX', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1 text-xs">
-                          <div className="flex items-center gap-1">
-                            <span className="text-muted-foreground">Cargo:</span>
-                            <Badge variant="outline" className="text-xs">
-                              {transaccion.cuenta_codigo || '5001'}
-                            </Badge>
+                      <TableCell className="text-right">
+                        <span className="font-semibold">
+                          ${formatMonto(transaccion.monto_total)}
+                        </span>
+                        {transaccion.monto_pagado > 0 && (
+                          <div className="text-xs text-green-600">
+                            Pagado: ${formatMonto(transaccion.monto_pagado)}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-muted-foreground">Abono:</span>
-                            {transaccion.metodo_pago === "efectivo" && (
-                              <Badge variant="outline" className="text-xs bg-green-50">
-                                1001 - Efectivo
-                              </Badge>
-                            )}
-                            {transaccion.metodo_pago === "transferencia" && (
-                              <Badge variant="outline" className="text-xs bg-blue-50">
-                                1002 - Bancos
-                              </Badge>
-                            )}
-                            {transaccion.metodo_pago === "tarjeta_credito" && (
-                              <Badge variant="outline" className="text-xs bg-purple-50">
-                                2102 - T. Crédito
-                              </Badge>
-                            )}
-                            {transaccion.monto_pendiente > 0 && (
-                              <Badge variant="outline" className="text-xs bg-yellow-50 ml-1">
-                                2001 - Ctas x Pagar
-                              </Badge>
-                            )}
+                        )}
+                        {transaccion.monto_pendiente > 0 && (
+                          <div className="text-xs text-yellow-600">
+                            Pendiente: ${formatMonto(transaccion.monto_pendiente)}
                           </div>
-                        </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {transaccion.monto_pendiente > 0 ? (
                           <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            Pendiente: ${formatMonto(transaccion.monto_pendiente)}
+                            Pendiente
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             Pagado
                           </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 px-2">
-                              <BookOpen className="h-4 w-4 mr-1" />
-                              Ver Asiento
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-96" align="start">
-                            <div className="space-y-3">
-                              <div>
-                                <h4 className="font-semibold text-sm mb-2">Asiento Contable</h4>
-                                <p className="text-xs text-muted-foreground mb-3">
-                                  {transaccion.descripcion}
-                                </p>
-                              </div>
-                              
-                              {getCuentasAfectadas(transaccion).map((cuenta, idx) => (
-                                <div 
-                                  key={idx} 
-                                  className={`p-3 rounded-lg border ${
-                                    cuenta.tipo.includes('Debe') 
-                                      ? 'bg-red-50 border-red-200' 
-                                      : 'bg-green-50 border-green-200'
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-start mb-1">
-                                    <Badge 
-                                      variant="outline" 
-                                      className={cuenta.tipo.includes('Debe') 
-                                        ? 'bg-red-100 text-red-700 border-red-300' 
-                                        : 'bg-green-100 text-green-700 border-green-300'
-                                      }
-                                    >
-                                      {cuenta.tipo}
-                                    </Badge>
-                                    <span className="font-semibold text-sm">
-                                      ${formatMonto(cuenta.monto)}
-                                    </span>
-                                  </div>
-                                  <div className="text-sm font-medium mt-2">
-                                    {cuenta.codigo} - {cuenta.nombre}
-                                  </div>
-                                </div>
-                              ))}
-                              
-                              <div className="pt-2 border-t">
-                                <div className="flex justify-between text-xs font-medium">
-                                  <span>Total Debe:</span>
-                                  <span className="text-red-600">
-                                    ${formatMonto(transaccion.monto_total)}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between text-xs font-medium mt-1">
-                                  <span>Total Haber:</span>
-                                  <span className="text-green-600">
-                                    ${formatMonto(transaccion.monto_total)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </TableCell>
-                      <TableCell>
-                        {transaccion.imagen_comprobante ? (
-                          <a 
-                            href={transaccion.imagen_comprobante} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-primary hover:text-primary/80"
-                          >
-                            <ImageIcon className="h-4 w-4" />
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">Sin imagen</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -674,7 +633,8 @@ const ResumenEgresos = () => {
                           size="sm"
                           onClick={() => handleViewDetails(transaccion)}
                         >
-                          <FileText className="h-4 w-4" />
+                          <FileText className="h-4 w-4 mr-1" />
+                          Ver Detalle
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -933,29 +893,61 @@ const ResumenEgresos = () => {
               </div>
 
               {/* Comprobante fotográfico */}
-              {selectedTransaction.imagen_comprobante && (
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    Comprobante Fotográfico
-                  </h4>
-                  <div className="rounded-lg overflow-hidden border">
-                    <img 
-                      src={selectedTransaction.imagen_comprobante} 
-                      alt="Comprobante" 
-                      className="w-full h-auto max-h-96 object-contain bg-muted"
-                    />
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Comprobante Fotográfico
+                </h4>
+                {selectedTransaction.imagen_comprobante ? (
+                  <div className="space-y-2">
+                    <div className="rounded-lg overflow-hidden border">
+                      <img 
+                        src={selectedTransaction.imagen_comprobante} 
+                        alt="Comprobante" 
+                        className="w-full h-auto max-h-96 object-contain bg-muted"
+                      />
+                    </div>
+                    <a 
+                      href={selectedTransaction.imagen_comprobante} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline inline-block"
+                    >
+                      Ver imagen completa en nueva pestaña
+                    </a>
                   </div>
-                  <a 
-                    href={selectedTransaction.imagen_comprobante} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline mt-2 inline-block"
-                  >
-                    Ver imagen completa
-                  </a>
-                </div>
-              )}
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-muted/50 rounded-lg text-center text-sm text-muted-foreground">
+                      No hay comprobante cargado para esta transacción
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <label htmlFor="comprobante-upload" className="cursor-pointer">
+                        <div className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-sm font-medium inline-flex items-center gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          {uploadingComprobante ? "Cargando..." : "Cargar Comprobante"}
+                        </div>
+                      </label>
+                      <input
+                        id="comprobante-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingComprobante}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            handleUploadComprobante(file);
+                          }
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Formatos soportados: JPG, PNG, WEBP (Máx. 5MB)
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
