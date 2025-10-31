@@ -7,15 +7,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
-import { Eye, ImageIcon } from "lucide-react";
+import { Eye, ImageIcon, Trash2, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ResumenInversiones = () => {
-  const { inversiones, isLoading } = useInversiones();
+  const { inversiones, isLoading, eliminarInversion } = useInversiones();
   const [selectedInversion, setSelectedInversion] = useState<any>(null);
   const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(selectedInversion?.id);
+
+  const handleEliminar = (id: string) => {
+    eliminarInversion.mutate(id);
+  };
 
   const getCategoriaLabel = (categoria: string) => {
     const labels: Record<string, string> = {
@@ -71,8 +77,23 @@ const ResumenInversiones = () => {
   const activosVendidos = inversiones.filter(inv => inv.estado === 'vendido').length;
   const activosBaja = inversiones.filter(inv => inv.estado === 'dado_de_baja').length;
 
+  const inversionesSinAsientos = inversiones.filter(inv => {
+    const numeroAsiento = `INV-${inv.id}`;
+    return !numeroAsiento;
+  });
+
   return (
     <div className="space-y-6">
+      {inversiones.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Hay {inversiones.length} inversión(es) registrada(s) antes de la implementación de asientos automáticos. 
+            Estas inversiones NO afectan la balanza de comprobación. Se recomienda eliminarlas y registrarlas nuevamente.
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -129,7 +150,7 @@ const ResumenInversiones = () => {
                 <TableHead>Estado Pago</TableHead>
                 <TableHead>Estado Activo</TableHead>
                 <TableHead>Fecha Adquisición</TableHead>
-                <TableHead>Acciones</TableHead>
+                <TableHead>Detalle</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -184,16 +205,17 @@ const ResumenInversiones = () => {
                     {format(new Date(inversion.fecha_adquisicion), "dd/MM/yyyy")}
                   </TableCell>
                   <TableCell>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedInversion(inversion)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
+                    <div className="flex items-center gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedInversion(inversion)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Detalle de Inversión</DialogTitle>
@@ -387,6 +409,37 @@ const ResumenInversiones = () => {
                         )}
                       </DialogContent>
                     </Dialog>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar inversión?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción eliminará permanentemente la inversión "{inversion.producto_nombre}".
+                            {!asientoInversion && (
+                              <span className="block mt-2 text-destructive font-medium">
+                                Esta inversión no tiene asientos contables asociados y no afecta la balanza.
+                              </span>
+                            )}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleEliminar(inversion.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
