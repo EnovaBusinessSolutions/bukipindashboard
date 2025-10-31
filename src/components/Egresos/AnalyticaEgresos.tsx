@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { TrendingDown, Calendar, DollarSign, Package, AlertCircle } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
+import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,9 +14,10 @@ import { Badge } from "@/components/ui/badge";
 
 const AnalyticaEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(1000);
+  const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
-  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "combinada">("total");
+  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "combinada">("total");
 
   // Filtrar solo costos y gastos
   const transaccionesFiltradas = transacciones.filter(
@@ -48,12 +50,56 @@ const AnalyticaEgresos = () => {
 
   const filteredTransactions = getFilteredTransactions();
 
+  // Filtrar costos de venta de inventario según período
+  const getFilteredCostosInventario = () => {
+    if (!costosVentaInventario) return [];
+    
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    if (periodFilter === "diario") {
+      const todayStr = today.toISOString().split('T')[0];
+      return costosVentaInventario.filter(c => 
+        new Date(c.fecha).toISOString().split('T')[0] === todayStr
+      );
+    } else if (periodFilter === "mensual") {
+      return costosVentaInventario.filter(c => {
+        const cDate = new Date(c.fecha);
+        return cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear;
+      });
+    } else {
+      return costosVentaInventario.filter(c => {
+        const cDate = new Date(c.fecha);
+        return cDate.getFullYear() === currentYear;
+      });
+    }
+  };
+
+  const filteredCostosInventario = getFilteredCostosInventario();
+
   // Calcular resúmenes por período
   const calcularResumenes = () => {
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     const todayStr = today.toISOString().split('T')[0];
+
+    // Costos de inventario
+    const costosInventarioDia = costosVentaInventario
+      ?.filter(c => new Date(c.fecha).toISOString().split('T')[0] === todayStr)
+      .reduce((sum, c) => sum + c.monto, 0) || 0;
+
+    const costosInventarioMes = costosVentaInventario
+      ?.filter(c => {
+        const cDate = new Date(c.fecha);
+        return cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear;
+      })
+      .reduce((sum, c) => sum + c.monto, 0) || 0;
+
+    const costosInventarioAnio = costosVentaInventario
+      ?.filter(c => new Date(c.fecha).getFullYear() === currentYear)
+      .reduce((sum, c) => sum + c.monto, 0) || 0;
 
     // Día
     const egresosDelDia = transaccionesFiltradas
@@ -89,15 +135,18 @@ const AnalyticaEgresos = () => {
       .reduce((sum, t) => sum + t.monto_pendiente, 0);
 
     return {
-      egresosDelDia,
+      egresosDelDia: egresosDelDia + costosInventarioDia,
       pendientesDelDia,
       pagadosDelDia: egresosDelDia - pendientesDelDia,
-      egresosDelMes,
+      costosInventarioDia,
+      egresosDelMes: egresosDelMes + costosInventarioMes,
       pendientesDelMes,
       pagadosDelMes: egresosDelMes - pendientesDelMes,
-      egresosDelAnio,
+      costosInventarioMes,
+      egresosDelAnio: egresosDelAnio + costosInventarioAnio,
       pendientesDelAnio,
-      pagadosDelAnio: egresosDelAnio - pendientesDelAnio
+      pagadosDelAnio: egresosDelAnio - pendientesDelAnio,
+      costosInventarioAnio
     };
   };
 
@@ -119,7 +168,7 @@ const AnalyticaEgresos = () => {
 
   // Generar datos para gráfica de evolución según período
   const generarDatosEvolucion = () => {
-    // Modo combinada: mostrar costos y gastos por separado
+    // Modo combinada: mostrar costos, gastos y costos de inventario por separado
     if (tipoEgreso === "combinada") {
       const costos = filteredTransactions.filter(t => t.tipo_egreso === 'costo');
       const gastos = filteredTransactions.filter(t => t.tipo_egreso === 'gasto');
@@ -127,17 +176,20 @@ const AnalyticaEgresos = () => {
       if (periodFilter === "diario") {
         const totalCostos = costos.reduce((sum, t) => sum + t.monto_total, 0);
         const totalGastos = gastos.reduce((sum, t) => sum + t.monto_total, 0);
+        const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
         
         return [{
           periodo: 'Hoy',
           costos: formatearMonto(totalCostos),
-          gastos: formatearMonto(totalGastos)
+          gastos: formatearMonto(totalGastos),
+          costosInventario: formatearMonto(totalCostosInventario)
         }];
       } else if (periodFilter === "mensual") {
         const today = new Date();
         const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
         const costosByDay: Record<number, number> = {};
         const gastosByDay: Record<number, number> = {};
+        const costosInventarioByDay: Record<number, number> = {};
 
         costos.forEach(t => {
           const day = new Date(t.created_at).getDate();
@@ -151,18 +203,26 @@ const AnalyticaEgresos = () => {
           gastosByDay[day] += t.monto_total;
         });
 
+        filteredCostosInventario.forEach(c => {
+          const day = new Date(c.fecha).getDate();
+          if (!costosInventarioByDay[day]) costosInventarioByDay[day] = 0;
+          costosInventarioByDay[day] += c.monto;
+        });
+
         return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => {
           const day = i + 1;
           return {
             periodo: `Día ${day}`,
             costos: formatearMonto(costosByDay[day] || 0),
-            gastos: formatearMonto(gastosByDay[day] || 0)
+            gastos: formatearMonto(gastosByDay[day] || 0),
+            costosInventario: formatearMonto(costosInventarioByDay[day] || 0)
           };
         });
       } else {
         const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const costosByMonth: Record<number, number> = {};
         const gastosByMonth: Record<number, number> = {};
+        const costosInventarioByMonth: Record<number, number> = {};
 
         costos.forEach(t => {
           const month = new Date(t.created_at).getMonth();
@@ -176,15 +236,61 @@ const AnalyticaEgresos = () => {
           gastosByMonth[month] += t.monto_total;
         });
 
+        filteredCostosInventario.forEach(c => {
+          const month = new Date(c.fecha).getMonth();
+          if (!costosInventarioByMonth[month]) costosInventarioByMonth[month] = 0;
+          costosInventarioByMonth[month] += c.monto;
+        });
+
         return meses.map((mes, index) => ({
           periodo: mes,
           costos: formatearMonto(costosByMonth[index] || 0),
-          gastos: formatearMonto(gastosByMonth[index] || 0)
+          gastos: formatearMonto(gastosByMonth[index] || 0),
+          costosInventario: formatearMonto(costosInventarioByMonth[index] || 0)
         }));
       }
     }
 
     // Modo normal: una sola línea
+    let datosParaGrafica: any[] = [];
+    
+    if (tipoEgreso === "costo_inventario") {
+      // Solo mostrar costos de inventario
+      if (periodFilter === "diario") {
+        const total = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+        return [{ periodo: 'Hoy', monto: formatearMonto(total) }];
+      } else if (periodFilter === "mensual") {
+        const today = new Date();
+        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        const dataByDay: Record<number, number> = {};
+        
+        filteredCostosInventario.forEach(c => {
+          const day = new Date(c.fecha).getDate();
+          if (!dataByDay[day]) dataByDay[day] = 0;
+          dataByDay[day] += c.monto;
+        });
+        
+        return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => ({
+          periodo: `Día ${i + 1}`,
+          monto: formatearMonto(dataByDay[i + 1] || 0)
+        }));
+      } else {
+        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const dataByMonth: Record<number, number> = {};
+        
+        filteredCostosInventario.forEach(c => {
+          const month = new Date(c.fecha).getMonth();
+          if (!dataByMonth[month]) dataByMonth[month] = 0;
+          dataByMonth[month] += c.monto;
+        });
+        
+        return meses.map((mes, index) => ({
+          periodo: mes,
+          monto: formatearMonto(dataByMonth[index] || 0)
+        }));
+      }
+    }
+    
     const transaccionesFiltradas = tipoEgreso === "total" 
       ? filteredTransactions 
       : filteredTransactions.filter(t => t.tipo_egreso === tipoEgreso);
@@ -248,6 +354,12 @@ const AnalyticaEgresos = () => {
       return acc;
     }, {} as Record<string, number>);
 
+    // Agregar costos de inventario
+    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostosInventario > 0) {
+      grouped['Costo Venta Inventario'] = totalCostosInventario;
+    }
+
     return Object.entries(grouped)
       .map(([tipo, monto]) => ({ tipo, monto }))
       .filter(item => item.monto > 0);
@@ -288,7 +400,7 @@ const AnalyticaEgresos = () => {
       .sort((a, b) => b.monto_total - a.monto_total);
   };
 
-  if (loading) {
+  if (loading || loadingCostosVenta) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -337,6 +449,12 @@ const AnalyticaEgresos = () => {
                 ${resumenes.egresosDelDia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-purple-600">Costo Venta Inventario:</span>
+              <span className="font-medium text-purple-600">
+                ${resumenes.costosInventarioDia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-green-600">Pagado:</span>
               <span className="font-semibold text-green-600">
@@ -365,6 +483,12 @@ const AnalyticaEgresos = () => {
                 ${resumenes.egresosDelMes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-purple-600">Costo Venta Inventario:</span>
+              <span className="font-medium text-purple-600">
+                ${resumenes.costosInventarioMes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-green-600">Pagado:</span>
               <span className="font-semibold text-green-600">
@@ -391,6 +515,12 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Egresos Totales:</span>
               <span className="font-semibold text-destructive">
                 ${resumenes.egresosDelAnio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-purple-600">Costo Venta Inventario:</span>
+              <span className="font-medium text-purple-600">
+                ${resumenes.costosInventarioAnio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -454,7 +584,8 @@ const AnalyticaEgresos = () => {
                       <TabsTrigger value="total">Total</TabsTrigger>
                       <TabsTrigger value="costo">Costos</TabsTrigger>
                       <TabsTrigger value="gasto">Gastos</TabsTrigger>
-                      <TabsTrigger value="combinada">Combinada</TabsTrigger>
+                      <TabsTrigger value="costo_inventario">Costo Inventario</TabsTrigger>
+                      <TabsTrigger value="combinada">Desglosada</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -484,26 +615,42 @@ const AnalyticaEgresos = () => {
                     <Line 
                       type="monotone" 
                       dataKey="costos" 
+                      name="Costos Manuales"
                       stroke="hsl(180, 25%, 50%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(180, 25%, 50%)' }}
                       label={{ 
                         position: 'top', 
                         fill: 'hsl(var(--foreground))',
-                        fontSize: 12,
+                        fontSize: 10,
                         formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
                       }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="gastos" 
+                      name="Gastos"
                       stroke="hsl(0, 70%, 55%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(0, 70%, 55%)' }}
                       label={{ 
+                        position: 'top', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 10,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="costosInventario" 
+                      name="Costo Venta Inventario"
+                      stroke="hsl(280, 60%, 55%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(280, 60%, 55%)' }}
+                      label={{ 
                         position: 'bottom', 
                         fill: 'hsl(var(--foreground))',
-                        fontSize: 12,
+                        fontSize: 10,
                         formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
                       }}
                     />
@@ -559,8 +706,8 @@ const AnalyticaEgresos = () => {
                     {egresosPorTipo().map((entry, index) => {
                       const colors = [
                         "hsl(180 50% 55%)",
-                        "hsl(180 45% 45%)",
-                        "hsl(180 55% 65%)",
+                        "hsl(0 70% 55%)",
+                        "hsl(280 60% 55%)",
                         "hsl(180 40% 40%)"
                       ];
                       return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
