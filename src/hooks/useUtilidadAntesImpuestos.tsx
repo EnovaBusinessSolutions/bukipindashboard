@@ -16,65 +16,49 @@ export const useUtilidadAntesImpuestos = (mes: number, ano: number) => {
   return useQuery({
     queryKey: ["utilidad-antes-impuestos", mes, ano],
     queryFn: async (): Promise<UtilidadData> => {
-      const fechaInicio = new Date(ano, mes - 1, 1).toISOString();
-      const fechaFin = new Date(ano, mes, 0, 23, 59, 59).toISOString();
+      const fechaInicio = new Date(ano, mes - 1, 1).toISOString().split('T')[0];
+      const fechaFin = new Date(ano, mes, 0).toISOString().split('T')[0];
 
-      // Obtener ingresos del mes
-      const { data: ingresosData } = await supabase
-        .from('transacciones_ingresos')
-        .select('monto_neto')
-        .gte('created_at', fechaInicio)
-        .lte('created_at', fechaFin);
+      // OBTENER TODO DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
+      const { data: detalles } = await supabase
+        .from('detalle_asientos')
+        .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
+        .gte('asientos_contables.fecha', fechaInicio)
+        .lte('asientos_contables.fecha', fechaFin);
 
-      const ingresos = ingresosData?.reduce((sum, t) => sum + (t.monto_neto || 0), 0) || 0;
-
-      // Obtener costos del mes
-      const { data: costosData } = await supabase
-        .from('transacciones_egresos')
-        .select('monto_total')
-        .eq('tipo_egreso', 'costo')
-        .gte('created_at', fechaInicio)
-        .lte('created_at', fechaFin);
-
-      const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
-
-      // Obtener gastos del mes
-      const { data: gastosData } = await supabase
-        .from('transacciones_egresos')
-        .select('monto_total')
-        .eq('tipo_egreso', 'gasto')
-        .gte('created_at', fechaInicio)
-        .lte('created_at', fechaFin);
-
-      const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
-
-      // Obtener depreciación mensual del mes
-      const { data: inversionesData } = await supabase
-        .from('inversiones_capex')
-        .select('valor_depreciacion_mensual, fecha_inicio_depreciacion, estado')
-        .eq('estado', 'activo');
-
+      let ingresos = 0;
+      let costos = 0;
+      let gastos = 0;
       let depreciacion = 0;
-      inversionesData?.forEach((inv) => {
-        if (inv.fecha_inicio_depreciacion) {
-          const fechaInicioDep = new Date(inv.fecha_inicio_depreciacion);
-          const fechaMes = new Date(ano, mes - 1, 15);
-          
-          if (fechaMes >= fechaInicioDep) {
-            depreciacion += inv.valor_depreciacion_mensual || 0;
-          }
+      let intereses = 0;
+
+      detalles?.forEach(detalle => {
+        const codigo = detalle.cuenta_codigo;
+        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
+        
+        // Ingresos (cuentas 4xxx) - naturaleza acreedora
+        if (codigo.startsWith('4')) {
+          ingresos += Math.abs(saldo);
+        }
+        // Costos (cuentas 5001-5099) - naturaleza deudora
+        else if (codigo.startsWith('5') && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099) {
+          costos += Math.abs(saldo);
+        }
+        // Depreciación (cuentas 5109, 5110)
+        else if (codigo === '5109' || codigo === '5110') {
+          depreciacion += Math.abs(saldo);
+        }
+        // Gastos (cuentas 5100-5108, 5202, 5203) - naturaleza deudora
+        else if ((codigo.startsWith('5') && parseInt(codigo) >= 5100 && parseInt(codigo) <= 5108) || 
+                 codigo === '5202' || codigo === '5203') {
+          gastos += Math.abs(saldo);
+        }
+        // Intereses (cuentas 5111-5199, 5201)
+        else if ((codigo.startsWith('5') && parseInt(codigo) >= 5111 && parseInt(codigo) <= 5199) || 
+                 codigo === '5201') {
+          intereses += Math.abs(saldo);
         }
       });
-
-      // Obtener intereses pagados del mes
-      const { data: interesesData } = await supabase
-        .from('transacciones_financiamientos')
-        .select('interes_pagado')
-        .eq('tipo_transaccion', 'cargo_interes')
-        .gte('fecha', new Date(ano, mes - 1, 1).toISOString().split('T')[0])
-        .lte('fecha', new Date(ano, mes, 0).toISOString().split('T')[0]);
-
-      const intereses = interesesData?.reduce((sum, t) => sum + (t.interes_pagado || 0), 0) || 0;
 
       // Calcular utilidad antes de impuestos
       const utilidadBruta = ingresos - costos;

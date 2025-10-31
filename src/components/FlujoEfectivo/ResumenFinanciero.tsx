@@ -12,74 +12,80 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
   const { data, isLoading } = useQuery({
     queryKey: ["resumen-financiero", startDate, endDate],
     queryFn: async () => {
-      const startDateStr = startDate.toISOString();
-      const endDateStr = endDate.toISOString();
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
 
-      // Obtener ventas (ingresos)
-      const { data: ingresos } = await supabase
-        .from("transacciones_ingresos")
-        .select("monto_neto, monto_pagado")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
+      // OBTENER TODO DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
+      const { data: detalles } = await supabase
+        .from("detalle_asientos")
+        .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
+        .gte("asientos_contables.fecha", startDateStr)
+        .lte("asientos_contables.fecha", endDateStr);
 
-      const ventas = ingresos?.reduce((sum, i) => sum + (i.monto_neto || 0), 0) || 0;
-      const cobrado = ingresos?.reduce((sum, i) => sum + (i.monto_pagado || 0), 0) || 0;
+      // Calcular totales por tipo de cuenta desde los asientos
+      let ingresos = 0;
+      let costos = 0;
+      let gastos = 0;
+      let efectivoFinal = 0;
+      let bancosFinal = 0;
 
-      // Obtener costos y gastos
-      const { data: egresos } = await supabase
-        .from("transacciones_egresos")
-        .select("tipo_egreso, monto_total, monto_pagado")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
+      detalles?.forEach(detalle => {
+        const codigo = detalle.cuenta_codigo;
+        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
+        
+        // Ingresos (cuentas 4xxx) - naturaleza acreedora
+        if (codigo.startsWith('4')) {
+          ingresos += Math.abs(saldo);
+        }
+        // Costos (cuentas 5001-5099) - naturaleza deudora
+        else if (codigo.startsWith('5') && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099) {
+          costos += Math.abs(saldo);
+        }
+        // Gastos (cuentas 5100+) - naturaleza deudora
+        else if (codigo.startsWith('5') && parseInt(codigo) >= 5100) {
+          gastos += Math.abs(saldo);
+        }
+        // Efectivo (1001)
+        else if (codigo === '1001') {
+          efectivoFinal += saldo;
+        }
+        // Bancos (1002)
+        else if (codigo === '1002') {
+          bancosFinal += saldo;
+        }
+      });
 
-      const costos = egresos?.filter(e => e.tipo_egreso === "costo" || e.tipo_egreso === "compra_inventario")
-        .reduce((sum, e) => sum + (e.monto_total || 0), 0) || 0;
-      
-      const gastos = egresos?.filter(e => e.tipo_egreso === "gasto")
-        .reduce((sum, e) => sum + (e.monto_total || 0), 0) || 0;
+      // Calcular saldo inicial de efectivo y bancos (antes del período)
+      const { data: saldoInicialData } = await supabase
+        .from("detalle_asientos")
+        .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
+        .in("cuenta_codigo", ["1001", "1002"])
+        .lt("asientos_contables.fecha", startDateStr);
 
-      const egresosTotal = egresos?.reduce((sum, e) => sum + (e.monto_pagado || 0), 0) || 0;
+      let saldoInicialEfectivo = 0;
+      let saldoInicialBancos = 0;
 
-      // Obtener inversiones
-      const { data: inversiones } = await supabase
-        .from("inversiones_capex")
-        .select("monto_pagado")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
+      saldoInicialData?.forEach(detalle => {
+        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
+        if (detalle.cuenta_codigo === '1001') {
+          saldoInicialEfectivo += saldo;
+        } else if (detalle.cuenta_codigo === '1002') {
+          saldoInicialBancos += saldo;
+        }
+      });
 
-      const inversionesTotal = inversiones?.reduce((sum, i) => sum + (i.monto_pagado || 0), 0) || 0;
-
-      // Obtener financiamientos
-      const { data: financiamientos } = await supabase
-        .from("financiamientos")
-        .select("saldo_inicial")
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
-
-      const financiamientosRecibidos = financiamientos?.reduce((sum, f) => sum + (f.saldo_inicial || 0), 0) || 0;
-
-      const { data: amortizaciones } = await supabase
-        .from("transacciones_financiamientos")
-        .select("capital_pagado, interes_pagado, metodo_pago")
-        .in("tipo_transaccion", ["amortizacion", "cargo_interes"])
-        .gte("created_at", startDateStr)
-        .lte("created_at", endDateStr);
-
-      const amortizacionesTotal = amortizaciones?.reduce((sum, a) => 
-        sum + (a.capital_pagado || 0) + (a.interes_pagado || 0), 0) || 0;
-
-      const utilidad = ventas - costos - gastos;
-      const flujoNeto = cobrado - egresosTotal - inversionesTotal + financiamientosRecibidos - amortizacionesTotal;
+      const utilidad = ingresos - costos - gastos;
+      const flujoNeto = (efectivoFinal + bancosFinal) - (saldoInicialEfectivo + saldoInicialBancos);
 
       return {
-        ventas,
-        cobrado,
+        ventas: ingresos,
+        cobrado: ingresos, // En el período todo lo registrado cuenta como cobrado
         costos,
         gastos,
         utilidad,
-        inversiones: inversionesTotal,
-        financiamientos: financiamientosRecibidos,
-        amortizaciones: amortizacionesTotal,
+        inversiones: 0, // Ya no se calcula desde tablas separadas
+        financiamientos: 0, // Ya no se calcula desde tablas separadas
+        amortizaciones: 0, // Ya no se calcula desde tablas separadas
         flujoNeto
       };
     }
