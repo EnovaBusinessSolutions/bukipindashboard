@@ -103,7 +103,7 @@ export const useCreateProductoEgreso = () => {
         unidad: productData.unidad,
         proveedor_principal: productData.proveedor_principal,
         es_recurrente: productData.es_recurrente || false,
-        subcuenta_id: productData.subcuenta_id,
+        subcuenta_id: productData.subcuenta_id || null,
         cuenta_contable: productData.cuenta_contable,
         imagen_url: imagenUrl,
         user_id: null, // Set to null for prototype
@@ -184,7 +184,7 @@ export const useUpdateProductoEgreso = () => {
         unidad: productData.unidad,
         proveedor_principal: productData.proveedor_principal,
         es_recurrente: productData.es_recurrente,
-        subcuenta_id: productData.subcuenta_id,
+        subcuenta_id: productData.subcuenta_id || null,
         cuenta_contable: productData.cuenta_contable,
       };
 
