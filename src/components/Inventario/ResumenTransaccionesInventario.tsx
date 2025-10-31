@@ -227,8 +227,8 @@ const ResumenTransaccionesInventario = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos los Movimientos</SelectItem>
-                  <SelectItem value="entrada">Entradas (Compras)</SelectItem>
-                  <SelectItem value="salida">Salidas (Ventas)</SelectItem>
+                  <SelectItem value="entrada">Entradas</SelectItem>
+                  <SelectItem value="salida">Salidas</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -351,7 +351,7 @@ const ResumenTransaccionesInventario = () => {
                   <TableCell className="font-medium">
                     {movimiento.productos?.nombre || "Producto eliminado"}
                   </TableCell>
-                                  <TableCell>
+                  <TableCell>
                     <Badge
                       variant={
                         movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
@@ -366,8 +366,6 @@ const ResumenTransaccionesInventario = () => {
                       )}
                       {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" 
                         ? "Entrada" 
-                        : movimiento.tipo_movimiento === "venta"
-                        ? "Venta"
                         : "Salida"}
                     </Badge>
                   </TableCell>
@@ -429,8 +427,6 @@ const ResumenTransaccionesInventario = () => {
                                     {selectedMovimiento.tipo_movimiento === "entrada" || 
                                      selectedMovimiento.tipo_movimiento === "compra"
                                       ? "Entrada"
-                                      : selectedMovimiento.tipo_movimiento === "venta"
-                                      ? "Venta"
                                       : "Salida"}
                                   </Badge>
                                 </div>
@@ -572,12 +568,12 @@ const ResumenTransaccionesInventario = () => {
                                 </div>
                               ) : (
                                 <div className="text-center py-8 text-muted-foreground">
-                                  <p>
+                                  <p className="text-muted-foreground">
                                     No se encontraron asientos contables relacionados con esta
                                     transacción.
                                   </p>
                                   <p className="text-sm mt-2">
-                                    Las transacciones de venta generan asientos automáticamente.
+                                    Las salidas de inventario (ventas) generan asientos automáticamente.
                                   </p>
                                 </div>
                               )}
