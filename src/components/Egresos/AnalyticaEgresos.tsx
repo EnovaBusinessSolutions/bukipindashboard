@@ -410,6 +410,12 @@ const AnalyticaEgresos = () => {
       return acc;
     }, {} as Record<string, number>);
 
+    // Agregar costos de inventario
+    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostosInventario > 0) {
+      grouped['Costo Venta Inventario'] = totalCostosInventario;
+    }
+
     return Object.entries(grouped)
       .map(([proveedor, monto]) => ({ proveedor, monto }))
       .sort((a, b) => b.monto - a.monto);
@@ -417,7 +423,28 @@ const AnalyticaEgresos = () => {
 
   // Todos los gastos
   const topGastos = () => {
-    return [...filteredTransactions]
+    // Combinar transacciones manuales con costos de inventario
+    const gastosTransacciones = filteredTransactions.map(t => ({
+      id: t.id,
+      descripcion: t.descripcion,
+      tipo_egreso: t.tipo_egreso,
+      monto_total: t.monto_total,
+      es_inventario: false,
+      producto_nombre: null,
+      fecha: t.created_at
+    }));
+
+    const gastosInventario = filteredCostosInventario.map(c => ({
+      id: c.numero_asiento,
+      descripcion: c.descripcion,
+      tipo_egreso: 'Costo Venta',
+      monto_total: c.monto,
+      es_inventario: true,
+      producto_nombre: c.producto_nombre,
+      fecha: c.fecha
+    }));
+
+    return [...gastosTransacciones, ...gastosInventario]
       .sort((a, b) => b.monto_total - a.monto_total);
   };
 
@@ -861,9 +888,21 @@ const AnalyticaEgresos = () => {
                   {topGastos().map((item, index) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="max-w-xs truncate">{item.descripcion}</TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {item.es_inventario && item.producto_nombre ? (
+                          <div>
+                            <div className="font-medium">{item.producto_nombre}</div>
+                            <div className="text-xs text-muted-foreground">{item.descripcion}</div>
+                          </div>
+                        ) : (
+                          item.descripcion
+                        )}
+                      </TableCell>
                       <TableCell>
-                        <Badge variant={item.tipo_egreso === 'costo' ? 'destructive' : 'default'}>
+                        <Badge variant={
+                          item.es_inventario ? 'secondary' : 
+                          item.tipo_egreso === 'costo' ? 'destructive' : 'default'
+                        }>
                           {item.tipo_egreso}
                         </Badge>
                       </TableCell>
