@@ -74,29 +74,40 @@ const AnalyticaInversiones = () => {
   const totalPendiente = inversiones.reduce((acc, inv) => acc + Number(inv.monto_pendiente), 0);
 
   // Data para TreeMap de inversiones por categoría
-  const treeMapInversionData = dataPorCategoria.map((item: any) => ({
-    name: item.name,
-    size: item.montoTotal,
-    value: item.montoTotal,
-  }));
+  const treeMapInversionData = dataPorCategoria
+    .filter((item: any) => item.montoTotal > 0)
+    .map((item: any) => ({
+      name: item.name,
+      size: item.montoTotal,
+      value: item.montoTotal,
+    }));
 
   // Data para TreeMap de depreciaciones acumuladas por categoría
-  const treeMapDepreciacionData = dataPorCategoria.map((item: any) => ({
-    name: item.name,
-    size: item.depreciacionAcumulada,
-    value: item.depreciacionAcumulada,
-  }));
+  const treeMapDepreciacionData = dataPorCategoria
+    .filter((item: any) => item.depreciacionAcumulada > 0)
+    .map((item: any) => ({
+      name: item.name,
+      size: item.depreciacionAcumulada,
+      value: item.depreciacionAcumulada,
+    }));
 
   // Data para TreeMap de activo fijo neto (inversión - depreciación)
-  const treeMapActivoNetoData = dataPorCategoria.map((item: any) => ({
-    name: item.name,
-    size: item.montoTotal - item.depreciacionAcumulada,
-    value: item.montoTotal - item.depreciacionAcumulada,
-  }));
+  const treeMapActivoNetoData = dataPorCategoria
+    .filter((item: any) => (item.montoTotal - item.depreciacionAcumulada) > 0)
+    .map((item: any) => ({
+      name: item.name,
+      size: item.montoTotal - item.depreciacionAcumulada,
+      value: item.montoTotal - item.depreciacionAcumulada,
+    }));
 
   // Custom content para el Treemap
   const CustomTreemapContent = (props: any) => {
     const { x, y, width, height, index, name, value } = props;
+    
+    // Validar que value exista y sea un número válido
+    if (!value || typeof value !== 'number') {
+      return null;
+    }
     
     return (
       <g>
@@ -121,7 +132,7 @@ const AnalyticaInversiones = () => {
               fontSize={14}
               fontWeight="bold"
             >
-              {name}
+              {name || 'Sin nombre'}
             </text>
             <text
               x={x + width / 2}
@@ -130,7 +141,7 @@ const AnalyticaInversiones = () => {
               fill="#fff"
               fontSize={12}
             >
-              ${value.toLocaleString("es-MX")}
+              ${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </text>
           </>
         )}
@@ -264,15 +275,21 @@ const AnalyticaInversiones = () => {
             <CardDescription>Monto total invertido por tipo de activo</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={400}>
-              <Treemap
-                data={treeMapInversionData}
-                dataKey="size"
-                aspectRatio={4 / 3}
-                stroke="#fff"
-                content={<CustomTreemapContent />}
-              />
-            </ResponsiveContainer>
+            {treeMapInversionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <Treemap
+                  data={treeMapInversionData}
+                  dataKey="size"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  content={<CustomTreemapContent />}
+                />
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+                No hay datos de inversiones para mostrar
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -282,15 +299,21 @@ const AnalyticaInversiones = () => {
             <CardDescription>Depreciación acumulada por tipo de activo</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={400}>
-              <Treemap
-                data={treeMapDepreciacionData}
-                dataKey="size"
-                aspectRatio={4 / 3}
-                stroke="#fff"
-                content={<CustomTreemapContent />}
-              />
-            </ResponsiveContainer>
+            {treeMapDepreciacionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <Treemap
+                  data={treeMapDepreciacionData}
+                  dataKey="size"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  content={<CustomTreemapContent />}
+                />
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+                No hay datos de depreciación para mostrar
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -300,15 +323,21 @@ const AnalyticaInversiones = () => {
             <CardDescription>Valor en libros por categoría</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={400}>
-              <Treemap
-                data={treeMapActivoNetoData}
-                dataKey="size"
-                aspectRatio={4 / 3}
-                stroke="#fff"
-                content={<CustomTreemapContent />}
-              />
-            </ResponsiveContainer>
+            {treeMapActivoNetoData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <Treemap
+                  data={treeMapActivoNetoData}
+                  dataKey="size"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  content={<CustomTreemapContent />}
+                />
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+                No hay datos de activo fijo neto para mostrar
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
