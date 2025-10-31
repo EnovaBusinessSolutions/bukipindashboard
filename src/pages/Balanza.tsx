@@ -80,6 +80,32 @@ const Balanza = () => {
 
   const { movimientos, saldosPorCuenta } = balanzaData;
 
+  // Si no hay movimientos, mostrar mensaje
+  if (!movimientos || movimientos.length === 0) {
+    return (
+      <div className="container mx-auto p-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">Balanza de Comprobación</h1>
+          <p className="text-muted-foreground mb-6">
+            Vista detallada de todos los movimientos contables del periodo
+          </p>
+        </div>
+        <Card>
+          <CardContent className="p-12">
+            <div className="text-center space-y-2">
+              <p className="text-xl font-medium text-muted-foreground">
+                No hay movimientos contables registrados
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Comienza registrando transacciones para ver la balanza de comprobación
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Agrupar movimientos por referencia (asiento)
   const asientosAgrupados: Record<string, AsientoAgrupado> = {};
 
