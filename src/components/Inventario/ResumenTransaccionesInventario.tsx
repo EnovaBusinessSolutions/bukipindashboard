@@ -65,7 +65,7 @@ const ResumenTransaccionesInventario = () => {
             nombre
           )
         `)
-        .eq("user_id", user?.id)
+        .or(`user_id.eq.${user?.id},user_id.is.null`) // Incluir movimientos sin user_id
         .order("fecha", { ascending: false });
 
       if (fechaInicio) {
@@ -77,6 +77,17 @@ const ResumenTransaccionesInventario = () => {
 
       const { data, error } = await query;
       if (error) throw error;
+      
+      // Actualizar movimientos sin user_id para asignarles el user_id actual
+      const movimientosSinUserId = data?.filter(m => !m.user_id) || [];
+      if (movimientosSinUserId.length > 0 && user?.id) {
+        const idsToUpdate = movimientosSinUserId.map(m => m.id);
+        await supabase
+          .from("movimientos_inventario")
+          .update({ user_id: user.id })
+          .in('id', idsToUpdate);
+      }
+      
       return data as MovimientoInventario[];
     },
     enabled: !!user?.id,
@@ -177,23 +188,24 @@ const ResumenTransaccionesInventario = () => {
 
   // Aplicar filtros
   const movimientosFiltrados = movimientos.filter((mov) => {
+    // Filtro por tipo de movimiento
     if (tipoMovimiento !== "todos") {
-      // "entrada" incluye compras
-      if (tipoMovimiento === "entrada" && 
-          mov.tipo_movimiento !== "entrada" && 
-          mov.tipo_movimiento !== "compra") {
+      const esEntrada = mov.tipo_movimiento === "entrada" || mov.tipo_movimiento === "compra";
+      const esSalida = mov.tipo_movimiento === "salida" || mov.tipo_movimiento === "venta";
+      
+      if (tipoMovimiento === "entrada" && !esEntrada) {
         return false;
       }
-      // "salida" incluye ventas
-      if (tipoMovimiento === "salida" && 
-          mov.tipo_movimiento !== "salida" && 
-          mov.tipo_movimiento !== "venta") {
+      if (tipoMovimiento === "salida" && !esSalida) {
         return false;
       }
     }
+    
+    // Filtro por producto
     if (productoFiltro !== "todos" && mov.productos?.nombre !== productoFiltro) {
       return false;
     }
+    
     return true;
   });
 

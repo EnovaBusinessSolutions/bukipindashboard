@@ -251,7 +251,7 @@ const RegistroEgresosPrecargados = () => {
           const { error: movimientoError } = await supabase
             .from('movimientos_inventario')
             .insert({
-              user_id: user.id,
+              user_id: user.id, // IMPORTANTE: incluir user_id
               producto_id: productoInventario.id,
               tipo_movimiento: 'compra',
               cantidad: cantidadComprada,
