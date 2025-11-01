@@ -552,19 +552,27 @@ const RegistroIngresos = () => {
       let descripcionToSend = descripcion;
       let montoTotalDerived = Number(montoTotal || '0');
       let subcuentaToSend = null;
+      let descuento = 0; // Inicializar variable de descuento
       
       if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
         // Para múltiples productos, usar la primera subcuenta o null
         const firstProduct = productos.find(p => p.id === selectedProducts[0].id);
         subcuentaToSend = firstProduct?.subcuenta_id || null;
-        montoTotalDerived = selectedProducts.reduce((sum, p) => sum + p.subtotal, 0);
+        // Calcular monto total SIN descuento y el descuento total
+        const subtotalSinDescuento = selectedProducts.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+        const descuentoTotal = selectedProducts.reduce((sum, p) => sum + p.descuento, 0);
+        montoTotalDerived = subtotalSinDescuento; // El monto total es ANTES del descuento
+        descuento = descuentoTotal; // Guardar el descuento total para enviarlo
         descripcionToSend = `Venta: ${selectedProducts.map(p => `${p.nombre} (x${p.cantidad})`).join(', ')}`;
       } else if (selectedIncomeType === 'inventariados' && selectedInventoryProduct) {
         descripcionToSend = `Venta de ${selectedInventoryProduct.nombre}`;
         montoTotalDerived = Number((Number(inventoryProductPrice || '0') * Number(inventoryQuantity || '1')).toFixed(2));
         subcuentaToSend = selectedInventoryProduct.subcuenta_id || null;
       }
-      const descuento = hasDiscount ? Number(discountAmount || '0') : 0;
+      // Si no es precargados, usar el descuento del formulario general
+      if (selectedIncomeType !== 'precargados') {
+        descuento = hasDiscount ? Number(discountAmount || '0') : 0;
+      }
       const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
 
       // Calcular monto pagado y pendiente según el tipo de pago
