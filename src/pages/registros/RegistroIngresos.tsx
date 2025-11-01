@@ -2408,8 +2408,8 @@ const RegistroIngresos = () => {
                         }
                       })()}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="periodo" />
-                        <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
+                        <XAxis dataKey="periodo" tick={{ fill: '#000000' }} />
+                        <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
                         <Tooltip 
                           formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, '']}
                           contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
@@ -2589,8 +2589,8 @@ const RegistroIngresos = () => {
                           }));
                         })()}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} />
-                          <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
+                          <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} tick={{ fill: '#000000' }} />
+                          <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
                           <Tooltip 
                             formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
                             contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
