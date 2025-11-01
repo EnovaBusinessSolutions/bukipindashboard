@@ -2595,10 +2595,10 @@ const RegistroIngresos = () => {
                             subcuenta,
                             monto
                           }));
-                        })()}>
+                        })()} layout="vertical">
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} tick={{ fill: '#000000' }} />
-                          <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
+                          <XAxis type="number" tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
+                          <YAxis type="category" dataKey="subcuenta" width={150} tick={{ fill: '#000000' }} />
                           <Tooltip 
                             formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
                             contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
@@ -2607,7 +2607,7 @@ const RegistroIngresos = () => {
                             wrapperStyle={{ zIndex: 1000 }}
                           />
                           <Bar dataKey="monto" fill="hsl(180 50% 55%)">
-                            <LabelList dataKey="monto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                            <LabelList dataKey="monto" position="right" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
