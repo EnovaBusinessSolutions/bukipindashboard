@@ -164,6 +164,12 @@ const RegistroIngresos = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
 
+  // Estados para cancelación de transacciones
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [transaccionACancelar, setTransaccionACancelar] = useState<any>(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [isCanceling, setIsCanceling] = useState(false);
+
   // Estados para editar producto
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -697,6 +703,52 @@ const RegistroIngresos = () => {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Función para cancelar una transacción
+  const handleCancelarTransaccion = async () => {
+    if (!transaccionACancelar || !motivoCancelacion.trim()) {
+      toast({
+        title: "⚠️ Motivo requerido",
+        description: "Debes ingresar el motivo de la cancelación",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCanceling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('cancelar-ingreso', {
+        body: {
+          transaccionId: transaccionACancelar.id,
+          motivoCancelacion: motivoCancelacion.trim()
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✓ Transacción cancelada",
+        description: `Asiento de reversión ${data.numeroAsientoReversion} creado correctamente`
+      });
+
+      // Refrescar datos
+      await Promise.all([refetchVentas(), refetchTransacciones()]);
+
+      // Limpiar y cerrar diálogo
+      setMotivoCancelacion("");
+      setTransaccionACancelar(null);
+      setIsCancelDialogOpen(false);
+
+    } catch (error) {
+      toast({
+        title: "Error al cancelar",
+        description: error.message || "No se pudo cancelar la transacción",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCanceling(false);
     }
   };
   const renderIncomeTypeForm = (type: string) => {
@@ -1958,7 +2010,19 @@ const RegistroIngresos = () => {
                           Mostrando {transaccionesFiltradas.length} transacción(es)
                         </div>
                         <div className="space-y-3">
-                           {transaccionesFiltradas.map(transaccion => <div key={transaccion.id} className="border rounded-lg p-4 hover:bg-muted/50">
+                           {transaccionesFiltradas.map(transaccion => {
+                             const esCancelada = (transaccion as any).estado === 'cancelado';
+                             const esReversion = transaccion.descripcion.includes('CANCELACIÓN:');
+                             
+                             return (
+                               <div 
+                                 key={transaccion.id} 
+                                 className={`border rounded-lg p-4 ${
+                                   esCancelada ? 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-800' : 
+                                   esReversion ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800' :
+                                   'hover:bg-muted/50'
+                                 }`}
+                               >
                            <div className="flex items-start gap-3 mb-2">
                               {/* Imagen del producto si es precargado o inventariado */}
                               {(transaccion.tipo_ingreso === 'precargados' || transaccion.tipo_ingreso === 'inventariados') && (() => {
@@ -1979,21 +2043,34 @@ const RegistroIngresos = () => {
                         })()}
                              
                              <div className="flex justify-between items-start flex-1">
-                               <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium">{transaccion.descripcion}</p>
-                                    <Dialog onOpenChange={(open) => {
-                                      if (open) {
-                                        loadAsientosContables(transaccion.id);
-                                      } else {
-                                        setCurrentAsientos(null);
-                                      }
-                                    }}>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                          <FileText className="h-3 w-3" />
-                                        </Button>
-                                      </DialogTrigger>
+                                <div className="flex-1">
+                                   <div className="flex items-center gap-2 flex-wrap">
+                                     <p className="font-medium">{transaccion.descripcion}</p>
+                                     
+                                     {/* Badge de estado */}
+                                     {esCancelada && (
+                                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+                                         ❌ Cancelada
+                                       </span>
+                                     )}
+                                     {esReversion && (
+                                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200">
+                                         ↩️ Reversión
+                                       </span>
+                                     )}
+                                     
+                                     <Dialog onOpenChange={(open) => {
+                                       if (open) {
+                                         loadAsientosContables(transaccion.id);
+                                       } else {
+                                         setCurrentAsientos(null);
+                                       }
+                                     }}>
+                                       <DialogTrigger asChild>
+                                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                           <FileText className="h-3 w-3" />
+                                         </Button>
+                                       </DialogTrigger>
                                       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                                         <DialogHeader>
                                           <DialogTitle>Detalles de la Transacción</DialogTitle>
@@ -2201,15 +2278,52 @@ const RegistroIngresos = () => {
                                    </div>
                                  </div>
                                </div>
-                            <div className="text-right ml-4">
-                              <p className="font-bold text-primary">${formatMonto(transaccion.monto_total)}</p>
-                              {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
-                                  -${formatMonto(transaccion.monto_descuento)} desc.
-                                </p>}
-                            </div>
+                             <div className="text-right ml-4 flex flex-col gap-2 items-end">
+                               <p className="font-bold text-primary">${formatMonto(transaccion.monto_total)}</p>
+                               {transaccion.monto_descuento > 0 && <p className="text-sm text-red-600">
+                                   -${formatMonto(transaccion.monto_descuento)} desc.
+                                 </p>}
+                               
+                               {/* Botón de cancelar (solo si está activa) */}
+                               {!esCancelada && !esReversion && (
+                                 <Button 
+                                   variant="outline" 
+                                   size="sm" 
+                                   className="mt-2 text-xs border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                                   onClick={() => {
+                                     setTransaccionACancelar(transaccion);
+                                     setIsCancelDialogOpen(true);
+                                   }}
+                                 >
+                                   ❌ Cancelar
+                                 </Button>
+                               )}
                              </div>
-                           </div>
-                           <div className="flex justify-between items-center text-xs text-muted-foreground">
+                             </div>
+                            </div>
+                            
+                            {/* Mostrar motivo de cancelación si está cancelada */}
+                            {esCancelada && (transaccion as any).motivo_cancelacion && (
+                              <div className="mt-3 p-3 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
+                                <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
+                                  📋 Motivo de cancelación:
+                                </p>
+                                <p className="text-xs text-red-600 dark:text-red-400">
+                                  {(transaccion as any).motivo_cancelacion}
+                                </p>
+                                <p className="text-xs text-red-500 dark:text-red-500 mt-1">
+                                  Cancelada el: {new Date((transaccion as any).fecha_cancelacion).toLocaleDateString('es-ES', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            )}
+                            
+                            <div className="flex justify-between items-center text-xs text-muted-foreground">
                              <span>
                                {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
                            day: '2-digit',
@@ -2222,10 +2336,12 @@ const RegistroIngresos = () => {
                              <span className="font-medium text-green-600">
                                Neto: ${transaccion.monto_neto.toFixed(2)}
                              </span>
+                            </div>
                            </div>
-                          </div>)}
-                     </div>
-                   </div>;
+                         );
+                       })}
+                      </div>
+                    </div>;
                   })()}
                </CardContent>
              </Card>
@@ -3255,6 +3371,74 @@ const RegistroIngresos = () => {
             </Card>
           </TabsContent>
         </Tabs>
+        
+        {/* Diálogo de confirmación de cancelación */}
+        <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>❌ Cancelar Transacción</DialogTitle>
+              <DialogDescription>
+                Esta acción creará un asiento contable de reversión. La transacción original quedará marcada como cancelada pero mantendrá toda su trazabilidad.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {transaccionACancelar && (
+                <div className="p-3 bg-muted rounded-md">
+                  <p className="text-sm font-medium mb-2">Transacción a cancelar:</p>
+                  <p className="text-sm"><span className="font-medium">Descripción:</span> {transaccionACancelar.descripcion}</p>
+                  <p className="text-sm"><span className="font-medium">Monto:</span> ${formatMonto(transaccionACancelar.monto_total)}</p>
+                  <p className="text-sm"><span className="font-medium">Fecha:</span> {new Date(transaccionACancelar.created_at).toLocaleDateString('es-ES')}</p>
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="motivo-cancelacion">Motivo de la Cancelación *</Label>
+                <Textarea 
+                  id="motivo-cancelacion"
+                  placeholder="Ej: Error en registro, cliente canceló pedido, etc."
+                  value={motivoCancelacion}
+                  onChange={(e) => setMotivoCancelacion(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  <strong>¿Qué sucederá?</strong>
+                  <ul className="list-disc ml-4 mt-1 space-y-1">
+                    <li>Se creará un asiento de reversión automáticamente</li>
+                    <li>La transacción original se marcará como "cancelada"</li>
+                    <li>Si es venta de inventario, el stock se restaurará</li>
+                    <li>Ambas transacciones quedarán visibles para auditoría</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsCancelDialogOpen(false);
+                  setMotivoCancelacion("");
+                  setTransaccionACancelar(null);
+                }}
+                disabled={isCanceling}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleCancelarTransaccion}
+                disabled={isCanceling || !motivoCancelacion.trim()}
+              >
+                {isCanceling ? "Cancelando..." : "Confirmar Cancelación"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>;
 };

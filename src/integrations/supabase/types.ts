@@ -992,6 +992,8 @@ export type Database = {
           created_at: string
           cuenta_principal_codigo: string
           descripcion: string
+          estado: string
+          fecha_cancelacion: string | null
           fecha_vencimiento: string | null
           id: string
           metodo_pago: string
@@ -1000,9 +1002,11 @@ export type Database = {
           monto_pagado: number
           monto_pendiente: number | null
           monto_total: number
+          motivo_cancelacion: string | null
           subcuenta_id: string | null
           tipo_ingreso: string
           tipo_pago: string
+          transaccion_cancelacion_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1015,6 +1019,8 @@ export type Database = {
           created_at?: string
           cuenta_principal_codigo: string
           descripcion: string
+          estado?: string
+          fecha_cancelacion?: string | null
           fecha_vencimiento?: string | null
           id?: string
           metodo_pago: string
@@ -1023,9 +1029,11 @@ export type Database = {
           monto_pagado: number
           monto_pendiente?: number | null
           monto_total: number
+          motivo_cancelacion?: string | null
           subcuenta_id?: string | null
           tipo_ingreso: string
           tipo_pago: string
+          transaccion_cancelacion_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1038,6 +1046,8 @@ export type Database = {
           created_at?: string
           cuenta_principal_codigo?: string
           descripcion?: string
+          estado?: string
+          fecha_cancelacion?: string | null
           fecha_vencimiento?: string | null
           id?: string
           metodo_pago?: string
@@ -1046,13 +1056,23 @@ export type Database = {
           monto_pagado?: number
           monto_pendiente?: number | null
           monto_total?: number
+          motivo_cancelacion?: string | null
           subcuenta_id?: string | null
           tipo_ingreso?: string
           tipo_pago?: string
+          transaccion_cancelacion_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transacciones_ingresos_transaccion_cancelacion_id_fkey"
+            columns: ["transaccion_cancelacion_id"]
+            isOneToOne: false
+            referencedRelation: "transacciones_ingresos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
