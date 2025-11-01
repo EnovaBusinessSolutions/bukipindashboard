@@ -23,35 +23,40 @@ export const useEgresosMensualesPorTipo = (año?: number) => {
       const egresosMensuales: EgresoMensual[] = [];
 
       for (let mes = 0; mes < 12; mes++) {
-        const fechaInicio = new Date(añoActual, mes, 1).toISOString();
-        const fechaFin = new Date(añoActual, mes + 1, 0, 23, 59, 59).toISOString();
+        const fechaInicio = new Date(añoActual, mes, 1).toISOString().split('T')[0];
+        const fechaFin = new Date(añoActual, mes + 1, 0).toISOString().split('T')[0];
 
-        // Obtener costos del mes
-        const { data: costosData } = await supabase
-          .from('transacciones_egresos')
-          .select('monto_total')
-          .eq('tipo_egreso', 'costo')
-          .gte('created_at', fechaInicio)
-          .lte('created_at', fechaFin);
+        // CONSULTAR DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
+        const { data: detalles } = await supabase
+          .from('detalle_asientos')
+          .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
+          .gte('asientos_contables.fecha', fechaInicio)
+          .lte('asientos_contables.fecha', fechaFin);
 
-        const costos = costosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+        let costos = 0;
+        let gastos = 0;
 
-        // Obtener gastos del mes
-        const { data: gastosData } = await supabase
-          .from('transacciones_egresos')
-          .select('monto_total')
-          .eq('tipo_egreso', 'gasto')
-          .gte('created_at', fechaInicio)
-          .lte('created_at', fechaFin);
-
-        const gastos = gastosData?.reduce((sum, t) => sum + (t.monto_total || 0), 0) || 0;
+        // Clasificar según el código de cuenta
+        detalles?.forEach(detalle => {
+          const codigo = detalle.cuenta_codigo;
+          // Costos y gastos tienen naturaleza deudora (DEBE aumenta, HABER disminuye)
+          const monto = (detalle.debe || 0) - (detalle.haber || 0);
+          
+          if (codigo.startsWith('5') && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099) {
+            // Costos de venta (5001-5099)
+            costos += monto;
+          } else if (codigo.startsWith('5') && parseInt(codigo) >= 5100) {
+            // Gastos operativos (5100+)
+            gastos += monto;
+          }
+        });
 
         egresosMensuales.push({
           mes: meses[mes],
           mesNumero: mes + 1,
-          costos,
-          gastos,
-          total: costos + gastos
+          costos: Math.max(0, costos), // Asegurar que no sea negativo
+          gastos: Math.max(0, gastos),
+          total: Math.max(0, costos + gastos)
         });
       }
 

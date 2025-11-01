@@ -29,40 +29,40 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
       const ingresosMensuales: IngresoMensual[] = [];
 
       for (let mes = 0; mes < 12; mes++) {
-        const fechaInicio = new Date(añoActual, mes, 1).toISOString();
-        const fechaFin = new Date(añoActual, mes + 1, 0, 23, 59, 59).toISOString();
+        const fechaInicio = new Date(añoActual, mes, 1).toISOString().split('T')[0];
+        const fechaFin = new Date(añoActual, mes + 1, 0).toISOString().split('T')[0];
 
-        // Obtener TODAS las transacciones de ingresos del mes con su clasificación
-        const { data: ingresosData } = await supabase
-          .from('transacciones_ingresos')
-          .select('tipo_ingreso, monto_neto, cuenta_principal_codigo')
-          .gte('created_at', fechaInicio)
-          .lte('created_at', fechaFin);
+        // CONSULTAR DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
+        const { data: detalles } = await supabase
+          .from('detalle_asientos')
+          .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
+          .gte('asientos_contables.fecha', fechaInicio)
+          .lte('asientos_contables.fecha', fechaFin);
 
         let ventas = 0;
         let otrosIngresos = 0;
 
-        // Clasificar según el cuenta_principal_codigo (4001 es ventas)
-        if (ingresosData) {
-          ingresosData.forEach(ingreso => {
-            const monto = ingreso.monto_neto || 0;
-            
-            // Si la cuenta empieza con 4001, es venta
-            if (ingreso.cuenta_principal_codigo && ingreso.cuenta_principal_codigo.startsWith('4001')) {
-              ventas += monto;
-            } else {
-              // Todo lo demás son otros ingresos
-              otrosIngresos += monto;
-            }
-          });
-        }
+        // Clasificar según el código de cuenta (cuentas 4XXX son ingresos)
+        detalles?.forEach(detalle => {
+          const codigo = detalle.cuenta_codigo;
+          // Las cuentas de ingreso tienen naturaleza acreedora (HABER aumenta, DEBE disminuye)
+          const monto = (detalle.haber || 0) - (detalle.debe || 0);
+          
+          if (codigo.startsWith('4001')) {
+            // Ventas
+            ventas += monto;
+          } else if (codigo.startsWith('4')) {
+            // Otros ingresos (4002, 4003, etc.)
+            otrosIngresos += monto;
+          }
+        });
 
         ingresosMensuales.push({
           mes: meses[mes],
           mesNumero: mes + 1,
-          ventas,
-          otrosIngresos,
-          total: ventas + otrosIngresos
+          ventas: Math.max(0, ventas), // Asegurar que no sea negativo
+          otrosIngresos: Math.max(0, otrosIngresos),
+          total: Math.max(0, ventas + otrosIngresos)
         });
       }
 
