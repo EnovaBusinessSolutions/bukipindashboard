@@ -2731,7 +2731,7 @@ const RegistroIngresos = () => {
                      <div className="space-y-3">
                       {(() => {
                         const productosVentas = filteredTransactions.reduce((acc, t) => {
-                          // Incluir TODAS las ventas, no solo precargados/inventariados
+                          // Incluir TODAS las ventas
                           const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
                           const producto = productos.find(p => 
                             p.nombre === t.descripcion || 
@@ -2739,7 +2739,8 @@ const RegistroIngresos = () => {
                             t.descripcion.includes(p.nombre)
                           );
                           
-                          const productoKey = producto?.nombre || descripcionSinPrefijo;
+                          // Si no tiene producto asignado, agruparlo en "Productos sin asignación"
+                          const productoKey = producto?.nombre || "Productos sin asignación";
                           const tieneAsignacion = !!producto;
                           
                           if (!acc[productoKey]) {
