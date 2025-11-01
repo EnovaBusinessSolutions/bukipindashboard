@@ -2728,32 +2728,32 @@ const RegistroIngresos = () => {
                       No hay datos para mostrar
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                     <div className="space-y-3">
                       {(() => {
                         const productosVentas = filteredTransactions.reduce((acc, t) => {
-                          if (t.tipo_ingreso === "precargados" || t.tipo_ingreso === "inventariados") {
-                            const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
-                            const producto = productos.find(p => 
-                              p.nombre === t.descripcion || 
-                              p.nombre === descripcionSinPrefijo ||
-                              t.descripcion.includes(p.nombre)
-                            );
-                            
-                            const productoKey = producto?.nombre || descripcionSinPrefijo;
-                            const tieneAsignacion = !!producto;
-                            
-                            if (!acc[productoKey]) {
-                              acc[productoKey] = {
-                                nombre: productoKey,
-                                transacciones: 0,
-                                monto: 0,
-                                imagen: producto?.imagen_url,
-                                tieneAsignacion
-                              };
-                            }
-                            acc[productoKey].transacciones += 1;
-                            acc[productoKey].monto += getMetricValue(t, metricType);
+                          // Incluir TODAS las ventas, no solo precargados/inventariados
+                          const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
+                          const producto = productos.find(p => 
+                            p.nombre === t.descripcion || 
+                            p.nombre === descripcionSinPrefijo ||
+                            t.descripcion.includes(p.nombre)
+                          );
+                          
+                          const productoKey = producto?.nombre || descripcionSinPrefijo;
+                          const tieneAsignacion = !!producto;
+                          
+                          if (!acc[productoKey]) {
+                            acc[productoKey] = {
+                              nombre: productoKey,
+                              transacciones: 0,
+                              monto: 0,
+                              imagen: producto?.imagen_url,
+                              tieneAsignacion
+                            };
                           }
+                          acc[productoKey].transacciones += 1;
+                          acc[productoKey].monto += getMetricValue(t, metricType);
+                          
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
                         
