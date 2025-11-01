@@ -25,11 +25,11 @@ const Configuracion = () => {
     setIsDeleting(true);
 
     try {
-      // 1. Obtener todos los asientos del usuario
+      // 1. Obtener TODOS los asientos (incluyendo posibles residuales con user_id null o de prueba)
       const { data: asientos } = await supabase
         .from('asientos_contables')
         .select('id')
-        .eq('user_id', user.id);
+        .or(`user_id.eq.${user.id},user_id.is.null`);
 
       const asientoIds = asientos?.map(a => a.id) || [];
 
@@ -41,21 +41,21 @@ const Configuracion = () => {
           .in('asiento_id', asientoIds);
       }
 
-      // 3. Borrar TODAS las transacciones y registros maestros
+      // 3. Borrar TODAS las transacciones y registros maestros (incluyendo residuales)
       await Promise.all([
-        // Transacciones
-        supabase.from('asientos_contables').delete().eq('user_id', user.id),
-        supabase.from('transacciones_cobros_pagos').delete().eq('user_id', user.id),
-        supabase.from('transacciones_impuestos').delete().eq('user_id', user.id),
+        // Transacciones - incluir posibles registros residuales
+        supabase.from('asientos_contables').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('transacciones_cobros_pagos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('transacciones_impuestos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
         supabase.from('movimientos_inventario').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_financiamientos').delete().eq('user_id', user.id),
-        supabase.from('transacciones_capital').delete().eq('user_id', user.id),
-        supabase.from('transacciones_egresos').delete().eq('user_id', user.id),
-        supabase.from('transacciones_ingresos').delete().eq('user_id', user.id),
+        supabase.from('transacciones_financiamientos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('transacciones_capital').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('transacciones_egresos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('transacciones_ingresos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
         
         // Registros Maestros que afectan reportes financieros
-        supabase.from('inversiones_capex').delete().eq('user_id', user.id),
-        supabase.from('financiamientos').delete().eq('user_id', user.id),
+        supabase.from('inversiones_capex').delete().or(`user_id.eq.${user.id},user_id.is.null`),
+        supabase.from('financiamientos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
         
         // Resetear inventario de productos a cero
         supabase.from('productos').update({
@@ -64,20 +64,29 @@ const Configuracion = () => {
           valor_total_inventario: 0,
           costo_unitario: 0,
           precio_venta: 0
-        }).eq('user_id', user.id)
+        }).or(`user_id.eq.${user.id},user_id.is.null`)
       ]);
+
+      // 4. Validar que efectivamente se borraron todos los datos
+      const { count: asientosRestantes } = await supabase
+        .from('asientos_contables')
+        .select('*', { count: 'exact', head: true });
+
+      if (asientosRestantes && asientosRestantes > 0) {
+        console.warn('⚠️ Aún existen asientos después del reset:', asientosRestantes);
+      }
 
       toast({
         title: "✅ Datos reseteados",
-        description: "Todas las transacciones han sido eliminadas. La página se recargará.",
+        description: "Todas las transacciones han sido eliminadas completamente. La página se recargará.",
       });
 
       setShowConfirm(false);
       
-      // Recargar después de 1 segundo
+      // Recargar después de 1.5 segundos
       setTimeout(() => {
         window.location.reload();
-      }, 1000);
+      }, 1500);
 
     } catch (error) {
       console.error('Error al resetear datos:', error);

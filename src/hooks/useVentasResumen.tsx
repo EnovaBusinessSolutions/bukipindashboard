@@ -13,6 +13,16 @@ interface VentasResumen {
   ingresoNetoDelAno: number;
 }
 
+/**
+ * Hook para obtener resumen de ventas DESDE ASIENTOS CONTABLES (Única Fuente de Verdad)
+ * 
+ * ARQUITECTURA: Este hook consulta ÚNICAMENTE la balanza de comprobación (asientos_contables + detalle_asientos)
+ * para garantizar consistencia con los estados financieros.
+ * 
+ * Cuentas utilizadas:
+ * - 4001: Ventas (Ingresos por ventas de productos/servicios)
+ * - 4XXX: Otros ingresos
+ */
 export const useVentasResumen = () => {
   const [ventasResumen, setVentasResumen] = useState<VentasResumen>({
     ventasDelDia: 0,
@@ -34,82 +44,78 @@ export const useVentasResumen = () => {
       setLoading(true);
       setError(null);
 
-      // Simplificar: obtener todas las transacciones sin filtros de fecha primero para debug
-      const { data: todasLasVentas, error: errorTodasVentas } = await supabase
-        .from('transacciones_ingresos')
-        .select('monto_total, monto_descuento, created_at');
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().split('T')[0];
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+      const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
 
-      if (errorTodasVentas) {
-        console.error('Error fetching todas las ventas:', errorTodasVentas);
-        throw errorTodasVentas;
+      // OBTENER DATOS DESDE ASIENTOS CONTABLES (ÚNICA FUENTE DE VERDAD)
+      // Obtener todos los detalles de ingresos (cuentas 4XXX)
+      const { data: detalles, error: errorDetalles } = await supabase
+        .from('detalle_asientos')
+        .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha, user_id)')
+        .gte('asientos_contables.fecha', startOfYear)
+        .like('cuenta_codigo', '4%');
+
+      if (errorDetalles) {
+        console.error('Error fetching detalles de ingresos:', errorDetalles);
+        throw errorDetalles;
       }
 
-      console.log('Todas las ventas encontradas:', todasLasVentas);
+      // Si no hay datos, retornar ceros
+      if (!detalles || detalles.length === 0) {
+        setVentasResumen({
+          ventasDelDia: 0,
+          ventasDelMes: 0,
+          ventasDelAno: 0,
+          descuentosDelDia: 0,
+          descuentosDelMes: 0,
+          descuentosDelAno: 0,
+          ingresoNetoDelDia: 0,
+          ingresoNetoDelMes: 0,
+          ingresoNetoDelAno: 0,
+        });
+        return;
+      }
 
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      // Calcular totales por periodo
+      let ventasDelDia = 0;
+      let ventasDelMes = 0;
+      let ventasDelAno = 0;
 
-      console.log('Fechas de filtro:', {
-        startOfDay: startOfDay.toISOString(),
-        startOfMonth: startOfMonth.toISOString(),
-        startOfYear: startOfYear.toISOString()
+      detalles.forEach(detalle => {
+        // Las cuentas de ingresos tienen naturaleza ACREEDORA (Haber aumenta, Debe disminuye)
+        const montoIngreso = (detalle.haber || 0) - (detalle.debe || 0);
+        const fechaAsiento = detalle.asientos_contables.fecha;
+
+        // Filtrar por periodo
+        if (fechaAsiento >= startOfDay) {
+          ventasDelDia += montoIngreso;
+        }
+        if (fechaAsiento >= startOfMonth) {
+          ventasDelMes += montoIngreso;
+        }
+        if (fechaAsiento >= startOfYear) {
+          ventasDelAno += montoIngreso;
+        }
       });
 
-      // Calcular totales usando las ventas obtenidas
-      const ventasDelDia = todasLasVentas?.filter(venta => {
-        const fechaVenta = new Date(venta.created_at);
-        return fechaVenta >= startOfDay;
-      }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
-
-      const ventasDelMes = todasLasVentas?.filter(venta => {
-        const fechaVenta = new Date(venta.created_at);
-        return fechaVenta >= startOfMonth;
-      }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
-
-      const ventasDelAno = todasLasVentas?.filter(venta => {
-        const fechaVenta = new Date(venta.created_at);
-        return fechaVenta >= startOfYear;
-      }).reduce((sum, venta) => sum + Number(venta.monto_total), 0) || 0;
-
-      // Calcular descuentos
-      const descuentosDelDia = todasLasVentas?.filter(venta => {
-        const fechaVenta = new Date(venta.created_at);
-        return fechaVenta >= startOfDay;
-      }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
-
-      const descuentosDelMes = todasLasVentas?.filter(venta => {
-        const fechaVenta = new Date(venta.created_at);
-        return fechaVenta >= startOfMonth;
-      }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
-
-      const descuentosDelAno = todasLasVentas?.filter(venta => {
-        const fechaVenta = new Date(venta.created_at);
-        return fechaVenta >= startOfYear;
-      }).reduce((sum, venta) => sum + Number(venta.monto_descuento || 0), 0) || 0;
-
-      // Calcular ingresos netos (ventas - descuentos)
-      const ingresoNetoDelDia = ventasDelDia - descuentosDelDia;
-      const ingresoNetoDelMes = ventasDelMes - descuentosDelMes;
-      const ingresoNetoDelAno = ventasDelAno - descuentosDelAno;
-
-      console.log('Resumen calculado:', { 
-        ventasDelDia, ventasDelMes, ventasDelAno,
-        descuentosDelDia, descuentosDelMes, descuentosDelAno,
-        ingresoNetoDelDia, ingresoNetoDelMes, ingresoNetoDelAno
-      });
+      // Nota: Los descuentos están incluidos en los asientos como reducciones del ingreso
+      // Por ahora no tenemos una cuenta separada para descuentos, así que se calculan como parte del neto
+      const descuentosDelDia = 0;
+      const descuentosDelMes = 0;
+      const descuentosDelAno = 0;
 
       setVentasResumen({
-        ventasDelDia,
-        ventasDelMes,
-        ventasDelAno,
+        ventasDelDia: Math.max(0, ventasDelDia),
+        ventasDelMes: Math.max(0, ventasDelMes),
+        ventasDelAno: Math.max(0, ventasDelAno),
         descuentosDelDia,
         descuentosDelMes,
         descuentosDelAno,
-        ingresoNetoDelDia,
-        ingresoNetoDelMes,
-        ingresoNetoDelAno,
+        ingresoNetoDelDia: Math.max(0, ventasDelDia - descuentosDelDia),
+        ingresoNetoDelMes: Math.max(0, ventasDelMes - descuentosDelMes),
+        ingresoNetoDelAno: Math.max(0, ventasDelAno - descuentosDelAno),
       });
     } catch (err) {
       console.error('Error fetching ventas resumen:', err);
@@ -123,14 +129,26 @@ export const useVentasResumen = () => {
     fetchVentasResumen();
 
     // Configurar realtime para actualizaciones automáticas
+    // Escuchar cambios en asientos_contables (fuente de verdad)
     const channel = supabase
-      .channel('transacciones-changes')
+      .channel('asientos-changes-ventas')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
-          table: 'transacciones_ingresos'
+          table: 'asientos_contables'
+        },
+        () => {
+          fetchVentasResumen();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'detalle_asientos'
         },
         () => {
           fetchVentasResumen();
