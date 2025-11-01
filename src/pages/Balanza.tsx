@@ -128,9 +128,35 @@ const Balanza = () => {
   });
 
   const asientosArray = Object.values(asientosAgrupados);
+  
+  // Identificar y asociar asientos de reversión con sus originales
+  const asientosConReversion = asientosArray.map(asiento => {
+    const esReversion = asiento.descripcion.includes('REVERSIÓN:');
+    
+    // Si es un asiento de reversión, no lo mostramos directamente
+    if (esReversion) {
+      return null;
+    }
+    
+    // Buscar si este asiento tiene una reversión asociada
+    const asientoReversion = asientosArray.find(a => {
+      if (!a.descripcion.includes('REVERSIÓN:')) return false;
+      
+      // La reversión contiene "REVERSIÓN: " + descripción original
+      const descripcionOriginal = a.descripcion.replace('REVERSIÓN: ', '');
+      return descripcionOriginal.includes(asiento.descripcion.substring(0, 30)) ||
+             asiento.descripcion.includes(descripcionOriginal.substring(0, 30));
+    });
+    
+    return {
+      ...asiento,
+      esCancelado: !!asientoReversion,
+      asientoReversion: asientoReversion || null
+    };
+  }).filter(Boolean) as (AsientoAgrupado & { esCancelado: boolean; asientoReversion: AsientoAgrupado | null })[];
 
   // Aplicar filtros
-  let asientosFiltrados = asientosArray;
+  let asientosFiltrados = asientosConReversion;
 
   if (filtroTipo !== "todos") {
     asientosFiltrados = asientosFiltrados.filter((a) => a.tipo === filtroTipo);
@@ -185,7 +211,7 @@ const Balanza = () => {
   const diferencia = Math.abs(totalDebe - totalHaber);
   const cuadra = diferencia < 0.01;
 
-  const tiposUnicos = Array.from(new Set(asientosArray.map((a) => a.tipo))).sort();
+  const tiposUnicos = Array.from(new Set(asientosConReversion.map((a) => a.tipo))).sort();
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -362,7 +388,7 @@ const Balanza = () => {
       <Card>
         <CardHeader>
           <CardTitle>
-            Asientos Contables ({asientosFiltrados.length} de {asientosArray.length})
+            Asientos Contables ({asientosFiltrados.length} de {asientosConReversion.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -371,9 +397,15 @@ const Balanza = () => {
               const diferencia = Math.abs(asiento.totalDebe - asiento.totalHaber);
               const cuadrado = diferencia < 0.01;
 
+              const asientoItem = asiento as any;
+              
               return (
                 <Collapsible key={asiento.referencia}>
-                  <Card className={cuadrado ? "" : "border-red-300"}>
+                  <Card className={
+                    asientoItem.esCancelado 
+                      ? "border-red-300 bg-red-50 dark:bg-red-950/20" 
+                      : cuadrado ? "" : "border-red-300"
+                  }>
                     <CollapsibleTrigger asChild>
                       <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
                         <div className="flex items-center justify-between">
@@ -385,7 +417,14 @@ const Balanza = () => {
                                 <p className="text-xs text-muted-foreground">{asiento.fecha}</p>
                               </div>
                               <div className="md:col-span-2">
-                                <p className="text-sm">{asiento.descripcion}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm">{asiento.descripcion}</p>
+                                  {asientoItem.esCancelado && (
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+                                      ❌ Cancelado
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-medium text-green-600">
@@ -400,7 +439,7 @@ const Balanza = () => {
                                 <p className="text-xs text-muted-foreground">Haber</p>
                               </div>
                             </div>
-                            {!cuadrado && (
+                            {!cuadrado && !asientoItem.esCancelado && (
                               <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
                                 Descuadrado
                               </span>
@@ -459,6 +498,69 @@ const Balanza = () => {
                             </TableRow>
                           </TableBody>
                         </Table>
+                        
+                        {/* Mostrar asiento de reversión si existe */}
+                        {asientoItem.asientoReversion && (
+                          <div className="mt-4 p-4 bg-orange-100 dark:bg-orange-950/40 rounded-md border border-orange-300 dark:border-orange-800">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                ↩️ Asiento de Reversión: {asientoItem.asientoReversion.referencia}
+                              </span>
+                              <span className="text-xs text-orange-600 dark:text-orange-400">
+                                ({asientoItem.asientoReversion.fecha})
+                              </span>
+                            </div>
+                            
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Cuenta</TableHead>
+                                  <TableHead>Descripción</TableHead>
+                                  <TableHead className="text-right">Debe</TableHead>
+                                  <TableHead className="text-right">Haber</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {asientoItem.asientoReversion.movimientos.map((mov: any, idx: number) => (
+                                  <TableRow key={idx}>
+                                    <TableCell>
+                                      <div>
+                                        <p className="font-mono text-xs">{mov.cuenta_codigo}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {mov.cuenta_nombre}
+                                        </p>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-xs">{mov.descripcion}</TableCell>
+                                    <TableCell className="text-right">
+                                      {mov.debe > 0 && (
+                                        <span className="text-green-600 font-medium text-xs">
+                                          {formatCurrency(mov.debe)}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {mov.haber > 0 && (
+                                        <span className="text-red-600 font-medium text-xs">
+                                          {formatCurrency(mov.haber)}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                <TableRow className="font-bold bg-muted/50">
+                                  <TableCell colSpan={2}>Total Reversión</TableCell>
+                                  <TableCell className="text-right text-green-600 text-xs">
+                                    {formatCurrency(asientoItem.asientoReversion.totalDebe)}
+                                  </TableCell>
+                                  <TableCell className="text-right text-red-600 text-xs">
+                                    {formatCurrency(asientoItem.asientoReversion.totalHaber)}
+                                  </TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
                       </CardContent>
                     </CollapsibleContent>
                   </Card>
