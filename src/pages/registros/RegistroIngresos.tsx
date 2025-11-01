@@ -27,6 +27,22 @@ const formatMonto = (value: number | string): string => {
   return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+// Función para formatear cifras según la escala seleccionada
+const formatCifra = (value: number, scale: "general" | "miles" | "millones"): string => {
+  let scaledValue = value;
+  let suffix = "";
+  
+  if (scale === "miles") {
+    scaledValue = value / 1000;
+    suffix = " K";
+  } else if (scale === "millones") {
+    scaledValue = value / 1000000;
+    suffix = " M";
+  }
+  
+  return scaledValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
+};
+
 const RegistroIngresos = () => {
   const {
     ventasResumen,
@@ -88,6 +104,9 @@ const RegistroIngresos = () => {
   
   // Estado para el período de análisis
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
+  
+  // Estado para el formato de cifras
+  const [scaleFormat, setScaleFormat] = useState<"general" | "miles" | "millones">("general");
 
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
@@ -2171,21 +2190,21 @@ const RegistroIngresos = () => {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold">
-                      {loadingVentas ? "..." : `$${ventasResumen.ventasDelDia.toLocaleString()}`}
+                    <span className="font-semibold hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelDia, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-destructive">
-                      {loadingVentas ? "..." : `$${ventasResumen.descuentosDelDia.toLocaleString()}`}
+                    <span className="font-semibold text-destructive hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelDia, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
-                    <span className="text-lg font-bold text-chart-2">
-                      {loadingVentas ? "..." : `$${ventasResumen.ingresoNetoDelDia.toLocaleString()}`}
+                    <span className="text-lg font-bold text-chart-2 hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelDia, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
@@ -2199,21 +2218,21 @@ const RegistroIngresos = () => {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold">
-                      {loadingVentas ? "..." : `$${ventasResumen.ventasDelMes.toLocaleString()}`}
+                    <span className="font-semibold hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelMes, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-destructive">
-                      {loadingVentas ? "..." : `$${ventasResumen.descuentosDelMes.toLocaleString()}`}
+                    <span className="font-semibold text-destructive hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelMes, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
-                    <span className="text-lg font-bold text-chart-2">
-                      {loadingVentas ? "..." : `$${ventasResumen.ingresoNetoDelMes.toLocaleString()}`}
+                    <span className="text-lg font-bold text-chart-2 hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelMes, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
@@ -2227,48 +2246,71 @@ const RegistroIngresos = () => {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold">
-                      {loadingVentas ? "..." : `$${ventasResumen.ventasDelAno.toLocaleString()}`}
+                    <span className="font-semibold hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelAno, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-destructive">
-                      {loadingVentas ? "..." : `$${ventasResumen.descuentosDelAno.toLocaleString()}`}
+                    <span className="font-semibold text-destructive hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelAno, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
-                    <span className="text-lg font-bold text-chart-2">
-                      {loadingVentas ? "..." : `$${ventasResumen.ingresoNetoDelAno.toLocaleString()}`}
+                    <span className="text-lg font-bold text-chart-2 hover:text-black transition-colors cursor-default">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelAno, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Selector de Período */}
+            {/* Selector de Período y Formato de Cifras */}
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Período de Análisis</CardTitle>
-                <CardDescription>Selecciona el período para analizar las ventas en detalle</CardDescription>
+                <CardTitle>Configuración de Análisis</CardTitle>
+                <CardDescription>Selecciona el período y formato de visualización</CardDescription>
               </CardHeader>
-              <CardContent>
-                <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex gap-4">
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="diario" id="period-daily" />
-                    <Label htmlFor="period-daily" className="cursor-pointer">Diario</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="mensual" id="period-monthly" />
-                    <Label htmlFor="period-monthly" className="cursor-pointer">Mensual</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="anual" id="period-annual" />
-                    <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
-                  </div>
-                </RadioGroup>
+              <CardContent className="space-y-6">
+                <div>
+                  <Label className="text-sm font-medium mb-3 block">Período de Análisis</Label>
+                  <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex gap-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="diario" id="period-daily" />
+                      <Label htmlFor="period-daily" className="cursor-pointer">Diario</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="mensual" id="period-monthly" />
+                      <Label htmlFor="period-monthly" className="cursor-pointer">Mensual</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="anual" id="period-annual" />
+                      <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                
+                <Separator />
+                
+                <div>
+                  <Label className="text-sm font-medium mb-3 block">Formato de Cifras</Label>
+                  <RadioGroup value={scaleFormat} onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")} className="flex gap-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="general" id="scale-general" />
+                      <Label htmlFor="scale-general" className="cursor-pointer">General</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="miles" id="scale-thousands" />
+                      <Label htmlFor="scale-thousands" className="cursor-pointer">Miles (K)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="millones" id="scale-millions" />
+                      <Label htmlFor="scale-millions" className="cursor-pointer">Millones (M)</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
               </CardContent>
             </Card>
 
@@ -2365,8 +2407,13 @@ const RegistroIngresos = () => {
                       })()}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="periodo" />
-                        <YAxis />
-                        <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, '']} />
+                        <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
+                        <Tooltip 
+                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, '']}
+                          contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
+                          itemStyle={{ color: 'black' }}
+                          labelStyle={{ color: 'black' }}
+                        />
                         <Legend />
                         <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2} />
                         <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2} />
@@ -2428,7 +2475,12 @@ const RegistroIngresos = () => {
                               return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
                             })}
                           </Pie>
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Tooltip 
+                            formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
+                            contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
+                            itemStyle={{ color: 'black' }}
+                            labelStyle={{ color: 'black' }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -2486,7 +2538,12 @@ const RegistroIngresos = () => {
                             <Cell fill="hsl(180 55% 65%)" />
                             <Cell fill="hsl(180 45% 45%)" />
                           </Pie>
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <Tooltip 
+                            formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
+                            contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
+                            itemStyle={{ color: 'black' }}
+                            labelStyle={{ color: 'black' }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -2528,8 +2585,13 @@ const RegistroIngresos = () => {
                         })()}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="subcuenta" angle={-45} textAnchor="end" height={100} />
-                          <YAxis />
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Monto']} />
+                          <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
+                          <Tooltip 
+                            formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
+                            contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
+                            itemStyle={{ color: 'black' }}
+                            labelStyle={{ color: 'black' }}
+                          />
                           <Bar dataKey="monto" fill="hsl(180 50% 55%)" />
                         </BarChart>
                       </ResponsiveContainer>
@@ -2606,7 +2668,9 @@ const RegistroIngresos = () => {
                                 </p>
                               </div>
                               <div className="text-right">
-                                <p className="font-bold text-primary">${producto.monto.toLocaleString()}</p>
+                                <p className="font-bold text-primary hover:text-black transition-colors cursor-default">
+                                  ${formatCifra(producto.monto, scaleFormat)}
+                                </p>
                               </div>
                             </div>
                           ));
@@ -2667,7 +2731,9 @@ const RegistroIngresos = () => {
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-bold text-primary">${cliente.monto.toLocaleString()}</p>
+                                <p className="font-bold text-primary hover:text-black transition-colors cursor-default">
+                                  ${formatCifra(cliente.monto, scaleFormat)}
+                                </p>
                               </div>
                             </div>
                           ));
