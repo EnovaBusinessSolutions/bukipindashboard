@@ -2234,8 +2234,10 @@ const RegistroIngresos = () => {
 
               return (
                 <>
-                  {/* Resumen de Ventas, Descuentos e Ingreso Neto */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                  {/* HIGHLIGHTS - Resumen de Ventas */}
+                  <div className="mb-8">
+                    <h3 className="text-xl font-bold text-foreground mb-4">Highlights de Ventas</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Día */}
               <Card>
                 <CardHeader className="pb-3">
@@ -2320,6 +2322,14 @@ const RegistroIngresos = () => {
                 </CardContent>
               </Card>
             </div>
+                  </div>
+
+            {/* SEPARADOR */}
+            <div className="my-8 border-t-2 border-primary/20"></div>
+
+            {/* ANALÍTICA - Sección de análisis detallado */}
+            <div>
+              <h3 className="text-xl font-bold text-foreground mb-6">Analítica de Ventas</h3>
 
             {/* Selector de Período, Formato de Cifras y Tipo de Métrica */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -2841,6 +2851,7 @@ const RegistroIngresos = () => {
                   )}
                 </CardContent>
               </Card>
+            </div>
             </div>
           </>
         );

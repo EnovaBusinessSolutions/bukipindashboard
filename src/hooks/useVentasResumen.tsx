@@ -82,29 +82,43 @@ export const useVentasResumen = () => {
       let ventasDelDia = 0;
       let ventasDelMes = 0;
       let ventasDelAno = 0;
+      let descuentosDelDia = 0;
+      let descuentosDelMes = 0;
+      let descuentosDelAno = 0;
 
       detalles.forEach(detalle => {
-        // Las cuentas de ingresos tienen naturaleza ACREEDORA (Haber aumenta, Debe disminuye)
-        const montoIngreso = (detalle.haber || 0) - (detalle.debe || 0);
         const fechaAsiento = detalle.asientos_contables.fecha;
+        
+        // Cuenta 4003: Descuentos sobre Ventas (tiene naturaleza DEUDORA en contra-cuenta de ingresos)
+        // El DEBE aumenta los descuentos (reduce ingresos)
+        if (detalle.cuenta_codigo === '4003') {
+          const montoDescuento = (detalle.debe || 0) - (detalle.haber || 0);
+          
+          if (fechaAsiento >= startOfDay) {
+            descuentosDelDia += montoDescuento;
+          }
+          if (fechaAsiento >= startOfMonth) {
+            descuentosDelMes += montoDescuento;
+          }
+          if (fechaAsiento >= startOfYear) {
+            descuentosDelAno += montoDescuento;
+          }
+        } else {
+          // Las demás cuentas de ingresos (4001, 4002, etc.) tienen naturaleza ACREEDORA
+          // (Haber aumenta, Debe disminuye)
+          const montoIngreso = (detalle.haber || 0) - (detalle.debe || 0);
 
-        // Filtrar por periodo
-        if (fechaAsiento >= startOfDay) {
-          ventasDelDia += montoIngreso;
-        }
-        if (fechaAsiento >= startOfMonth) {
-          ventasDelMes += montoIngreso;
-        }
-        if (fechaAsiento >= startOfYear) {
-          ventasDelAno += montoIngreso;
+          if (fechaAsiento >= startOfDay) {
+            ventasDelDia += montoIngreso;
+          }
+          if (fechaAsiento >= startOfMonth) {
+            ventasDelMes += montoIngreso;
+          }
+          if (fechaAsiento >= startOfYear) {
+            ventasDelAno += montoIngreso;
+          }
         }
       });
-
-      // Nota: Los descuentos están incluidos en los asientos como reducciones del ingreso
-      // Por ahora no tenemos una cuenta separada para descuentos, así que se calculan como parte del neto
-      const descuentosDelDia = 0;
-      const descuentosDelMes = 0;
-      const descuentosDelAno = 0;
 
       setVentasResumen({
         ventasDelDia: Math.max(0, ventasDelDia),
