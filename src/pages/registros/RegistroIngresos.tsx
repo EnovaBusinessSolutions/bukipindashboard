@@ -214,8 +214,14 @@ const RegistroIngresos = () => {
     if (!selectedProduct) return;
 
     const cantidad = parseFloat(productQuantity) || 1;
-    const descuento = parseFloat(productDiscount) || 0;
+    const discountValue = parseFloat(productDiscount) || 0;
     const subtotalSinDescuento = selectedProduct.precio * cantidad;
+    
+    // Calcular descuento según el tipo
+    const descuento = productDiscountType === "porcentaje" 
+      ? subtotalSinDescuento * (discountValue / 100)
+      : discountValue;
+    
     const subtotal = Math.max(0, subtotalSinDescuento - descuento);
 
     // Verificar si el producto ya está en la lista
