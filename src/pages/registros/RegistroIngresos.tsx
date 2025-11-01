@@ -1410,36 +1410,6 @@ const RegistroIngresos = () => {
                             </div>
                           </div>}
 
-                       <div className="flex items-center space-x-2">
-                        <Checkbox id="discount" checked={hasDiscount} onCheckedChange={checked => setHasDiscount(checked === true)} />
-                        <Label htmlFor="discount" className="font-medium">¿Aplicar descuento?</Label>
-                      </div>
-                      
-                      {hasDiscount && <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
-                          <div className="space-y-2">
-                            <Label htmlFor="discount-amount">Monto del descuento</Label>
-                            <Input id="discount-amount" type="number" placeholder="0.00" value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} />
-                          </div>
-                          <div className="flex items-end">
-                            <Alert className="mt-4">
-                              <AlertCircle className="h-4 w-4" />
-                              <AlertDescription>
-                                <strong>Contabilización automática:</strong><br />
-                                • Ventas: +${montoTotal || '0'}<br />
-                                {hasDiscount && discountAmount && <span>• Descuento sobre ventas: +${discountAmount}<br /></span>}
-                                • {paymentMethod === 'efectivo' ? 'Caja' : 'Bancos'}: +${formatMonto(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))}
-                              </AlertDescription>
-                            </Alert>
-                          </div>
-                          <div className="mt-4 p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
-                            <div className="text-center">
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Total a cobrar al cliente</p>
-                              <p className="text-2xl font-bold text-primary">
-                                ${formatMonto(parseFloat(montoTotal || '0') - parseFloat(discountAmount || '0'))}
-                              </p>
-                            </div>
-                          </div>
-                        </div>}
                     </div>
 
 
@@ -1483,41 +1453,20 @@ const RegistroIngresos = () => {
                           </div>
                           
                           {montoTotal && montoAbonado && <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 bg-white dark:bg-gray-900 rounded border">
-                              {hasDiscount && discountAmount ? <>
-                                  <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Total original</p>
-                                <p className="text-sm line-through text-muted-foreground">${formatMonto(montoTotal)}</p>
-                                <p className="text-sm text-muted-foreground">Descuento: -${formatMonto(discountAmount)}</p>
-                                <p className="text-lg font-semibold text-primary">
-                                  ${formatMonto(parseFloat(montoTotal) - parseFloat(discountAmount))}
-                                    </p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Se pagará ahora</p>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Total de la venta</p>
+                                <p className="text-lg font-semibold text-primary">${formatMonto(montoTotal)}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Se pagará ahora</p>
                                 <p className="text-lg font-semibold text-green-600">${formatMonto(montoAbonado)}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Queda pendiente</p>
-                                    <p className="text-lg font-semibold text-orange-600">
-                                      ${formatMonto(parseFloat(montoTotal) - parseFloat(discountAmount) - parseFloat(montoAbonado))}
-                                    </p>
-                                  </div>
-                                </> : <>
-                                  <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Total de la venta</p>
-                                    <p className="text-lg font-semibold text-primary">${formatMonto(montoTotal)}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Se pagará ahora</p>
-                                    <p className="text-lg font-semibold text-green-600">${formatMonto(montoAbonado)}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Queda pendiente</p>
-                                    <p className="text-lg font-semibold text-orange-600">
-                                      ${formatMonto(parseFloat(montoTotal) - parseFloat(montoAbonado))}
-                                    </p>
-                                  </div>
-                                </>}
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Queda pendiente</p>
+                                <p className="text-lg font-semibold text-orange-600">
+                                  ${formatMonto(parseFloat(montoTotal) - parseFloat(montoAbonado))}
+                                </p>
+                              </div>
                             </div>}
                         </div>}
 
