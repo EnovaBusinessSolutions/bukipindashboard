@@ -2758,42 +2758,73 @@ const RegistroIngresos = () => {
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
                         
-                        return Object.values(productosVentas)
-                          .sort((a, b) => b.monto - a.monto)
-                          .slice(0, 10)
-                          .map((producto) => (
-                            <div key={producto.nombre} className={`flex items-center gap-3 p-3 border rounded-lg ${!producto.tieneAsignacion ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                              {producto.imagen ? (
-                                <img 
-                                  src={producto.imagen} 
-                                  alt={producto.nombre} 
-                                  className="w-12 h-12 rounded-md object-cover flex-shrink-0"
-                                />
-                              ) : (
-                                <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${!producto.tieneAsignacion ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted'}`}>
-                                  <Package className={`w-5 h-5 ${!producto.tieneAsignacion ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium truncate">{producto.nombre}</p>
-                                  {!producto.tieneAsignacion && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
-                                      Sin asignar
-                                    </span>
+                        const productosArray = Object.values(productosVentas).sort((a, b) => b.monto - a.monto);
+                        const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
+                        const top10 = productosArray.slice(0, 10);
+                        
+                        return (
+                          <>
+                            {top10.map((producto) => {
+                              const porcentaje = totalGeneral > 0 ? ((producto.monto / totalGeneral) * 100).toFixed(1) : '0.0';
+                              return (
+                                <div key={producto.nombre} className={`flex items-center gap-3 p-3 border rounded-lg ${!producto.tieneAsignacion ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                                  {producto.imagen ? (
+                                    <img 
+                                      src={producto.imagen} 
+                                      alt={producto.nombre} 
+                                      className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${!producto.tieneAsignacion ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted'}`}>
+                                      <Package className={`w-5 h-5 ${!producto.tieneAsignacion ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
+                                    </div>
                                   )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium truncate">{producto.nombre}</p>
+                                      {!producto.tieneAsignacion && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                                          Sin asignar
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                      {producto.transacciones} {producto.transacciones === 1 ? 'transacción' : 'transacciones'}
+                                    </p>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="font-bold text-foreground">
+                                      ${formatCifra(producto.monto, scaleFormat)}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {porcentaje}%
+                                    </p>
+                                  </div>
                                 </div>
+                              );
+                            })}
+                            {/* Fila de Total */}
+                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                              <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                <Package className="w-5 h-5 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
                                 <p className="text-sm text-muted-foreground">
-                                  {producto.transacciones} {producto.transacciones === 1 ? 'transacción' : 'transacciones'}
+                                  {productosArray.reduce((sum, p) => sum + p.transacciones, 0)} transacciones
                                 </p>
                               </div>
-                              <div className="text-right">
-                                <p className="font-bold text-foreground">
-                                  ${formatCifra(producto.monto, scaleFormat)}
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-lg text-primary">
+                                  ${formatCifra(totalGeneral, scaleFormat)}
+                                </p>
+                                <p className="text-sm font-semibold text-primary">
+                                  100%
                                 </p>
                               </div>
                             </div>
-                          ));
+                          </>
+                        );
                       })()}
                     </div>
                   )}
@@ -2834,29 +2865,60 @@ const RegistroIngresos = () => {
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
                         
-                        return Object.values(clientesVentas)
-                          .sort((a, b) => b.monto - a.monto)
-                          .slice(0, 10)
-                          .map((cliente) => (
-                            <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
-                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
+                        const totalGeneral = clientesArray.reduce((sum, c) => sum + c.monto, 0);
+                        const top10 = clientesArray.slice(0, 10);
+                        
+                        return (
+                          <>
+                            {top10.map((cliente) => {
+                              const porcentaje = totalGeneral > 0 ? ((cliente.monto / totalGeneral) * 100).toFixed(1) : '0.0';
+                              return (
+                                <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
+                                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <Users className="w-6 h-6 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">{cliente.nombre}</p>
+                                    <div className="text-sm text-muted-foreground space-y-0.5">
+                                      <p>{cliente.transacciones} {cliente.transacciones === 1 ? 'compra' : 'compras'}</p>
+                                      {cliente.telefono && <p className="text-xs">{cliente.telefono}</p>}
+                                      {cliente.email && <p className="text-xs truncate">{cliente.email}</p>}
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="font-bold text-foreground">
+                                      ${formatCifra(cliente.monto, scaleFormat)}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {porcentaje}%
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {/* Fila de Total */}
+                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                                 <Users className="w-6 h-6 text-primary" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{cliente.nombre}</p>
-                                <div className="text-sm text-muted-foreground space-y-0.5">
-                                  <p>{cliente.transacciones} {cliente.transacciones === 1 ? 'compra' : 'compras'}</p>
-                                  {cliente.telefono && <p className="text-xs">{cliente.telefono}</p>}
-                                  {cliente.email && <p className="text-xs truncate">{cliente.email}</p>}
-                                </div>
+                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {clientesArray.reduce((sum, c) => sum + c.transacciones, 0)} transacciones
+                                </p>
                               </div>
-                              <div className="text-right">
-                                <p className="font-bold text-foreground">
-                                  ${formatCifra(cliente.monto, scaleFormat)}
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-lg text-primary">
+                                  ${formatCifra(totalGeneral, scaleFormat)}
+                                </p>
+                                <p className="text-sm font-semibold text-primary">
+                                  100%
                                 </p>
                               </div>
                             </div>
-                          ));
+                          </>
+                        );
                       })()}
                     </div>
                   )}
