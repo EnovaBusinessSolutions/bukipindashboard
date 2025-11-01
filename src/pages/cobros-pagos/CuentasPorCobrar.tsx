@@ -31,7 +31,9 @@ import {
   Users, 
   Clock, 
   Target,
-  CheckCircle2
+  CheckCircle2,
+  FileText,
+  Eye
 } from "lucide-react";
 import { 
   BarChart, 
@@ -85,6 +87,10 @@ const CuentasPorCobrar = () => {
   const [filtroClienteTransaccion, setFiltroClienteTransaccion] = useState<string>("todos");
   const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
   const [escalaHistorico, setEscalaHistorico] = useState<"normal" | "miles" | "millones">("normal");
+  
+  // Estados para modal de detalle contable
+  const [detalleContableOpen, setDetalleContableOpen] = useState(false);
+  const [selectedTransaccionId, setSelectedTransaccionId] = useState<string | null>(null);
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -144,6 +150,43 @@ const CuentasPorCobrar = () => {
   // Hooks para analíticas
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC);
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
+
+  // Query para obtener asientos contables de una transacción
+  const { data: asientosContables, isLoading: loadingAsientos } = useQuery({
+    queryKey: ["asientos-contables-transaccion", selectedTransaccionId],
+    queryFn: async () => {
+      if (!selectedTransaccionId) return null;
+      
+      const { data: asiento, error: asientoError } = await supabase
+        .from("asientos_contables")
+        .select(`
+          *,
+          detalle_asientos (
+            *,
+            cuentas:cuenta_codigo (
+              codigo,
+              nombre,
+              estado_financiero,
+              grupo
+            ),
+            subcuentas (
+              id,
+              nombre
+            )
+          )
+        `)
+        .eq("transaccion_ingreso_id", selectedTransaccionId)
+        .single();
+
+      if (asientoError) {
+        console.error("Error fetching asiento:", asientoError);
+        return null;
+      }
+
+      return asiento;
+    },
+    enabled: !!selectedTransaccionId && detalleContableOpen,
+  });
 
   // Mutación para registrar pago
   const registrarPagoMutation = useMutation({
@@ -962,7 +1005,7 @@ const CuentasPorCobrar = () => {
                     ) : (
                       <div className="overflow-x-auto">
                         <Table>
-                          <TableHeader>
+                           <TableHeader>
                             <TableRow>
                               <TableHead>Fecha Creación</TableHead>
                               <TableHead>Cliente</TableHead>
@@ -977,6 +1020,7 @@ const CuentasPorCobrar = () => {
                               <TableHead>Método Pago</TableHead>
                               <TableHead>Estado</TableHead>
                               <TableHead>Progreso</TableHead>
+                              <TableHead className="text-center">Detalle Contable</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1074,6 +1118,19 @@ const CuentasPorCobrar = () => {
                                         />
                                       </div>
                                     </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedTransaccionId(transaccion.id);
+                                        setDetalleContableOpen(true);
+                                      }}
+                                    >
+                                      <Eye className="h-4 w-4 mr-1" />
+                                      Ver Detalle
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -1520,6 +1577,176 @@ const CuentasPorCobrar = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Dialog para ver detalle contable */}
+      <Dialog open={detalleContableOpen} onOpenChange={setDetalleContableOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Detalle Contable - Asiento Generado
+            </DialogTitle>
+            <DialogDescription>
+              Consulta las cuentas afectadas en la balanza de comprobación
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingAsientos ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-muted-foreground">Cargando detalle contable...</div>
+            </div>
+          ) : !asientosContables ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No se encontró asiento contable para esta transacción.</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                El asiento puede no haberse generado automáticamente.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Información del Asiento */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Información del Asiento</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground">Número de Asiento</Label>
+                      <p className="font-mono font-semibold">{asientosContables.numero_asiento}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Fecha</Label>
+                      <p className="font-medium">
+                        {format(new Date(asientosContables.fecha), "dd 'de' MMMM, yyyy", { locale: es })}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Descripción</Label>
+                    <p className="font-medium">{asientosContables.descripcion}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Detalle de Movimientos Contables */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Movimientos Contables (Debe y Haber)</CardTitle>
+                  <CardDescription>
+                    Cuentas afectadas en la balanza de comprobación
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cuenta</TableHead>
+                        <TableHead>Subcuenta</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead className="text-right">Debe</TableHead>
+                        <TableHead className="text-right">Haber</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {asientosContables.detalle_asientos?.map((detalle: any) => (
+                        <TableRow key={detalle.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-mono text-sm font-semibold">
+                                {detalle.cuentas?.codigo}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {detalle.cuentas?.nombre}
+                              </p>
+                              <Badge variant="outline" className="mt-1 text-xs">
+                                {detalle.cuentas?.grupo}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {detalle.subcuentas ? (
+                              <Badge variant="secondary" className="text-xs">
+                                {detalle.subcuentas.nombre}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="max-w-[200px]">
+                            <p className="text-sm">{detalle.descripcion || "-"}</p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {detalle.debe > 0 ? (
+                              <span className="font-semibold text-primary">
+                                ${detalle.debe.toLocaleString('es-CO')}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {detalle.haber > 0 ? (
+                              <span className="font-semibold text-secondary">
+                                ${detalle.haber.toLocaleString('es-CO')}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {/* Totales */}
+                  <div className="mt-4 pt-4 border-t space-y-2">
+                    <div className="flex justify-between items-center font-semibold">
+                      <span>Total Debe:</span>
+                      <span className="text-primary">
+                        ${asientosContables.detalle_asientos
+                          ?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0)
+                          .toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center font-semibold">
+                      <span>Total Haber:</span>
+                      <span className="text-secondary">
+                        ${asientosContables.detalle_asientos
+                          ?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0)
+                          .toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center font-bold text-lg pt-2 border-t">
+                      <span>Diferencia (Debe - Haber):</span>
+                      <span className={
+                        Math.abs(
+                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
+                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
+                        ) < 0.01 ? 'text-success' : 'text-destructive'
+                      }>
+                        ${(
+                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
+                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
+                        ).toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                    {Math.abs(
+                      (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
+                      (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
+                    ) < 0.01 && (
+                      <div className="flex items-center gap-2 text-success text-sm mt-2">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>El asiento está balanceado correctamente</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de Registro de Pago */}
       <Dialog open={pagoDialogOpen} onOpenChange={setPagoDialogOpen}>
