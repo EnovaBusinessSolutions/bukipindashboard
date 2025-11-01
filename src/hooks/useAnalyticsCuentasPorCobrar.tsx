@@ -49,6 +49,7 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         .from("transacciones_ingresos")
         .select("*")
         .gt("monto_pendiente", 0)
+        .eq("estado", "activo")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -333,6 +334,7 @@ export const useCuentasPorCobrarDetalle = () => {
         .from("transacciones_ingresos")
         .select("*")
         .gt("monto_pendiente", 0)
+        .eq("estado", "activo")
         .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
 
       if (error) throw error;

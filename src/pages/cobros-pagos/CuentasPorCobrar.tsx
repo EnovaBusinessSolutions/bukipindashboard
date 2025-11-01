@@ -107,6 +107,7 @@ const CuentasPorCobrar = () => {
         .from("transacciones_ingresos")
         .select("*")
         .gt("monto_pendiente", 0)
+        .eq("estado", "activo")
         .order("fecha_vencimiento", { ascending: true });
 
       if (error) throw error;
