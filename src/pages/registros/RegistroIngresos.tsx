@@ -1095,12 +1095,37 @@ const RegistroIngresos = () => {
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
-              <Label htmlFor="descripcion-otros">Descripción del Ingreso Extraordinario</Label>
-              <Textarea id="descripcion-otros" placeholder="Ej: Venta extraordinaria de equipo usado, donación recibida, etc." />
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="descripcion-otros">Descripción del Ingreso Extraordinario</Label>
+                {hasFieldError('Descripción') && <div className="flex items-center text-destructive">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Requerido</span>
+                  </div>}
+              </div>
+              <Textarea 
+                id="descripcion-otros" 
+                placeholder="Ej: Venta extraordinaria de equipo usado, donación recibida, etc." 
+                value={descripcion} 
+                onChange={e => setDescripcion(e.target.value)}
+                className={hasFieldError('Descripción') ? 'border-destructive' : ''}
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="monto-otros">Monto</Label>
-              <Input id="monto-otros" type="number" placeholder="0.00" />
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="monto-otros">Monto</Label>
+                {hasFieldError('Monto Total') && <div className="flex items-center text-destructive">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">Requerido</span>
+                  </div>}
+              </div>
+              <Input 
+                id="monto-otros" 
+                type="number" 
+                placeholder="0.00" 
+                value={montoTotal} 
+                onChange={e => setMontoTotal(e.target.value)}
+                className={hasFieldError('Monto Total') ? 'border-destructive' : ''}
+              />
             </div>
           </div>;
       default:
