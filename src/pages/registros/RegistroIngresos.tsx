@@ -319,8 +319,14 @@ const RegistroIngresos = () => {
     if (paymentStatus === 'credito' || paymentStatus === 'parcial') {
       if (!tipoCliente) errors.push('Tipo de Cliente');
       if (tipoCliente === 'recurrente' && !clienteSeleccionado) errors.push('Cliente Seleccionado');
-      if (!clienteTelefono.trim()) errors.push('Teléfono del Cliente');
-      if (!clienteEmail.trim()) errors.push('Email del Cliente');
+      
+      // Solo validar datos del cliente si es NUEVO
+      if (tipoCliente === 'nuevo') {
+        if (!clienteNombre.trim()) errors.push('Nombre del Cliente');
+        if (!clienteTelefono.trim()) errors.push('Teléfono del Cliente');
+        if (!clienteEmail.trim()) errors.push('Email del Cliente');
+      }
+      
       if (!fechaVencimiento) errors.push('Fecha de Vencimiento');
 
       // Validación específica para pago parcial
