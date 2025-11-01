@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
@@ -2418,9 +2418,15 @@ const RegistroIngresos = () => {
                           wrapperStyle={{ zIndex: 1000 }}
                         />
                         <Legend />
-                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2} />
-                        <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2} />
-                        <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2} />
+                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
+                          <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                        </Line>
+                        <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
+                          <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                        </Line>
+                        <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
+                          <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                        </Line>
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -2598,7 +2604,9 @@ const RegistroIngresos = () => {
                             labelStyle={{ color: '#000000', fontWeight: 'bold' }}
                             wrapperStyle={{ zIndex: 1000 }}
                           />
-                          <Bar dataKey="monto" fill="hsl(180 50% 55%)" />
+                          <Bar dataKey="monto" fill="hsl(180 50% 55%)">
+                            <LabelList dataKey="monto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
