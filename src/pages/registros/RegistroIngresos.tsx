@@ -719,6 +719,8 @@ const RegistroIngresos = () => {
 
     setIsCanceling(true);
     try {
+      console.log('Cancelando transacción:', transaccionACancelar.id);
+      
       const { data, error } = await supabase.functions.invoke('cancelar-ingreso', {
         body: {
           transaccionId: transaccionACancelar.id,
@@ -726,11 +728,22 @@ const RegistroIngresos = () => {
         }
       });
 
-      if (error) throw error;
+      console.log('Respuesta de edge function:', { data, error });
+
+      if (error) {
+        console.error('Error de edge function:', error);
+        throw new Error(error.message || JSON.stringify(error));
+      }
+
+      // Verificar si la respuesta indica error
+      if (data?.error) {
+        console.error('Error en data:', data);
+        throw new Error(data.error);
+      }
 
       toast({
         title: "✓ Transacción cancelada",
-        description: `Asiento de reversión ${data.numeroAsientoReversion} creado correctamente`
+        description: `Asiento de reversión ${data?.numeroAsientoReversion || 'creado'} correctamente`
       });
 
       // Refrescar datos
@@ -741,10 +754,11 @@ const RegistroIngresos = () => {
       setTransaccionACancelar(null);
       setIsCancelDialogOpen(false);
 
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error completo al cancelar:', error);
       toast({
-        title: "Error al cancelar",
-        description: error.message || "No se pudo cancelar la transacción",
+        title: "❌ Error al cancelar",
+        description: error?.message || error?.toString() || "No se pudo cancelar la transacción",
         variant: "destructive"
       });
     } finally {

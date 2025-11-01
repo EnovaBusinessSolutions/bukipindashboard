@@ -12,6 +12,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('Iniciando cancelación de ingreso...');
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -19,21 +21,38 @@ Deno.serve(async (req) => {
 
     // Obtener user_id del token de autenticación
     const authHeader = req.headers.get('Authorization');
+    console.log('Auth header presente:', !!authHeader);
+    
     let userId = null;
     
     if (authHeader) {
-      const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError) {
+        console.error('Error de autenticación:', authError);
+        return new Response(
+          JSON.stringify({ error: `Error de autenticación: ${authError.message}` }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       userId = user?.id;
+      console.log('User ID obtenido:', userId);
     }
 
     if (!userId) {
+      console.error('No se pudo obtener el user ID');
       return new Response(
-        JSON.stringify({ error: 'No autorizado' }),
+        JSON.stringify({ error: 'No autorizado - usuario no identificado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { transaccionId, motivoCancelacion } = await req.json();
+    const body = await req.json();
+    console.log('Body recibido:', body);
+    
+    const { transaccionId, motivoCancelacion } = body;
 
     if (!transaccionId || !motivoCancelacion) {
       return new Response(
