@@ -43,6 +43,14 @@ const formatCifra = (value: number, scale: "general" | "miles" | "millones"): st
   return scaledValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
 };
 
+// Función helper para obtener el valor de métrica según el tipo seleccionado
+const getMetricValue = (transaction: any, metricType: "brutas" | "descuentos" | "netas"): number => {
+  if (metricType === "brutas") return transaction.monto_total || 0;
+  if (metricType === "descuentos") return transaction.monto_descuento || 0;
+  if (metricType === "netas") return transaction.monto_neto || transaction.monto_total || 0;
+  return 0;
+};
+
 const RegistroIngresos = () => {
   const {
     ventasResumen,
@@ -2513,8 +2521,8 @@ const RegistroIngresos = () => {
               {/* Gráfico de Ventas por Tipo */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Ventas por Tipo</CardTitle>
-                  <CardDescription>Distribución de ingresos por categoría</CardDescription>
+                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Tipo</CardTitle>
+                  <CardDescription>Distribución de {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por categoría</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingTransacciones ? (
@@ -2531,12 +2539,12 @@ const RegistroIngresos = () => {
                         <PieChart>
                           <Pie
                             data={Object.entries(filteredTransactions.reduce((acc, t) => {
-                              acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + t.monto_total;
+                              acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + getMetricValue(t, metricType);
                               return acc;
                             }, {} as Record<string, number>)).map(([tipo, monto]) => ({
                               tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
                               monto,
-                              porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                              porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + getMetricValue(t, metricType), 0) * 100).toFixed(1)
                             }))}
                             cx="50%"
                             cy="50%"
@@ -2577,8 +2585,8 @@ const RegistroIngresos = () => {
               {/* Gráfico de Estado de Pago */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Estado de Pagos</CardTitle>
-                  <CardDescription>Pagados, parciales y por cobrar</CardDescription>
+                  <CardTitle>Estado de Pagos - {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"}</CardTitle>
+                  <CardDescription>Distribución por estado de pago</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingTransacciones ? (
@@ -2602,14 +2610,14 @@ const RegistroIngresos = () => {
                                 } else if (t.tipo_pago === "parcial" || (t.monto_pagado > 0 && t.monto_pendiente > 0)) {
                                   estado = "Pago Parcial";
                                 }
-                                acc[estado] = (acc[estado] || 0) + t.monto_total;
+                                acc[estado] = (acc[estado] || 0) + getMetricValue(t, metricType);
                                 return acc;
                               }, {} as Record<string, number>);
                               
                               return Object.entries(estadoPagos).map(([estado, monto]) => ({
                                 estado,
                                 monto,
-                                porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0) * 100).toFixed(1)
+                                porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + getMetricValue(t, metricType), 0) * 100).toFixed(1)
                               }));
                             })()}
                             cx="50%"
@@ -2642,7 +2650,7 @@ const RegistroIngresos = () => {
               {/* Gráfico por Subcuenta Contable */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Ventas por Subcuenta</CardTitle>
+                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Subcuenta</CardTitle>
                   <CardDescription>Distribución por subcuentas contables</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -2662,7 +2670,7 @@ const RegistroIngresos = () => {
                             const subcuentaNombre = t.subcuenta_id 
                               ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
                               : "Sin subcuenta asignada";
-                            acc[subcuentaNombre] = (acc[subcuentaNombre] || 0) + t.monto_total;
+                            acc[subcuentaNombre] = (acc[subcuentaNombre] || 0) + getMetricValue(t, metricType);
                             return acc;
                           }, {} as Record<string, number>);
                           
@@ -2697,8 +2705,8 @@ const RegistroIngresos = () => {
               {/* Tabla de Ventas por Producto */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Ventas por Producto</CardTitle>
-                  <CardDescription>Ranking de productos más vendidos</CardDescription>
+                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Producto</CardTitle>
+                  <CardDescription>Ranking de productos {metricType === "descuentos" ? "con más descuentos" : "más vendidos"}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingTransacciones ? (
@@ -2731,7 +2739,7 @@ const RegistroIngresos = () => {
                               };
                             }
                             acc[productoKey].transacciones += 1;
-                            acc[productoKey].monto += t.monto_total;
+                            acc[productoKey].monto += getMetricValue(t, metricType);
                           }
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string }>);
@@ -2774,8 +2782,8 @@ const RegistroIngresos = () => {
               {/* Tabla de Ventas por Cliente */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Ventas por Cliente</CardTitle>
-                  <CardDescription>Ranking de mejores clientes</CardDescription>
+                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Cliente</CardTitle>
+                  <CardDescription>Ranking de {metricType === "descuentos" ? "clientes con más descuentos" : "mejores clientes"}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingTransacciones ? (
@@ -2801,7 +2809,7 @@ const RegistroIngresos = () => {
                             };
                           }
                           acc[clienteNombre].transacciones += 1;
-                          acc[clienteNombre].monto += t.monto_total;
+                          acc[clienteNombre].monto += getMetricValue(t, metricType);
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
                         
