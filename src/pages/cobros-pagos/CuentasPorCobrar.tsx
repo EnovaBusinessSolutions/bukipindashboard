@@ -33,7 +33,10 @@ import {
   Target,
   CheckCircle2,
   FileText,
-  Eye
+  Eye,
+  ChevronDown,
+  ChevronRight,
+  History
 } from "lucide-react";
 import { 
   BarChart, 
@@ -91,6 +94,11 @@ const CuentasPorCobrar = () => {
   // Estados para modal de detalle contable
   const [detalleContableOpen, setDetalleContableOpen] = useState(false);
   const [selectedTransaccionId, setSelectedTransaccionId] = useState<string | null>(null);
+  
+  // Estados para agrupación por cliente
+  const [expandedClientes, setExpandedClientes] = useState<Set<string>>(new Set());
+  const [historialPagosOpen, setHistorialPagosOpen] = useState(false);
+  const [selectedFacturaId, setSelectedFacturaId] = useState<string | null>(null);
 
   const { data: cuentasPorCobrar, isLoading } = useQuery({
     queryKey: ["cuentas-por-cobrar"],
@@ -186,6 +194,29 @@ const CuentasPorCobrar = () => {
       return asiento;
     },
     enabled: !!selectedTransaccionId && detalleContableOpen,
+  });
+  
+  // Query para obtener historial de pagos de una factura
+  const { data: historialPagos, isLoading: loadingHistorial } = useQuery({
+    queryKey: ["historial-pagos", selectedFacturaId],
+    queryFn: async () => {
+      if (!selectedFacturaId) return [];
+      
+      const { data, error } = await supabase
+        .from("transacciones_cobros_pagos")
+        .select("*")
+        .eq("referencia_id", selectedFacturaId)
+        .eq("tipo_transaccion", "cobro")
+        .order("fecha", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching historial:", error);
+        return [];
+      }
+
+      return data || [];
+    },
+    enabled: !!selectedFacturaId && historialPagosOpen,
   });
 
   // Mutación para registrar pago
@@ -347,6 +378,64 @@ const CuentasPorCobrar = () => {
     } else {
       return <Badge variant="default">Por vencer</Badge>;
     }
+  };
+  
+  // Función para agrupar cuentas por cliente
+  const cuentasAgrupadasPorCliente = (() => {
+    const grupos = new Map<string, {
+      cliente: string;
+      facturas: any[];
+      totalPendiente: number;
+      totalOriginal: number;
+      totalPagado: number;
+      contacto: {
+        telefono?: string;
+        email?: string;
+        rfc?: string;
+      };
+    }>();
+    
+    filteredCuentas.forEach(cuenta => {
+      const clienteKey = cuenta.cliente_nombre || "Sin cliente asignado";
+      
+      if (!grupos.has(clienteKey)) {
+        grupos.set(clienteKey, {
+          cliente: clienteKey,
+          facturas: [],
+          totalPendiente: 0,
+          totalOriginal: 0,
+          totalPagado: 0,
+          contacto: {
+            telefono: (cuenta as any).cliente_telefono,
+            email: (cuenta as any).cliente_email,
+            rfc: (cuenta as any).cliente_rfc,
+          }
+        });
+      }
+      
+      const grupo = grupos.get(clienteKey)!;
+      grupo.facturas.push(cuenta);
+      grupo.totalPendiente += cuenta.monto_pendiente || 0;
+      grupo.totalOriginal += cuenta.monto_total || 0;
+      grupo.totalPagado += cuenta.monto_pagado || 0;
+    });
+    
+    return Array.from(grupos.values());
+  })();
+  
+  const toggleClienteExpansion = (cliente: string) => {
+    const newExpanded = new Set(expandedClientes);
+    if (newExpanded.has(cliente)) {
+      newExpanded.delete(cliente);
+    } else {
+      newExpanded.add(cliente);
+    }
+    setExpandedClientes(newExpanded);
+  };
+  
+  const openHistorialPagos = (facturaId: string) => {
+    setSelectedFacturaId(facturaId);
+    setHistorialPagosOpen(true);
   };
 
   if (isLoading) {
@@ -536,7 +625,7 @@ const CuentasPorCobrar = () => {
                 <CardTitle>Listado de Cuentas por Cobrar</CardTitle>
               </CardHeader>
               <CardContent>
-                {filteredCuentas.length === 0 ? (
+                {cuentasAgrupadasPorCliente.length === 0 ? (
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">No se encontraron cuentas por cobrar.</p>
                   </div>
@@ -545,148 +634,202 @@ const CuentasPorCobrar = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[50px]"></TableHead>
                           <TableHead>Cliente</TableHead>
                           <TableHead>Información de Contacto</TableHead>
-                          <TableHead>Descripción</TableHead>
-                          <TableHead>Desglose de Montos</TableHead>
-                          <TableHead>Estado de Pago</TableHead>
-                          <TableHead>Fecha Vencimiento</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead>Acciones</TableHead>
+                          <TableHead>Total Pendiente</TableHead>
+                          <TableHead>Facturas</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredCuentas.map((cuenta) => (
-                          <TableRow key={cuenta.id}>
-                            <TableCell className="font-medium">
-                              {cuenta.cliente_nombre || "Sin especificar"}
-                            </TableCell>
-                            <TableCell className="min-w-[200px]">
-                              <div className="space-y-1">
-                                {(cuenta as any).cliente_telefono && (
-                                  <div className="text-sm">
-                                    📞 {(cuenta as any).cliente_telefono}
-                                  </div>
+                        {cuentasAgrupadasPorCliente.map((grupo) => (
+                          <>
+                            {/* Fila del Cliente (Agrupado) */}
+                            <TableRow 
+                              key={`cliente-${grupo.cliente}`}
+                              className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
+                              onClick={() => toggleClienteExpansion(grupo.cliente)}
+                            >
+                              <TableCell>
+                                {expandedClientes.has(grupo.cliente) ? (
+                                  <ChevronDown className="w-5 h-5" />
+                                ) : (
+                                  <ChevronRight className="w-5 h-5" />
                                 )}
-                                {(cuenta as any).cliente_email && (
-                                  <div className="text-sm">
-                                    📧 {(cuenta as any).cliente_email}
-                                  </div>
-                                )}
-                                {(cuenta as any).cliente_rfc && (
-                                  <div className="text-sm">
-                                    🆔 {(cuenta as any).cliente_rfc}
-                                  </div>
-                                )}
-                                {!(cuenta as any).cliente_telefono && !(cuenta as any).cliente_email && !(cuenta as any).cliente_rfc && (
-                                  <span className="text-muted-foreground text-sm">Sin información de contacto</span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>{cuenta.descripcion}</TableCell>
-                            <TableCell className="min-w-[280px]">
-                              <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-muted-foreground">Total original:</span>
-                                  <span className="font-medium">${cuenta.monto_total.toLocaleString('es-CO')}</span>
-                                </div>
-                                {cuenta.monto_descuento && cuenta.monto_descuento > 0 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Descuento:</span>
-                                    <span className="text-destructive">-${cuenta.monto_descuento.toLocaleString('es-CO')}</span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between items-center border-t pt-1">
-                                  <span className="text-sm text-muted-foreground">Subtotal:</span>
-                                  <span className="font-medium">${cuenta.monto_neto.toLocaleString('es-CO')}</span>
-                                </div>
-                                {cuenta.monto_pagado > 0 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Pagado:</span>
-                                    <span className="text-success">+${cuenta.monto_pagado.toLocaleString('es-CO')}</span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between items-center border-t pt-1">
-                                  <span className="text-sm font-medium">Pendiente:</span>
-                                  <span className="font-bold text-lg text-primary">
-                                    ${cuenta.monto_pendiente?.toLocaleString('es-CO') || 0}
-                                  </span>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <Badge variant={cuenta.tipo_pago === 'contado' ? 'default' : cuenta.tipo_pago === 'parcial' ? 'secondary' : 'outline'}>
-                                  {cuenta.tipo_pago === 'contado' ? 'Contado' : 
-                                   cuenta.tipo_pago === 'parcial' ? 'Pago Parcial' : 
-                                   'A Crédito'}
-                                </Badge>
-                                {cuenta.metodo_pago && (
-                                  <div className="text-xs text-muted-foreground">
-                                    {cuenta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Tarjeta/Banco'}
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {cuenta.fecha_vencimiento ? (
+                              </TableCell>
+                              <TableCell className="font-semibold">
+                                {grupo.cliente}
+                              </TableCell>
+                              <TableCell className="min-w-[200px]">
                                 <div className="space-y-1">
-                                  <div className="text-sm font-medium">
-                                    {format(new Date(cuenta.fecha_vencimiento), "dd/MM/yyyy", { locale: es })}
-                                  </div>
-                                  <div className="text-xs">
-                                    {(() => {
-                                      const today = new Date();
-                                      const dueDate = new Date(cuenta.fecha_vencimiento);
-                                      const diffTime = dueDate.getTime() - today.getTime();
-                                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                      
-                                      if (diffDays < 0) {
-                                        return (
-                                          <span className="text-destructive font-medium">
-                                            Vencida hace {Math.abs(diffDays)} día(s)
-                                          </span>
-                                        );
-                                      } else if (diffDays === 0) {
-                                        return (
-                                          <span className="text-warning font-medium">
-                                            Vence hoy
-                                          </span>
-                                        );
-                                      } else if (diffDays <= 7) {
-                                        return (
-                                          <span className="text-warning font-medium">
-                                            Vence en {diffDays} día(s)
-                                          </span>
-                                        );
-                                      } else {
-                                        return (
-                                          <span className="text-muted-foreground">
-                                            Vence en {diffDays} día(s)
-                                          </span>
-                                        );
-                                      }
-                                    })()}
-                                  </div>
+                                  {grupo.contacto.telefono && (
+                                    <div className="text-sm">📞 {grupo.contacto.telefono}</div>
+                                  )}
+                                  {grupo.contacto.email && (
+                                    <div className="text-sm">📧 {grupo.contacto.email}</div>
+                                  )}
+                                  {grupo.contacto.rfc && (
+                                    <div className="text-sm">🆔 {grupo.contacto.rfc}</div>
+                                  )}
+                                  {!grupo.contacto.telefono && !grupo.contacto.email && !grupo.contacto.rfc && (
+                                    <span className="text-muted-foreground text-sm">Sin información de contacto</span>
+                                  )}
                                 </div>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">Sin fecha límite</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente || 0)}
-                            </TableCell>
-                            <TableCell>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => openPagoDialog(cuenta)}
-                                disabled={cuenta.monto_pendiente <= 0}
-                              >
-                                Registrar Pago
-                              </Button>
-                            </TableCell>
-                          </TableRow>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <div className="text-lg font-bold text-primary">
+                                    ${grupo.totalPendiente.toLocaleString('es-CO')}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Total: ${grupo.totalOriginal.toLocaleString('es-CO')}
+                                  </div>
+                                  {grupo.totalPagado > 0 && (
+                                    <div className="text-sm text-success">
+                                      Pagado: ${grupo.totalPagado.toLocaleString('es-CO')}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">
+                                  {grupo.facturas.length} {grupo.facturas.length === 1 ? 'factura' : 'facturas'}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                            
+                            {/* Filas de Facturas Individuales (Expandidas) */}
+                            {expandedClientes.has(grupo.cliente) && grupo.facturas.map((cuenta) => (
+                              <TableRow key={cuenta.id} className="bg-background">
+                                <TableCell></TableCell>
+                                <TableCell colSpan={5}>
+                                  <div className="pl-4 border-l-2 border-primary/30 ml-4">
+                                    <div className="grid grid-cols-12 gap-4 items-center">
+                                      {/* Descripción */}
+                                      <div className="col-span-3">
+                                        <div className="font-medium">{cuenta.descripcion}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {format(new Date(cuenta.created_at), "dd/MM/yyyy", { locale: es })}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Desglose de Montos */}
+                                      <div className="col-span-3">
+                                        <div className="space-y-1 text-sm">
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Total:</span>
+                                            <span className="font-medium">${cuenta.monto_total.toLocaleString('es-CO')}</span>
+                                          </div>
+                                          {cuenta.monto_descuento && cuenta.monto_descuento > 0 && (
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Descuento:</span>
+                                              <span className="text-destructive">-${cuenta.monto_descuento.toLocaleString('es-CO')}</span>
+                                            </div>
+                                          )}
+                                          {cuenta.monto_pagado > 0 && (
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Pagado:</span>
+                                              <span className="text-success">${cuenta.monto_pagado.toLocaleString('es-CO')}</span>
+                                            </div>
+                                          )}
+                                          <div className="flex justify-between border-t pt-1">
+                                            <span className="font-medium">Pendiente:</span>
+                                            <span className="font-bold text-primary">
+                                              ${cuenta.monto_pendiente?.toLocaleString('es-CO') || 0}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Estado de Pago y Método */}
+                                      <div className="col-span-2">
+                                        <div className="space-y-1">
+                                          <Badge variant={cuenta.tipo_pago === 'contado' ? 'default' : cuenta.tipo_pago === 'parcial' ? 'secondary' : 'outline'}>
+                                            {cuenta.tipo_pago === 'contado' ? 'Contado' : 
+                                             cuenta.tipo_pago === 'parcial' ? 'Parcial' : 
+                                             'Crédito'}
+                                          </Badge>
+                                          {cuenta.metodo_pago && (
+                                            <div className="text-xs text-muted-foreground">
+                                              {cuenta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Tarjeta/Banco'}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Fecha Vencimiento */}
+                                      <div className="col-span-2">
+                                        {cuenta.fecha_vencimiento ? (
+                                          <div className="space-y-1">
+                                            <div className="text-sm font-medium">
+                                              {format(new Date(cuenta.fecha_vencimiento), "dd/MM/yyyy", { locale: es })}
+                                            </div>
+                                            <div className="text-xs">
+                                              {(() => {
+                                                const today = new Date();
+                                                const dueDate = new Date(cuenta.fecha_vencimiento);
+                                                const diffTime = dueDate.getTime() - today.getTime();
+                                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                                
+                                                if (diffDays < 0) {
+                                                  return (
+                                                    <span className="text-destructive font-medium">
+                                                      Vencida hace {Math.abs(diffDays)} día(s)
+                                                    </span>
+                                                  );
+                                                } else if (diffDays === 0) {
+                                                  return (
+                                                    <span className="text-warning font-medium">
+                                                      Vence hoy
+                                                    </span>
+                                                  );
+                                                } else if (diffDays <= 7) {
+                                                  return (
+                                                    <span className="text-warning font-medium">
+                                                      Vence en {diffDays} día(s)
+                                                    </span>
+                                                  );
+                                                } else {
+                                                  return (
+                                                    <span className="text-muted-foreground">
+                                                      Vence en {diffDays} día(s)
+                                                    </span>
+                                                  );
+                                                }
+                                              })()}
+                                            </div>
+                                            {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente || 0)}
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground text-sm">Sin fecha límite</span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Acciones */}
+                                      <div className="col-span-2 flex gap-2">
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => openHistorialPagos(cuenta.id)}
+                                          title="Ver historial de pagos"
+                                        >
+                                          <History className="w-4 h-4" />
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="default" 
+                                          onClick={() => openPagoDialog(cuenta)}
+                                          disabled={cuenta.monto_pendiente <= 0}
+                                        >
+                                          Pagar
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </>
                         ))}
                       </TableBody>
                     </Table>
@@ -1826,6 +1969,116 @@ const CuentasPorCobrar = () => {
                 disabled={registrarPagoMutation.isPending}
               >
                 Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Diálogo de Historial de Pagos */}
+      <Dialog open={historialPagosOpen} onOpenChange={setHistorialPagosOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Historial de Pagos</DialogTitle>
+            <DialogDescription>
+              {selectedFacturaId && (() => {
+                const factura = filteredCuentas.find(c => c.id === selectedFacturaId);
+                return factura ? (
+                  <>
+                    Cliente: {factura.cliente_nombre || 'Sin especificar'}<br/>
+                    Descripción: {factura.descripcion}<br/>
+                    Monto Total: ${factura.monto_total.toLocaleString('es-CO')}<br/>
+                    Monto Pendiente: ${(factura.monto_pendiente || 0).toLocaleString('es-CO')}
+                  </>
+                ) : null;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            {loadingHistorial ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Cargando historial...
+              </div>
+            ) : !historialPagos || historialPagos.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+                  <History className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">No hay pagos registrados para esta factura.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-3">
+                  {historialPagos.map((pago: any, index: number) => (
+                    <div 
+                      key={pago.id} 
+                      className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                              {historialPagos.length - index}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-lg">
+                                ${pago.monto.toLocaleString('es-CO')}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {format(new Date(pago.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="pl-11 space-y-1">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-muted-foreground">Método:</span>
+                              <Badge variant="outline">
+                                {pago.metodo_pago === 'efectivo' ? '💵 Efectivo' : '💳 Tarjeta/Banco'}
+                              </Badge>
+                            </div>
+                            
+                            {pago.descripcion && (
+                              <div className="text-sm text-muted-foreground">
+                                {pago.descripcion}
+                              </div>
+                            )}
+                            
+                            <div className="text-xs text-muted-foreground pt-1">
+                              Registrado: {format(new Date(pago.created_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Resumen */}
+                <div className="border-t pt-4 mt-4">
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Total de pagos realizados:</span>
+                      <span className="font-semibold">{historialPagos.length}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Monto total pagado:</span>
+                      <span className="text-lg font-bold text-success">
+                        ${historialPagos.reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setHistorialPagosOpen(false)}
+              >
+                Cerrar
               </Button>
             </div>
           </div>
