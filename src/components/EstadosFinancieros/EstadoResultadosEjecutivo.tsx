@@ -59,6 +59,12 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     const saldo = saldosPorCuenta[codigoCuenta]?.saldo || 0;
     const primerDigito = codigoCuenta.charAt(0);
     
+    // Cuenta 4003: Descuentos sobre Ventas (contra-cuenta de ingresos con naturaleza DEUDORA)
+    // Si el saldo es DEUDOR (positivo), debe RESTAR de los ingresos, por lo que lo invertimos
+    if (codigoCuenta === "4003") {
+      return -Math.abs(saldo); // Siempre negativo para restar de ingresos
+    }
+    
     // Cuentas acreedoras (Pasivos, Capital, Ingresos) - convertir a positivo
     if (["2", "3", "4"].includes(primerDigito)) {
       return Math.abs(saldo);
