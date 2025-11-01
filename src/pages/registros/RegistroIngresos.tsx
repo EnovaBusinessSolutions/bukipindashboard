@@ -131,6 +131,7 @@ const RegistroIngresos = () => {
   const [productUnitPrice, setProductUnitPrice] = useState("");
   const [productQuantity, setProductQuantity] = useState("1");
   const [productDiscount, setProductDiscount] = useState("0");
+  const [productDiscountType, setProductDiscountType] = useState<"monto" | "porcentaje">("monto");
   const [selectedProducts, setSelectedProducts] = useState<Array<{
     id: string;
     nombre: string;
@@ -736,22 +737,50 @@ const RegistroIngresos = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="descuento-producto">Descuento (opcional)</Label>
+                    <div className="flex gap-2">
+                      <RadioGroup 
+                        value={productDiscountType} 
+                        onValueChange={(value: "monto" | "porcentaje") => setProductDiscountType(value)}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="monto" id="descuento-monto" />
+                          <Label htmlFor="descuento-monto" className="cursor-pointer">Monto</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="porcentaje" id="descuento-porcentaje" />
+                          <Label htmlFor="descuento-porcentaje" className="cursor-pointer">%</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
                     <Input 
                       id="descuento-producto" 
                       type="number" 
-                      placeholder="0.00" 
+                      placeholder={productDiscountType === "porcentaje" ? "0" : "0.00"}
                       min="0"
-                      step="0.01"
+                      max={productDiscountType === "porcentaje" ? "100" : undefined}
+                      step={productDiscountType === "porcentaje" ? "1" : "0.01"}
                       value={productDiscount} 
                       onChange={e => setProductDiscount(e.target.value)} 
                     />
-                    <p className="text-xs text-muted-foreground">Descuento individual para este producto</p>
+                    <p className="text-xs text-muted-foreground">
+                      {productDiscountType === "porcentaje" 
+                        ? "Descuento en porcentaje (0-100%)" 
+                        : "Descuento en monto fijo"}
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label>Subtotal con Descuento</Label>
                     <Input 
                       type="text" 
-                      value={selectedProductId && productUnitPrice ? `$${formatMonto(Math.max(0, (parseFloat(productUnitPrice) * parseFloat(productQuantity || "1")) - parseFloat(productDiscount || "0")))}` : "$0.00"} 
+                      value={selectedProductId && productUnitPrice ? (() => {
+                        const subtotal = parseFloat(productUnitPrice) * parseFloat(productQuantity || "1");
+                        const discount = parseFloat(productDiscount || "0");
+                        const finalAmount = productDiscountType === "porcentaje" 
+                          ? Math.max(0, subtotal - (subtotal * discount / 100))
+                          : Math.max(0, subtotal - discount);
+                        return `$${formatMonto(finalAmount)}`;
+                      })() : "$0.00"} 
                       readOnly 
                       className="bg-muted font-medium" 
                     />
