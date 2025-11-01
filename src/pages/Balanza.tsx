@@ -131,21 +131,28 @@ const Balanza = () => {
   
   // Identificar y asociar asientos de reversión con sus originales
   const asientosConReversion = asientosArray.map(asiento => {
-    const esReversion = asiento.descripcion.includes('REVERSIÓN:');
+    const descripcionLower = asiento.descripcion.toLowerCase();
+    const esReversion = descripcionLower.includes('reversión:') || descripcionLower.includes('reversion:');
     
     // Si es un asiento de reversión, no lo mostramos directamente
     if (esReversion) {
       return null;
     }
     
-    // Buscar si este asiento tiene una reversión asociada
+    // Buscar si este asiento tiene una reversión asociada (case-insensitive)
     const asientoReversion = asientosArray.find(a => {
-      if (!a.descripcion.includes('REVERSIÓN:')) return false;
+      const aDescLower = a.descripcion.toLowerCase();
+      if (!aDescLower.includes('reversión:') && !aDescLower.includes('reversion:')) return false;
       
-      // La reversión contiene "REVERSIÓN: " + descripción original
-      const descripcionOriginal = a.descripcion.replace('REVERSIÓN: ', '');
-      return descripcionOriginal.includes(asiento.descripcion.substring(0, 30)) ||
-             asiento.descripcion.includes(descripcionOriginal.substring(0, 30));
+      // La reversión contiene "Reversión: " + descripción original (remover ambas variantes)
+      const descripcionOriginal = a.descripcion
+        .replace(/REVERSIÓN:\s*/i, '')
+        .replace(/Reversión:\s*/i, '')
+        .replace(/REVERSION:\s*/i, '')
+        .replace(/Reversion:\s*/i, '');
+      
+      return descripcionOriginal.toLowerCase().includes(asiento.descripcion.substring(0, 30).toLowerCase()) ||
+             asiento.descripcion.toLowerCase().includes(descripcionOriginal.substring(0, 30).toLowerCase());
     });
     
     return {

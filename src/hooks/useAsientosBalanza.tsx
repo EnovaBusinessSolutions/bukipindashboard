@@ -69,10 +69,25 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         else if (numeroAsiento.startsWith("PAG-")) tipo = "Pago";
         else if (numeroAsiento.startsWith("DEP-")) tipo = "Depreciación";
 
+        // Usar la descripción del asiento principal (más confiable para identificar reversiones)
+        const descripcionFinal = asiento?.descripcion || detalle.descripcion || "";
+        
+        // Formatear fecha - agregar zona horaria para evitar problemas de offset
+        let fechaFormateada = "";
+        if (asiento?.fecha) {
+          const fechaParts = asiento.fecha.split('-');
+          const fecha = new Date(
+            parseInt(fechaParts[0]), 
+            parseInt(fechaParts[1]) - 1, 
+            parseInt(fechaParts[2])
+          );
+          fechaFormateada = format(fecha, "dd/MM/yyyy");
+        }
+        
         return {
-          fecha: asiento?.fecha ? format(new Date(asiento.fecha), "dd/MM/yyyy") : "",
+          fecha: fechaFormateada,
           tipo,
-          descripcion: detalle.descripcion || asiento?.descripcion || "",
+          descripcion: descripcionFinal,
           cuenta_codigo: detalle.cuenta_codigo,
           cuenta_nombre: cuentasMap.get(detalle.cuenta_codigo) || detalle.cuenta_codigo,
           debe: Number(detalle.debe) || 0,
