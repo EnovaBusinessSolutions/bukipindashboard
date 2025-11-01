@@ -2740,25 +2740,28 @@ const RegistroIngresos = () => {
                             );
                             
                             const productoKey = producto?.nombre || descripcionSinPrefijo;
+                            const tieneAsignacion = !!producto;
+                            
                             if (!acc[productoKey]) {
                               acc[productoKey] = {
                                 nombre: productoKey,
                                 transacciones: 0,
                                 monto: 0,
-                                imagen: producto?.imagen_url
+                                imagen: producto?.imagen_url,
+                                tieneAsignacion
                               };
                             }
                             acc[productoKey].transacciones += 1;
                             acc[productoKey].monto += getMetricValue(t, metricType);
                           }
                           return acc;
-                        }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string }>);
+                        }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
                         
                         return Object.values(productosVentas)
                           .sort((a, b) => b.monto - a.monto)
                           .slice(0, 10)
                           .map((producto) => (
-                            <div key={producto.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
+                            <div key={producto.nombre} className={`flex items-center gap-3 p-3 border rounded-lg ${!producto.tieneAsignacion ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
                               {producto.imagen ? (
                                 <img 
                                   src={producto.imagen} 
@@ -2766,12 +2769,19 @@ const RegistroIngresos = () => {
                                   className="w-12 h-12 rounded-md object-cover flex-shrink-0"
                                 />
                               ) : (
-                                <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                                  <Package className="w-5 h-5 text-muted-foreground" />
+                                <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${!producto.tieneAsignacion ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted'}`}>
+                                  <Package className={`w-5 h-5 ${!producto.tieneAsignacion ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
                                 </div>
                               )}
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{producto.nombre}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium truncate">{producto.nombre}</p>
+                                  {!producto.tieneAsignacion && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                                      Sin asignar
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-sm text-muted-foreground">
                                   {producto.transacciones} {producto.transacciones === 1 ? 'transacción' : 'transacciones'}
                                 </p>
