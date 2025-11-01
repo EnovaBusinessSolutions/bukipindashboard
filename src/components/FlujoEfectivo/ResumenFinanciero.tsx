@@ -92,7 +92,7 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
-            Flujo Caja
+            Flujo Efectivo
           </CardTitle>
         </CardHeader>
         <CardContent>
