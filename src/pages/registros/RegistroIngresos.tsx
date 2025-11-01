@@ -2412,9 +2412,10 @@ const RegistroIngresos = () => {
                         <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
                         <Tooltip 
                           formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, '']}
-                          contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
-                          itemStyle={{ color: 'black' }}
-                          labelStyle={{ color: 'black' }}
+                          contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
+                          itemStyle={{ color: '#000000', fontWeight: 'bold' }}
+                          labelStyle={{ color: '#000000', fontWeight: 'bold' }}
+                          wrapperStyle={{ zIndex: 1000 }}
                         />
                         <Legend />
                         <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2} />
@@ -2479,9 +2480,10 @@ const RegistroIngresos = () => {
                           </Pie>
                           <Tooltip 
                             formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
-                            contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
-                            itemStyle={{ color: 'black' }}
-                            labelStyle={{ color: 'black' }}
+                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
+                            itemStyle={{ color: '#000000', fontWeight: 'bold' }}
+                            labelStyle={{ color: '#000000', fontWeight: 'bold' }}
+                            wrapperStyle={{ zIndex: 1000 }}
                           />
                         </PieChart>
                       </ResponsiveContainer>
@@ -2542,9 +2544,10 @@ const RegistroIngresos = () => {
                           </Pie>
                           <Tooltip 
                             formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
-                            contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
-                            itemStyle={{ color: 'black' }}
-                            labelStyle={{ color: 'black' }}
+                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
+                            itemStyle={{ color: '#000000', fontWeight: 'bold' }}
+                            labelStyle={{ color: '#000000', fontWeight: 'bold' }}
+                            wrapperStyle={{ zIndex: 1000 }}
                           />
                         </PieChart>
                       </ResponsiveContainer>
@@ -2590,9 +2593,10 @@ const RegistroIngresos = () => {
                           <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
                           <Tooltip 
                             formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
-                            contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px' }}
-                            itemStyle={{ color: 'black' }}
-                            labelStyle={{ color: 'black' }}
+                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
+                            itemStyle={{ color: '#000000', fontWeight: 'bold' }}
+                            labelStyle={{ color: '#000000', fontWeight: 'bold' }}
+                            wrapperStyle={{ zIndex: 1000 }}
                           />
                           <Bar dataKey="monto" fill="hsl(180 50% 55%)" />
                         </BarChart>
