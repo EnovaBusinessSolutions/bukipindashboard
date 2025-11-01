@@ -2466,7 +2466,8 @@ const RegistroIngresos = () => {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ tipo, porcentaje }) => `${tipo} ${porcentaje}%`}
+                            label={({ tipo, porcentaje, monto }) => `${tipo}\n${porcentaje}%\n$${formatCifra(monto, scaleFormat)}`}
+                            innerRadius={60}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="monto"
@@ -2539,7 +2540,8 @@ const RegistroIngresos = () => {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ estado, porcentaje }) => `${estado} ${porcentaje}%`}
+                            label={({ estado, porcentaje, monto }) => `${estado}\n${porcentaje}%\n$${formatCifra(monto, scaleFormat)}`}
+                            innerRadius={60}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="monto"
