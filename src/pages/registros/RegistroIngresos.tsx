@@ -2017,16 +2017,39 @@ const RegistroIngresos = () => {
                       return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
                     });
 
-                    return transaccionesFiltradas.length === 0 ? <div className="text-center py-8 text-muted-foreground">
+                    // Agrupar transacciones: filtrar reversiones y asociarlas con sus originales
+                    const transaccionesAgrupadas = transaccionesFiltradas.filter(t => {
+                      // No mostrar reversiones directamente, se mostrarán agrupadas con su original
+                      return !t.descripcion.includes('CANCELACIÓN:');
+                    }).map(transaccion => {
+                      const esCancelada = (transaccion as any).estado === 'cancelado';
+                      let transaccionReversion = null;
+                      
+                      // Si está cancelada, buscar su transacción de reversión
+                      if (esCancelada && (transaccion as any).transaccion_cancelacion_id) {
+                        transaccionReversion = transacciones.find(t => 
+                          t.id === (transaccion as any).transaccion_cancelacion_id
+                        );
+                      }
+                      
+                      return {
+                        ...transaccion,
+                        esCancelada,
+                        transaccionReversion
+                      };
+                    });
+
+                    return transaccionesAgrupadas.length === 0 ? <div className="text-center py-8 text-muted-foreground">
                         No hay transacciones que coincidan con los filtros
                       </div> : <div className="space-y-4">
                         <div className="text-sm font-medium text-muted-foreground mb-4">
-                          Mostrando {transaccionesFiltradas.length} transacción(es)
+                          Mostrando {transaccionesAgrupadas.length} transacción(es)
                         </div>
                         <div className="space-y-3">
-                           {transaccionesFiltradas.map(transaccion => {
-                             const esCancelada = (transaccion as any).estado === 'cancelado';
-                             const esReversion = transaccion.descripcion.includes('CANCELACIÓN:');
+                           {transaccionesAgrupadas.map((item: any) => {
+                             const transaccion = item;
+                             const esCancelada = item.esCancelada;
+                             const esReversion = false; // Ya no mostramos reversiones sueltas
                              
                              return (
                                <div 
@@ -2316,24 +2339,48 @@ const RegistroIngresos = () => {
                              </div>
                             </div>
                             
-                            {/* Mostrar motivo de cancelación si está cancelada */}
+                            {/* Mostrar motivo de cancelación y transacción de reversión si está cancelada */}
                             {esCancelada && (transaccion as any).motivo_cancelacion && (
-                              <div className="mt-3 p-3 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
-                                <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
-                                  📋 Motivo de cancelación:
-                                </p>
-                                <p className="text-xs text-red-600 dark:text-red-400">
-                                  {(transaccion as any).motivo_cancelacion}
-                                </p>
-                                <p className="text-xs text-red-500 dark:text-red-500 mt-1">
-                                  Cancelada el: {new Date((transaccion as any).fecha_cancelacion).toLocaleDateString('es-ES', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
+                              <div className="mt-3 space-y-2">
+                                <div className="p-3 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
+                                  <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
+                                    📋 Motivo de cancelación:
+                                  </p>
+                                  <p className="text-xs text-red-600 dark:text-red-400">
+                                    {(transaccion as any).motivo_cancelacion}
+                                  </p>
+                                  <p className="text-xs text-red-500 dark:text-red-500 mt-1">
+                                    Cancelada el: {new Date((transaccion as any).fecha_cancelacion).toLocaleDateString('es-ES', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+                                
+                                {/* Mostrar transacción de reversión asociada */}
+                                {item.transaccionReversion && (
+                                  <div className="p-3 bg-orange-100 dark:bg-orange-950/40 rounded-md border border-orange-300 dark:border-orange-800">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-orange-700 dark:text-orange-300">
+                                        ↩️ Asiento de Reversión Generado
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-orange-600 dark:text-orange-400 space-y-1">
+                                      <p><span className="font-medium">Descripción:</span> {item.transaccionReversion.descripcion}</p>
+                                      <p><span className="font-medium">Monto reversado:</span> ${formatMonto(Math.abs(item.transaccionReversion.monto_total))}</p>
+                                      <p><span className="font-medium">Fecha:</span> {new Date(item.transaccionReversion.created_at).toLocaleDateString('es-ES', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}</p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                             
