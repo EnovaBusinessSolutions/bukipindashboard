@@ -15,47 +15,7 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
 
-      // OBTENER TODO DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
-      const { data: detalles } = await supabase
-        .from("detalle_asientos")
-        .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
-        .gte("asientos_contables.fecha", startDateStr)
-        .lte("asientos_contables.fecha", endDateStr);
-
-      // Calcular totales por tipo de cuenta desde los asientos
-      let ingresos = 0;
-      let costos = 0;
-      let gastos = 0;
-      let efectivoFinal = 0;
-      let bancosFinal = 0;
-
-      detalles?.forEach(detalle => {
-        const codigo = detalle.cuenta_codigo;
-        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
-        
-        // Ingresos (cuentas 4xxx) - naturaleza acreedora
-        if (codigo.startsWith('4')) {
-          ingresos += Math.abs(saldo);
-        }
-        // Costos (cuentas 5001-5099) - naturaleza deudora
-        else if (codigo.startsWith('5') && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099) {
-          costos += Math.abs(saldo);
-        }
-        // Gastos (cuentas 5100+) - naturaleza deudora
-        else if (codigo.startsWith('5') && parseInt(codigo) >= 5100) {
-          gastos += Math.abs(saldo);
-        }
-        // Efectivo (1001)
-        else if (codigo === '1001') {
-          efectivoFinal += saldo;
-        }
-        // Bancos (1002)
-        else if (codigo === '1002') {
-          bancosFinal += saldo;
-        }
-      });
-
-      // Calcular saldo inicial de efectivo y bancos (antes del período)
+      // 1. Calcular saldo inicial de efectivo y bancos (antes del período)
       const { data: saldoInicialData } = await supabase
         .from("detalle_asientos")
         .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
@@ -74,17 +34,36 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
         }
       });
 
-      // Calcular flujos individuales
-      const flujoCaja = efectivoFinal - saldoInicialEfectivo;
-      const flujoBancos = bancosFinal - saldoInicialBancos;
+      // 2. Calcular saldo final (hasta el final del período)
+      const { data: saldoFinalData } = await supabase
+        .from("detalle_asientos")
+        .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
+        .in("cuenta_codigo", ["1001", "1002"])
+        .lte("asientos_contables.fecha", endDateStr);
+
+      let saldoFinalEfectivo = 0;
+      let saldoFinalBancos = 0;
+
+      saldoFinalData?.forEach(detalle => {
+        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
+        if (detalle.cuenta_codigo === '1001') {
+          saldoFinalEfectivo += saldo;
+        } else if (detalle.cuenta_codigo === '1002') {
+          saldoFinalBancos += saldo;
+        }
+      });
+
+      // 3. Calcular flujos del período
+      const flujoCaja = saldoFinalEfectivo - saldoInicialEfectivo;
+      const flujoBancos = saldoFinalBancos - saldoInicialBancos;
       const flujoNeto = flujoCaja + flujoBancos;
 
       return {
         flujoCaja,
         flujoBancos,
         flujoNeto,
-        saldoFinalCaja: efectivoFinal,
-        saldoFinalBancos: bancosFinal
+        saldoFinalCaja: saldoFinalEfectivo,
+        saldoFinalBancos: saldoFinalBancos
       };
     }
   });
