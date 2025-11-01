@@ -623,7 +623,7 @@ const RegistroIngresos = () => {
           descripcion: descripcionToSend,
           montoTotal: montoTotalDerived,
           montoDescuento: descuento,
-          cuentaPrincipalCodigo: selectedIncomeType === 'otros' ? '4004' : '4001',
+          cuentaPrincipalCodigo: selectedIncomeType === 'otros' ? '4102' : '4001',
           subcuentaId: subcuentaToSend || undefined,
           metodoPago: paymentMethod,
           tipoPago: paymentStatus,
