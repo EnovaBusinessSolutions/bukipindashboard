@@ -74,19 +74,17 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
         }
       });
 
-      const utilidad = ingresos - costos - gastos;
-      const flujoNeto = (efectivoFinal + bancosFinal) - (saldoInicialEfectivo + saldoInicialBancos);
+      // Calcular flujos individuales
+      const flujoCaja = efectivoFinal - saldoInicialEfectivo;
+      const flujoBancos = bancosFinal - saldoInicialBancos;
+      const flujoNeto = flujoCaja + flujoBancos;
 
       return {
-        ventas: ingresos,
-        cobrado: ingresos, // En el período todo lo registrado cuenta como cobrado
-        costos,
-        gastos,
-        utilidad,
-        inversiones: 0, // Ya no se calcula desde tablas separadas
-        financiamientos: 0, // Ya no se calcula desde tablas separadas
-        amortizaciones: 0, // Ya no se calcula desde tablas separadas
-        flujoNeto
+        flujoCaja,
+        flujoBancos,
+        flujoNeto,
+        saldoFinalCaja: efectivoFinal,
+        saldoFinalBancos: bancosFinal
       };
     }
   });
@@ -110,31 +108,37 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
-            Ventas Totales
+            Flujo Caja
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-foreground">{formatCurrency(data?.ventas || 0)}</div>
-          <p className="text-xs text-muted-foreground mt-1">Cobrado: {formatCurrency(data?.cobrado || 0)}</p>
+          <div className={`text-2xl font-bold ${(data?.flujoCaja || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+            {formatCurrency(data?.flujoCaja || 0)}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Saldo final: {formatCurrency(data?.saldoFinalCaja || 0)}
+          </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <TrendingDown className="h-4 w-4" />
-            Costos y Gastos
+            <DollarSign className="h-4 w-4" />
+            Flujo Bancos
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-foreground">{formatCurrency((data?.costos || 0) + (data?.gastos || 0))}</div>
+          <div className={`text-2xl font-bold ${(data?.flujoBancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+            {formatCurrency(data?.flujoBancos || 0)}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Costos: {formatCurrency(data?.costos || 0)} | Gastos: {formatCurrency(data?.gastos || 0)}
+            Saldo final: {formatCurrency(data?.saldoFinalBancos || 0)}
           </p>
         </CardContent>
       </Card>
@@ -143,21 +147,6 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
-            Utilidad
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className={`text-2xl font-bold ${(data?.utilidad || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-            {formatCurrency(data?.utilidad || 0)}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Ventas - Costos - Gastos</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
             Flujo Neto
           </CardTitle>
         </CardHeader>
@@ -165,7 +154,9 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
           <div className={`text-2xl font-bold ${(data?.flujoNeto || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
             {formatCurrency(data?.flujoNeto || 0)}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Efectivo + Bancos</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Total: {formatCurrency((data?.saldoFinalCaja || 0) + (data?.saldoFinalBancos || 0))}
+          </p>
         </CardContent>
       </Card>
     </div>
