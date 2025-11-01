@@ -301,13 +301,58 @@ export const useUpdateProducto = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, precio_venta }: { id: string; precio_venta: number }) => {
+    mutationFn: async ({ 
+      id, 
+      nombre, 
+      descripcion, 
+      precio, 
+      imagen 
+    }: { 
+      id: string; 
+      nombre?: string; 
+      descripcion?: string; 
+      precio?: number; 
+      imagen?: File 
+    }) => {
+      let imagenUrl: string | undefined;
+
+      // Si hay una nueva imagen, subirla
+      if (imagen) {
+        const fileExt = imagen.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `productos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, imagen);
+
+        if (uploadError) {
+          throw new Error(`Error al subir imagen: ${uploadError.message}`);
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+
+        imagenUrl = publicUrl;
+      }
+
+      // Preparar objeto de actualización solo con campos definidos
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (nombre !== undefined) updateData.nombre = nombre;
+      if (descripcion !== undefined) updateData.descripcion = descripcion;
+      if (precio !== undefined) {
+        updateData.precio = precio;
+        updateData.precio_venta = precio;
+      }
+      if (imagenUrl !== undefined) updateData.imagen_url = imagenUrl;
+
       const { data, error } = await supabase
         .from("productos")
-        .update({ 
-          precio_venta,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq("id", id)
         .select()
         .single();
@@ -318,14 +363,14 @@ export const useUpdateProducto = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["productos"] });
       toast({
-        title: "Precio actualizado",
-        description: "El precio de venta se ha actualizado correctamente",
+        title: "Producto actualizado",
+        description: "El producto se ha actualizado correctamente",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo actualizar el precio",
+        description: error.message || "No se pudo actualizar el producto",
         variant: "destructive",
       });
     },

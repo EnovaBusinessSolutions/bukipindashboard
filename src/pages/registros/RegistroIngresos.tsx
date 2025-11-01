@@ -18,7 +18,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
-import { useProductos, useProductosServicios, useCreateProducto, useDeleteProducto } from "@/hooks/useProductos";
+import { useProductos, useProductosServicios, useCreateProducto, useUpdateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
 
 // Función helper para formatear montos con separador de comas
@@ -56,6 +56,7 @@ const RegistroIngresos = () => {
     isLoading: loadingClientes
   } = useClientes();
   const createProducto = useCreateProducto();
+  const updateProducto = useUpdateProducto();
   const deleteProducto = useDeleteProducto();
   const createCliente = useCreateCliente();
   const [selectedIncomeType, setSelectedIncomeType] = useState("");
@@ -127,9 +128,19 @@ const RegistroIngresos = () => {
   const [productPrice, setProductPrice] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [productAccount, setProductAccount] = useState("4001"); // Fijo en ventas
-  const [productSubcuenta, setProductSubcuenta] = useState(""); // Nueva subcuenta
+  const [productSubcuenta, setProductSubcuenta] = useState("");
   const [productImage, setProductImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
+  // Estados para editar producto
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editProductName, setEditProductName] = useState("");
+  const [editProductPrice, setEditProductPrice] = useState("");
+  const [editProductDescription, setEditProductDescription] = useState("");
+  const [editProductImage, setEditProductImage] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
   // Filtrar productos con stock disponible para inventario
   const productosInventario = productos.filter(producto => producto.cantidad_stock && producto.cantidad_stock > 0 || producto.cantidad_comprada && producto.cantidad_comprada > 0);
@@ -1050,6 +1061,63 @@ const RegistroIngresos = () => {
       setIsSubmittingProduct(false);
     }
   };
+
+  const handleOpenEditDialog = (producto: any) => {
+    setEditingProduct(producto);
+    setEditProductName(producto.nombre);
+    setEditProductPrice(producto.precio?.toString() || "");
+    setEditProductDescription(producto.descripcion || "");
+    setEditImagePreview(producto.imagen_url || null);
+    setEditProductImage(null);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditProductImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editProductName.trim() || !editProductPrice.trim()) {
+      toast({
+        title: "Error",
+        description: "El nombre y precio del producto son obligatorios",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmittingProduct(true);
+    try {
+      await updateProducto.mutateAsync({
+        id: editingProduct.id,
+        nombre: editProductName.trim(),
+        precio: parseFloat(editProductPrice),
+        descripcion: editProductDescription.trim() || undefined,
+        imagen: editProductImage || undefined
+      });
+
+      setIsEditDialogOpen(false);
+      setEditingProduct(null);
+      setEditProductName("");
+      setEditProductPrice("");
+      setEditProductDescription("");
+      setEditProductImage(null);
+      setEditImagePreview(null);
+    } catch (error) {
+      // Error manejado por el hook
+    } finally {
+      setIsSubmittingProduct(false);
+    }
+  };
+
   return <div className="h-full overflow-hidden flex flex-col">
       {/* Diálogo de confirmación de inventario negativo */}
       <Dialog open={showNegativeStockDialog} onOpenChange={setShowNegativeStockDialog}>
@@ -2764,6 +2832,88 @@ const RegistroIngresos = () => {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+
+                  {/* Dialog para Editar Producto */}
+                  <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Editar Producto</DialogTitle>
+                        <DialogDescription>
+                          Modifica la información del producto.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-product-name" className="text-right">
+                            Nombre *
+                          </Label>
+                          <Input 
+                            id="edit-product-name" 
+                            value={editProductName} 
+                            onChange={e => setEditProductName(e.target.value)} 
+                            className="col-span-3" 
+                            placeholder="Ej: Consultoría, Producto X" 
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-product-price" className="text-right">
+                            Precio *
+                          </Label>
+                          <Input 
+                            id="edit-product-price" 
+                            type="number" 
+                            value={editProductPrice} 
+                            onChange={e => setEditProductPrice(e.target.value)} 
+                            className="col-span-3" 
+                            placeholder="0.00" 
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-product-image" className="text-right">
+                            Imagen
+                          </Label>
+                          <div className="col-span-3 space-y-2">
+                            <Input 
+                              id="edit-product-image" 
+                              type="file" 
+                              accept="image/*"
+                              onChange={handleEditImageChange}
+                            />
+                            {editImagePreview && (
+                              <div className="aspect-square w-24 mx-auto">
+                                <img 
+                                  src={editImagePreview} 
+                                  alt="Preview" 
+                                  className="w-full h-full object-cover rounded-md"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-product-description" className="text-right">
+                            Descripción
+                          </Label>
+                          <Textarea 
+                            id="edit-product-description" 
+                            value={editProductDescription} 
+                            onChange={e => setEditProductDescription(e.target.value)} 
+                            className="col-span-3" 
+                            placeholder="Descripción opcional del producto" 
+                            rows={3} 
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                          Cancelar
+                        </Button>
+                        <Button onClick={handleUpdateProduct} disabled={isSubmittingProduct}>
+                          {isSubmittingProduct ? "Actualizando..." : "Actualizar Producto"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                   </div>
                 </CardTitle>
                 <CardDescription>
@@ -2810,9 +2960,14 @@ const RegistroIngresos = () => {
                                         {producto.descripcion && <p className="text-sm text-muted-foreground">{producto.descripcion}</p>}
                                         <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
                                       </div>
-                                      <Button variant="outline" size="sm" onClick={() => deleteProducto.mutate(producto.id)} className="w-full text-destructive hover:text-destructive">
-                                        Eliminar
-                                      </Button>
+                                      <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(producto)} className="flex-1">
+                                          Editar
+                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={() => deleteProducto.mutate(producto.id)} className="flex-1 text-destructive hover:text-destructive">
+                                          Eliminar
+                                        </Button>
+                                      </div>
                                     </div>)}
                                 </div>
                               </CardContent>
@@ -2844,9 +2999,14 @@ const RegistroIngresos = () => {
                                       {producto.descripcion && <p className="text-sm text-muted-foreground">{producto.descripcion}</p>}
                                       <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => deleteProducto.mutate(producto.id)} className="w-full text-destructive hover:text-destructive">
-                                      Eliminar
-                                    </Button>
+                                    <div className="flex gap-2">
+                                      <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(producto)} className="flex-1">
+                                        Editar
+                                      </Button>
+                                      <Button variant="outline" size="sm" onClick={() => deleteProducto.mutate(producto.id)} className="flex-1 text-destructive hover:text-destructive">
+                                        Eliminar
+                                      </Button>
+                                    </div>
                                   </div>)}
                               </div>
                             </CardContent>

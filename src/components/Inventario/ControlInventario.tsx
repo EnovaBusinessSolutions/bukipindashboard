@@ -112,7 +112,7 @@ const ControlInventario = () => {
     try {
       await updateProducto.mutateAsync({
         id: productId,
-        precio_venta: tempPrice
+        precio: tempPrice
       });
       setEditingPrice(null);
       setTempPrice(0);
