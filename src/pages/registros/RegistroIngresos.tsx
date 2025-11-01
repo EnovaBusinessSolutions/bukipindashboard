@@ -2190,20 +2190,20 @@ const RegistroIngresos = () => {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold hover:text-black transition-colors cursor-default">
+                    <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelDia, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-destructive hover:text-black transition-colors cursor-default">
+                    <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelDia, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
-                    <span className="text-lg font-bold text-chart-2 hover:text-black transition-colors cursor-default">
+                    <span className="text-lg font-bold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelDia, scaleFormat)}`}
                     </span>
                   </div>
@@ -2218,20 +2218,20 @@ const RegistroIngresos = () => {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold hover:text-black transition-colors cursor-default">
+                    <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelMes, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-destructive hover:text-black transition-colors cursor-default">
+                    <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelMes, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
-                    <span className="text-lg font-bold text-chart-2 hover:text-black transition-colors cursor-default">
+                    <span className="text-lg font-bold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelMes, scaleFormat)}`}
                     </span>
                   </div>
@@ -2246,20 +2246,20 @@ const RegistroIngresos = () => {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold hover:text-black transition-colors cursor-default">
+                    <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelAno, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-destructive hover:text-black transition-colors cursor-default">
+                    <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelAno, scaleFormat)}`}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
-                    <span className="text-lg font-bold text-chart-2 hover:text-black transition-colors cursor-default">
+                    <span className="text-lg font-bold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelAno, scaleFormat)}`}
                     </span>
                   </div>
@@ -2268,15 +2268,14 @@ const RegistroIngresos = () => {
             </div>
 
             {/* Selector de Período y Formato de Cifras */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Configuración de Análisis</CardTitle>
-                <CardDescription>Selecciona el período y formato de visualización</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label className="text-sm font-medium mb-3 block">Período de Análisis</Label>
-                  <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Período de Análisis</CardTitle>
+                  <CardDescription>Selecciona el período para analizar</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex flex-col gap-3">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="diario" id="period-daily" />
                       <Label htmlFor="period-daily" className="cursor-pointer">Diario</Label>
@@ -2290,13 +2289,16 @@ const RegistroIngresos = () => {
                       <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
                     </div>
                   </RadioGroup>
-                </div>
-                
-                <Separator />
-                
-                <div>
-                  <Label className="text-sm font-medium mb-3 block">Formato de Cifras</Label>
-                  <RadioGroup value={scaleFormat} onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")} className="flex gap-4">
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Formato de Cifras</CardTitle>
+                  <CardDescription>Elige cómo visualizar los montos</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup value={scaleFormat} onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")} className="flex flex-col gap-3">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="general" id="scale-general" />
                       <Label htmlFor="scale-general" className="cursor-pointer">General</Label>
@@ -2310,9 +2312,9 @@ const RegistroIngresos = () => {
                       <Label htmlFor="scale-millions" className="cursor-pointer">Millones (M)</Label>
                     </div>
                   </RadioGroup>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
             <Card className="mb-6">
@@ -2668,7 +2670,7 @@ const RegistroIngresos = () => {
                                 </p>
                               </div>
                               <div className="text-right">
-                                <p className="font-bold text-primary hover:text-black transition-colors cursor-default">
+                                <p className="font-bold text-foreground">
                                   ${formatCifra(producto.monto, scaleFormat)}
                                 </p>
                               </div>
@@ -2731,7 +2733,7 @@ const RegistroIngresos = () => {
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-bold text-primary hover:text-black transition-colors cursor-default">
+                                <p className="font-bold text-foreground">
                                   ${formatCifra(cliente.monto, scaleFormat)}
                                 </p>
                               </div>
