@@ -1085,7 +1085,7 @@ const RegistroIngresos = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Este ingreso se ligará a la cuenta 4003 - Otros Ingresos.
+                Este ingreso se ligará a la cuenta 4102 - Otros Productos.
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
