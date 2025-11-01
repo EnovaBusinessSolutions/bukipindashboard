@@ -412,18 +412,25 @@ const Balanza = () => {
                           <div className="flex items-center gap-4 flex-1">
                             <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
-                              <div>
-                                <p className="text-sm font-medium">{asiento.referencia}</p>
-                                <p className="text-xs text-muted-foreground">{asiento.fecha}</p>
+                              <div className="flex items-center gap-2">
+                                {asientoItem.esCancelado && (
+                                  <span className="text-lg">❌</span>
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium">{asiento.referencia}</p>
+                                  <p className="text-xs text-muted-foreground">{asiento.fecha}</p>
+                                </div>
                               </div>
                               <div className="md:col-span-2">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm">{asiento.descripcion}</p>
                                   {asientoItem.esCancelado && (
-                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
-                                      ❌ Cancelado
+                                    <span className="px-3 py-1 rounded-md text-xs font-bold bg-red-500 text-white shadow-sm">
+                                      CANCELADO
                                     </span>
                                   )}
+                                  <p className={`text-sm ${asientoItem.esCancelado ? 'line-through text-muted-foreground' : ''}`}>
+                                    {asiento.descripcion}
+                                  </p>
                                 </div>
                               </div>
                               <div className="text-right">
