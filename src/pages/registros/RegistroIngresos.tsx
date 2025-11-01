@@ -107,6 +107,9 @@ const RegistroIngresos = () => {
   
   // Estado para el formato de cifras
   const [scaleFormat, setScaleFormat] = useState<"general" | "miles" | "millones">("general");
+  
+  // Estado para el tipo de métrica a mostrar
+  const [metricType, setMetricType] = useState<"brutas" | "descuentos" | "netas">("brutas");
 
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
@@ -2310,8 +2313,8 @@ const RegistroIngresos = () => {
               </Card>
             </div>
 
-            {/* Selector de Período y Formato de Cifras */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Selector de Período, Formato de Cifras y Tipo de Métrica */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Período de Análisis</CardTitle>
@@ -2357,14 +2360,37 @@ const RegistroIngresos = () => {
                   </RadioGroup>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tipo de Métrica</CardTitle>
+                  <CardDescription>Selecciona qué datos visualizar</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup value={metricType} onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")} className="flex flex-col gap-3">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="brutas" id="metric-brutas" />
+                      <Label htmlFor="metric-brutas" className="cursor-pointer">Ventas Brutas</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="descuentos" id="metric-descuentos" />
+                      <Label htmlFor="metric-descuentos" className="cursor-pointer">Descuentos</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="netas" id="metric-netas" />
+                      <Label htmlFor="metric-netas" className="cursor-pointer">Ventas Netas</Label>
+                    </div>
+                  </RadioGroup>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Evolución de Ventas</CardTitle>
+                <CardTitle>Evolución de {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"}</CardTitle>
                 <CardDescription>
-                  Ventas brutas, descuentos y ventas netas - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
+                  {metricType === "brutas" ? "Ventas brutas" : metricType === "descuentos" ? "Descuentos aplicados" : "Ventas netas"} - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -2461,15 +2487,21 @@ const RegistroIngresos = () => {
                           wrapperStyle={{ zIndex: 1000 }}
                         />
                         <Legend />
-                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
-                          <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                        </Line>
-                        <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
-                          <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                        </Line>
-                        <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
-                          <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                        </Line>
+                        {metricType === "brutas" && (
+                          <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
+                            <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Line>
+                        )}
+                        {metricType === "descuentos" && (
+                          <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
+                            <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Line>
+                        )}
+                        {metricType === "netas" && (
+                          <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
+                            <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Line>
+                        )}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
