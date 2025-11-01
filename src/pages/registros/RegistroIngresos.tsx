@@ -2796,9 +2796,11 @@ const RegistroIngresos = () => {
                                     <p className="font-bold text-foreground">
                                       ${formatCifra(producto.monto, scaleFormat)}
                                     </p>
-                                    <p className="text-sm text-muted-foreground">
+                                  </div>
+                                  <div className="flex-shrink-0">
+                                    <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
                                       {porcentaje}%
-                                    </p>
+                                    </div>
                                   </div>
                                 </div>
                               );
@@ -2818,9 +2820,11 @@ const RegistroIngresos = () => {
                                 <p className="font-bold text-lg text-primary">
                                   ${formatCifra(totalGeneral, scaleFormat)}
                                 </p>
-                                <p className="text-sm font-semibold text-primary">
+                              </div>
+                              <div className="flex-shrink-0">
+                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
                                   100%
-                                </p>
+                                </div>
                               </div>
                             </div>
                           </>
@@ -2890,9 +2894,11 @@ const RegistroIngresos = () => {
                                     <p className="font-bold text-foreground">
                                       ${formatCifra(cliente.monto, scaleFormat)}
                                     </p>
-                                    <p className="text-sm text-muted-foreground">
+                                  </div>
+                                  <div className="flex-shrink-0">
+                                    <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
                                       {porcentaje}%
-                                    </p>
+                                    </div>
                                   </div>
                                 </div>
                               );
@@ -2912,9 +2918,11 @@ const RegistroIngresos = () => {
                                 <p className="font-bold text-lg text-primary">
                                   ${formatCifra(totalGeneral, scaleFormat)}
                                 </p>
-                                <p className="text-sm font-semibold text-primary">
+                              </div>
+                              <div className="flex-shrink-0">
+                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
                                   100%
-                                </p>
+                                </div>
                               </div>
                             </div>
                           </>
