@@ -171,10 +171,15 @@ export const useCreateProducto = () => {
 
           if (updateError) throw updateError;
 
+          // Obtener user_id actual
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("Usuario no autenticado");
+
           const { error: movimientoError } = await supabase
             .from("movimientos_inventario")
             .insert({
               producto_id: productoExistente.id,
+              user_id: user.id,
               tipo_movimiento: 'compra',
               cantidad: cantidad!,
               costo_unitario: precio,
@@ -214,10 +219,15 @@ export const useCreateProducto = () => {
 
           if (error) throw error;
 
+          // Obtener user_id actual
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("Usuario no autenticado");
+
           const { error: movimientoError } = await supabase
             .from("movimientos_inventario")
             .insert({
               producto_id: data.id,
+              user_id: user.id,
               tipo_movimiento: 'compra',
               cantidad: cantidad!,
               costo_unitario: precio,
