@@ -2472,6 +2472,11 @@ const RegistroIngresos = () => {
 
               const filteredTransactions = getFilteredTransactions();
 
+              // Calcular totales desde las transacciones filtradas
+              const totalVentasBrutas = filteredTransactions.reduce((sum, t) => sum + (t.monto_total || 0), 0);
+              const totalDescuentos = filteredTransactions.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
+              const totalVentasNetas = filteredTransactions.reduce((sum, t) => sum + (t.monto_neto || 0), 0);
+
               return (
                 <>
                   {/* HIGHLIGHTS - Resumen */}
@@ -2483,121 +2488,32 @@ const RegistroIngresos = () => {
               {/* Día */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-primary">
+                    {periodFilter === "diario" ? "Resumen del Día" : periodFilter === "mensual" ? "Resumen del Mes" : "Resumen del Año"}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                    <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                    <span className="text-sm text-muted-foreground">
+                      {tipoIngresoAnalisis === "ventas" ? "Ventas Brutas:" : "Ingresos Brutos:"}
+                    </span>
                     <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelDia, scaleFormat)}`}
+                      ${formatCifra(totalVentasBrutas, scaleFormat)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
                     <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelDia, scaleFormat)}`}
+                      ${formatCifra(totalDescuentos, scaleFormat)}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
+                    <span className="text-sm font-semibold text-chart-2">
+                      {tipoIngresoAnalisis === "ventas" ? "Ventas Netas:" : "Ingresos Netos:"}
+                    </span>
                     <span className="text-lg font-bold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelDia, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelDia, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
-                    <span className="text-xl font-bold text-primary">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelDia, scaleFormat)}`}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Mes */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelMes, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelMes, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
-                    <span className="text-lg font-bold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelMes, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelMes, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
-                    <span className="text-xl font-bold text-primary">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelMes, scaleFormat)}`}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Año */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelAno, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.descuentosDelAno, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
-                    <span className="text-lg font-bold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelAno, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
-                    <span className="font-semibold text-foreground">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelAno, scaleFormat)}`}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
-                    <span className="text-xl font-bold text-primary">
-                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelAno, scaleFormat)}`}
+                      ${formatCifra(totalVentasNetas, scaleFormat)}
                     </span>
                   </div>
                 </CardContent>
