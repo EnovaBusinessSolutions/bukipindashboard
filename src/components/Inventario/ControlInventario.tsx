@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle, Edit, Check, X } from "lucide-react";
-import { useProductos, useUpdateProducto } from "@/hooks/useProductos";
+import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
+import { useUpdateProducto } from "@/hooks/useProductos";
 import {
   Table,
   TableBody,
@@ -24,30 +25,22 @@ const ControlInventario = () => {
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState<number>(0);
   
-  const { data: productos, isLoading } = useProductos();
+  const { data: productosInventario, isLoading } = useInventarioConMovimientos();
   const updateProducto = useUpdateProducto();
 
-  // Filtrar solo productos de inventario (que tienen cantidad_stock > 0 o cantidad_comprada > 0)
-  const productosInventario = productos?.filter(producto => 
-    (producto.cantidad_stock && producto.cantidad_stock > 0) || 
-    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
-  ) || [];
-
-  // Usar datos reales de inventario
-  const inventoryData = productosInventario.map(producto => {
-    const valorTotal = producto.valor_total_inventario ?? 0;
-    console.log(`Producto ${producto.nombre}: stock=${producto.cantidad_stock}, valor_total_inventario=${producto.valor_total_inventario}, valorTotal=${valorTotal}`);
-    
+  // Procesar datos de inventario con métricas calculadas
+  const inventoryData = (productosInventario || []).map(producto => {
     return {
       ...producto,
-      stock_actual: producto.cantidad_stock || 0,
+      stock_actual: producto.cantidad_stock,
       stock_minimo: 10, // Puede ser configurable en el futuro
       stock_maximo: 100, // Puede ser configurable en el futuro
-      costo_promedio: producto.costo_unitario || 0,
-      valor_total: valorTotal, // Permitir valores negativos
-      entradas_mes: producto.cantidad_comprada || 0, // Total comprado
-      salidas_mes: Math.max(0, (producto.cantidad_comprada || 0) - (producto.cantidad_stock || 0)), // Vendido/usado
-      precio_venta: (producto as any).precio_venta || 0
+      costo_promedio: producto.costo_unitario,
+      valor_total: producto.valor_total_inventario,
+      entradas_mes: producto.cantidad_comprada,
+      salidas_mes: producto.cantidad_vendida,
+      precio_venta: producto.precio_venta,
+      subcuenta_nombre: producto.subcuenta_nombre
     };
   });
 
@@ -383,7 +376,7 @@ const ControlInventario = () => {
             </Table>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              {productosInventario.length === 0 
+              {inventoryData.length === 0 
                 ? "No hay productos de inventario registrados. Registra tu primera compra en la pestaña 'Registro de Productos'."
                 : "No se encontraron productos con los filtros seleccionados"
               }
