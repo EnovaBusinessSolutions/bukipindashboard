@@ -2802,6 +2802,18 @@ const RegistroIngresos = () => {
 
               const filteredTransactions = getFilteredTransactions();
 
+              // Función para verificar si hay datos disponibles
+              const hayDatosDisponibles = () => {
+                if (tipoIngresoAnalisis === "ventas") {
+                  return filteredTransactions.length > 0 || 
+                         datosAnaliticas.ventasBrutas > 0 || 
+                         datosAnaliticas.descuentos > 0;
+                } else {
+                  // Otros ingresos
+                  return filteredTransactions.length > 0 || datosAnaliticas.otrosIngresos > 0;
+                }
+              };
+
               return (
                 <>
                   {/* HIGHLIGHTS - Resumen Completo (sin filtros) */}
@@ -3168,7 +3180,7 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
                     </div>
-                  ) : filteredTransactions.length === 0 ? (
+                  ) : !hayDatosDisponibles() ? (
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
@@ -3178,24 +3190,35 @@ const RegistroIngresos = () => {
                         <PieChart>
                           <Pie
                             data={(() => {
+                              // Obtener total real desde asientos contables
+                              const totalRealPie = tipoIngresoAnalisis === "ventas"
+                                ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                                   : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                                   : datosAnaliticas.ventasNetas)
+                                : datosAnaliticas.otrosIngresos;
+                              
+                              // Si no hay transacciones pero hay monto en asientos (otros ingresos)
+                              if (filteredTransactions.length === 0 && totalRealPie > 0) {
+                                return [{
+                                  tipo: "Otros Ingresos",
+                                  monto: totalRealPie,
+                                  porcentaje: "100.0"
+                                }];
+                              }
+                              
                               // Calcular distribución desde transacciones
                               const distribucionTransacciones = filteredTransactions.reduce((acc, t) => {
                                 acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + getMetricValue(t, metricType);
                                 return acc;
                               }, {} as Record<string, number>);
                               
-                              // Obtener total real desde asientos contables
-                              const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                                : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                                : datosAnaliticas.ventasNetas;
-                              
                               // Ajustar proporcionalmente
-                              const distribucionAjustada = ajustarProporcionalmente(distribucionTransacciones, totalReal);
+                              const distribucionAjustada = ajustarProporcionalmente(distribucionTransacciones, totalRealPie);
                               
                               return Object.entries(distribucionAjustada).map(([tipo, monto]) => ({
                                 tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
                                 monto,
-                                porcentaje: totalReal > 0 ? ((monto / totalReal) * 100).toFixed(1) : '0.0'
+                                porcentaje: totalRealPie > 0 ? ((monto / totalRealPie) * 100).toFixed(1) : '0.0'
                               }));
                             })()}
                             cx="50%"
@@ -3245,7 +3268,7 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
                     </div>
-                  ) : filteredTransactions.length === 0 ? (
+                  ) : !hayDatosDisponibles() ? (
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
@@ -3255,6 +3278,22 @@ const RegistroIngresos = () => {
                         <PieChart>
                           <Pie
                             data={(() => {
+                              // Obtener total real desde asientos contables
+                              const totalRealEstado = tipoIngresoAnalisis === "ventas"
+                                ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                                   : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                                   : datosAnaliticas.ventasNetas)
+                                : datosAnaliticas.otrosIngresos;
+                              
+                              // Si no hay transacciones pero hay monto en asientos (otros ingresos)
+                              if (filteredTransactions.length === 0 && totalRealEstado > 0) {
+                                return [{
+                                  estado: "Pagado Total",
+                                  monto: totalRealEstado,
+                                  porcentaje: "100.0"
+                                }];
+                              }
+                              
                               // Calcular distribución por estado desde transacciones
                               const estadoPagos = filteredTransactions.reduce((acc, t: any) => {
                                 let estado = "Por Cobrar";
@@ -3267,18 +3306,13 @@ const RegistroIngresos = () => {
                                 return acc;
                               }, {} as Record<string, number>);
                               
-                              // Obtener total real desde asientos contables
-                              const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                                : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                                : datosAnaliticas.ventasNetas;
-                              
                               // Ajustar proporcionalmente
-                              const estadoPagosAjustado = ajustarProporcionalmente(estadoPagos, totalReal);
+                              const estadoPagosAjustado = ajustarProporcionalmente(estadoPagos, totalRealEstado);
                               
                               return Object.entries(estadoPagosAjustado).map(([estado, monto]) => ({
                                 estado,
                                 monto,
-                                porcentaje: totalReal > 0 ? ((monto / totalReal) * 100).toFixed(1) : '0.0'
+                                porcentaje: totalRealEstado > 0 ? ((monto / totalRealEstado) * 100).toFixed(1) : '0.0'
                               }));
                             })()}
                             cx="50%"
@@ -3319,7 +3353,7 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       Cargando gráfico...
                     </div>
-                  ) : filteredTransactions.length === 0 ? (
+                  ) : !hayDatosDisponibles() ? (
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
@@ -3327,7 +3361,16 @@ const RegistroIngresos = () => {
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={(() => {
-                          // Calcular distribución por subcuenta desde transacciones
+                          const totalRealBarSub = tipoIngresoAnalisis === "ventas"
+                            ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                               : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                               : datosAnaliticas.ventasNetas)
+                            : datosAnaliticas.otrosIngresos;
+                          
+                          if (filteredTransactions.length === 0 && totalRealBarSub > 0) {
+                            return [{subcuenta: "Sin detalle", monto: totalRealBarSub}];
+                          }
+                          
                           const subcuentaData = filteredTransactions.reduce((acc, t) => {
                             const subcuentaNombre = t.subcuenta_id 
                               ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
@@ -3336,13 +3379,7 @@ const RegistroIngresos = () => {
                             return acc;
                           }, {} as Record<string, number>);
                           
-                          // Obtener total real desde asientos contables
-                          const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                            : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                            : datosAnaliticas.ventasNetas;
-                          
-                          // Ajustar proporcionalmente
-                          const subcuentaDataAjustada = ajustarProporcionalmente(subcuentaData, totalReal);
+                          const subcuentaDataAjustada = ajustarProporcionalmente(subcuentaData, totalRealBarSub);
                           
                           return Object.entries(subcuentaDataAjustada).map(([subcuenta, monto]) => ({
                             subcuenta,
@@ -3383,13 +3420,67 @@ const RegistroIngresos = () => {
                     <div className="text-center py-8 text-muted-foreground">
                       Cargando datos...
                     </div>
-                  ) : filteredTransactions.length === 0 ? (
+                  ) : !hayDatosDisponibles() ? (
                     <div className="text-center py-8 text-muted-foreground">
                       No hay datos para mostrar
                     </div>
                   ) : (
                      <div className="space-y-3">
                       {(() => {
+                        // Obtener total real desde asientos contables
+                        const totalRealProductos = tipoIngresoAnalisis === "ventas"
+                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                             : datosAnaliticas.ventasNetas)
+                          : datosAnaliticas.otrosIngresos;
+                        
+                        // Si no hay transacciones pero hay monto en asientos (otros ingresos)
+                        if (filteredTransactions.length === 0 && totalRealProductos > 0) {
+                          return (
+                            <>
+                              <div className="flex items-center gap-3 p-3 border rounded-lg">
+                                <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                  <Package className="w-5 h-5 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium">Sin detalle de producto</p>
+                                  <p className="text-sm text-muted-foreground">Otros Ingresos</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-bold text-foreground">
+                                    ${formatCifra(totalRealProductos, scaleFormat)}
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
+                                    100%
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Fila de Total */}
+                              <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                                <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                  <Package className="w-5 h-5 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                  <p className="text-sm text-muted-foreground">1 registro</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-bold text-lg text-primary">
+                                    ${formatCifra(totalRealProductos, scaleFormat)}
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
+                                    100%
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        }
+                        
                         // Calcular distribución por producto desde transacciones
                         const productosVentas = filteredTransactions.reduce((acc, t) => {
                           // Incluir TODAS las ventas
@@ -3419,17 +3510,19 @@ const RegistroIngresos = () => {
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
                         
-                        // Obtener total real desde asientos contables
-                        const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                          : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                          : datosAnaliticas.ventasNetas;
+                        // Obtener total real desde asientos contables  
+                        const totalRealProd = tipoIngresoAnalisis === "ventas"
+                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                             : datosAnaliticas.ventasNetas)
+                          : datosAnaliticas.otrosIngresos;
                         
                         // Ajustar proporcionalmente cada producto
                         const distribucionProductos: Record<string, number> = {};
                         Object.entries(productosVentas).forEach(([key, data]) => {
                           distribucionProductos[key] = data.monto;
                         });
-                        const distribucionAjustada = ajustarProporcionalmente(distribucionProductos, totalReal);
+                        const distribucionAjustada = ajustarProporcionalmente(distribucionProductos, totalRealProd);
                         
                         // Actualizar montos ajustados
                         Object.keys(productosVentas).forEach(key => {
@@ -3437,7 +3530,7 @@ const RegistroIngresos = () => {
                         });
                         
                         const productosArray = Object.values(productosVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneral = totalReal; // Usar el total real de asientos contables
+                        const totalGeneral = totalRealProd; // Usar el total real de asientos contables
                         const top10 = productosArray.slice(0, 10);
                         
                         return (
@@ -3524,13 +3617,67 @@ const RegistroIngresos = () => {
                     <div className="text-center py-8 text-muted-foreground">
                       Cargando datos...
                     </div>
-                  ) : filteredTransactions.length === 0 ? (
+                  ) : !hayDatosDisponibles() ? (
                     <div className="text-center py-8 text-muted-foreground">
                       No hay datos para mostrar
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {(() => {
+                        // Obtener total real desde asientos contables
+                        const totalRealClientes = tipoIngresoAnalisis === "ventas"
+                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                             : datosAnaliticas.ventasNetas)
+                          : datosAnaliticas.otrosIngresos;
+                        
+                        // Si no hay transacciones pero hay monto en asientos (otros ingresos)
+                        if (filteredTransactions.length === 0 && totalRealClientes > 0) {
+                          return (
+                            <>
+                              <div className="flex items-center gap-3 p-3 border rounded-lg">
+                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                  <Users className="w-6 h-6 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium">Sin cliente asignado</p>
+                                  <p className="text-sm text-muted-foreground">Otros Ingresos</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-bold text-foreground">
+                                    ${formatCifra(totalRealClientes, scaleFormat)}
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
+                                    100%
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Fila de Total */}
+                              <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                  <Users className="w-6 h-6 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                  <p className="text-sm text-muted-foreground">1 registro</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-bold text-lg text-primary">
+                                    ${formatCifra(totalRealClientes, scaleFormat)}
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
+                                    100%
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        }
+                        
                         // Calcular distribución por cliente desde transacciones
                         const clientesVentas = filteredTransactions.reduce((acc, t: any) => {
                           const clienteNombre = t.cliente_nombre || "Sin cliente asignado";
@@ -3549,16 +3696,18 @@ const RegistroIngresos = () => {
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
                         
                         // Obtener total real desde asientos contables
-                        const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                          : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                          : datosAnaliticas.ventasNetas;
+                        const totalRealCli = tipoIngresoAnalisis === "ventas"
+                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                             : datosAnaliticas.ventasNetas)
+                          : datosAnaliticas.otrosIngresos;
                         
                         // Ajustar proporcionalmente cada cliente
                         const distribucionClientes: Record<string, number> = {};
                         Object.entries(clientesVentas).forEach(([key, data]) => {
                           distribucionClientes[key] = data.monto;
                         });
-                        const distribucionAjustada = ajustarProporcionalmente(distribucionClientes, totalReal);
+                        const distribucionAjustada = ajustarProporcionalmente(distribucionClientes, totalRealCli);
                         
                         // Actualizar montos ajustados
                         Object.keys(clientesVentas).forEach(key => {
@@ -3566,7 +3715,7 @@ const RegistroIngresos = () => {
                         });
                         
                         const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneral = totalReal; // Usar el total real de asientos contables
+                        const totalGeneral = totalRealCli; // Usar el total real de asientos contables
                         const top10 = clientesArray.slice(0, 10);
                         
                         return (
