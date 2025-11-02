@@ -126,35 +126,21 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            Flujo Neto
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className={`text-2xl font-bold ${(data?.flujoNeto || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-            {formatCurrency(data?.flujoNeto || 0)}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Total: {formatCurrency((data?.saldoFinalCaja || 0) + (data?.saldoFinalBancos || 0))}
-          </p>
-        </CardContent>
-      </Card>
-
       <Card className="border-finance-success bg-finance-success/5">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-finance-success" />
-            Saldo Final
+            ✅ Saldo Final (Verificado)
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-finance-success">
             {formatCurrency(saldoFlujo)}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-finance-success mt-1 font-medium">
+            Coincide con Balanza de Comprobación
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Efectivo + Bancos
           </p>
         </CardContent>

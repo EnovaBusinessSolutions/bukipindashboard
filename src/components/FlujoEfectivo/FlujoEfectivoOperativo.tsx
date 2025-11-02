@@ -289,64 +289,41 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
 
   const isDetallada = vistaColumnas === "detallada";
 
-  const getOperativoData = () => {
-    if (isDetallada) {
-      return {
-        efectivo: flujoData.operativo.ingresosEfectivo - flujoData.operativo.costosEfectivo - flujoData.operativo.gastosEfectivo,
-        bancos: flujoData.operativo.ingresosBancos - flujoData.operativo.costosBancos - flujoData.operativo.gastosBancos,
-        total: flujoData.operativo.ingresos - flujoData.operativo.costos - flujoData.operativo.gastos
-      };
-    }
-    return {
-      total: flujoData.operativo.ingresos - flujoData.operativo.costos - flujoData.operativo.gastos
-    };
+  // Siempre calcular efectivo y bancos por separado para garantizar consistencia
+  const operativoDetalle = {
+    efectivo: flujoData.operativo.ingresosEfectivo - flujoData.operativo.costosEfectivo - flujoData.operativo.gastosEfectivo,
+    bancos: flujoData.operativo.ingresosBancos - flujoData.operativo.costosBancos - flujoData.operativo.gastosBancos,
+    total: flujoData.operativo.ingresos - flujoData.operativo.costos - flujoData.operativo.gastos
   };
 
-  const getInversionData = () => {
-    if (isDetallada) {
-      const totalEfectivo = -Object.values(flujoData.inversionEfectivo).reduce((sum: number, val) => sum + (val as number), 0);
-      const totalBancos = -Object.values(flujoData.inversionBancos).reduce((sum: number, val) => sum + (val as number), 0);
-      return {
-        efectivo: totalEfectivo,
-        bancos: totalBancos,
-        total: totalEfectivo + totalBancos
-      };
-    }
-    return {
-      total: -Object.values(flujoData.inversion).reduce((sum: number, val) => sum + (val as number), 0)
-    };
+  const inversionDetalle = {
+    efectivo: -Object.values(flujoData.inversionEfectivo).reduce((sum: number, val) => sum + (val as number), 0),
+    bancos: -Object.values(flujoData.inversionBancos).reduce((sum: number, val) => sum + (val as number), 0),
+    total: -Object.values(flujoData.inversion).reduce((sum: number, val) => sum + (val as number), 0)
   };
 
-  const getFinanciamientoData = () => {
-    if (isDetallada) {
-      const disposicionesEfectivo = flujoData.financiamiento.disposiciones * 0.3;
-      const disposicionesBancos = flujoData.financiamiento.disposiciones * 0.7;
-      return {
-        efectivo: disposicionesEfectivo - flujoData.financiamiento.amortizacionesEfectivo - flujoData.financiamiento.interesesEfectivo,
-        bancos: disposicionesBancos - flujoData.financiamiento.amortizacionesBancos - flujoData.financiamiento.interesesBancos,
-        total: flujoData.financiamiento.disposiciones - flujoData.financiamiento.amortizaciones - flujoData.financiamiento.intereses
-      };
-    }
-    return {
-      total: flujoData.financiamiento.disposiciones - flujoData.financiamiento.amortizaciones - flujoData.financiamiento.intereses
-    };
+  const disposicionesEfectivo = flujoData.financiamiento.disposiciones * 0.3;
+  const disposicionesBancos = flujoData.financiamiento.disposiciones * 0.7;
+  const financiamientoDetalle = {
+    efectivo: disposicionesEfectivo - flujoData.financiamiento.amortizacionesEfectivo - flujoData.financiamiento.interesesEfectivo,
+    bancos: disposicionesBancos - flujoData.financiamiento.amortizacionesBancos - flujoData.financiamiento.interesesBancos,
+    total: flujoData.financiamiento.disposiciones - flujoData.financiamiento.amortizaciones - flujoData.financiamiento.intereses
   };
 
-  const operativoData = getOperativoData();
-  const inversionData = getInversionData();
-  const financiamientoData = getFinanciamientoData();
-
-  // Calcular flujo neto usando los movimientos REALES (igual que Ejecutivo)
-  const flujoNetoEfectivo = (operativoData.efectivo || 0) + (inversionData.efectivo || 0) + (financiamientoData.efectivo || 0);
-  const flujoNetoBancos = (operativoData.bancos || 0) + (inversionData.bancos || 0) + (financiamientoData.bancos || 0);
+  const flujoNetoEfectivo = operativoDetalle.efectivo + inversionDetalle.efectivo + financiamientoDetalle.efectivo;
+  const flujoNetoBancos = operativoDetalle.bancos + inversionDetalle.bancos + financiamientoDetalle.bancos;
   const flujoNetoTotal = flujoNetoEfectivo + flujoNetoBancos;
 
-  // Saldo final = saldo inicial + flujo neto (MISMA LÓGICA QUE EJECUTIVO)
   const saldoFinal = {
     efectivo: flujoData.saldoInicial.efectivo + flujoNetoEfectivo,
     bancos: flujoData.saldoInicial.bancos + flujoNetoBancos,
     total: flujoData.saldoInicial.total + flujoNetoTotal
   };
+
+  // Funciones auxiliares para compatibilidad con renderizado
+  const getOperativoData = () => isDetallada ? operativoDetalle : { total: operativoDetalle.total };
+  const getInversionData = () => isDetallada ? inversionDetalle : { total: inversionDetalle.total };
+  const getFinanciamientoData = () => isDetallada ? financiamientoDetalle : { total: financiamientoDetalle.total };
 
   const renderValue = (efectivo?: number, bancos?: number, total?: number) => {
     if (isDetallada && efectivo !== undefined && bancos !== undefined) {
@@ -465,19 +442,19 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                 <span className="text-lg font-bold">Flujo Neto Operativo</span>
                 {isDetallada ? (
                   <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                    <span className={`text-lg font-bold ${(operativoData.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(operativoData.efectivo || 0)}
+                    <span className={`text-lg font-bold ${(operativoDetalle.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                      {formatCurrency(operativoDetalle.efectivo || 0)}
                     </span>
-                    <span className={`text-lg font-bold ${(operativoData.bancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(operativoData.bancos || 0)}
+                    <span className={`text-lg font-bold ${(operativoDetalle.bancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                      {formatCurrency(operativoDetalle.bancos || 0)}
                     </span>
-                    <span className={`text-lg font-bold ${operativoData.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(operativoData.total)}
+                    <span className={`text-lg font-bold ${operativoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                      {formatCurrency(operativoDetalle.total)}
                     </span>
                   </div>
                 ) : (
-                  <span className={`text-lg font-bold ${operativoData.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                    {formatCurrency(operativoData.total)}
+                  <span className={`text-lg font-bold ${operativoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                    {formatCurrency(operativoDetalle.total)}
                   </span>
                 )}
               </div>
@@ -534,18 +511,18 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                 {isDetallada ? (
                   <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
                     <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(inversionData.efectivo || 0)}
+                      {formatCurrency(inversionDetalle.efectivo || 0)}
                     </span>
                     <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(inversionData.bancos || 0)}
+                      {formatCurrency(inversionDetalle.bancos || 0)}
                     </span>
                     <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(inversionData.total)}
+                      {formatCurrency(inversionDetalle.total)}
                     </span>
                   </div>
                 ) : (
                   <span className="text-lg font-bold text-destructive">
-                    {formatCurrency(inversionData.total)}
+                    {formatCurrency(inversionDetalle.total)}
                   </span>
                 )}
               </div>
@@ -606,19 +583,19 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                 <span className="text-lg font-bold">Flujo Neto de Financiamiento</span>
                 {isDetallada ? (
                   <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                    <span className={`text-lg font-bold ${(financiamientoData.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(financiamientoData.efectivo || 0)}
+                    <span className={`text-lg font-bold ${(financiamientoDetalle.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                      {formatCurrency(financiamientoDetalle.efectivo || 0)}
                     </span>
-                    <span className={`text-lg font-bold ${(financiamientoData.bancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(financiamientoData.bancos || 0)}
+                    <span className={`text-lg font-bold ${(financiamientoDetalle.bancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                      {formatCurrency(financiamientoDetalle.bancos || 0)}
                     </span>
-                    <span className={`text-lg font-bold ${financiamientoData.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(financiamientoData.total)}
+                    <span className={`text-lg font-bold ${financiamientoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                      {formatCurrency(financiamientoDetalle.total)}
                     </span>
                   </div>
                 ) : (
-                  <span className={`text-lg font-bold ${financiamientoData.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                    {formatCurrency(financiamientoData.total)}
+                  <span className={`text-lg font-bold ${financiamientoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
+                    {formatCurrency(financiamientoDetalle.total)}
                   </span>
                 )}
               </div>
