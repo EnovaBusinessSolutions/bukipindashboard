@@ -86,7 +86,7 @@ const CustomTreemapContent = (props: any) => {
   const { x, y, width, height, name, value, porcentaje } = props;
   
   const isEfectivo = name === "Efectivo";
-  const color = isEfectivo ? "hsl(142.1 76.2% 36.3%)" : "hsl(221.2 83.2% 53.3%)";
+  const color = isEfectivo ? "hsl(180 50% 55%)" : "hsl(180 45% 45%)";
   const Icon = isEfectivo ? Wallet : CreditCard;
   
   // Determinar si hay suficiente espacio para el texto
@@ -107,19 +107,19 @@ const CustomTreemapContent = (props: any) => {
       {showMinimalText && (
         <>
           <Icon
-            x={x + width / 2 - 12}
-            y={y + (showFullText ? 20 : 15)}
-            width={24}
-            height={24}
-            fill="#fff"
+            x={x + width / 2 - 14}
+            y={y + (showFullText ? 22 : 16)}
+            width={28}
+            height={28}
+            fill="#000000"
           />
           <text
             x={x + width / 2}
-            y={y + (showFullText ? 55 : 40)}
+            y={y + (showFullText ? 60 : 44)}
             textAnchor="middle"
-            fill="#fff"
+            fill="#000000"
             fontWeight="bold"
-            fontSize={showFullText ? "14px" : "12px"}
+            fontSize={showFullText ? "16px" : "14px"}
           >
             {name}
           </text>
@@ -127,20 +127,21 @@ const CustomTreemapContent = (props: any) => {
             <>
               <text
                 x={x + width / 2}
-                y={y + 75}
+                y={y + 80}
                 textAnchor="middle"
-                fill="#fff"
-                fontSize="12px"
+                fill="#000000"
+                fontSize="14px"
                 fontWeight="600"
               >
                 ${formatCifra(value, "general")}
               </text>
               <text
                 x={x + width / 2}
-                y={y + 92}
+                y={y + 98}
                 textAnchor="middle"
-                fill="#fff"
-                fontSize="11px"
+                fill="#000000"
+                fontSize="13px"
+                fontWeight="600"
               >
                 {porcentaje}%
               </text>
