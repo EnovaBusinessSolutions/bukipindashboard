@@ -100,7 +100,15 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
             });
             clasificado = true;
           }
-          // Egresos (5XXX, 6XXX)
+          // Compras de Inventario (1005, 1006) ✅ CRÍTICO - AHORA INCLUIDO
+          else if ((codigo === "1005" || codigo === "1006") && montoTotal < 0) {
+            egresos.push({
+              ...transaccion,
+              tipo_egreso: "compra_inventario"
+            });
+            clasificado = true;
+          }
+          // Egresos operativos (5XXX, 6XXX)
           else if ((codigo.startsWith("5") || codigo.startsWith("6")) && montoTotal < 0) {
             egresos.push({
               ...transaccion,
@@ -108,12 +116,20 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
             });
             clasificado = true;
           }
-          // Inversiones (1004, 15XX)
-          else if ((codigo === "1004" || codigo.startsWith("15")) && montoTotal < 0) {
+          // Pagos a proveedores y pasivos (2001-2006)
+          else if (["2001", "2002", "2003", "2004", "2005", "2006"].includes(codigo) && montoTotal < 0) {
+            egresos.push({
+              ...transaccion,
+              tipo_egreso: "pago_proveedor"
+            });
+            clasificado = true;
+          }
+          // Inversiones (12XX, 13XX activos fijos y diferidos)
+          else if (((codigo.startsWith("12") && parseInt(codigo) >= 1201) || codigo.startsWith("13")) && montoTotal < 0) {
             inversiones.push({
               ...transaccion,
               producto_nombre: asiento.descripcion,
-              categoria_activo: "activo_fijo",
+              categoria_activo: codigo.startsWith("12") ? "activo_fijo" : "activo_diferido",
               valor_total: Math.abs(montoTotal)
             });
             clasificado = true;

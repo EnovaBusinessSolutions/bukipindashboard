@@ -122,7 +122,7 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate, filtroMetodoPago }: FlujoE
         const montoTotal = impactoEfectivo + impactoBancos;
         if (montoTotal === 0) return;
 
-        // Determinar categoría y tipo
+        // Determinar categoría y tipo - MAPEO COMPLETO DEL PLAN DE CUENTAS
         let categoria = "Operativo";
         let tipo = montoTotal > 0 ? "Cobro" : "Pago";
 
@@ -130,12 +130,70 @@ const FlujoEfectivoAnalitico = ({ startDate, endDate, filtroMetodoPago }: FlujoE
           const codigo = det.cuenta_codigo;
           if (codigo === "1001" || codigo === "1002") return;
 
-          if (codigo === "1004" || codigo.startsWith("15")) {
+          // ============= ACTIVIDADES OPERATIVAS =============
+          // Ingresos por ventas y cobros (4XXX)
+          if (codigo.startsWith("4")) {
+            categoria = "Operativo";
+            tipo = "Cobro por Ventas/Ingresos";
+          }
+          // Cobros de Cuentas por Cobrar (1003, 1004)
+          else if (codigo === "1003" || codigo === "1004") {
+            categoria = "Operativo";
+            tipo = "Cobro de Clientes";
+          }
+          // Compras de inventario (1005, 1006) ✅ CRÍTICO - AHORA INCLUIDO
+          else if (codigo === "1005" || codigo === "1006") {
+            categoria = "Operativo";
+            tipo = "Pago por Compra de Inventario";
+          }
+          // Pagos a proveedores y pasivos circulantes (2001-2006)
+          else if (["2001", "2002", "2003", "2006"].includes(codigo)) {
+            categoria = "Operativo";
+            tipo = "Pago a Proveedores/Gastos";
+          }
+          // Pago de impuestos (2004, 2005, 6001, 6002)
+          else if (["2004", "2005", "6001", "6002"].includes(codigo)) {
+            categoria = "Operativo";
+            tipo = "Pago de Impuestos";
+          }
+          // Gastos operativos directos (5XXX)
+          else if (codigo.startsWith("5")) {
+            categoria = "Operativo";
+            tipo = "Pago de Gastos Operativos";
+          }
+          // IVA Acreditable (1007)
+          else if (codigo === "1007") {
+            categoria = "Operativo";
+            tipo = "Pago de IVA";
+          }
+          // Gastos anticipados (1008)
+          else if (codigo === "1008") {
+            categoria = "Operativo";
+            tipo = "Pago de Gastos Anticipados";
+          }
+          
+          // ============= ACTIVIDADES DE INVERSIÓN =============
+          // Activos fijos (12XX)
+          else if (codigo.startsWith("12") && parseInt(codigo) >= 1201 && parseInt(codigo) <= 1299) {
             categoria = "Inversión";
-            tipo = "Inversión";
-          } else if (codigo.startsWith("20") || codigo.startsWith("21") || codigo === "3001" || codigo === "3002") {
+            tipo = "Adquisición de Activos Fijos";
+          }
+          // Activos diferidos (13XX)
+          else if (codigo.startsWith("13")) {
+            categoria = "Inversión";
+            tipo = "Gastos Diferidos";
+          }
+          
+          // ============= ACTIVIDADES DE FINANCIAMIENTO =============
+          // Préstamos y financiamientos (20XX, 21XX)
+          else if (codigo.startsWith("20") || codigo.startsWith("21")) {
             categoria = "Financiamiento";
-            tipo = montoTotal > 0 ? "Disposición" : "Amortización";
+            tipo = montoTotal > 0 ? "Disposición de Préstamo" : "Amortización de Préstamo";
+          }
+          // Capital (3001, 3002, 3003)
+          else if (["3001", "3002", "3003"].includes(codigo)) {
+            categoria = "Financiamiento";
+            tipo = montoTotal > 0 ? "Aportación de Capital" : "Retiro de Capital";
           }
         });
 

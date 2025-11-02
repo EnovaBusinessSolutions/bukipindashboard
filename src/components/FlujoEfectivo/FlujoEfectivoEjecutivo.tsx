@@ -57,35 +57,99 @@ const FlujoEfectivoEjecutivo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       });
       saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
 
-      // Calcular movimiento neto en efectivo durante el período
-      const { data: movimientosEfectivo } = await supabase
+      // ============= CLASIFICAR MOVIMIENTOS POR ACTIVIDAD =============
+      
+      // Obtener todos los movimientos de efectivo/bancos con sus asientos completos
+      const { data: movimientosData } = await supabase
         .from("detalle_asientos")
-        .select("debe, haber, asientos_contables!inner(fecha)")
-        .eq("cuenta_codigo", "1001")
+        .select(`
+          debe, haber, cuenta_codigo,
+          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
+        `)
+        .in("cuenta_codigo", ["1001", "1002"])
         .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
         .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
 
-      let flujoEfectivo = 0;
-      movimientosEfectivo?.forEach(mov => {
-        flujoEfectivo += (mov.debe || 0) - (mov.haber || 0);
+      let operativoEfectivo = 0;
+      let operativoBancos = 0;
+      let inversionEfectivo = 0;
+      let inversionBancos = 0;
+      let financiamientoEfectivo = 0;
+      let financiamientoBancos = 0;
+
+      const asientosProcesados = new Set();
+
+      movimientosData?.forEach((det: any) => {
+        const asientoId = det.asientos_contables?.id;
+        if (asientosProcesados.has(asientoId)) return;
+        asientosProcesados.add(asientoId);
+
+        const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
+        
+        // Calcular impacto en efectivo y bancos
+        let impactoEfectivo = 0;
+        let impactoBancos = 0;
+        
+        detallesAsiento.forEach((d: any) => {
+          if (d.cuenta_codigo === "1001") {
+            impactoEfectivo += (d.debe || 0) - (d.haber || 0);
+          } else if (d.cuenta_codigo === "1002") {
+            impactoBancos += (d.debe || 0) - (d.haber || 0);
+          }
+        });
+
+        // Clasificar según las contrapartidas
+        let esOperativo = false;
+        let esInversion = false;
+        let esFinanciamiento = false;
+
+        detallesAsiento.forEach((d: any) => {
+          const codigo = d.cuenta_codigo;
+          if (codigo === "1001" || codigo === "1002") return;
+
+          // OPERATIVO: 4XXX, 1003, 1004, 1005, 1006, 5XXX, 6XXX, 2001-2006, 1007, 1008
+          if (codigo?.startsWith("4") || codigo?.startsWith("5") || codigo?.startsWith("6") ||
+              ["1003", "1004", "1005", "1006", "2001", "2002", "2003", "2004", "2005", "2006", "1007", "1008"].includes(codigo)) {
+            esOperativo = true;
+          }
+          // INVERSIÓN: 12XX, 13XX
+          else if ((codigo?.startsWith("12") && parseInt(codigo) >= 1201) || codigo?.startsWith("13")) {
+            esInversion = true;
+          }
+          // FINANCIAMIENTO: 20XX, 21XX, 3001, 3002, 3003
+          else if (codigo?.startsWith("20") || codigo?.startsWith("21") || ["3001", "3002", "3003"].includes(codigo)) {
+            esFinanciamiento = true;
+          }
+        });
+
+        // Asignar a la categoría correspondiente
+        if (esOperativo) {
+          operativoEfectivo += impactoEfectivo;
+          operativoBancos += impactoBancos;
+        } else if (esInversion) {
+          inversionEfectivo += impactoEfectivo;
+          inversionBancos += impactoBancos;
+        } else if (esFinanciamiento) {
+          financiamientoEfectivo += impactoEfectivo;
+          financiamientoBancos += impactoBancos;
+        }
       });
 
-      // Calcular movimiento neto en bancos durante el período
-      const { data: movimientosBancos } = await supabase
-        .from("detalle_asientos")
-        .select("debe, haber, asientos_contables!inner(fecha)")
-        .eq("cuenta_codigo", "1002")
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
-
-      let flujoBancos = 0;
-      movimientosBancos?.forEach(mov => {
-        flujoBancos += (mov.debe || 0) - (mov.haber || 0);
-      });
-
-      const operativo = { efectivo: flujoEfectivo, bancos: flujoBancos, total: flujoEfectivo + flujoBancos };
-      const inversion = { efectivo: 0, bancos: 0, total: 0 };
-      const financiamiento = { efectivo: 0, bancos: 0, total: 0 };
+      const operativo = { 
+        efectivo: operativoEfectivo, 
+        bancos: operativoBancos, 
+        total: operativoEfectivo + operativoBancos 
+      };
+      const inversion = { 
+        efectivo: inversionEfectivo, 
+        bancos: inversionBancos, 
+        total: inversionEfectivo + inversionBancos 
+      };
+      const financiamiento = { 
+        efectivo: financiamientoEfectivo, 
+        bancos: financiamientoBancos, 
+        total: financiamientoEfectivo + financiamientoBancos 
+      };
 
       // Calcular totales
       operativo.total = operativo.efectivo + operativo.bancos;

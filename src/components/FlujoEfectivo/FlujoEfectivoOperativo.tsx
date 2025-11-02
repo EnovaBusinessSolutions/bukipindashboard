@@ -101,16 +101,134 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         flujoBancos += (mov.debe || 0) - (mov.haber || 0);
       });
 
+      // ============= CALCULAR ACTIVIDADES OPERATIVAS DETALLADAMENTE =============
+      
+      // 1. INGRESOS: Cobros por ventas (cuenta 4XXX genera DEBE en efectivo/bancos)
+      const { data: ingresosData } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          debe, haber, cuenta_codigo,
+          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
+        `)
+        .in("cuenta_codigo", ["1001", "1002"])
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+
+      let ingresosEfectivo = 0;
+      let ingresosBancos = 0;
+
+      // Procesar ingresos: cuando 1001/1002 tiene DEBE y la contrapartida es 4XXX (ingreso)
+      const asientosIngreso = new Set();
+      ingresosData?.forEach((det: any) => {
+        const debeEfectivo = det.cuenta_codigo === "1001" ? (det.debe || 0) : 0;
+        const debeBancos = det.cuenta_codigo === "1002" ? (det.debe || 0) : 0;
+        
+        if (debeEfectivo > 0 || debeBancos > 0) {
+          // Verificar si la contrapartida es ingreso (4XXX)
+          const asientoId = det.asientos_contables?.id;
+          if (asientoId && !asientosIngreso.has(asientoId)) {
+            const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
+            const tieneIngreso = detallesAsiento.some((d: any) => d.cuenta_codigo?.startsWith("4") && (d.haber || 0) > 0);
+            
+            if (tieneIngreso) {
+              ingresosEfectivo += debeEfectivo;
+              ingresosBancos += debeBancos;
+              asientosIngreso.add(asientoId);
+            }
+          }
+        }
+      });
+
+      // 2. COSTOS: Compras de inventario (1005, 1006) y costo de ventas (5001)
+      const { data: costosData } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          debe, haber, cuenta_codigo,
+          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
+        `)
+        .in("cuenta_codigo", ["1001", "1002"])
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+
+      let costosEfectivo = 0;
+      let costosBancos = 0;
+
+      // Procesar costos: cuando 1001/1002 tiene HABER y contrapartida es 1005, 1006, o 5001
+      const asientosCosto = new Set();
+      costosData?.forEach((det: any) => {
+        const haberEfectivo = det.cuenta_codigo === "1001" ? (det.haber || 0) : 0;
+        const haberBancos = det.cuenta_codigo === "1002" ? (det.haber || 0) : 0;
+        
+        if (haberEfectivo > 0 || haberBancos > 0) {
+          const asientoId = det.asientos_contables?.id;
+          if (asientoId && !asientosCosto.has(asientoId)) {
+            const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
+            const tieneCosto = detallesAsiento.some((d: any) => 
+              (["1005", "1006", "5001"].includes(d.cuenta_codigo) && (d.debe || 0) > 0)
+            );
+            
+            if (tieneCosto) {
+              costosEfectivo += haberEfectivo;
+              costosBancos += haberBancos;
+              asientosCosto.add(asientoId);
+            }
+          }
+        }
+      });
+
+      // 3. GASTOS: Pagos por gastos operativos (51XX, 6XXX) y proveedores (2001-2006)
+      const { data: gastosData } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          debe, haber, cuenta_codigo,
+          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
+        `)
+        .in("cuenta_codigo", ["1001", "1002"])
+        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
+        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+
+      let gastosEfectivo = 0;
+      let gastosBancos = 0;
+
+      // Procesar gastos: cuando 1001/1002 tiene HABER y contrapartida es gasto (51XX, 6XXX, 2001-2006)
+      const asientosGasto = new Set();
+      gastosData?.forEach((det: any) => {
+        const haberEfectivo = det.cuenta_codigo === "1001" ? (det.haber || 0) : 0;
+        const haberBancos = det.cuenta_codigo === "1002" ? (det.haber || 0) : 0;
+        
+        if (haberEfectivo > 0 || haberBancos > 0) {
+          const asientoId = det.asientos_contables?.id;
+          // Evitar duplicados con costos
+          if (asientoId && !asientosGasto.has(asientoId) && !asientosCosto.has(asientoId)) {
+            const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
+            const tieneGasto = detallesAsiento.some((d: any) => {
+              const codigo = d.cuenta_codigo;
+              return (
+                (codigo?.startsWith("51") || codigo?.startsWith("6") || 
+                 ["2001", "2002", "2003", "2004", "2005", "2006", "1007", "1008"].includes(codigo)) &&
+                (d.debe || 0) > 0
+              );
+            });
+            
+            if (tieneGasto) {
+              gastosEfectivo += haberEfectivo;
+              gastosBancos += haberBancos;
+              asientosGasto.add(asientoId);
+            }
+          }
+        }
+      });
+
       const operativo = {
-        ingresos: flujoEfectivo + flujoBancos,
-        ingresosEfectivo: flujoEfectivo,
-        ingresosBancos: flujoBancos,
-        costos: 0,
-        costosEfectivo: 0,
-        costosBancos: 0,
-        gastos: 0,
-        gastosEfectivo: 0,
-        gastosBancos: 0
+        ingresos: ingresosEfectivo + ingresosBancos,
+        ingresosEfectivo: ingresosEfectivo,
+        ingresosBancos: ingresosBancos,
+        costos: costosEfectivo + costosBancos,
+        costosEfectivo: costosEfectivo,
+        costosBancos: costosBancos,
+        gastos: gastosEfectivo + gastosBancos,
+        gastosEfectivo: gastosEfectivo,
+        gastosBancos: gastosBancos
       };
 
       const inversion: any = {};
