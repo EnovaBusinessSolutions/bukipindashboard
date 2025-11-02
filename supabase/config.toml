@@ -2,3 +2,9 @@ project_id = "rvutjdrjxuilmjugnbtq"
 
 [functions.registrar-ingreso]
 verify_jwt = false
+
+[functions.cancelar-ingreso]
+verify_jwt = false
+
+[functions.cancelar-compra-inventario]
+verify_jwt = false

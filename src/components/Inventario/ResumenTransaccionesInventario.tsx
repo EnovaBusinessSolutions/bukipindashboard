@@ -7,12 +7,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Eye, TrendingUp, TrendingDown, Calendar } from "lucide-react";
+import { Eye, TrendingUp, TrendingDown, Calendar, Package, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/hooks/use-toast";
 
 interface MovimientoInventario {
   id: string;
@@ -25,6 +38,7 @@ interface MovimientoInventario {
   descripcion?: string;
   productos?: {
     nombre: string;
+    imagen_url?: string;
   };
 }
 
@@ -52,9 +66,13 @@ const ResumenTransaccionesInventario = () => {
   const [tipoMovimiento, setTipoMovimiento] = useState<string>("todos");
   const [productoFiltro, setProductoFiltro] = useState<string>("todos");
   const [selectedMovimiento, setSelectedMovimiento] = useState<MovimientoInventario | null>(null);
+  const [movimientoACancelar, setMovimientoACancelar] = useState<MovimientoInventario | null>(null);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Obtener movimientos de inventario
-  const { data: movimientos = [], isLoading } = useQuery({
+  const { data: movimientos = [], isLoading, refetch } = useQuery({
     queryKey: ["movimientos-inventario", user?.id, fechaInicio, fechaFin],
     queryFn: async () => {
       let query = supabase
@@ -62,7 +80,8 @@ const ResumenTransaccionesInventario = () => {
         .select(`
           *,
           productos (
-            nombre
+            nombre,
+            imagen_url
           )
         `)
         .or(`user_id.eq.${user?.id},user_id.is.null`) // Incluir movimientos sin user_id
@@ -180,6 +199,52 @@ const ResumenTransaccionesInventario = () => {
     },
     enabled: !!selectedMovimiento,
   });
+
+  // Función de cancelación
+  const handleCancelarMovimiento = async () => {
+    if (!movimientoACancelar || !motivoCancelacion.trim()) {
+      toast({
+        title: "Error",
+        description: "Debes ingresar un motivo de cancelación",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCancelling(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('cancelar-compra-inventario', {
+        body: {
+          movimientoId: movimientoACancelar.id,
+          motivoCancelacion
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Compra cancelada",
+        description: "La compra ha sido cancelada y se generó el asiento de reversión"
+      });
+
+      // Refrescar datos
+      refetch();
+      setIsCancelDialogOpen(false);
+      setMotivoCancelacion("");
+      setMovimientoACancelar(null);
+
+    } catch (error: any) {
+      console.error('Error al cancelar:', error);
+      toast({
+        title: "Error al cancelar",
+        description: error.message || "No se pudo cancelar la compra",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // Obtener lista única de productos para filtro
   const productosUnicos = Array.from(
@@ -384,20 +449,38 @@ const ResumenTransaccionesInventario = () => {
                 <TableHead className="text-right">Costo Unitario</TableHead>
                 <TableHead className="text-right">Costo Total</TableHead>
                 <TableHead>Descripción</TableHead>
-                <TableHead>Detalle</TableHead>
+                <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {movimientosFiltrados.map((movimiento) => (
-                <TableRow key={movimiento.id}>
+              {movimientosFiltrados.map((movimiento) => {
+                const esCancelado = movimiento.descripcion?.includes('CANCELACIÓN');
+                
+                return (
+                <TableRow key={movimiento.id} className={esCancelado ? "opacity-60 bg-muted/50" : ""}>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       {format(new Date(movimiento.fecha), "dd/MM/yyyy")}
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">
-                    {movimiento.productos?.nombre || "Producto eliminado"}
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      {movimiento.productos?.imagen_url ? (
+                        <img 
+                          src={movimiento.productos.imagen_url} 
+                          alt={movimiento.productos.nombre}
+                          className="w-10 h-10 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+                          <Package className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <span className="font-medium">
+                        {movimiento.productos?.nombre || "Producto eliminado"}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -430,20 +513,31 @@ const ResumenTransaccionesInventario = () => {
                       minimumFractionDigits: 2,
                     })}
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {movimiento.descripcion || "-"}
+                  <TableCell className="max-w-xs">
+                    <div className="flex flex-col gap-1">
+                      {esCancelado && (
+                        <Badge variant="destructive" className="w-fit">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Cancelado
+                        </Badge>
+                      )}
+                      <span className={esCancelado ? "text-xs line-through" : ""}>
+                        {movimiento.descripcion || "-"}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedMovimiento(movimiento)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
+                    <div className="flex items-center justify-center gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedMovimiento(movimiento)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Detalle de Transacción</DialogTitle>
@@ -640,9 +734,27 @@ const ResumenTransaccionesInventario = () => {
                         )}
                       </DialogContent>
                     </Dialog>
+                    
+                    {/* Botón de cancelar (solo para compras no canceladas) */}
+                    {movimiento.tipo_movimiento === 'compra' && !esCancelado && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => {
+                          setMovimientoACancelar(movimiento);
+                          setIsCancelDialogOpen(true);
+                        }}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Cancelar
+                      </Button>
+                    )}
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
+              )}
             </TableBody>
           </Table>
 
@@ -653,6 +765,81 @@ const ResumenTransaccionesInventario = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de confirmación de cancelación */}
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cancelar esta compra de inventario?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción creará un asiento de reversión automático y ajustará el inventario.
+              No se puede deshacer esta operación.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {movimientoACancelar && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-muted rounded-md space-y-2">
+                <div className="flex items-center gap-3">
+                  {movimientoACancelar.productos?.imagen_url ? (
+                    <img 
+                      src={movimientoACancelar.productos.imagen_url} 
+                      alt={movimientoACancelar.productos.nombre}
+                      className="w-12 h-12 rounded-md object-cover"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-md bg-background flex items-center justify-center">
+                      <Package className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium">{movimientoACancelar.productos?.nombre}</p>
+                    <p className="text-sm text-muted-foreground">{movimientoACancelar.descripcion}</p>
+                  </div>
+                </div>
+                <Separator />
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Cantidad:</span>
+                    <span className="ml-2 font-medium">{movimientoACancelar.cantidad}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Costo Total:</span>
+                    <span className="ml-2 font-medium">
+                      ${movimientoACancelar.costo_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="motivo">Motivo de cancelación *</Label>
+                <Textarea
+                  id="motivo"
+                  value={motivoCancelacion}
+                  onChange={(e) => setMotivoCancelacion(e.target.value)}
+                  placeholder="Describe por qué se cancela esta compra..."
+                  rows={3}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancelling}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelarMovimiento}
+              disabled={isCancelling || !motivoCancelacion.trim()}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isCancelling ? "Cancelando..." : "Confirmar Cancelación"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
