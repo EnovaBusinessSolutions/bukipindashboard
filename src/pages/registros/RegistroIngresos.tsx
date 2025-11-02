@@ -56,6 +56,13 @@ const getMetricValue = (transaction: any, metricType: "brutas" | "descuentos" | 
   return 0;
 };
 
+// Función para parsear fechas DATE correctamente (evita problemas de zona horaria UTC)
+const parseDateSafe = (dateString: string): Date => {
+  // Forzar interpretación local, no UTC
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 // Función para ajustar proporcionalmente los datos para que sumen el total real de asientos contables
 const ajustarProporcionalmente = (
   datosTransacciones: { [key: string]: number },
@@ -509,7 +516,7 @@ const RegistroIngresos = () => {
 
         asientos.forEach(asiento => {
           const detallesAsiento = detalles.filter(d => d.asiento_id === asiento.id);
-          const fecha = new Date(asiento.fecha);
+          const fecha = parseDateSafe(asiento.fecha);
           
           // Determinar la clave del período
           let periodKey: string;
@@ -2753,22 +2760,28 @@ const RegistroIngresos = () => {
                 );
                 
                 if (periodFilter === "diario") {
-                  // Usar la fecha seleccionada para análisis diario
+                  // Usar la fecha seleccionada para análisis diario desde asiento contable
                   const selectedDateStr = fechaAnalisisDiario.toISOString().split('T')[0];
-                  filtered = filtered.filter(t => 
-                    new Date(t.created_at).toISOString().split('T')[0] === selectedDateStr
-                  );
+                  filtered = filtered.filter(t => {
+                    const asientoFecha = (t as any).asiento_fecha;
+                    return asientoFecha === selectedDateStr;
+                  });
                 } else if (periodFilter === "mensual") {
-                  // Usar el mes y año de la fecha seleccionada
+                  // Usar el mes y año de la fecha seleccionada desde asiento contable
                   const selectedMonth = fechaAnalisisMensual.getMonth();
                   const selectedYear = fechaAnalisisMensual.getFullYear();
                   filtered = filtered.filter(t => {
-                    const tDate = new Date(t.created_at);
+                    const asientoFecha = (t as any).asiento_fecha;
+                    if (!asientoFecha) return false;
+                    const tDate = parseDateSafe(asientoFecha);
                     return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
                   });
                 } else {
+                  // Anual desde asiento contable
                   filtered = filtered.filter(t => {
-                    const tDate = new Date(t.created_at);
+                    const asientoFecha = (t as any).asiento_fecha;
+                    if (!asientoFecha) return false;
+                    const tDate = parseDateSafe(asientoFecha);
                     return tDate.getFullYear() === currentYear;
                   });
                 }

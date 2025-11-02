@@ -14,6 +14,7 @@ interface TransaccionIngreso {
   subcuenta_id: string | null;
   created_at: string;
   comentarios?: string | null;
+  asiento_fecha?: string | null; // Fecha del asiento contable relacionado
   subcuentas?: {
     nombre: string;
   } | null;
@@ -34,13 +35,22 @@ export const useTransaccionesRecientes = (limit: number = 10) => {
 
       const { data, error: fetchError } = await supabase
         .from('transacciones_ingresos')
-        .select('*')
+        .select(`
+          *,
+          asiento:asientos_contables!transaccion_ingreso_id(fecha)
+        `)
         .order('created_at', { ascending: false })
         .limit(limit);
 
       if (fetchError) throw fetchError;
 
-      setTransacciones((data as any) || []);
+      // Mapear la fecha del asiento a la transacción
+      const transaccionesConFecha = (data || []).map((t: any) => ({
+        ...t,
+        asiento_fecha: Array.isArray(t.asiento) && t.asiento.length > 0 ? t.asiento[0].fecha : null
+      }));
+
+      setTransacciones(transaccionesConFecha as any);
     } catch (err) {
       console.error('Error fetching transacciones:', err);
       setError(err instanceof Error ? err.message : 'Error desconocido');
