@@ -5,12 +5,18 @@ interface VentasResumen {
   ventasDelDia: number;
   ventasDelMes: number;
   ventasDelAno: number;
+  otrosIngresosDelDia: number;
+  otrosIngresosDelMes: number;
+  otrosIngresosDelAno: number;
   descuentosDelDia: number;
   descuentosDelMes: number;
   descuentosDelAno: number;
   ingresoNetoDelDia: number;
   ingresoNetoDelMes: number;
   ingresoNetoDelAno: number;
+  totalIngresosDelDia: number;
+  totalIngresosDelMes: number;
+  totalIngresosDelAno: number;
 }
 
 /**
@@ -21,19 +27,26 @@ interface VentasResumen {
  * 
  * Cuentas utilizadas:
  * - 4001: Ventas (Ingresos por ventas de productos/servicios)
- * - 4XXX: Otros ingresos
+ * - 4003: Descuentos sobre ventas
+ * - 4004 y otras 4XXX: Otros ingresos (extraordinarios, donaciones, etc.)
  */
 export const useVentasResumen = () => {
   const [ventasResumen, setVentasResumen] = useState<VentasResumen>({
     ventasDelDia: 0,
     ventasDelMes: 0,
     ventasDelAno: 0,
+    otrosIngresosDelDia: 0,
+    otrosIngresosDelMes: 0,
+    otrosIngresosDelAno: 0,
     descuentosDelDia: 0,
     descuentosDelMes: 0,
     descuentosDelAno: 0,
     ingresoNetoDelDia: 0,
     ingresoNetoDelMes: 0,
     ingresoNetoDelAno: 0,
+    totalIngresosDelDia: 0,
+    totalIngresosDelMes: 0,
+    totalIngresosDelAno: 0,
   });
   
   const [loading, setLoading] = useState(true);
@@ -68,12 +81,18 @@ export const useVentasResumen = () => {
           ventasDelDia: 0,
           ventasDelMes: 0,
           ventasDelAno: 0,
+          otrosIngresosDelDia: 0,
+          otrosIngresosDelMes: 0,
+          otrosIngresosDelAno: 0,
           descuentosDelDia: 0,
           descuentosDelMes: 0,
           descuentosDelAno: 0,
           ingresoNetoDelDia: 0,
           ingresoNetoDelMes: 0,
           ingresoNetoDelAno: 0,
+          totalIngresosDelDia: 0,
+          totalIngresosDelMes: 0,
+          totalIngresosDelAno: 0,
         });
         return;
       }
@@ -82,6 +101,9 @@ export const useVentasResumen = () => {
       let ventasDelDia = 0;
       let ventasDelMes = 0;
       let ventasDelAno = 0;
+      let otrosIngresosDelDia = 0;
+      let otrosIngresosDelMes = 0;
+      let otrosIngresosDelAno = 0;
       let descuentosDelDia = 0;
       let descuentosDelMes = 0;
       let descuentosDelAno = 0;
@@ -103,33 +125,56 @@ export const useVentasResumen = () => {
           if (fechaAsiento >= startOfYear) {
             descuentosDelAno += montoDescuento;
           }
-        } else {
-          // Las demás cuentas de ingresos (4001, 4002, etc.) tienen naturaleza ACREEDORA
-          // (Haber aumenta, Debe disminuye)
-          const montoIngreso = (detalle.haber || 0) - (detalle.debe || 0);
+        } else if (detalle.cuenta_codigo === '4001') {
+          // Cuenta 4001: Ventas normales (naturaleza ACREEDORA)
+          const montoVenta = (detalle.haber || 0) - (detalle.debe || 0);
 
           if (fechaAsiento >= startOfDay) {
-            ventasDelDia += montoIngreso;
+            ventasDelDia += montoVenta;
           }
           if (fechaAsiento >= startOfMonth) {
-            ventasDelMes += montoIngreso;
+            ventasDelMes += montoVenta;
           }
           if (fechaAsiento >= startOfYear) {
-            ventasDelAno += montoIngreso;
+            ventasDelAno += montoVenta;
+          }
+        } else {
+          // Otras cuentas 4XXX: Otros ingresos (naturaleza ACREEDORA)
+          const montoOtros = (detalle.haber || 0) - (detalle.debe || 0);
+
+          if (fechaAsiento >= startOfDay) {
+            otrosIngresosDelDia += montoOtros;
+          }
+          if (fechaAsiento >= startOfMonth) {
+            otrosIngresosDelMes += montoOtros;
+          }
+          if (fechaAsiento >= startOfYear) {
+            otrosIngresosDelAno += montoOtros;
           }
         }
       });
+
+      // Calcular ingresos netos (ventas - descuentos)
+      const ingresoNetoDelDia = Math.max(0, ventasDelDia - descuentosDelDia);
+      const ingresoNetoDelMes = Math.max(0, ventasDelMes - descuentosDelMes);
+      const ingresoNetoDelAno = Math.max(0, ventasDelAno - descuentosDelAno);
 
       setVentasResumen({
         ventasDelDia: Math.max(0, ventasDelDia),
         ventasDelMes: Math.max(0, ventasDelMes),
         ventasDelAno: Math.max(0, ventasDelAno),
+        otrosIngresosDelDia: Math.max(0, otrosIngresosDelDia),
+        otrosIngresosDelMes: Math.max(0, otrosIngresosDelMes),
+        otrosIngresosDelAno: Math.max(0, otrosIngresosDelAno),
         descuentosDelDia,
         descuentosDelMes,
         descuentosDelAno,
-        ingresoNetoDelDia: Math.max(0, ventasDelDia - descuentosDelDia),
-        ingresoNetoDelMes: Math.max(0, ventasDelMes - descuentosDelMes),
-        ingresoNetoDelAno: Math.max(0, ventasDelAno - descuentosDelAno),
+        ingresoNetoDelDia,
+        ingresoNetoDelMes,
+        ingresoNetoDelAno,
+        totalIngresosDelDia: ingresoNetoDelDia + otrosIngresosDelDia,
+        totalIngresosDelMes: ingresoNetoDelMes + otrosIngresosDelMes,
+        totalIngresosDelAno: ingresoNetoDelAno + otrosIngresosDelAno,
       });
     } catch (err) {
       console.error('Error fetching ventas resumen:', err);

@@ -118,6 +118,9 @@ const RegistroIngresos = () => {
   
   // Estado para el tipo de métrica a mostrar
   const [metricType, setMetricType] = useState<"brutas" | "descuentos" | "netas">("brutas");
+  
+  // Estado para el tipo de ingreso a analizar
+  const [tipoIngresoAnalisis, setTipoIngresoAnalisis] = useState<"ventas" | "otros">("ventas");
 
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
@@ -2410,31 +2413,43 @@ const RegistroIngresos = () => {
 
           {/* TAB 3: ANALÍTICA DE VENTAS - GRÁFICAS Y DESTACADOS */}
           <TabsContent value="analitica" className="mt-6">
-            {/* Función para filtrar transacciones según el período */}
+            {/* Función para filtrar transacciones según el período y tipo de ingreso */}
             {(() => {
               const getFilteredTransactions = () => {
                 const today = new Date();
                 const currentMonth = today.getMonth();
                 const currentYear = today.getFullYear();
 
+                // Primero filtrar por período
+                let filtered = transacciones;
                 if (periodFilter === "diario") {
-                  // Filtrar solo del día actual
                   const todayStr = today.toISOString().split('T')[0];
-                  return transacciones.filter(t => 
+                  filtered = transacciones.filter(t => 
                     new Date(t.created_at).toISOString().split('T')[0] === todayStr
                   );
                 } else if (periodFilter === "mensual") {
-                  // Filtrar solo del mes actual
-                  return transacciones.filter(t => {
+                  filtered = transacciones.filter(t => {
                     const tDate = new Date(t.created_at);
                     return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
                   });
                 } else {
-                  // Filtrar solo del año actual
-                  return transacciones.filter(t => {
+                  filtered = transacciones.filter(t => {
                     const tDate = new Date(t.created_at);
                     return tDate.getFullYear() === currentYear;
                   });
+                }
+
+                // Luego filtrar por tipo de ingreso
+                if (tipoIngresoAnalisis === "ventas") {
+                  // Solo ventas (cuenta 4001)
+                  return filtered.filter(t => t.cuenta_principal_codigo === '4001');
+                } else {
+                  // Otros ingresos (cuentas 4XXX excepto 4001 y 4003)
+                  return filtered.filter(t => 
+                    t.cuenta_principal_codigo?.startsWith('4') && 
+                    t.cuenta_principal_codigo !== '4001' && 
+                    t.cuenta_principal_codigo !== '4003'
+                  );
                 }
               };
 
@@ -2442,9 +2457,11 @@ const RegistroIngresos = () => {
 
               return (
                 <>
-                  {/* HIGHLIGHTS - Resumen de Ventas */}
+                  {/* HIGHLIGHTS - Resumen */}
                   <div className="mb-8">
-                    <h3 className="text-xl font-bold text-foreground mb-4">Highlights de Ventas</h3>
+                    <h3 className="text-xl font-bold text-foreground mb-4">
+                      Highlights de {tipoIngresoAnalisis === "ventas" ? "Ventas" : "Otros Ingresos"}
+                    </h3>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Día */}
               <Card>
@@ -2452,7 +2469,7 @@ const RegistroIngresos = () => {
                   <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
+                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                     <span className="font-semibold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ventasDelDia, scaleFormat)}`}
@@ -2466,9 +2483,22 @@ const RegistroIngresos = () => {
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
+                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                     <span className="text-lg font-bold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelDia, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                    <span className="font-semibold text-foreground">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelDia, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelDia, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
@@ -2494,9 +2524,22 @@ const RegistroIngresos = () => {
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
+                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                     <span className="text-lg font-bold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelMes, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                    <span className="font-semibold text-foreground">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelMes, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelMes, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
@@ -2522,9 +2565,22 @@ const RegistroIngresos = () => {
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ingreso Neto:</span>
+                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                     <span className="text-lg font-bold text-foreground">
                       {loadingVentas ? "..." : `$${formatCifra(ventasResumen.ingresoNetoDelAno, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                    <span className="font-semibold text-foreground">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelAno, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelAno, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
@@ -2537,14 +2593,35 @@ const RegistroIngresos = () => {
 
             {/* ANALÍTICA - Sección de análisis detallado */}
             <div>
-              <h3 className="text-xl font-bold text-foreground mb-6">Analítica de Ventas</h3>
+              <h3 className="text-xl font-bold text-foreground mb-6">
+                Analítica de {tipoIngresoAnalisis === "ventas" ? "Ventas" : "Otros Ingresos"}
+              </h3>
 
-            {/* Selector de Período, Formato de Cifras y Tipo de Métrica */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* Selector de Período, Formato de Cifras, Tipo de Métrica y Tipo de Ingreso */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tipo de Ingreso</CardTitle>
+                  <CardDescription>Selecciona qué analizar</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup value={tipoIngresoAnalisis} onValueChange={(v) => setTipoIngresoAnalisis(v as "ventas" | "otros")} className="flex flex-col gap-3">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="ventas" id="tipo-ventas" />
+                      <Label htmlFor="tipo-ventas" className="cursor-pointer">Ventas</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="otros" id="tipo-otros" />
+                      <Label htmlFor="tipo-otros" className="cursor-pointer">Otros Ingresos</Label>
+                    </div>
+                  </RadioGroup>
+                </CardContent>
+              </Card>
+              
               <Card>
                 <CardHeader>
                   <CardTitle>Período de Análisis</CardTitle>
-                  <CardDescription>Selecciona el período para analizar</CardDescription>
+                  <CardDescription>Selecciona el período</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex flex-col gap-3">
@@ -2567,7 +2644,7 @@ const RegistroIngresos = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Formato de Cifras</CardTitle>
-                  <CardDescription>Elige cómo visualizar los montos</CardDescription>
+                  <CardDescription>Visualización de montos</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <RadioGroup value={scaleFormat} onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")} className="flex flex-col gap-3">
@@ -2590,7 +2667,7 @@ const RegistroIngresos = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Tipo de Métrica</CardTitle>
-                  <CardDescription>Selecciona qué datos visualizar</CardDescription>
+                  <CardDescription>Datos a visualizar</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <RadioGroup value={metricType} onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")} className="flex flex-col gap-3">
