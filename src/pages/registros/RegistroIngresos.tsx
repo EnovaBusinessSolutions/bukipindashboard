@@ -3133,7 +3133,8 @@ const RegistroIngresos = () => {
                         periodo: d.periodo,
                         ventas: d.ventasBrutas,
                         descuentos: d.descuentos,
-                        neto: d.ventasNetas
+                        neto: d.ventasNetas,
+                        otrosIngresos: d.otrosIngresos
                       }))}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="periodo" tick={{ fill: '#000000' }} />
