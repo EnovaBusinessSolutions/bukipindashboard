@@ -336,8 +336,17 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
   const inversionData = getInversionData();
   const financiamientoData = getFinanciamientoData();
 
-  const flujoNetoTotal = (operativoData.total || 0) + (inversionData.total || 0) + (financiamientoData.total || 0);
-  const saldoFinal = flujoData.saldoInicial.total + flujoNetoTotal;
+  // Calcular flujo neto usando los movimientos REALES (igual que Ejecutivo)
+  const flujoNetoEfectivo = (operativoData.efectivo || 0) + (inversionData.efectivo || 0) + (financiamientoData.efectivo || 0);
+  const flujoNetoBancos = (operativoData.bancos || 0) + (inversionData.bancos || 0) + (financiamientoData.bancos || 0);
+  const flujoNetoTotal = flujoNetoEfectivo + flujoNetoBancos;
+
+  // Saldo final = saldo inicial + flujo neto (MISMA LÓGICA QUE EJECUTIVO)
+  const saldoFinal = {
+    efectivo: flujoData.saldoInicial.efectivo + flujoNetoEfectivo,
+    bancos: flujoData.saldoInicial.bancos + flujoNetoBancos,
+    total: flujoData.saldoInicial.total + flujoNetoTotal
+  };
 
   const renderValue = (efectivo?: number, bancos?: number, total?: number) => {
     if (isDetallada && efectivo !== undefined && bancos !== undefined) {
@@ -628,22 +637,22 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Efectivo</div>
                   <span className="text-2xl font-bold text-green-600">
-                    {formatCurrency(flujoData.saldoInicial.efectivo + (operativoData.efectivo || 0) + (inversionData.efectivo || 0) + (financiamientoData.efectivo || 0))}
+                    {formatCurrency(saldoFinal.efectivo)}
                   </span>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Bancos</div>
                   <span className="text-2xl font-bold text-green-600">
-                    {formatCurrency(flujoData.saldoInicial.bancos + (operativoData.bancos || 0) + (inversionData.bancos || 0) + (financiamientoData.bancos || 0))}
+                    {formatCurrency(saldoFinal.bancos)}
                   </span>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Total</div>
-                  <span className="text-2xl font-bold text-green-600">{formatCurrency(saldoFinal)}</span>
+                  <span className="text-2xl font-bold text-green-600">{formatCurrency(saldoFinal.total)}</span>
                 </div>
               </div>
             ) : (
-              <span className="text-2xl font-bold text-green-600">{formatCurrency(saldoFinal)}</span>
+              <span className="text-2xl font-bold text-green-600">{formatCurrency(saldoFinal.total)}</span>
             )}
           </div>
         </CardContent>
