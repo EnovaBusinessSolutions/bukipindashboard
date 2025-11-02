@@ -19,7 +19,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList, Treemap } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
@@ -79,6 +79,101 @@ const ajustarProporcionalmente = (
   });
   
   return resultado;
+};
+
+// Componente personalizado para celdas del TreeMap
+const CustomTreemapContent = (props: any) => {
+  const { x, y, width, height, name, value, porcentaje } = props;
+  
+  const isEfectivo = name === "Efectivo";
+  const color = isEfectivo ? "hsl(142.1 76.2% 36.3%)" : "hsl(221.2 83.2% 53.3%)";
+  const Icon = isEfectivo ? Wallet : CreditCard;
+  
+  // Determinar si hay suficiente espacio para el texto
+  const showFullText = width > 120 && height > 80;
+  const showMinimalText = width > 80 && height > 50;
+  
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={color}
+        stroke="#fff"
+        strokeWidth={2}
+      />
+      {showMinimalText && (
+        <>
+          <Icon
+            x={x + width / 2 - 12}
+            y={y + (showFullText ? 20 : 15)}
+            width={24}
+            height={24}
+            fill="#fff"
+          />
+          <text
+            x={x + width / 2}
+            y={y + (showFullText ? 55 : 40)}
+            textAnchor="middle"
+            fill="#fff"
+            fontWeight="bold"
+            fontSize={showFullText ? "14px" : "12px"}
+          >
+            {name}
+          </text>
+          {showFullText && (
+            <>
+              <text
+                x={x + width / 2}
+                y={y + 75}
+                textAnchor="middle"
+                fill="#fff"
+                fontSize="12px"
+                fontWeight="600"
+              >
+                ${formatCifra(value, "general")}
+              </text>
+              <text
+                x={x + width / 2}
+                y={y + 92}
+                textAnchor="middle"
+                fill="#fff"
+                fontSize="11px"
+              >
+                {porcentaje}%
+              </text>
+            </>
+          )}
+        </>
+      )}
+    </g>
+  );
+};
+
+// Tooltip personalizado para el TreeMap
+const CustomTreemapTooltip = ({ active, payload, scaleFormat }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const isEfectivo = data.name === "Efectivo";
+    
+    return (
+      <div className="bg-background border border-border rounded-lg shadow-lg p-3">
+        <p className="font-bold text-foreground mb-1">{data.name}</p>
+        <p className="text-sm text-muted-foreground">
+          Monto: <span className="font-semibold text-foreground">${formatCifra(data.value, scaleFormat)}</span>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Porcentaje: <span className="font-semibold text-foreground">{data.porcentaje}%</span>
+        </p>
+        <p className="text-xs text-muted-foreground mt-2 italic">
+          {isEfectivo ? "Se registra en Efectivo (Caja)" : "Se registra en Bancos"}
+        </p>
+      </div>
+    );
+  }
+  return null;
 };
 
 const RegistroIngresos = () => {
@@ -2802,6 +2897,36 @@ const RegistroIngresos = () => {
 
               const filteredTransactions = getFilteredTransactions();
 
+              // Función para procesar datos de métodos de pago (solo para transacciones con pago recibido)
+              const getMetodosPagoData = () => {
+                // Filtrar solo transacciones que tienen método de pago asignado (contado o parcial)
+                const transaccionesConPago = filteredTransactions.filter(t => 
+                  t.tipo_pago === "contado" || t.tipo_pago === "parcial"
+                );
+
+                if (transaccionesConPago.length === 0) {
+                  return [];
+                }
+
+                // Agrupar por método de pago
+                const metodosPago: { [key: string]: number } = {};
+                transaccionesConPago.forEach(t => {
+                  const metodo = t.metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta";
+                  metodosPago[metodo] = (metodosPago[metodo] || 0) + getMetricValue(t, metricType);
+                });
+
+                // Calcular total y porcentajes
+                const total = Object.values(metodosPago).reduce((sum, val) => sum + val, 0);
+                
+                return Object.entries(metodosPago).map(([name, value]) => ({
+                  name,
+                  value,
+                  porcentaje: total > 0 ? ((value / total) * 100).toFixed(1) : "0.0"
+                }));
+              };
+
+              const datosMetodosPago = getMetodosPagoData();
+
               // Función para verificar si hay datos disponibles
               const hayDatosDisponibles = () => {
                 if (tipoIngresoAnalisis === "ventas") {
@@ -3184,7 +3309,7 @@ const RegistroIngresos = () => {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Gráfico de Ventas por Tipo */}
               <Card>
                 <CardHeader>
@@ -3365,7 +3490,9 @@ const RegistroIngresos = () => {
                   )}
                 </CardContent>
               </Card>
+            </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Gráfico por Subcuenta Contable */}
               <Card>
                 <CardHeader>
@@ -3428,6 +3555,52 @@ const RegistroIngresos = () => {
                             <LabelList dataKey="monto" position="right" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
                           </Bar>
                         </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* TreeMap de Métodos de Pago */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Métodos de Pago Recibidos</CardTitle>
+                  <CardDescription>
+                    Distribución de {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por método de pago
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransacciones ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      Cargando gráfico...
+                    </div>
+                  ) : !hayDatosDisponibles() ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay datos para mostrar
+                    </div>
+                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay descuentos en otros ingresos
+                    </div>
+                  ) : datosMetodosPago.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay transacciones con método de pago en este período
+                      <br />
+                      <span className="text-xs mt-2 block">Las ventas a crédito no tienen método de pago asignado</span>
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <Treemap
+                          data={datosMetodosPago}
+                          dataKey="value"
+                          aspectRatio={4/3}
+                          stroke="#fff"
+                          fill="#8884d8"
+                          content={<CustomTreemapContent />}
+                        >
+                          <Tooltip content={<CustomTreemapTooltip scaleFormat={scaleFormat} />} />
+                        </Treemap>
                       </ResponsiveContainer>
                     </div>
                   )}
