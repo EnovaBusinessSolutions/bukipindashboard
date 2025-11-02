@@ -3146,19 +3146,27 @@ const RegistroIngresos = () => {
                           wrapperStyle={{ zIndex: 1000 }}
                         />
                         <Legend />
-                        {metricType === "brutas" && (
-                          <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
-                            <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Line>
-                        )}
-                        {metricType === "descuentos" && (
-                          <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
-                            <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Line>
-                        )}
-                        {metricType === "netas" && (
-                          <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
-                            <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                        {tipoIngresoAnalisis === "ventas" ? (
+                          <>
+                            {metricType === "brutas" && (
+                              <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
+                                <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                              </Line>
+                            )}
+                            {metricType === "descuentos" && (
+                              <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
+                                <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                              </Line>
+                            )}
+                            {metricType === "netas" && (
+                              <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
+                                <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                              </Line>
+                            )}
+                          </>
+                        ) : (
+                          <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2}>
+                            <LabelList dataKey="otrosIngresos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
                           </Line>
                         )}
                       </LineChart>
@@ -3576,28 +3584,36 @@ const RegistroIngresos = () => {
                                 </div>
                               );
                             })}
-                            {/* Fila de Total */}
-                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                              <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                <Package className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {productosArray.reduce((sum, p) => sum + p.transacciones, 0)} transacciones
-                                </p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-lg text-primary">
-                                  ${formatCifra(totalGeneral, scaleFormat)}
-                                </p>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
-                                  100%
-                                </div>
-                              </div>
-                            </div>
+                            {/* Fila de Total - solo mostrar si hay monto */}
+                            {(() => {
+                              const totalGeneralMonto = productosArray.reduce((sum, p) => sum + p.monto, 0);
+                              if (totalGeneralMonto > 0) {
+                                return (
+                                  <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                                    <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                      <Package className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {productosArray.reduce((sum, p) => sum + p.transacciones, 0)} transacciones
+                                      </p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <p className="font-bold text-lg text-primary">
+                                        ${formatCifra(totalGeneral, scaleFormat)}
+                                      </p>
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                      <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
+                                        100%
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </>
                         );
                       })()}
@@ -3748,28 +3764,36 @@ const RegistroIngresos = () => {
                                 </div>
                               );
                             })}
-                            {/* Fila de Total */}
-                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                <Users className="w-6 h-6 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {clientesArray.reduce((sum, c) => sum + c.transacciones, 0)} transacciones
-                                </p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-lg text-primary">
-                                  ${formatCifra(totalGeneral, scaleFormat)}
-                                </p>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
-                                  100%
-                                </div>
-                              </div>
-                            </div>
+                            {/* Fila de Total - solo mostrar si hay monto */}
+                            {(() => {
+                              const totalGeneralMonto = clientesArray.reduce((sum, c) => sum + c.monto, 0);
+                              if (totalGeneralMonto > 0) {
+                                return (
+                                  <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                      <Users className="w-6 h-6 text-primary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {clientesArray.reduce((sum, c) => sum + c.transacciones, 0)} transacciones
+                                      </p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <p className="font-bold text-lg text-primary">
+                                        ${formatCifra(totalGeneral, scaleFormat)}
+                                      </p>
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                      <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
+                                        100%
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </>
                         );
                       })()}
