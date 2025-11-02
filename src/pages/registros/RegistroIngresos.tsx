@@ -2472,10 +2472,54 @@ const RegistroIngresos = () => {
 
               const filteredTransactions = getFilteredTransactions();
 
-              // Calcular totales desde las transacciones filtradas
-              const totalVentasBrutas = filteredTransactions.reduce((sum, t) => sum + (t.monto_total || 0), 0);
-              const totalDescuentos = filteredTransactions.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
-              const totalVentasNetas = filteredTransactions.reduce((sum, t) => sum + (t.monto_neto || 0), 0);
+              // Calcular totales para cada período desde transacciones filtradas por tipo
+              const calcularTotalesPorPeriodo = (periodo: 'dia' | 'mes' | 'ano') => {
+                let filtered = transacciones.filter(t => 
+                  (t as any).estado !== 'cancelado' && 
+                  !t.descripcion.includes('CANCELACIÓN:')
+                );
+
+                const today = new Date();
+                if (periodo === 'dia') {
+                  const selectedDateStr = fechaAnalisisDiario.toISOString().split('T')[0];
+                  filtered = filtered.filter(t => 
+                    new Date(t.created_at).toISOString().split('T')[0] === selectedDateStr
+                  );
+                } else if (periodo === 'mes') {
+                  const selectedMonth = fechaAnalisisMensual.getMonth();
+                  const selectedYear = fechaAnalisisMensual.getFullYear();
+                  filtered = filtered.filter(t => {
+                    const tDate = new Date(t.created_at);
+                    return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
+                  });
+                } else {
+                  filtered = filtered.filter(t => {
+                    const tDate = new Date(t.created_at);
+                    return tDate.getFullYear() === today.getFullYear();
+                  });
+                }
+
+                // Filtrar por tipo de ingreso
+                if (tipoIngresoAnalisis === "ventas") {
+                  filtered = filtered.filter(t => t.cuenta_principal_codigo === '4001');
+                } else {
+                  filtered = filtered.filter(t => 
+                    t.cuenta_principal_codigo?.startsWith('4') && 
+                    t.cuenta_principal_codigo !== '4001' && 
+                    t.cuenta_principal_codigo !== '4003'
+                  );
+                }
+
+                return {
+                  ventasBrutas: filtered.reduce((sum, t) => sum + (t.monto_total || 0), 0),
+                  descuentos: filtered.reduce((sum, t) => sum + (t.monto_descuento || 0), 0),
+                  ventasNetas: filtered.reduce((sum, t) => sum + (t.monto_neto || 0), 0)
+                };
+              };
+
+              const totalesDia = calcularTotalesPorPeriodo('dia');
+              const totalesMes = calcularTotalesPorPeriodo('mes');
+              const totalesAno = calcularTotalesPorPeriodo('ano');
 
               return (
                 <>
@@ -2488,32 +2532,121 @@ const RegistroIngresos = () => {
               {/* Día */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">
-                    {periodFilter === "diario" ? "Resumen del Día" : periodFilter === "mensual" ? "Resumen del Mes" : "Resumen del Año"}
-                  </CardTitle>
+                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                    <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      {tipoIngresoAnalisis === "ventas" ? "Ventas Brutas:" : "Ingresos Brutos:"}
-                    </span>
+                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                     <span className="font-semibold text-foreground">
-                      ${formatCifra(totalVentasBrutas, scaleFormat)}
+                      ${formatCifra(totalesDia.ventasBrutas, scaleFormat)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-destructive">Descuentos:</span>
                     <span className="font-semibold text-foreground">
-                      ${formatCifra(totalDescuentos, scaleFormat)}
+                      ${formatCifra(totalesDia.descuentos, scaleFormat)}
                     </span>
                   </div>
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">
-                      {tipoIngresoAnalisis === "ventas" ? "Ventas Netas:" : "Ingresos Netos:"}
-                    </span>
+                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                     <span className="text-lg font-bold text-foreground">
-                      ${formatCifra(totalVentasNetas, scaleFormat)}
+                      ${formatCifra(totalesDia.ventasNetas, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                    <span className="font-semibold text-foreground">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelDia, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelDia, scaleFormat)}`}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Mes */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                    <span className="font-semibold text-foreground">
+                      ${formatCifra(totalesMes.ventasBrutas, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-destructive">Descuentos:</span>
+                    <span className="font-semibold text-foreground">
+                      ${formatCifra(totalesMes.descuentos, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
+                    <span className="text-lg font-bold text-foreground">
+                      ${formatCifra(totalesMes.ventasNetas, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                    <span className="font-semibold text-foreground">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelMes, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelMes, scaleFormat)}`}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Año */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                    <span className="font-semibold text-foreground">
+                      ${formatCifra(totalesAno.ventasBrutas, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-destructive">Descuentos:</span>
+                    <span className="font-semibold text-foreground">
+                      ${formatCifra(totalesAno.descuentos, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
+                    <span className="text-lg font-bold text-foreground">
+                      ${formatCifra(totalesAno.ventasNetas, scaleFormat)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                    <span className="font-semibold text-foreground">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.otrosIngresosDelAno, scaleFormat)}`}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border"></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {loadingVentas ? "..." : `$${formatCifra(ventasResumen.totalIngresosDelAno, scaleFormat)}`}
                     </span>
                   </div>
                 </CardContent>
