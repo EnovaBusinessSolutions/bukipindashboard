@@ -56,6 +56,24 @@ const getMetricValue = (transaction: any, metricType: "brutas" | "descuentos" | 
   return 0;
 };
 
+// Función para ajustar proporcionalmente los datos para que sumen el total real de asientos contables
+const ajustarProporcionalmente = (
+  datosTransacciones: { [key: string]: number },
+  totalReal: number
+): { [key: string]: number } => {
+  const totalTransacciones = Object.values(datosTransacciones).reduce((sum, val) => sum + val, 0);
+  if (totalTransacciones === 0) return datosTransacciones;
+  
+  const factor = totalReal / totalTransacciones;
+  const resultado: { [key: string]: number } = {};
+  
+  Object.entries(datosTransacciones).forEach(([key, valor]) => {
+    resultado[key] = valor * factor;
+  });
+  
+  return resultado;
+};
+
 const RegistroIngresos = () => {
   const {
     ventasResumen,
@@ -3146,14 +3164,27 @@ const RegistroIngresos = () => {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={Object.entries(filteredTransactions.reduce((acc, t) => {
-                              acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + getMetricValue(t, metricType);
-                              return acc;
-                            }, {} as Record<string, number>)).map(([tipo, monto]) => ({
-                              tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
-                              monto,
-                              porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + getMetricValue(t, metricType), 0) * 100).toFixed(1)
-                            }))}
+                            data={(() => {
+                              // Calcular distribución desde transacciones
+                              const distribucionTransacciones = filteredTransactions.reduce((acc, t) => {
+                                acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + getMetricValue(t, metricType);
+                                return acc;
+                              }, {} as Record<string, number>);
+                              
+                              // Obtener total real desde asientos contables
+                              const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                                : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                                : datosAnaliticas.ventasNetas;
+                              
+                              // Ajustar proporcionalmente
+                              const distribucionAjustada = ajustarProporcionalmente(distribucionTransacciones, totalReal);
+                              
+                              return Object.entries(distribucionAjustada).map(([tipo, monto]) => ({
+                                tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
+                                monto,
+                                porcentaje: totalReal > 0 ? ((monto / totalReal) * 100).toFixed(1) : '0.0'
+                              }));
+                            })()}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -3211,6 +3242,7 @@ const RegistroIngresos = () => {
                         <PieChart>
                           <Pie
                             data={(() => {
+                              // Calcular distribución por estado desde transacciones
                               const estadoPagos = filteredTransactions.reduce((acc, t: any) => {
                                 let estado = "Por Cobrar";
                                 if (t.tipo_pago === "contado" || (t.monto_pagado && t.monto_pendiente === 0)) {
@@ -3222,10 +3254,18 @@ const RegistroIngresos = () => {
                                 return acc;
                               }, {} as Record<string, number>);
                               
-                              return Object.entries(estadoPagos).map(([estado, monto]) => ({
+                              // Obtener total real desde asientos contables
+                              const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                                : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                                : datosAnaliticas.ventasNetas;
+                              
+                              // Ajustar proporcionalmente
+                              const estadoPagosAjustado = ajustarProporcionalmente(estadoPagos, totalReal);
+                              
+                              return Object.entries(estadoPagosAjustado).map(([estado, monto]) => ({
                                 estado,
                                 monto,
-                                porcentaje: (monto / filteredTransactions.reduce((sum, t) => sum + getMetricValue(t, metricType), 0) * 100).toFixed(1)
+                                porcentaje: totalReal > 0 ? ((monto / totalReal) * 100).toFixed(1) : '0.0'
                               }));
                             })()}
                             cx="50%"
@@ -3274,6 +3314,7 @@ const RegistroIngresos = () => {
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={(() => {
+                          // Calcular distribución por subcuenta desde transacciones
                           const subcuentaData = filteredTransactions.reduce((acc, t) => {
                             const subcuentaNombre = t.subcuenta_id 
                               ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
@@ -3282,7 +3323,15 @@ const RegistroIngresos = () => {
                             return acc;
                           }, {} as Record<string, number>);
                           
-                          return Object.entries(subcuentaData).map(([subcuenta, monto]) => ({
+                          // Obtener total real desde asientos contables
+                          const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                            : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                            : datosAnaliticas.ventasNetas;
+                          
+                          // Ajustar proporcionalmente
+                          const subcuentaDataAjustada = ajustarProporcionalmente(subcuentaData, totalReal);
+                          
+                          return Object.entries(subcuentaDataAjustada).map(([subcuenta, monto]) => ({
                             subcuenta,
                             monto
                           }));
@@ -3328,6 +3377,7 @@ const RegistroIngresos = () => {
                   ) : (
                      <div className="space-y-3">
                       {(() => {
+                        // Calcular distribución por producto desde transacciones
                         const productosVentas = filteredTransactions.reduce((acc, t) => {
                           // Incluir TODAS las ventas
                           const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
@@ -3356,8 +3406,25 @@ const RegistroIngresos = () => {
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
                         
+                        // Obtener total real desde asientos contables
+                        const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                          : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                          : datosAnaliticas.ventasNetas;
+                        
+                        // Ajustar proporcionalmente cada producto
+                        const distribucionProductos: Record<string, number> = {};
+                        Object.entries(productosVentas).forEach(([key, data]) => {
+                          distribucionProductos[key] = data.monto;
+                        });
+                        const distribucionAjustada = ajustarProporcionalmente(distribucionProductos, totalReal);
+                        
+                        // Actualizar montos ajustados
+                        Object.keys(productosVentas).forEach(key => {
+                          productosVentas[key].monto = distribucionAjustada[key] || 0;
+                        });
+                        
                         const productosArray = Object.values(productosVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
+                        const totalGeneral = totalReal; // Usar el total real de asientos contables
                         const top10 = productosArray.slice(0, 10);
                         
                         return (
@@ -3451,6 +3518,7 @@ const RegistroIngresos = () => {
                   ) : (
                     <div className="space-y-3">
                       {(() => {
+                        // Calcular distribución por cliente desde transacciones
                         const clientesVentas = filteredTransactions.reduce((acc, t: any) => {
                           const clienteNombre = t.cliente_nombre || "Sin cliente asignado";
                           if (!acc[clienteNombre]) {
@@ -3467,8 +3535,25 @@ const RegistroIngresos = () => {
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
                         
+                        // Obtener total real desde asientos contables
+                        const totalReal = metricType === "brutas" ? datosAnaliticas.ventasBrutas 
+                          : metricType === "descuentos" ? datosAnaliticas.descuentos 
+                          : datosAnaliticas.ventasNetas;
+                        
+                        // Ajustar proporcionalmente cada cliente
+                        const distribucionClientes: Record<string, number> = {};
+                        Object.entries(clientesVentas).forEach(([key, data]) => {
+                          distribucionClientes[key] = data.monto;
+                        });
+                        const distribucionAjustada = ajustarProporcionalmente(distribucionClientes, totalReal);
+                        
+                        // Actualizar montos ajustados
+                        Object.keys(clientesVentas).forEach(key => {
+                          clientesVentas[key].monto = distribucionAjustada[key] || 0;
+                        });
+                        
                         const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneral = clientesArray.reduce((sum, c) => sum + c.monto, 0);
+                        const totalGeneral = totalReal; // Usar el total real de asientos contables
                         const top10 = clientesArray.slice(0, 10);
                         
                         return (
