@@ -402,8 +402,12 @@ export type Database = {
           costo_unitario: number
           created_at: string
           descripcion: string | null
+          estado: string | null
           fecha: string
+          fecha_cancelacion: string | null
           id: string
+          motivo_cancelacion: string | null
+          movimiento_reversion_id: string | null
           producto_id: string
           tipo_movimiento: string
           updated_at: string
@@ -415,8 +419,12 @@ export type Database = {
           costo_unitario: number
           created_at?: string
           descripcion?: string | null
+          estado?: string | null
           fecha?: string
+          fecha_cancelacion?: string | null
           id?: string
+          motivo_cancelacion?: string | null
+          movimiento_reversion_id?: string | null
           producto_id: string
           tipo_movimiento: string
           updated_at?: string
@@ -428,14 +436,25 @@ export type Database = {
           costo_unitario?: number
           created_at?: string
           descripcion?: string | null
+          estado?: string | null
           fecha?: string
+          fecha_cancelacion?: string | null
           id?: string
+          motivo_cancelacion?: string | null
+          movimiento_reversion_id?: string | null
           producto_id?: string
           tipo_movimiento?: string
           updated_at?: string
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "movimientos_inventario_movimiento_reversion_id_fkey"
+            columns: ["movimiento_reversion_id"]
+            isOneToOne: false
+            referencedRelation: "movimientos_inventario"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "movimientos_inventario_producto_id_fkey"
             columns: ["producto_id"]

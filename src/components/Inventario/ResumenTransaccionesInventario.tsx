@@ -36,6 +36,10 @@ interface MovimientoInventario {
   costo_total: number;
   fecha: string;
   descripcion?: string;
+  estado?: string | null;
+  motivo_cancelacion?: string | null;
+  fecha_cancelacion?: string | null;
+  movimiento_reversion_id?: string | null;
   productos?: {
     nombre: string;
     imagen_url?: string;
@@ -457,7 +461,7 @@ const ResumenTransaccionesInventario = () => {
             </TableHeader>
             <TableBody>
               {movimientosFiltrados.map((movimiento) => {
-                const esCancelado = movimiento.descripcion?.includes('CANCELACIÓN');
+                const esCancelado = movimiento.estado === 'cancelado' || movimiento.descripcion?.includes('CANCELACIÓN');
                 
                 return (
                 <TableRow key={movimiento.id} className={esCancelado ? "opacity-60 bg-muted/50" : ""}>
@@ -486,22 +490,29 @@ const ResumenTransaccionesInventario = () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
-                          ? "default"
-                          : "destructive"
-                      }
-                    >
-                      {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" ? (
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                      ) : (
-                        <TrendingDown className="h-3 w-3 mr-1" />
+                    <div className="flex flex-col gap-1">
+                      <Badge
+                        variant={
+                          movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
+                            ? "default"
+                            : "destructive"
+                        }
+                      >
+                        {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" ? (
+                          <TrendingUp className="h-3 w-3 mr-1" />
+                        ) : (
+                          <TrendingDown className="h-3 w-3 mr-1" />
+                        )}
+                        {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" 
+                          ? "Entrada" 
+                          : "Salida"}
+                      </Badge>
+                      {movimiento.estado === 'cancelado' && (
+                        <Badge variant="destructive" className="text-xs">
+                          Cancelado
+                        </Badge>
                       )}
-                      {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" 
-                        ? "Entrada" 
-                        : "Salida"}
-                    </Badge>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {movimiento.cantidad.toLocaleString("es-MX")}
@@ -547,6 +558,30 @@ const ResumenTransaccionesInventario = () => {
                         </DialogHeader>
                         {selectedMovimiento && (
                           <div className="space-y-6">
+                            {/* Alerta de cancelación */}
+                            {selectedMovimiento.estado === 'cancelado' && (
+                              <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                  <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="font-medium text-red-700 dark:text-red-300 text-sm">
+                                      Movimiento Cancelado
+                                    </p>
+                                    {selectedMovimiento.motivo_cancelacion && (
+                                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                                        {selectedMovimiento.motivo_cancelacion}
+                                      </p>
+                                    )}
+                                    {selectedMovimiento.fecha_cancelacion && (
+                                      <p className="text-xs text-red-500 mt-1">
+                                        Cancelado el: {format(new Date(selectedMovimiento.fecha_cancelacion), 'dd/MM/yyyy HH:mm')}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
                             {/* Información de la transacción */}
                             <div>
                               <h3 className="text-lg font-semibold mb-3">
@@ -739,7 +774,9 @@ const ResumenTransaccionesInventario = () => {
                     </Dialog>
                     
                     {/* Botón de cancelar (solo para compras no canceladas) */}
-                    {movimiento.tipo_movimiento === 'compra' && !esCancelado && (
+                    {movimiento.tipo_movimiento === 'compra' && 
+                     movimiento.estado !== 'cancelado' && 
+                     !movimiento.descripcion?.includes('CANCELACIÓN') && (
                       <Button
                         variant="outline"
                         size="sm"

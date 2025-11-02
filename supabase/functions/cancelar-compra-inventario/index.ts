@@ -46,18 +46,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verificar que sea una compra
-    if (movimientoOriginal.tipo_movimiento !== 'compra') {
+    // Validar que el movimiento no esté ya cancelado
+    if (movimientoOriginal.estado === 'cancelado') {
       return new Response(
-        JSON.stringify({ error: 'Solo se pueden cancelar compras' }),
+        JSON.stringify({ 
+          error: 'Este movimiento ya ha sido cancelado',
+          movimiento_reversion_id: movimientoOriginal.movimiento_reversion_id
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Verificar que no esté ya cancelada
-    if (movimientoOriginal.descripcion.includes('CANCELACIÓN')) {
+    // Validar que sea una compra
+    if (movimientoOriginal.tipo_movimiento !== 'compra') {
       return new Response(
-        JSON.stringify({ error: 'Este movimiento ya está cancelado' }),
+        JSON.stringify({ error: 'Solo se pueden cancelar compras de inventario' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -106,6 +109,24 @@ Deno.serve(async (req) => {
     }
 
     console.log('Movimiento de reversión creado:', movimientoReversion.id);
+
+    // 4b. Marcar el movimiento original como cancelado
+    const { error: errorActualizacion } = await supabase
+      .from('movimientos_inventario')
+      .update({
+        estado: 'cancelado',
+        motivo_cancelacion: motivoCancelacion,
+        fecha_cancelacion: new Date().toISOString(),
+        movimiento_reversion_id: movimientoReversion.id
+      })
+      .eq('id', movimientoId);
+
+    if (errorActualizacion) {
+      console.error('Error al marcar movimiento como cancelado:', errorActualizacion);
+      throw errorActualizacion;
+    }
+
+    console.log(`Movimiento ${movimientoId} marcado como cancelado`);
 
     // 5. Crear asiento contable de reversión (si existe el original)
     if (asientoOriginal) {
