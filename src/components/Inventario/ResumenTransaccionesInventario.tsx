@@ -525,105 +525,114 @@ const ResumenTransaccionesInventario = () => {
 
                             <Separator />
 
-                            {/* Asientos contables */}
+                            {/* Asientos en Balanza de Comprobación */}
                             <div>
-                              <h3 className="text-lg font-semibold mb-3">
-                                Asientos Contables Afectados
+                              <h3 className="text-lg font-semibold mb-4">
+                                Asientos en Balanza de Comprobación
                               </h3>
-                              {asientoDetalle ? (
-                                <div className="space-y-3">
-                                  <div className="grid grid-cols-2 gap-2 text-sm">
-                                    <div>
-                                      <span className="text-muted-foreground">Número:</span>{" "}
-                                      <span className="font-medium">
+                              {!asientoDetalle ? (
+                                <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center space-y-2">
+                                  <p>No se encontraron asientos contables para esta transacción</p>
+                                  <p className="text-xs">
+                                    Las entradas (compras) y salidas (ventas) de inventario generan 
+                                    asientos automáticamente que afectan tus cuentas de inventario, 
+                                    efectivo/bancos y cuentas por pagar.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4">
+                                  {/* Información del Asiento */}
+                                  <div className="p-4 bg-muted rounded-lg">
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                      <div>
+                                        <span className="font-medium">Número de Asiento:</span>{' '}
                                         {asientoDetalle.numero_asiento}
-                                      </span>
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Fecha:</span>{' '}
+                                        {format(new Date(asientoDetalle.fecha), 'dd/MM/yyyy')}
+                                      </div>
+                                      <div className="col-span-2">
+                                        <span className="font-medium">Descripción:</span>{' '}
+                                        {asientoDetalle.descripcion}
+                                      </div>
                                     </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Fecha:</span>{" "}
-                                      <span className="font-medium">
-                                        {format(
-                                          new Date(asientoDetalle.fecha),
-                                          "dd/MM/yyyy"
-                                        )}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="text-sm">
-                                    <span className="text-muted-foreground">Descripción:</span>{" "}
-                                    <span>{asientoDetalle.descripcion}</span>
                                   </div>
 
+                                  {/* Tabla de Detalles */}
                                   <div className="border rounded-lg overflow-hidden">
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead>Cuenta</TableHead>
-                                          <TableHead className="text-right">Debe</TableHead>
-                                          <TableHead className="text-right">Haber</TableHead>
+                                          <TableHead className="w-[200px]">Cuenta</TableHead>
+                                          <TableHead>Descripción</TableHead>
+                                          <TableHead className="text-right w-[150px]">Debe</TableHead>
+                                          <TableHead className="text-right w-[150px]">Haber</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
-                                        {asientoDetalle.detalle_asientos.map((detalle) => (
-                                          <TableRow key={detalle.id}>
+                                        {asientoDetalle.detalle_asientos?.map((detalle, idx) => (
+                                          <TableRow key={idx}>
                                             <TableCell>
                                               <div>
                                                 <div className="font-medium text-sm">
-                                                  {detalle.cuenta_codigo} -{" "}
-                                                  {detalle.cuentas?.nombre || "Sin nombre"}
+                                                  {detalle.cuenta_codigo}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
-                                                  {detalle.descripcion}
+                                                  {detalle.cuentas?.nombre}
                                                 </div>
                                               </div>
                                             </TableCell>
-                                            <TableCell className="text-right font-mono">
-                                              {detalle.debe > 0 ? (
-                                                <span className="text-green-600">
-                                                  $
-                                                  {Number(detalle.debe).toLocaleString("es-MX", {
-                                                    minimumFractionDigits: 2,
-                                                  })}
-                                                </span>
-                                              ) : (
-                                                "-"
-                                              )}
+                                            <TableCell className="text-sm">
+                                              {detalle.descripcion}
                                             </TableCell>
-                                            <TableCell className="text-right font-mono">
-                                              {detalle.haber > 0 ? (
-                                                <span className="text-red-600">
-                                                  $
-                                                  {Number(detalle.haber).toLocaleString("es-MX", {
+                                            <TableCell className="text-right font-medium">
+                                              {detalle.debe > 0
+                                                ? `$${Number(detalle.debe).toLocaleString('es-MX', {
                                                     minimumFractionDigits: 2,
-                                                  })}
-                                                </span>
-                                              ) : (
-                                                "-"
-                                              )}
+                                                  })}`
+                                                : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium">
+                                              {detalle.haber > 0
+                                                ? `$${Number(detalle.haber).toLocaleString('es-MX', {
+                                                    minimumFractionDigits: 2,
+                                                  })}`
+                                                : '-'}
                                             </TableCell>
                                           </TableRow>
                                         ))}
+                                        {/* Fila de Totales */}
+                                        <TableRow className="border-t-2 bg-muted/50 font-bold">
+                                          <TableCell colSpan={2}>TOTALES</TableCell>
+                                          <TableCell className="text-right">
+                                            $
+                                            {asientoDetalle.detalle_asientos
+                                              ?.reduce((sum, d) => sum + Number(d.debe), 0)
+                                              .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            $
+                                            {asientoDetalle.detalle_asientos
+                                              ?.reduce((sum, d) => sum + Number(d.haber), 0)
+                                              .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                          </TableCell>
+                                        </TableRow>
                                       </TableBody>
                                     </Table>
                                   </div>
 
-                                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                                    <p className="text-muted-foreground">
-                                      Estos asientos se reflejan en la Balanza de Comprobación y
-                                      afectan las cuentas contables correspondientes.
+                                  {/* Nota informativa */}
+                                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
+                                    <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                      💡 Trazabilidad Contable
+                                    </p>
+                                    <p className="text-blue-600 dark:text-blue-400">
+                                      Este asiento contable refleja cómo esta transacción de inventario
+                                      afecta a las diferentes cuentas en la balanza de comprobación y
+                                      posteriormente en los estados financieros.
                                     </p>
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="text-center py-8 text-muted-foreground">
-                                  <p className="text-muted-foreground">
-                                    No se encontraron asientos contables relacionados con esta
-                                    transacción.
-                                  </p>
-                                  <p className="text-sm mt-2">
-                                    Las entradas (compras) y salidas (ventas) de inventario generan asientos automáticamente 
-                                    que afectan tus cuentas de inventario, efectivo/bancos y cuentas por pagar.
-                                  </p>
                                 </div>
                               )}
                             </div>
