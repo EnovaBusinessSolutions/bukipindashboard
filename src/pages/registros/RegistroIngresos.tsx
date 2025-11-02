@@ -9,9 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator, Users, RefreshCw } from "lucide-react";
+import { AlertCircle, Plus, ShoppingCart, Package, FileText, Gift, CreditCard, Wallet, Calculator, Users, RefreshCw, CalendarIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList } from "recharts";
@@ -121,6 +126,10 @@ const RegistroIngresos = () => {
   
   // Estado para el tipo de ingreso a analizar
   const [tipoIngresoAnalisis, setTipoIngresoAnalisis] = useState<"ventas" | "otros">("ventas");
+  
+  // Estados para fechas específicas de análisis
+  const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
+  const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
 
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
@@ -2427,14 +2436,18 @@ const RegistroIngresos = () => {
                 );
                 
                 if (periodFilter === "diario") {
-                  const todayStr = today.toISOString().split('T')[0];
+                  // Usar la fecha seleccionada para análisis diario
+                  const selectedDateStr = fechaAnalisisDiario.toISOString().split('T')[0];
                   filtered = filtered.filter(t => 
-                    new Date(t.created_at).toISOString().split('T')[0] === todayStr
+                    new Date(t.created_at).toISOString().split('T')[0] === selectedDateStr
                   );
                 } else if (periodFilter === "mensual") {
+                  // Usar el mes y año de la fecha seleccionada
+                  const selectedMonth = fechaAnalisisMensual.getMonth();
+                  const selectedYear = fechaAnalisisMensual.getFullYear();
                   filtered = filtered.filter(t => {
                     const tDate = new Date(t.created_at);
-                    return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+                    return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
                   });
                 } else {
                   filtered = filtered.filter(t => {
@@ -2627,7 +2640,7 @@ const RegistroIngresos = () => {
                   <CardTitle>Período de Análisis</CardTitle>
                   <CardDescription>Selecciona el período</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-3">
                   <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex flex-col gap-3">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="diario" id="period-daily" />
@@ -2642,6 +2655,68 @@ const RegistroIngresos = () => {
                       <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
                     </div>
                   </RadioGroup>
+                  
+                  {/* Selector de fecha para análisis diario */}
+                  {periodFilter === "diario" && (
+                    <div className="pt-2 border-t">
+                      <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !fechaAnalisisDiario && "text-muted-foreground"
+                            )}
+                            size="sm"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {format(fechaAnalisisDiario, "PPP", { locale: es })}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={fechaAnalisisDiario}
+                            onSelect={(date) => date && setFechaAnalisisDiario(date)}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+                  
+                  {/* Selector de mes para análisis mensual */}
+                  {periodFilter === "mensual" && (
+                    <div className="pt-2 border-t">
+                      <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !fechaAnalisisMensual && "text-muted-foreground"
+                            )}
+                            size="sm"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={fechaAnalisisMensual}
+                            onSelect={(date) => date && setFechaAnalisisMensual(date)}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               
