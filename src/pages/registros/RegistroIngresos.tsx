@@ -108,9 +108,11 @@ const CustomTreemapContent = (props: any) => {
             x={x + width / 2}
             y={y + height / 2 - 20}
             textAnchor="middle"
+            dominantBaseline="middle"
             fill="#000000"
             fontWeight="bold"
             fontSize="16px"
+            style={{ userSelect: 'none' }}
           >
             {name}
           </text>
@@ -118,9 +120,11 @@ const CustomTreemapContent = (props: any) => {
             x={x + width / 2}
             y={y + height / 2 + 5}
             textAnchor="middle"
+            dominantBaseline="middle"
             fill="#000000"
             fontSize="14px"
             fontWeight="600"
+            style={{ userSelect: 'none' }}
           >
             ${formatCifra(value, "general")}
           </text>
@@ -128,9 +132,11 @@ const CustomTreemapContent = (props: any) => {
             x={x + width / 2}
             y={y + height / 2 + 25}
             textAnchor="middle"
+            dominantBaseline="middle"
             fill="#000000"
             fontSize="14px"
             fontWeight="600"
+            style={{ userSelect: 'none' }}
           >
             {porcentaje}%
           </text>
