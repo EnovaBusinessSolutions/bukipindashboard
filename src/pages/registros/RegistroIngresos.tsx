@@ -3200,6 +3200,10 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
+                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay descuentos en otros ingresos
+                    </div>
                   ) : (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
@@ -3288,6 +3292,10 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
+                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay descuentos en otros ingresos
+                    </div>
                   ) : (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
@@ -3373,6 +3381,10 @@ const RegistroIngresos = () => {
                     <div className="h-64 flex items-center justify-center text-muted-foreground">
                       No hay datos para mostrar
                     </div>
+                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                      No hay descuentos en otros ingresos
+                    </div>
                   ) : (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
@@ -3443,6 +3455,15 @@ const RegistroIngresos = () => {
                   ) : (
                      <div className="space-y-3">
                       {(() => {
+                        // Si estamos en "Otros Ingresos" y seleccionamos "Descuentos", no hay nada que mostrar
+                        if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              No hay descuentos en otros ingresos
+                            </div>
+                          );
+                        }
+                        
                         // Obtener total real desde asientos contables
                         const totalRealProductos = tipoIngresoAnalisis === "ventas"
                           ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
@@ -3648,6 +3669,15 @@ const RegistroIngresos = () => {
                   ) : (
                     <div className="space-y-3">
                       {(() => {
+                        // Si estamos en "Otros Ingresos" y seleccionamos "Descuentos", no hay nada que mostrar
+                        if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              No hay descuentos en otros ingresos
+                            </div>
+                          );
+                        }
+                        
                         // Obtener total real desde asientos contables
                         const totalRealClientes = tipoIngresoAnalisis === "ventas"
                           ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
