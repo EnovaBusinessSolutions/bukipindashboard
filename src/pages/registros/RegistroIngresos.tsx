@@ -3112,9 +3112,19 @@ const RegistroIngresos = () => {
             {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Evolución de {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"}</CardTitle>
+                <CardTitle>
+                  Evolución de {
+                    metricType === "descuentos" ? "Descuentos" :
+                    tipoIngresoAnalisis === "otros" ? "Otros Ingresos" :
+                    metricType === "brutas" ? "Ventas Brutas" : "Ventas Netas"
+                  }
+                </CardTitle>
                 <CardDescription>
-                  {metricType === "brutas" ? "Ventas brutas" : metricType === "descuentos" ? "Descuentos aplicados" : "Ventas netas"} - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
+                  {
+                    metricType === "descuentos" ? "Descuentos aplicados" :
+                    tipoIngresoAnalisis === "otros" ? "Otros ingresos" :
+                    metricType === "brutas" ? "Ventas brutas" : "Ventas netas"
+                  } - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
                 </CardDescription>
               </CardHeader>
                <CardContent>
@@ -3147,25 +3157,22 @@ const RegistroIngresos = () => {
                           wrapperStyle={{ zIndex: 1000 }}
                         />
                         <Legend />
-                        {tipoIngresoAnalisis === "ventas" ? (
-                          <>
-                            {metricType === "brutas" && (
-                              <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
-                                <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                              </Line>
-                            )}
-                            {metricType === "descuentos" && (
-                              <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
-                                <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                              </Line>
-                            )}
-                            {metricType === "netas" && (
-                              <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
-                                <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                              </Line>
-                            )}
-                          </>
-                        ) : (
+                        {metricType === "descuentos" && (
+                          <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
+                            <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Line>
+                        )}
+                        {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
+                          <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
+                            <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Line>
+                        )}
+                        {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
+                          <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
+                            <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
+                          </Line>
+                        )}
+                        {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
                           <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2}>
                             <LabelList dataKey="otrosIngresos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
                           </Line>
