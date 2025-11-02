@@ -136,6 +136,27 @@ const RegistroIngresos = () => {
   const [totalesMes, setTotalesMes] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
   const [totalesAno, setTotalesAno] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
 
+  // Estado para datos de analíticas calculados desde asientos contables
+  const [datosAnaliticas, setDatosAnaliticas] = useState<{
+    ventasBrutas: number;
+    descuentos: number;
+    ventasNetas: number;
+    otrosIngresos: number;
+    detallesPorPeriodo: Array<{
+      periodo: string;
+      ventasBrutas: number;
+      descuentos: number;
+      ventasNetas: number;
+      otrosIngresos: number;
+    }>;
+  }>({
+    ventasBrutas: 0,
+    descuentos: 0,
+    ventasNetas: 0,
+    otrosIngresos: 0,
+    detallesPorPeriodo: []
+  });
+
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
   const [filtroFechaFin, setFiltroFechaFin] = useState("");
@@ -400,6 +421,189 @@ const RegistroIngresos = () => {
       setDuplicateWarnings([]);
     }
   }, [clienteTelefono, clienteEmail, clienteRFC, tipoCliente, clientes]);
+
+  // useEffect para calcular analíticas desde asientos contables
+  useEffect(() => {
+    const calcularAnaliticasDesdeAsientos = async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user?.user?.id) return;
+
+      try {
+        // Determinar el rango de fechas según el período seleccionado
+        let fechaInicio: Date;
+        let fechaFin: Date;
+
+        if (periodFilter === "diario") {
+          fechaInicio = new Date(fechaAnalisisDiario);
+          fechaInicio.setHours(0, 0, 0, 0);
+          fechaFin = new Date(fechaAnalisisDiario);
+          fechaFin.setHours(23, 59, 59, 999);
+        } else if (periodFilter === "mensual") {
+          fechaInicio = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth(), 1);
+          fechaFin = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 0, 23, 59, 59, 999);
+        } else {
+          // Anual
+          fechaInicio = new Date(new Date().getFullYear(), 0, 1);
+          fechaFin = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999);
+        }
+
+        // Consultar asientos contables en el rango de fechas
+        const { data: asientos, error: asientosError } = await supabase
+          .from('asientos_contables')
+          .select('id, fecha, descripcion')
+          .eq('user_id', user.user.id)
+          .gte('fecha', fechaInicio.toISOString().split('T')[0])
+          .lte('fecha', fechaFin.toISOString().split('T')[0]);
+
+        if (asientosError) throw asientosError;
+        if (!asientos || asientos.length === 0) {
+          setDatosAnaliticas({
+            ventasBrutas: 0,
+            descuentos: 0,
+            ventasNetas: 0,
+            otrosIngresos: 0,
+            detallesPorPeriodo: []
+          });
+          return;
+        }
+
+        // Obtener detalles de asientos
+        const asientoIds = asientos.map(a => a.id);
+        const { data: detalles, error: detallesError } = await supabase
+          .from('detalle_asientos')
+          .select('asiento_id, cuenta_codigo, debe, haber')
+          .in('asiento_id', asientoIds);
+
+        if (detallesError) throw detallesError;
+        if (!detalles) return;
+
+        // Calcular totales según tipo de ingreso
+        let ventasBrutasTotal = 0;
+        let descuentosTotal = 0;
+        let otrosIngresosTotal = 0;
+
+        // Agrupar detalles por período para la gráfica
+        const detallesPorPeriodoMap: Record<string, {
+          ventasBrutas: number;
+          descuentos: number;
+          otrosIngresos: number;
+        }> = {};
+
+        asientos.forEach(asiento => {
+          const detallesAsiento = detalles.filter(d => d.asiento_id === asiento.id);
+          const fecha = new Date(asiento.fecha);
+          
+          // Determinar la clave del período
+          let periodKey: string;
+          if (periodFilter === "diario") {
+            periodKey = "Hoy";
+          } else if (periodFilter === "mensual") {
+            periodKey = `Día ${fecha.getDate()}`;
+          } else {
+            const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+            periodKey = meses[fecha.getMonth()];
+          }
+
+          if (!detallesPorPeriodoMap[periodKey]) {
+            detallesPorPeriodoMap[periodKey] = {
+              ventasBrutas: 0,
+              descuentos: 0,
+              otrosIngresos: 0
+            };
+          }
+
+          detallesAsiento.forEach(detalle => {
+            const debe = detalle.debe || 0;
+            const haber = detalle.haber || 0;
+            const cuenta = detalle.cuenta_codigo;
+
+            if (tipoIngresoAnalisis === "ventas") {
+              // Ventas brutas (cuenta 4001)
+              if (cuenta === '4001') {
+                const monto = haber - debe;
+                ventasBrutasTotal += monto;
+                detallesPorPeriodoMap[periodKey].ventasBrutas += monto;
+              }
+              // Descuentos (cuenta 4003)
+              if (cuenta === '4003') {
+                const monto = debe - haber;
+                descuentosTotal += monto;
+                detallesPorPeriodoMap[periodKey].descuentos += monto;
+              }
+            } else {
+              // Otros ingresos (cuentas 4XXX excepto 4001 y 4003)
+              if (cuenta.startsWith('4') && cuenta !== '4001' && cuenta !== '4003') {
+                const monto = haber - debe;
+                otrosIngresosTotal += monto;
+                detallesPorPeriodoMap[periodKey].otrosIngresos += monto;
+              }
+            }
+          });
+        });
+
+        // Construir array de detalles por período
+        let detallesPorPeriodo: Array<{
+          periodo: string;
+          ventasBrutas: number;
+          descuentos: number;
+          ventasNetas: number;
+          otrosIngresos: number;
+        }> = [];
+
+        if (periodFilter === "diario") {
+          // Un solo punto para el día
+          const data = detallesPorPeriodoMap["Hoy"] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
+          detallesPorPeriodo = [{
+            periodo: "Hoy",
+            ventasBrutas: data.ventasBrutas,
+            descuentos: data.descuentos,
+            ventasNetas: data.ventasBrutas - data.descuentos,
+            otrosIngresos: data.otrosIngresos
+          }];
+        } else if (periodFilter === "mensual") {
+          // Días del mes
+          const daysInMonth = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 0).getDate();
+          detallesPorPeriodo = Array.from({ length: daysInMonth }, (_, i) => {
+            const day = i + 1;
+            const periodKey = `Día ${day}`;
+            const data = detallesPorPeriodoMap[periodKey] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
+            return {
+              periodo: periodKey,
+              ventasBrutas: data.ventasBrutas,
+              descuentos: data.descuentos,
+              ventasNetas: data.ventasBrutas - data.descuentos,
+              otrosIngresos: data.otrosIngresos
+            };
+          });
+        } else {
+          // Meses del año
+          const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+          detallesPorPeriodo = meses.map(mes => {
+            const data = detallesPorPeriodoMap[mes] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
+            return {
+              periodo: mes,
+              ventasBrutas: data.ventasBrutas,
+              descuentos: data.descuentos,
+              ventasNetas: data.ventasBrutas - data.descuentos,
+              otrosIngresos: data.otrosIngresos
+            };
+          });
+        }
+
+        setDatosAnaliticas({
+          ventasBrutas: ventasBrutasTotal,
+          descuentos: descuentosTotal,
+          ventasNetas: ventasBrutasTotal - descuentosTotal,
+          otrosIngresos: otrosIngresosTotal,
+          detallesPorPeriodo
+        });
+      } catch (error) {
+        console.error('Error calculando analíticas desde asientos:', error);
+      }
+    };
+
+    calcularAnaliticasDesdeAsientos();
+  }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual, tipoIngresoAnalisis]);
 
   // useEffect para calcular totales desde asientos contables
   useEffect(() => {
@@ -2870,89 +3074,24 @@ const RegistroIngresos = () => {
                   {metricType === "brutas" ? "Ventas brutas" : metricType === "descuentos" ? "Descuentos aplicados" : "Ventas netas"} - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+               <CardContent>
                 {loadingTransacciones ? (
                   <div className="h-80 flex items-center justify-center text-muted-foreground">
                     Cargando datos...
                   </div>
-                ) : filteredTransactions.length === 0 ? (
+                ) : datosAnaliticas.detallesPorPeriodo.length === 0 ? (
                   <div className="h-80 flex items-center justify-center text-muted-foreground">
                     No hay datos para mostrar
                   </div>
                 ) : (
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={(() => {
-                        const today = new Date();
-                        const currentMonth = today.getMonth();
-                        const currentYear = today.getFullYear();
-
-                        if (periodFilter === "diario") {
-                          // Para diario: un solo punto con los totales del día
-                          const totalVentas = filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0);
-                          const totalDescuentos = filteredTransactions.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
-                          const totalNeto = totalVentas - totalDescuentos;
-                          
-                          return [{
-                            periodo: "Hoy",
-                            ventas: totalVentas,
-                            descuentos: totalDescuentos,
-                            neto: totalNeto
-                          }];
-                        } else if (periodFilter === "mensual") {
-                          // Para mensual: ventas por día del mes actual
-                          const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-                          const dailyData: Record<string, {ventas: number, descuentos: number}> = {};
-                          
-                          // Agrupar por día (ya filtradas por mes)
-                          filteredTransactions.forEach(t => {
-                            const day = new Date(t.created_at).getDate();
-                            const dayKey = `${day}`;
-                            if (!dailyData[dayKey]) {
-                              dailyData[dayKey] = { ventas: 0, descuentos: 0 };
-                            }
-                            dailyData[dayKey].ventas += t.monto_total;
-                            dailyData[dayKey].descuentos += t.monto_descuento || 0;
-                          });
-                          
-                          // Crear array con todos los días del mes
-                          return Array.from({ length: daysInMonth }, (_, i) => {
-                            const day = i + 1;
-                            const data = dailyData[`${day}`] || { ventas: 0, descuentos: 0 };
-                            return {
-                              periodo: `Día ${day}`,
-                              ventas: data.ventas,
-                              descuentos: data.descuentos,
-                              neto: data.ventas - data.descuentos
-                            };
-                          });
-                        } else {
-                          // Para anual: ventas por mes del año actual
-                          const monthlyData: Record<number, {ventas: number, descuentos: number}> = {};
-                          
-                          // Agrupar por mes (ya filtradas por año)
-                          filteredTransactions.forEach(t => {
-                            const month = new Date(t.created_at).getMonth();
-                            if (!monthlyData[month]) {
-                              monthlyData[month] = { ventas: 0, descuentos: 0 };
-                            }
-                            monthlyData[month].ventas += t.monto_total;
-                            monthlyData[month].descuentos += t.monto_descuento || 0;
-                          });
-                          
-                          // Crear array con los 12 meses
-                          const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-                          return meses.map((mes, i) => {
-                            const data = monthlyData[i] || { ventas: 0, descuentos: 0 };
-                            return {
-                              periodo: mes,
-                              ventas: data.ventas,
-                              descuentos: data.descuentos,
-                              neto: data.ventas - data.descuentos
-                            };
-                          });
-                        }
-                      })()}>
+                      <LineChart data={datosAnaliticas.detallesPorPeriodo.map(d => ({
+                        periodo: d.periodo,
+                        ventas: d.ventasBrutas,
+                        descuentos: d.descuentos,
+                        neto: d.ventasNetas
+                      }))}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="periodo" tick={{ fill: '#000000' }} />
                         <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
