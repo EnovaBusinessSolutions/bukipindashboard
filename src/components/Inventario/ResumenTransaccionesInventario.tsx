@@ -223,16 +223,19 @@ const ResumenTransaccionesInventario = () => {
 
       if (error) throw error;
 
+      // Primero cerramos el diálogo y limpiamos estados
+      setIsCancelDialogOpen(false);
+      setMotivoCancelacion("");
+      setMovimientoACancelar(null);
+
+      // Refrescar datos
+      await refetch();
+
+      // Mostrar toast después de actualizar
       toast({
         title: "✅ Compra cancelada",
         description: "La compra ha sido cancelada y se generó el asiento de reversión"
       });
-
-      // Refrescar datos
-      refetch();
-      setIsCancelDialogOpen(false);
-      setMotivoCancelacion("");
-      setMovimientoACancelar(null);
 
     } catch (error: any) {
       console.error('Error al cancelar:', error);
