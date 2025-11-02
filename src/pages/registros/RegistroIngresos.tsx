@@ -87,11 +87,9 @@ const CustomTreemapContent = (props: any) => {
   
   const isEfectivo = name === "Efectivo";
   const color = isEfectivo ? "hsl(180 50% 55%)" : "hsl(180 45% 45%)";
-  const Icon = isEfectivo ? Wallet : CreditCard;
   
   // Determinar si hay suficiente espacio para el texto
-  const showFullText = width > 120 && height > 80;
-  const showMinimalText = width > 80 && height > 50;
+  const showFullText = width > 100 && height > 70;
   
   return (
     <g>
@@ -104,49 +102,38 @@ const CustomTreemapContent = (props: any) => {
         stroke="#fff"
         strokeWidth={2}
       />
-      {showMinimalText && (
+      {showFullText && (
         <>
-          <Icon
-            x={x + width / 2 - 14}
-            y={y + (showFullText ? 22 : 16)}
-            width={28}
-            height={28}
-            fill="#000000"
-          />
           <text
             x={x + width / 2}
-            y={y + (showFullText ? 60 : 44)}
+            y={y + height / 2 - 20}
             textAnchor="middle"
             fill="#000000"
             fontWeight="bold"
-            fontSize={showFullText ? "16px" : "14px"}
+            fontSize="16px"
           >
             {name}
           </text>
-          {showFullText && (
-            <>
-              <text
-                x={x + width / 2}
-                y={y + 80}
-                textAnchor="middle"
-                fill="#000000"
-                fontSize="14px"
-                fontWeight="600"
-              >
-                ${formatCifra(value, "general")}
-              </text>
-              <text
-                x={x + width / 2}
-                y={y + 98}
-                textAnchor="middle"
-                fill="#000000"
-                fontSize="13px"
-                fontWeight="600"
-              >
-                {porcentaje}%
-              </text>
-            </>
-          )}
+          <text
+            x={x + width / 2}
+            y={y + height / 2 + 5}
+            textAnchor="middle"
+            fill="#000000"
+            fontSize="14px"
+            fontWeight="600"
+          >
+            ${formatCifra(value, "general")}
+          </text>
+          <text
+            x={x + width / 2}
+            y={y + height / 2 + 25}
+            textAnchor="middle"
+            fill="#000000"
+            fontSize="14px"
+            fontWeight="600"
+          >
+            {porcentaje}%
+          </text>
         </>
       )}
     </g>
