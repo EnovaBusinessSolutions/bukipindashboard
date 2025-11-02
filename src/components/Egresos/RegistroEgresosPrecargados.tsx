@@ -15,10 +15,12 @@ import { useProveedores } from "@/hooks/useProveedores";
 import { supabase } from "@/integrations/supabase/client";
 import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
+import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 const RegistroEgresosPrecargados = () => {
   const { data: productos = [] } = useProductosEgresos();
   const { proveedores, createProveedor } = useProveedores();
   const { data: tarjetasCredito } = useTarjetasCredito();
+  const { data: saldosDisponibles } = useSaldosDisponibles();
   const [selectedType, setSelectedType] = useState(""); // "costo" or "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -193,6 +195,29 @@ const RegistroEgresosPrecargados = () => {
       const montoTotal = parseFloat(totalAmount) || 0;
       const montoPagado = paymentType === "contado" ? montoTotal : paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0;
       const montoPendiente = montoTotal - montoPagado;
+
+      // Validar saldo disponible para efectivo o bancos
+      if (paymentMethod === "efectivo" && saldosDisponibles) {
+        if (montoPagado > saldosDisponibles.efectivo) {
+          toast({
+            title: "⚠️ Saldo insuficiente en efectivo",
+            description: `Saldo disponible: $${saldosDisponibles.efectivo.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      if (paymentMethod === "tarjeta-transferencia" && saldosDisponibles) {
+        if (montoPagado > saldosDisponibles.bancos) {
+          toast({
+            title: "⚠️ Saldo insuficiente en bancos",
+            description: `Saldo disponible: $${saldosDisponibles.bancos.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
 
       // Validar límite de crédito si se seleccionó tarjeta de crédito
       if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {

@@ -159,6 +159,62 @@ export const RegistroImpuestosForm = () => {
       }
     }
 
+    // Validar saldo disponible antes de registrar
+    let montoPagadoFinal = 0;
+    if (tipoPago === "total") {
+      montoPagadoFinal = parseFloat(isrReal);
+    } else if (tipoPago === "parcial") {
+      montoPagadoFinal = parseFloat(montoPagado);
+    }
+
+    if (montoPagadoFinal > 0 && (tipoPago === "total" || tipoPago === "parcial")) {
+      if (metodoPago === "efectivo") {
+        const { data: detalles } = await supabase
+          .from("detalle_asientos")
+          .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
+          .eq("cuenta_codigo", "1001")
+          .eq("asientos_contables.user_id", user.id);
+
+        let efectivo = 0;
+        detalles?.forEach(detalle => {
+          efectivo += (detalle.debe || 0) - (detalle.haber || 0);
+        });
+
+        if (montoPagadoFinal > efectivo) {
+          toast({
+            title: "⚠️ Saldo insuficiente en efectivo",
+            description: `Saldo disponible: $${efectivo.toFixed(2)} | Monto solicitado: $${montoPagadoFinal.toFixed(2)}`,
+            variant: "destructive"
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      if (metodoPago === "transferencia") {
+        const { data: detalles } = await supabase
+          .from("detalle_asientos")
+          .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
+          .eq("cuenta_codigo", "1002")
+          .eq("asientos_contables.user_id", user.id);
+
+        let bancos = 0;
+        detalles?.forEach(detalle => {
+          bancos += (detalle.debe || 0) - (detalle.haber || 0);
+        });
+
+        if (montoPagadoFinal > bancos) {
+          toast({
+            title: "⚠️ Saldo insuficiente en bancos",
+            description: `Saldo disponible: $${bancos.toFixed(2)} | Monto solicitado: $${montoPagadoFinal.toFixed(2)}`,
+            variant: "destructive"
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+    }
+
     setIsSaving(true);
 
     try {

@@ -182,6 +182,75 @@ const RegistroProductos = () => {
       }
     }
 
+    // Validar saldo disponible si hay pago (contado o parcial)
+    if (tipoPago === "contado" || tipoPago === "parcial") {
+      const montoPagoActual = data.montoPagado;
+      
+      if (data.metodoPago === "efectivo") {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast({
+            title: "Error",
+            description: "Usuario no autenticado",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        const { data: detalles } = await supabase
+          .from("detalle_asientos")
+          .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
+          .eq("cuenta_codigo", "1001")
+          .eq("asientos_contables.user_id", user.id);
+
+        let efectivo = 0;
+        detalles?.forEach(detalle => {
+          efectivo += (detalle.debe || 0) - (detalle.haber || 0);
+        });
+
+        if (montoPagoActual > efectivo) {
+          toast({
+            title: "⚠️ Saldo insuficiente en efectivo",
+            description: `Saldo disponible: $${efectivo.toFixed(2)} | Monto solicitado: $${montoPagoActual.toFixed(2)}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      if (data.metodoPago === "bancos") {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast({
+            title: "Error",
+            description: "Usuario no autenticado",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        const { data: detalles } = await supabase
+          .from("detalle_asientos")
+          .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
+          .eq("cuenta_codigo", "1002")
+          .eq("asientos_contables.user_id", user.id);
+
+        let bancos = 0;
+        detalles?.forEach(detalle => {
+          bancos += (detalle.debe || 0) - (detalle.haber || 0);
+        });
+
+        if (montoPagoActual > bancos) {
+          toast({
+            title: "⚠️ Saldo insuficiente en bancos",
+            description: `Saldo disponible: $${bancos.toFixed(2)} | Monto solicitado: $${montoPagoActual.toFixed(2)}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+    }
+
     let proveedorId = null;
     let proveedorNombre = data.proveedor || "";
 

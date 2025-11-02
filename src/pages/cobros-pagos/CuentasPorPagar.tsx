@@ -304,6 +304,43 @@ const CuentasPorPagar = () => {
       return;
     }
 
+    // Validar saldo disponible para efectivo o bancos
+    if (metodoPago === "efectivo") {
+      const { data: detalles } = await supabase
+        .from("detalle_asientos")
+        .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
+        .eq("cuenta_codigo", "1001")
+        .eq("asientos_contables.user_id", (await supabase.auth.getUser()).data.user?.id);
+
+      let efectivo = 0;
+      detalles?.forEach(detalle => {
+        efectivo += (detalle.debe || 0) - (detalle.haber || 0);
+      });
+
+      if (monto > efectivo) {
+        toast.error(`Saldo insuficiente en efectivo. Disponible: $${efectivo.toFixed(2)} | Solicitado: $${monto.toFixed(2)}`);
+        return;
+      }
+    }
+
+    if (metodoPago === "transferencia") {
+      const { data: detalles } = await supabase
+        .from("detalle_asientos")
+        .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
+        .eq("cuenta_codigo", "1002")
+        .eq("asientos_contables.user_id", (await supabase.auth.getUser()).data.user?.id);
+
+      let bancos = 0;
+      detalles?.forEach(detalle => {
+        bancos += (detalle.debe || 0) - (detalle.haber || 0);
+      });
+
+      if (monto > bancos) {
+        toast.error(`Saldo insuficiente en bancos. Disponible: $${bancos.toFixed(2)} | Solicitado: $${monto.toFixed(2)}`);
+        return;
+      }
+    }
+
     // Validar límite de crédito si se seleccionó tarjeta de crédito
     if (metodoPago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
       const tarjetaId = metodoPago.replace("tarjeta_credito_", "");
