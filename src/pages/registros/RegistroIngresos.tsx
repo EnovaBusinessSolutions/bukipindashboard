@@ -130,6 +130,11 @@ const RegistroIngresos = () => {
   // Estados para fechas específicas de análisis
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
+  
+  // Estados para totales calculados desde asientos contables
+  const [totalesDia, setTotalesDia] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
+  const [totalesMes, setTotalesMes] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
+  const [totalesAno, setTotalesAno] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
 
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
@@ -395,6 +400,96 @@ const RegistroIngresos = () => {
       setDuplicateWarnings([]);
     }
   }, [clienteTelefono, clienteEmail, clienteRFC, tipoCliente, clientes]);
+
+  // useEffect para calcular totales desde asientos contables
+  useEffect(() => {
+    const calcularTotales = async () => {
+      try {
+        const { data: user } = await supabase.auth.getUser();
+        if (!user?.user?.id) return;
+
+        const calcularPeriodo = async (periodo: 'dia' | 'mes' | 'ano') => {
+          const today = new Date();
+          let startDate: string;
+          let endDate: string;
+
+          if (periodo === 'dia') {
+            const selectedDate = fechaAnalisisDiario;
+            startDate = selectedDate.toISOString().split('T')[0];
+            endDate = startDate;
+          } else if (periodo === 'mes') {
+            const selectedMonth = fechaAnalisisMensual.getMonth();
+            const selectedYear = fechaAnalisisMensual.getFullYear();
+            const firstDay = new Date(selectedYear, selectedMonth, 1);
+            const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+            startDate = firstDay.toISOString().split('T')[0];
+            endDate = lastDay.toISOString().split('T')[0];
+          } else {
+            const year = today.getFullYear();
+            startDate = `${year}-01-01`;
+            endDate = `${year}-12-31`;
+          }
+
+          const { data: detalles, error } = await supabase
+            .from('detalle_asientos')
+            .select(`
+              id,
+              cuenta_codigo,
+              debe,
+              haber,
+              asiento_id,
+              asientos_contables!inner(
+                fecha,
+                user_id
+              )
+            `)
+            .eq('asientos_contables.user_id', user.user.id)
+            .gte('asientos_contables.fecha', startDate)
+            .lte('asientos_contables.fecha', endDate)
+            .like('cuenta_codigo', '4%');
+
+          if (error) throw error;
+
+          let ventasBrutas = 0;
+          let descuentos = 0;
+          let otrosIngresos = 0;
+
+          (detalles || []).forEach(detalle => {
+            const debe = Number(detalle.debe) || 0;
+            const haber = Number(detalle.haber) || 0;
+            const cuenta = detalle.cuenta_codigo;
+
+            if (cuenta === '4001') {
+              ventasBrutas += (haber - debe);
+            } else if (cuenta === '4003') {
+              descuentos += (debe - haber);
+            } else if (cuenta?.startsWith('4')) {
+              otrosIngresos += (haber - debe);
+            }
+          });
+
+          const ventasNetas = ventasBrutas - descuentos;
+          const totalIngresos = ventasNetas + otrosIngresos;
+
+          return { ventasBrutas, descuentos, ventasNetas, otrosIngresos, totalIngresos };
+        };
+
+        const [dia, mes, ano] = await Promise.all([
+          calcularPeriodo('dia'),
+          calcularPeriodo('mes'),
+          calcularPeriodo('ano')
+        ]);
+
+        setTotalesDia(dia);
+        setTotalesMes(mes);
+        setTotalesAno(ano);
+      } catch (error) {
+        console.error('Error calculando totales:', error);
+      }
+    };
+
+    calcularTotales();
+  }, [fechaAnalisisDiario, fechaAnalisisMensual, transacciones]);
 
   // Función para cargar asientos contables relacionados con una transacción
   const loadAsientosContables = async (transaccionId: string) => {
@@ -2471,63 +2566,6 @@ const RegistroIngresos = () => {
               };
 
               const filteredTransactions = getFilteredTransactions();
-
-              // Calcular totales completos para cada período (SIN filtros de tipo)
-              const calcularTotalesPorPeriodo = (periodo: 'dia' | 'mes' | 'ano') => {
-                let filtered = transacciones.filter(t => 
-                  (t as any).estado !== 'cancelado' && 
-                  !t.descripcion.includes('CANCELACIÓN:')
-                );
-
-                const today = new Date();
-                if (periodo === 'dia') {
-                  const selectedDateStr = fechaAnalisisDiario.toISOString().split('T')[0];
-                  filtered = filtered.filter(t => 
-                    new Date(t.created_at).toISOString().split('T')[0] === selectedDateStr
-                  );
-                } else if (periodo === 'mes') {
-                  const selectedMonth = fechaAnalisisMensual.getMonth();
-                  const selectedYear = fechaAnalisisMensual.getFullYear();
-                  filtered = filtered.filter(t => {
-                    const tDate = new Date(t.created_at);
-                    return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
-                  });
-                } else {
-                  filtered = filtered.filter(t => {
-                    const tDate = new Date(t.created_at);
-                    return tDate.getFullYear() === today.getFullYear();
-                  });
-                }
-
-                // Calcular ventas (cuenta 4001)
-                const transaccionesVentas = filtered.filter(t => t.cuenta_principal_codigo === '4001');
-                const ventasBrutas = transaccionesVentas.reduce((sum, t) => sum + (t.monto_total || 0), 0);
-                const descuentos = transaccionesVentas.reduce((sum, t) => sum + (t.monto_descuento || 0), 0);
-                const ventasNetas = ventasBrutas - descuentos;
-
-                // Calcular otros ingresos (cuentas 4XXX excepto 4001 y 4003)
-                const transaccionesOtros = filtered.filter(t => 
-                  t.cuenta_principal_codigo?.startsWith('4') && 
-                  t.cuenta_principal_codigo !== '4001' && 
-                  t.cuenta_principal_codigo !== '4003'
-                );
-                const otrosIngresos = transaccionesOtros.reduce((sum, t) => sum + (t.monto_neto || 0), 0);
-
-                // Total ingresos
-                const totalIngresos = ventasNetas + otrosIngresos;
-
-                return {
-                  ventasBrutas,
-                  descuentos,
-                  ventasNetas,
-                  otrosIngresos,
-                  totalIngresos
-                };
-              };
-
-              const totalesDia = calcularTotalesPorPeriodo('dia');
-              const totalesMes = calcularTotalesPorPeriodo('mes');
-              const totalesAno = calcularTotalesPorPeriodo('ano');
 
               return (
                 <>
