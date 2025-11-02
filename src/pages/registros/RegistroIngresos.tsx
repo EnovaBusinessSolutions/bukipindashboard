@@ -2420,20 +2420,24 @@ const RegistroIngresos = () => {
                 const currentMonth = today.getMonth();
                 const currentYear = today.getFullYear();
 
-                // Primero filtrar por período
-                let filtered = transacciones;
+                // Primero filtrar por período y excluir canceladas y reversiones
+                let filtered = transacciones.filter(t => 
+                  (t as any).estado !== 'cancelado' && 
+                  !t.descripcion.includes('CANCELACIÓN:')
+                );
+                
                 if (periodFilter === "diario") {
                   const todayStr = today.toISOString().split('T')[0];
-                  filtered = transacciones.filter(t => 
+                  filtered = filtered.filter(t => 
                     new Date(t.created_at).toISOString().split('T')[0] === todayStr
                   );
                 } else if (periodFilter === "mensual") {
-                  filtered = transacciones.filter(t => {
+                  filtered = filtered.filter(t => {
                     const tDate = new Date(t.created_at);
                     return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
                   });
                 } else {
-                  filtered = transacciones.filter(t => {
+                  filtered = filtered.filter(t => {
                     const tDate = new Date(t.created_at);
                     return tDate.getFullYear() === currentYear;
                   });
