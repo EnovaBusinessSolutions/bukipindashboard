@@ -9,7 +9,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Activity } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Activity, Package } from "lucide-react";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 
 const TablaRotacionInventario = () => {
@@ -72,6 +73,7 @@ const TablaRotacionInventario = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Imagen</TableHead>
               <TableHead>Producto</TableHead>
               <TableHead className="text-right">Stock Actual</TableHead>
               <TableHead className="text-right">Días Promedio</TableHead>
@@ -82,6 +84,14 @@ const TablaRotacionInventario = () => {
             {productosOrdenados.length > 0 ? (
               productosOrdenados.map((producto) => (
                 <TableRow key={producto.id}>
+                  <TableCell>
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={producto.imagen_url || ''} alt={producto.nombre} />
+                      <AvatarFallback>
+                        <Package className="h-5 w-5" />
+                      </AvatarFallback>
+                    </Avatar>
+                  </TableCell>
                   <TableCell className="font-medium">{producto.nombre}</TableCell>
                   <TableCell className="text-right">
                     {producto.cantidad_stock.toLocaleString()} unidades
@@ -96,7 +106,7 @@ const TablaRotacionInventario = () => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No hay productos de inventario
                 </TableCell>
               </TableRow>
