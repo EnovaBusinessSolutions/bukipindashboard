@@ -90,110 +90,82 @@ serve(async (req) => {
     const montoPendiente = montoNeto - requestData.montoPagado
 
     // Manejo especial para ventas de inventario
+    let costoUnitarioProducto = 0
+    let nombreProducto = ''
+    
     if (requestData.tipoIngreso === 'inventariados' && requestData.productoId && requestData.cantidadVendida) {
-      // Verificar y actualizar stock del producto
+      // Verificar que el producto existe
       const { data: producto, error: productoError } = await supabaseClient
         .from('productos')
-        .select('cantidad_stock, costo_unitario, nombre')
+        .select('nombre')
         .eq('id', requestData.productoId)
+        .eq('cuenta_codigo', '1005')
         .single()
 
       if (productoError || !producto) {
         throw new Error('Producto no encontrado en inventario')
       }
 
-      const stockActual = producto.cantidad_stock || 0
+      nombreProducto = producto.nombre
       
-      // Determinar el costo a usar para valorar el inventario
-      let costoParaInventario = producto.costo_unitario || 0
-      let debeActualizarCosto = false
+      // Calcular costo promedio desde movimientos_inventario
+      console.log(`Calculando costo promedio desde movimientos_inventario para ${nombreProducto}...`)
       
-      // Prioridad 1: Si el usuario proporcionó un costo personalizado, usarlo
-      if (requestData.costoPersonalizado && requestData.costoPersonalizado > 0) {
-        costoParaInventario = requestData.costoPersonalizado
-        debeActualizarCosto = true
-        console.log(`Usando costo personalizado del usuario: ${costoParaInventario}`)
-      }
-      // Prioridad 2: Si el producto no tiene costo registrado, calcular el costo promedio histórico desde movimientos
-      else if (costoParaInventario === 0) {
-        console.log(`Producto sin costo registrado. Buscando costo promedio histórico...`)
+      const { data: movimientos, error: movimientosError } = await supabaseClient
+        .from('movimientos_inventario')
+        .select('costo_unitario, cantidad, tipo_movimiento')
+        .eq('producto_id', requestData.productoId)
+        .eq('tipo_movimiento', 'compra')
+        .order('created_at', { ascending: false })
+      
+      if (!movimientosError && movimientos && movimientos.length > 0) {
+        // Calcular costo promedio ponderado
+        let totalCosto = 0
+        let totalCantidad = 0
         
-        const { data: movimientos, error: movimientosError } = await supabaseClient
-          .from('movimientos_inventario')
-          .select('costo_unitario, cantidad, tipo_movimiento')
-          .eq('producto_id', requestData.productoId)
-          .eq('tipo_movimiento', 'compra')
-          .order('created_at', { ascending: false })
-        
-        if (!movimientosError && movimientos && movimientos.length > 0) {
-          // Calcular costo promedio ponderado de las compras históricas
-          let totalCosto = 0
-          let totalCantidad = 0
-          
-          for (const mov of movimientos) {
-            if (mov.costo_unitario > 0 && mov.cantidad > 0) {
-              totalCosto += mov.costo_unitario * mov.cantidad
-              totalCantidad += mov.cantidad
-            }
+        for (const mov of movimientos) {
+          if (mov.costo_unitario > 0 && mov.cantidad > 0) {
+            totalCosto += mov.costo_unitario * mov.cantidad
+            totalCantidad += mov.cantidad
           }
-          
-          if (totalCantidad > 0) {
-            costoParaInventario = totalCosto / totalCantidad
-            debeActualizarCosto = true
-            console.log(`Costo promedio histórico calculado: ${costoParaInventario} (basado en ${movimientos.length} movimientos, ${totalCantidad} unidades)`)
-          } else {
-            console.warn(`No se encontraron movimientos con costo válido. Usando costo 0 - REQUIERE ATENCIÓN`)
-          }
-        } else {
-          console.warn(`No se encontraron movimientos de compra históricos para calcular costo promedio. Usando costo 0 - REQUIERE ATENCIÓN`)
         }
+        
+        if (totalCantidad > 0) {
+          costoUnitarioProducto = totalCosto / totalCantidad
+          console.log(`Costo promedio calculado: ${costoUnitarioProducto} (${movimientos.length} movimientos, ${totalCantidad} unidades)`)
+        } else {
+          console.warn(`No se encontraron movimientos con costo válido. Usando costo 0`)
+        }
+      } else {
+        console.warn(`No se encontraron movimientos de compra para calcular costo. Usando costo 0`)
       }
       
-      // Permitir inventario negativo - actualizar stock y valor del inventario
-      const nuevoStock = stockActual - requestData.cantidadVendida
-      const nuevoValorInventario = nuevoStock * costoParaInventario
-      
-      console.log(`Procesando venta - Stock actual: ${stockActual}, Cantidad vendida: ${requestData.cantidadVendida}, Nuevo stock: ${nuevoStock}${nuevoStock < 0 ? ' (NEGATIVO)' : ''}, Costo: ${costoParaInventario}, Valor inventario: ${nuevoValorInventario}`)
-      
-      const updateData: any = { 
-        cantidad_stock: nuevoStock,
-        valor_total_inventario: nuevoValorInventario
+      // Usar costo personalizado si fue proporcionado
+      if (requestData.costoPersonalizado && requestData.costoPersonalizado > 0) {
+        costoUnitarioProducto = requestData.costoPersonalizado
+        console.log(`Usando costo personalizado: ${costoUnitarioProducto}`)
       }
       
-      // Si calculamos un costo promedio histórico, actualizar el costo_unitario del producto
-      if (debeActualizarCosto) {
-        updateData.costo_unitario = costoParaInventario
-        console.log(`Actualizando costo_unitario del producto a ${costoParaInventario}`)
-      }
+      console.log(`Procesando venta - Producto: ${nombreProducto}, Cantidad: ${requestData.cantidadVendida}, Costo unitario: ${costoUnitarioProducto}`)
       
-      const { error: updateStockError } = await supabaseClient
-        .from('productos')
-        .update(updateData)
-        .eq('id', requestData.productoId)
-
-      if (updateStockError) {
-        throw new Error(`Error al actualizar stock: ${updateStockError.message}`)
-      }
-
-      // Registrar movimiento de inventario
+      // Registrar movimiento de inventario (negativo = salida)
       const { error: movimientoError } = await supabaseClient
         .from('movimientos_inventario')
         .insert({
           producto_id: requestData.productoId,
           tipo_movimiento: 'venta',
-          cantidad: -requestData.cantidadVendida, // Negativo porque es salida
-          costo_unitario: producto.costo_unitario || 0,
-          costo_total: (producto.costo_unitario || 0) * requestData.cantidadVendida,
-          descripcion: `Venta de ${producto.nombre} - Stock anterior: ${stockActual}, Stock actual: ${nuevoStock}`,
+          cantidad: requestData.cantidadVendida,
+          costo_unitario: costoUnitarioProducto,
+          costo_total: costoUnitarioProducto * requestData.cantidadVendida,
+          descripcion: `Venta de ${nombreProducto}`,
           user_id: userId
         })
 
       if (movimientoError) {
-        console.warn('Error al registrar movimiento de inventario:', movimientoError.message)
-        // No fallar la transacción por esto, pero logear el error
+        throw new Error(`Error al registrar movimiento de inventario: ${movimientoError.message}`)
       }
 
-      console.log(`Stock actualizado para producto ${requestData.productoId}: ${stockActual} -> ${nuevoStock}`)
+      console.log(`Movimiento de venta registrado para ${nombreProducto}`)
     }
 
     // 1. Crear la transacción de ingreso
@@ -319,38 +291,29 @@ serve(async (req) => {
     //   Utilidad Bruta = Ventas - Costo de Ventas
     // ========================================================================
     
-    if (requestData.tipoIngreso === 'inventariados' && requestData.productoId && requestData.cantidadVendida) {
-      // Obtener el costo unitario actual del producto desde la base de datos
-      const { data: productoInfo, error: productoInfoError } = await supabaseClient
-        .from('productos')
-        .select('costo_unitario, nombre')
-        .eq('id', requestData.productoId)
-        .single()
+    if (requestData.tipoIngreso === 'inventariados' && requestData.productoId && requestData.cantidadVendida && costoUnitarioProducto > 0) {
+      // Calcular el costo total de la venta
+      const costoVenta = costoUnitarioProducto * requestData.cantidadVendida
 
-      if (!productoInfoError && productoInfo) {
-        // Calcular el costo total de la venta
-        const costoVenta = (productoInfo.costo_unitario || 0) * requestData.cantidadVendida
+      // DÉBITO a Cuenta 5001 - Costo de Ventas (Aumenta los gastos en el Estado de Resultados)
+      detallesAsiento.push({
+        asiento_id: asiento.id,
+        cuenta_codigo: '5001', // Costo de Ventas
+        debe: costoVenta,
+        haber: 0,
+        descripcion: `Costo de venta - ${nombreProducto} (${requestData.cantidadVendida} unidades)`
+      })
 
-        // DÉBITO a Cuenta 5001 - Costo de Ventas (Aumenta los gastos en el Estado de Resultados)
-        detallesAsiento.push({
-          asiento_id: asiento.id,
-          cuenta_codigo: '5001', // Costo de Ventas
-          debe: costoVenta,
-          haber: 0,
-          descripcion: `Costo de venta - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
-        })
+      // CRÉDITO a Cuenta 1005 - Inventario (Disminuye el activo de inventario en el Balance General)
+      detallesAsiento.push({
+        asiento_id: asiento.id,
+        cuenta_codigo: '1005', // Inventario de Mercancías
+        debe: 0,
+        haber: costoVenta,
+        descripcion: `Salida de inventario - ${nombreProducto} (${requestData.cantidadVendida} unidades)`
+      })
 
-        // CRÉDITO a Cuenta 1005 - Inventario (Disminuye el activo de inventario en el Balance General)
-        detallesAsiento.push({
-          asiento_id: asiento.id,
-          cuenta_codigo: '1005', // Inventario de Mercancías
-          debe: 0,
-          haber: costoVenta,
-          descripcion: `Salida de inventario - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
-        })
-
-        console.log(`✅ Asiento de costo de venta registrado: $${costoVenta} para ${productoInfo.nombre}`)
-      }
+      console.log(`✅ Asiento de costo de venta registrado: $${costoVenta} para ${nombreProducto}`)
     }
 
     // Insertar todos los detalles
