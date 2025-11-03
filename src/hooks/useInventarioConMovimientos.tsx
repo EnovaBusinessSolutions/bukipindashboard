@@ -18,6 +18,11 @@ export type ProductoInventario = {
   costo_unitario: number;
   valor_total_inventario: number;
   ultimo_movimiento: string | null;
+  // Métricas de rotación
+  fecha_primera_compra: string | null;
+  fecha_ultima_venta: string | null;
+  dias_promedio_rotacion: number | undefined;
+  estado_rotacion: "alta" | "media" | "baja" | "muy_baja" | "sin_movimiento" | undefined;
 };
 
 export const useInventarioConMovimientos = () => {
@@ -80,6 +85,57 @@ export const useInventarioConMovimientos = () => {
         // Último movimiento
         const ultimo_movimiento = movimientosProducto[0]?.fecha || null;
 
+        // ===== NUEVAS MÉTRICAS DE ROTACIÓN =====
+        
+        // Fecha de primera compra
+        const fecha_primera_compra = compras.length > 0
+          ? compras[compras.length - 1].fecha
+          : null;
+
+        // Fecha de última venta
+        const fecha_ultima_venta = ventas.length > 0
+          ? ventas[0].fecha
+          : null;
+
+        // Calcular días promedio de rotación
+        let dias_promedio_rotacion: number | undefined = undefined;
+        let estado_rotacion: "alta" | "media" | "baja" | "muy_baja" | "sin_movimiento" | undefined = undefined;
+
+        if (fecha_primera_compra && cantidad_vendida > 0) {
+          // Días transcurridos desde la primera compra
+          const diasTranscurridos = Math.floor(
+            (new Date().getTime() - new Date(fecha_primera_compra).getTime()) / (1000 * 60 * 60 * 24)
+          );
+
+          // Stock promedio (asumiendo que el stock ha variado linealmente)
+          const stock_promedio = (cantidad_comprada + cantidad_stock) / 2;
+
+          // Ciclos de rotación = cantidad vendida / stock promedio
+          const ciclos_rotacion = stock_promedio > 0 
+            ? cantidad_vendida / stock_promedio 
+            : 0;
+
+          // Días promedio en inventario
+          if (ciclos_rotacion > 0) {
+            dias_promedio_rotacion = diasTranscurridos / ciclos_rotacion;
+
+            // Clasificar estado de rotación
+            if (dias_promedio_rotacion < 30) {
+              estado_rotacion = "alta";
+            } else if (dias_promedio_rotacion < 60) {
+              estado_rotacion = "media";
+            } else if (dias_promedio_rotacion < 90) {
+              estado_rotacion = "baja";
+            } else {
+              estado_rotacion = "muy_baja";
+            }
+          } else {
+            estado_rotacion = "sin_movimiento";
+          }
+        } else {
+          estado_rotacion = "sin_movimiento";
+        }
+
         return {
           id: producto.id,
           nombre: producto.nombre,
@@ -96,6 +152,10 @@ export const useInventarioConMovimientos = () => {
           costo_unitario,
           valor_total_inventario,
           ultimo_movimiento,
+          fecha_primera_compra,
+          fecha_ultima_venta,
+          dias_promedio_rotacion,
+          estado_rotacion,
         };
       });
 

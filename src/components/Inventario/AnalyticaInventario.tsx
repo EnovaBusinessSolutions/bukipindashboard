@@ -2,30 +2,17 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line
-} from "recharts";
-import { 
-  TrendingUp, 
-  TrendingDown, 
   DollarSign, 
   Package, 
   Activity,
   AlertCircle,
   Target,
-  Zap
+  Zap,
+  TrendingUp
 } from "lucide-react";
 import { useProductos } from "@/hooks/useProductos";
+import GraficaHistorialInventario from "./GraficaHistorialInventario";
+import TablaRotacionInventario from "./TablaRotacionInventario";
 
 const AnalyticaInventario = () => {
   const { data: productos, isLoading } = useProductos();
@@ -62,65 +49,6 @@ const AnalyticaInventario = () => {
 
   const rotacionInventario = productosInventario.length > 0 
     ? (productosConMovimiento / productosInventario.length) * 100 : 0;
-
-  // Colores armónicos del sistema de diseño
-  const chartColors = {
-    primary: 'hsl(180, 25%, 50%)',        // Color principal del sistema
-    primaryLight: 'hsl(180, 30%, 60%)',   // Variación más clara
-    primaryDark: 'hsl(180, 35%, 40%)',    // Variación más oscura
-    secondary: 'hsl(200, 25%, 55%)',      // Azul complementario
-    accent: 'hsl(160, 25%, 50%)',         // Verde complementario
-    warning: 'hsl(40, 70%, 60%)',         // Amarillo armónico
-    success: 'hsl(140, 40%, 50%)',        // Verde éxito
-    destructive: 'hsl(0, 70%, 55%)',      // Rojo del sistema
-    muted: 'hsl(180, 15%, 70%)',          // Gris armónico
-  };
-
-  // Datos para gráficos
-  const datosValorPorProducto = productosInventario
-    .sort((a, b) => (b.valor_total_inventario || 0) - (a.valor_total_inventario || 0))
-    .slice(0, 5)
-    .map(producto => ({
-      nombre: producto.nombre.length > 15 ? producto.nombre.substring(0, 15) + '...' : producto.nombre,
-      valor: producto.valor_total_inventario || 0,
-      cantidad: producto.cantidad_stock || 0
-    }));
-
-  const datosDistribucionStock = productosInventario.map(producto => {
-    const stockActual = producto.cantidad_stock || 0;
-    const stockMinimo = 10; // Configurable en el futuro
-    
-    let nivel = 'Alto';
-    let color = chartColors.success;
-    
-    if (stockActual === 0) {
-      nivel = 'Agotado';
-      color = chartColors.destructive;
-    } else if (stockActual <= stockMinimo) {
-      nivel = 'Bajo';
-      color = chartColors.warning;
-    } else if (stockActual <= stockMinimo * 2) {
-      nivel = 'Medio';
-      color = chartColors.secondary;
-    }
-    
-    return {
-      nombre: producto.nombre,
-      nivel,
-      valor: stockActual,
-      color
-    };
-  });
-
-  const resumenNiveles = datosDistribucionStock.reduce((acc, item) => {
-    const existing = acc.find(a => a.nivel === item.nivel);
-    if (existing) {
-      existing.cantidad += 1;
-    } else {
-      acc.push({ nivel: item.nivel, cantidad: 1, color: item.color });
-    }
-    return acc;
-  }, [] as any[]);
 
   const formatPrice = (precio: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -183,91 +111,11 @@ const AnalyticaInventario = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico de productos por valor */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart className="h-5 w-5" />
-              Top 5 Productos por Valor
-            </CardTitle>
-            <CardDescription>
-              Productos con mayor valor total en inventario
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {datosValorPorProducto.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={datosValorPorProducto}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="nombre" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis tickFormatter={(value) => formatPrice(value)} />
-                  <Tooltip formatter={(value) => [formatPrice(Number(value)), "Valor"]} />
-                  <Bar dataKey="valor">
-                    {datosValorPorProducto.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.valor < 0 ? chartColors.warning : chartColors.primary} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No hay datos de productos para mostrar
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Gráfica histórica de inventario */}
+      <GraficaHistorialInventario />
 
-        {/* Distribución de niveles de stock */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              Distribución Niveles de Stock
-            </CardTitle>
-            <CardDescription>
-              Clasificación de productos por nivel de stock
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {resumenNiveles.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={resumenNiveles}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ nivel, cantidad, percent }) => 
-                      `${nivel}: ${cantidad} (${(percent * 100).toFixed(0)}%)`
-                    }
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="cantidad"
-                  >
-                    {resumenNiveles.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No hay datos de stock para mostrar
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Tabla de rotación de inventario */}
+      <TablaRotacionInventario />
 
       {/* Alertas y recomendaciones */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -346,7 +194,7 @@ const AnalyticaInventario = () => {
               <div className="p-3 bg-card rounded-lg border">
                 <h4 className="font-medium text-primary mb-1">Productos Rentables</h4>
                 <p className="text-sm text-muted-foreground">
-                  Los productos con mayor valor representan {((datosValorPorProducto.length / productosInventario.length) * 100).toFixed(0)}% del inventario total.
+                  Revisa la tabla de rotación para identificar productos de rápida o lenta salida.
                 </p>
               </div>
 
