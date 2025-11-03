@@ -523,6 +523,15 @@ const RegistroIngresos = () => {
     }
   }, [selectedProducts, selectedIncomeType]);
 
+  // Calcular total de productos inventariados
+  useEffect(() => {
+    if (selectedIncomeType === 'inventariados' && selectedInventoryProducts.length > 0) {
+      const total = selectedInventoryProducts.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2);
+      setMontoTotal(total);
+      setDescripcion(`Venta de ${selectedInventoryProducts.length} producto(s) de inventario`);
+    }
+  }, [selectedInventoryProducts, selectedIncomeType]);
+
   // Función para manejar selección de producto precargado (para actualizar precio)
   const handleProductSelection = (productId: string) => {
     setSelectedProductId(productId);
