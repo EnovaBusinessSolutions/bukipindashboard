@@ -295,9 +295,32 @@ serve(async (req) => {
       descripcion: requestData.descripcion
     })
 
-    // Para ventas de inventario, registrar el costo de ventas
+    // ========================================================================
+    // ASIENTOS CONTABLES PARA VENTAS DE INVENTARIO (Método de Inventario Perpetuo)
+    // ========================================================================
+    // Para cada venta de inventario, debemos registrar 2 asientos adicionales:
+    //
+    // 1. RECONOCIMIENTO DEL COSTO DE VENTAS:
+    //    - DÉBITO a "5001 - Costo de Ventas" (Estado de Resultados - Aumenta Gastos)
+    //    - CRÉDITO a "1005 - Inventario" (Balance General - Disminuye Activos)
+    //
+    // Este asiento refleja el COSTO del producto vendido (no el precio de venta).
+    // El precio de venta ya fue registrado en el asiento de ingreso como "Ventas" (4001).
+    //
+    // EJEMPLO NUMÉRICO:
+    // Si vendemos 5 unidades de un producto con costo unitario de $100:
+    //   - Costo de Venta = 5 × $100 = $500
+    //   - DÉBITO: Cuenta 5001 (Costo de Ventas) = $500
+    //   - CRÉDITO: Cuenta 1005 (Inventario) = $500
+    //
+    // EFECTO EN ESTADOS FINANCIEROS:
+    //   Balance General: Disminuye Inventario (Activo) en $500
+    //   Estado de Resultados: Aumenta Costo de Ventas (Gasto) en $500
+    //   Utilidad Bruta = Ventas - Costo de Ventas
+    // ========================================================================
+    
     if (requestData.tipoIngreso === 'inventariados' && requestData.productoId && requestData.cantidadVendida) {
-      // Obtener información del producto nuevamente para el costo
+      // Obtener el costo unitario actual del producto desde la base de datos
       const { data: productoInfo, error: productoInfoError } = await supabaseClient
         .from('productos')
         .select('costo_unitario, nombre')
@@ -305,27 +328,28 @@ serve(async (req) => {
         .single()
 
       if (!productoInfoError && productoInfo) {
+        // Calcular el costo total de la venta
         const costoVenta = (productoInfo.costo_unitario || 0) * requestData.cantidadVendida
 
-        // Débito a Costo de Ventas
+        // DÉBITO a Cuenta 5001 - Costo de Ventas (Aumenta los gastos en el Estado de Resultados)
         detallesAsiento.push({
           asiento_id: asiento.id,
-          cuenta_codigo: '5001', // Compras (Costo de Ventas)
+          cuenta_codigo: '5001', // Costo de Ventas
           debe: costoVenta,
           haber: 0,
           descripcion: `Costo de venta - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
         })
 
-        // Crédito a Inventario (reducir el inventario contablemente)
+        // CRÉDITO a Cuenta 1005 - Inventario (Disminuye el activo de inventario en el Balance General)
         detallesAsiento.push({
           asiento_id: asiento.id,
-          cuenta_codigo: '1005', // Inventario
+          cuenta_codigo: '1005', // Inventario de Mercancías
           debe: 0,
           haber: costoVenta,
           descripcion: `Salida de inventario - ${productoInfo.nombre} (${requestData.cantidadVendida} unidades)`
         })
 
-        console.log(`Registrando costo de venta: ${costoVenta} para producto ${productoInfo.nombre}`)
+        console.log(`✅ Asiento de costo de venta registrado: $${costoVenta} para ${productoInfo.nombre}`)
       }
     }
 

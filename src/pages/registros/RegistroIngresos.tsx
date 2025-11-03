@@ -331,8 +331,9 @@ const RegistroIngresos = () => {
   const [editProductImage, setEditProductImage] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
-  // Filtrar productos con stock disponible para inventario
-  const productosInventario = productos.filter(producto => producto.cantidad_stock && producto.cantidad_stock > 0 || producto.cantidad_comprada && producto.cantidad_comprada > 0);
+  // Filtrar todos los productos de inventario (código 1005), independientemente del stock
+  // Esto permite ventas con inventario negativo que serán confirmadas por el usuario
+  const productosInventario = productos.filter(producto => producto.cuenta_codigo === '1005');
 
   // Función para manejar selección de producto de inventario
   const handleInventoryProductSelection = (productId: string) => {
@@ -1389,7 +1390,7 @@ const RegistroIngresos = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Ventas desde Inventario:</strong> Solo se muestran productos con stock disponible. El stock se actualizará automáticamente al registrar la venta.
+                <strong>Ventas desde Inventario:</strong> Se muestran todos los productos de inventario. Si vendes más de lo disponible, se te pedirá confirmar la sobreventa. El stock se actualizará automáticamente al registrar la venta.
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
@@ -1745,16 +1746,36 @@ const RegistroIngresos = () => {
                   </div>
                 </div>
               </div>
+              {/* Sección informativa destacada - Costo Promedio Histórico */}
+              {negativeStockData?.costoPorUnidad && negativeStockData.costoPorUnidad > 0 && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border-2 border-blue-300 dark:border-blue-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calculator className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <p className="font-bold text-blue-700 dark:text-blue-300">
+                      📊 Costo Promedio Histórico
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Costo promedio calculado:</span>
+                      <span className="text-lg font-bold text-blue-700 dark:text-blue-300">
+                        ${formatMonto(negativeStockData.costoPorUnidad)} por unidad
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Este costo se calculó automáticamente del promedio ponderado de todas tus compras anteriores de este producto.
+                      Puedes usar este costo sugerido o ingresar uno personalizado si conoces el costo real de esta venta.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
                 <p className="font-medium mb-3 text-blue-700 dark:text-blue-400">Impacto en el inventario:</p>
                 
                 {negativeStockData?.costoPorUnidad && negativeStockData.costoPorUnidad > 0 ? (
                   <>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      💡 El costo mostrado es el <strong>promedio histórico</strong> calculado de tus compras anteriores de este producto.
-                    </p>
-                    
-                    <RadioGroup 
+                    <RadioGroup
                       value={tipoCostoInventarioNegativo} 
                       onValueChange={(value: "historico" | "personalizado") => {
                         setTipoCostoInventarioNegativo(value);
