@@ -15,12 +15,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 const AnalisisResultados = () => {
   const [escalaVisualizacion, setEscalaVisualizacion] = useState<'original' | 'miles' | 'millones'>('original');
+  const [activeTab, setActiveTab] = useState<string>('mensual');
+  
+  // Datos esenciales - siempre cargados
   const { data: saldos, isLoading } = useBalanceGeneral();
   const { data: resultadosMensuales, isLoading: isLoadingMensual } = useEstadoResultadosMensual();
-  const { data: ventasProductosData, isLoading: isLoadingVentasProductos } = useVentasProductos();
-  const { data: costosData, isLoading: isLoadingCostos } = useCostosMensuales();
   const { data: ingresosPorTipo, isLoading: isLoadingIngresosTipo } = useIngresosMensualesPorTipo();
   const { data: egresosPorTipo, isLoading: isLoadingEgresosTipo } = useEgresosMensualesPorTipo();
+  
+  // Lazy loading - solo se cargan cuando se necesitan
+  const { data: ventasProductosData, isLoading: isLoadingVentasProductos } = useVentasProductos(activeTab === 'ventas');
+  const { data: costosData, isLoading: isLoadingCostos } = useCostosMensuales(undefined, activeTab === 'costos');
 
   const ventasProductos = ventasProductosData?.ventasDetalladas || [];
   const ventasPorMes = ventasProductosData?.ventasPorMes || [];
@@ -202,7 +207,7 @@ const AnalisisResultados = () => {
         </div>
 
         {/* Tabs de Análisis */}
-        <Tabs defaultValue="mensual" className="w-full">
+        <Tabs defaultValue="mensual" className="w-full" onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="mensual">Estado de Resultados Mensual</TabsTrigger>
             <TabsTrigger value="ventas">Ventas</TabsTrigger>

@@ -16,9 +16,10 @@ interface VentasPorMes {
   [producto: string]: number | string; // volumen por cada producto
 }
 
-export const useVentasProductos = () => {
+export const useVentasProductos = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['ventas-productos'],
+    enabled,
     queryFn: async () => {
       // Obtener el año actual
       const currentYear = new Date().getFullYear();

@@ -13,11 +13,12 @@ interface CostoPorCuenta {
   data: { mes: string; monto: number }[];
 }
 
-export const useCostosMensuales = (año?: number) => {
+export const useCostosMensuales = (año?: number, enabled: boolean = true) => {
   const añoActual = año || new Date().getFullYear();
 
   return useQuery({
     queryKey: ["costos-mensuales", añoActual],
+    enabled,
     queryFn: async () => {
       const meses = [
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
