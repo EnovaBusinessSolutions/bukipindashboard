@@ -918,7 +918,6 @@ const RegistroProductos = () => {
                 {...register("descripcion")}
                 placeholder="Descripción, características, marca, modelo..."
                 className="min-h-16"
-                readOnly={!!selectedProducto}
               />
             </div>
 
