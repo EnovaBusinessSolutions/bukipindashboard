@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Upload, Image, Trash2, Package, CreditCard, Wallet, FileText, AlertCircle, ArrowLeft, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useProductos, useCreateProducto } from "@/hooks/useProductos";
+import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
 import { useProveedores } from "@/hooks/useProveedores";
 import { toast } from "@/hooks/use-toast";
@@ -58,15 +59,18 @@ const RegistroProductos = () => {
   const [proveedorRFC, setProveedorRFC] = useState("");
   
   const { data: productos, isLoading: loadingProductos } = useProductos();
+  const { data: productosInventario, isLoading: loadingInventario } = useInventarioConMovimientos();
   const { data: subcuentasInventario } = useSubcuentasInventario();
   const { proveedores, createProveedor } = useProveedores();
   const createProducto = useCreateProducto();
 
-  // Filtrar productos existentes de inventario
-  const productosExistentes = productos?.filter(producto => 
-    (producto.cantidad_stock && producto.cantidad_stock >= 0) || 
-    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
+  // Filtrar productos existentes con movimientos (compras o ventas)
+  const productosExistentes = productosInventario?.filter(producto => 
+    producto.cantidad_comprada > 0 || producto.cantidad_vendida > 0
   ) || [];
+
+  // Loading state combinado
+  const isLoadingProductos = loadingProductos || loadingInventario;
 
   const filteredProductos = productosExistentes.filter(producto =>
     producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
@@ -468,7 +472,7 @@ const RegistroProductos = () => {
                 />
               </div>
 
-              {loadingProductos ? (
+              {isLoadingProductos ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Cargando productos...
                 </div>
