@@ -16,6 +16,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Label,
 } from "recharts";
 import { TrendingUp } from "lucide-react";
 import { useProductos } from "@/hooks/useProductos";
@@ -193,6 +194,12 @@ const GraficaHistorialInventario = () => {
                 strokeWidth={2}
                 name="stock"
                 dot={{ fill: "hsl(var(--primary))" }}
+                label={{ 
+                  position: 'top',
+                  fill: 'hsl(var(--primary))',
+                  fontSize: 10,
+                  formatter: (value: number) => value > 0 ? value.toFixed(0) : ''
+                }}
               />
               <Line
                 type="monotone"
@@ -201,6 +208,12 @@ const GraficaHistorialInventario = () => {
                 strokeWidth={2}
                 name="compras"
                 dot={{ fill: "hsl(142, 76%, 36%)" }}
+                label={{ 
+                  position: 'top',
+                  fill: 'hsl(142, 76%, 36%)',
+                  fontSize: 10,
+                  formatter: (value: number) => value > 0 ? value.toFixed(0) : ''
+                }}
               />
               <Line
                 type="monotone"
@@ -209,6 +222,12 @@ const GraficaHistorialInventario = () => {
                 strokeWidth={2}
                 name="ventas"
                 dot={{ fill: "hsl(346, 77%, 50%)" }}
+                label={{ 
+                  position: 'bottom',
+                  fill: 'hsl(346, 77%, 50%)',
+                  fontSize: 10,
+                  formatter: (value: number) => value > 0 ? value.toFixed(0) : ''
+                }}
               />
             </LineChart>
           </ResponsiveContainer>
