@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface ResumenTransaccionesProps {
   startDate: Date;
@@ -170,13 +171,87 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
         });
       });
 
+      // Detectar transacciones canceladas
+      const transaccionesCanceladas: any[] = [];
+      const asientosReversiones = new Set<string>();
+
+      asientos?.forEach((asiento: any) => {
+        // Detectar si es un asiento de reversión
+        if (asiento.numero_asiento.startsWith('REV-COMP-INV-') || 
+            asiento.descripcion.includes('REVERSIÓN:')) {
+          
+          // Extraer ID del movimiento original
+          const movimientoId = asiento.numero_asiento.replace('REV-COMP-INV-', '');
+          
+          // Buscar asiento original correspondiente
+          const asientoOriginal = asientos.find((a: any) => 
+            a.numero_asiento === `COMP-INV-${movimientoId}`
+          );
+          
+          if (asientoOriginal) {
+            // Marcar ambos como procesados para no duplicar
+            asientosReversiones.add(asiento.id);
+            asientosReversiones.add(asientoOriginal.id);
+            
+            // Obtener detalles de ambos asientos
+            const detallesOriginal = asientoOriginal.detalle_asientos || [];
+            const detallesReversion = asiento.detalle_asientos || [];
+            
+            // Calcular impacto en efectivo/bancos
+            let montoOriginal = 0;
+            let montoReversion = 0;
+            let metodoPago = "";
+            
+            detallesOriginal.forEach((det: any) => {
+              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
+                montoOriginal = (det.debe || 0) - (det.haber || 0);
+                metodoPago = det.cuenta_codigo === "1001" ? "efectivo" : "bancos";
+              }
+            });
+            
+            // Aplicar filtro de método de pago
+            const metodoCumpleFiltro = 
+              filtroMetodoPago === "consolidado" || 
+              (filtroMetodoPago === "efectivo" && metodoPago === "efectivo") ||
+              (filtroMetodoPago === "bancos" && metodoPago === "bancos");
+            
+            if (!metodoCumpleFiltro) return;
+            
+            detallesReversion.forEach((det: any) => {
+              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
+                montoReversion = (det.debe || 0) - (det.haber || 0);
+              }
+            });
+            
+            // Agregar a transacciones canceladas
+            transaccionesCanceladas.push({
+              id: `cancelacion-${movimientoId}`,
+              movimiento_id: movimientoId,
+              fecha_original: asientoOriginal.fecha,
+              fecha_cancelacion: asiento.fecha,
+              descripcion: asientoOriginal.descripcion.replace('Compra de inventario: ', ''),
+              motivo_cancelacion: asiento.descripcion.split('Motivo: ')[1] || 'No especificado',
+              metodo_pago: metodoPago,
+              monto_original: Math.abs(montoOriginal),
+              monto_reversion: Math.abs(montoReversion),
+              monto_neto: 0,
+              asiento_original: asientoOriginal,
+              asiento_reversion: asiento,
+              detalles_original: detallesOriginal,
+              detalles_reversion: detallesReversion
+            });
+          }
+        }
+      });
+
       return {
         ingresos,
         egresos,
         inversiones,
         financiamientos,
         amortizaciones,
-        intereses: []
+        intereses: [],
+        transaccionesCanceladas
       };
     }
   });
@@ -282,6 +357,152 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
           </Table>
         </CardContent>
       </Card>
+
+      {/* Transacciones Canceladas */}
+      {(data?.transaccionesCanceladas && data.transaccionesCanceladas.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              Compras de Inventario Canceladas
+              <Badge variant="outline" className="text-xs">Neto: $0.00</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {data.transaccionesCanceladas.map((cancelacion: any) => (
+                <AccordionItem key={cancelacion.id} value={cancelacion.id}>
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex justify-between items-center w-full pr-4">
+                      <div className="flex items-center gap-4">
+                        <Badge variant="secondary">Cancelada</Badge>
+                        <span className="font-medium">{cancelacion.descripcion}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(cancelacion.fecha_original)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Badge variant="outline">{cancelacion.metodo_pago}</Badge>
+                        <span className="font-mono text-muted-foreground">
+                          {formatCurrency(0)}
+                        </span>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-4">
+                      {/* Asiento Original */}
+                      <div className="border rounded-lg p-4 bg-red-50/50 dark:bg-red-950/20">
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="font-semibold text-sm">
+                            📥 Transacción Original (Salida)
+                          </h4>
+                          <span className="text-sm text-muted-foreground">
+                            {formatDate(cancelacion.fecha_original)}
+                          </span>
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Cuenta</TableHead>
+                              <TableHead className="text-right">Debe</TableHead>
+                              <TableHead className="text-right">Haber</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {cancelacion.detalles_original.map((det: any, idx: number) => (
+                              <TableRow key={idx}>
+                                <TableCell className="text-sm">
+                                  {det.cuenta_codigo} - {det.descripcion}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {det.debe > 0 ? formatCurrency(det.debe) : "-"}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {det.haber > 0 ? formatCurrency(det.haber) : "-"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="font-medium bg-red-100/50 dark:bg-red-900/30">
+                              <TableCell>Impacto en Efectivo/Bancos</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right text-destructive">
+                                -{formatCurrency(cancelacion.monto_original)}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Asiento de Reversión */}
+                      <div className="border rounded-lg p-4 bg-green-50/50 dark:bg-green-950/20">
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="font-semibold text-sm">
+                            📤 Reversión (Entrada)
+                          </h4>
+                          <span className="text-sm text-muted-foreground">
+                            {formatDate(cancelacion.fecha_cancelacion)}
+                          </span>
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Cuenta</TableHead>
+                              <TableHead className="text-right">Debe</TableHead>
+                              <TableHead className="text-right">Haber</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {cancelacion.detalles_reversion.map((det: any, idx: number) => (
+                              <TableRow key={idx}>
+                                <TableCell className="text-sm">
+                                  {det.cuenta_codigo} - {det.descripcion}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {det.debe > 0 ? formatCurrency(det.debe) : "-"}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {det.haber > 0 ? formatCurrency(det.haber) : "-"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="font-medium bg-green-100/50 dark:bg-green-900/30">
+                              <TableCell>Impacto en Efectivo/Bancos</TableCell>
+                              <TableCell className="text-right text-finance-success">
+                                +{formatCurrency(cancelacion.monto_reversion)}
+                              </TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Resultado Neto */}
+                      <div className="border-2 border-primary/30 rounded-lg p-4 bg-primary/5">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h4 className="font-bold text-sm mb-1">💰 Impacto Neto</h4>
+                            <p className="text-xs text-muted-foreground">
+                              <strong>Motivo:</strong> {cancelacion.motivo_cancelacion}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-primary">
+                              {formatCurrency(0)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              (Sin impacto en flujo de efectivo)
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Inversiones */}
       <Card>
