@@ -61,6 +61,10 @@ export const useEgresosMensualesPorTipo = (año?: number) => {
       }
 
       return egresosMensuales;
-    }
+    },
+    staleTime: 5 * 60 * 1000, // Cachear por 5 minutos
+    gcTime: 10 * 60 * 1000, // Mantener en memoria 10 minutos
+    retry: 1, // Solo 1 reintento
+    refetchOnWindowFocus: false, // No refrescar al cambiar de ventana
   });
 };

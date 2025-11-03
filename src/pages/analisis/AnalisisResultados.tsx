@@ -7,7 +7,7 @@ import { useCostosMensuales } from "@/hooks/useCostosMensuales";
 import { useIngresosMensualesPorTipo } from "@/hooks/useIngresosMensualesPorTipo";
 import { useEgresosMensualesPorTipo } from "@/hooks/useEgresosMensualesPorTipo";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart as RechartsPieChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ComposedChart, LabelList } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -29,12 +29,19 @@ const AnalisisResultados = () => {
   const costosPorCuenta = costosData?.costosPorCuenta || [];
   const cuentasCostos = costosData?.cuentas || [];
 
-  if (isLoading) {
+  if (isLoading || isLoadingMensual || isLoadingIngresosTipo || isLoadingEgresosTipo) {
     return (
       <div className="h-full overflow-auto p-6">
         <div className="space-y-6">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-96 w-full" />
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center p-12">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Cargando Análisis Financiero</h3>
+              <p className="text-sm text-muted-foreground text-center">
+                Calculando resultados mensuales, esto puede tomar unos segundos...
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
