@@ -10,17 +10,12 @@ import {
   Zap,
   TrendingUp
 } from "lucide-react";
-import { useProductos } from "@/hooks/useProductos";
+import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import GraficaHistorialInventario from "./GraficaHistorialInventario";
 import TablaRotacionInventario from "./TablaRotacionInventario";
 
 const AnalyticaInventario = () => {
-  const { data: productos, isLoading } = useProductos();
-
-  // Filtrar solo productos de inventario (cuenta_codigo 1005)
-  const productosInventario = productos?.filter(producto => 
-    producto.cuenta_codigo === '1005'
-  ) || [];
+  const { data: productosInventario, isLoading } = useInventarioConMovimientos();
 
   if (isLoading) {
     return (
@@ -30,24 +25,24 @@ const AnalyticaInventario = () => {
     );
   }
 
-  // Calcular métricas principales
-  const valorTotalInventario = productosInventario.reduce((total, producto) => 
+  // Calcular métricas principales (ya vienen calculados desde useInventarioConMovimientos)
+  const valorTotalInventario = productosInventario?.reduce((total, producto) => 
     total + (producto.valor_total_inventario || 0), 0
-  );
+  ) || 0;
 
-  const totalUnidades = productosInventario.reduce((total, producto) => 
+  const totalUnidades = productosInventario?.reduce((total, producto) => 
     total + (producto.cantidad_stock || 0), 0
-  );
+  ) || 0;
 
   const costoPromedioGeneral = valorTotalInventario > 0 && totalUnidades > 0 
     ? valorTotalInventario / totalUnidades : 0;
 
-  const productosConMovimiento = productosInventario.filter(p => 
+  const productosConMovimiento = productosInventario?.filter(p => 
     (p.cantidad_comprada || 0) > (p.cantidad_stock || 0)
-  ).length;
+  ).length || 0;
 
-  const rotacionInventario = productosInventario.length > 0 
-    ? (productosConMovimiento / productosInventario.length) * 100 : 0;
+  const rotacionInventario = (productosInventario?.length || 0) > 0 
+    ? (productosConMovimiento / (productosInventario?.length || 1)) * 100 : 0;
 
   const formatPrice = (precio: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -126,11 +121,11 @@ const AnalyticaInventario = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {productosInventario.filter(p => (p.cantidad_stock || 0) <= 10).length > 0 ? (
+            {(productosInventario?.filter(p => (p.cantidad_stock || 0) <= 10).length || 0) > 0 ? (
               <div>
                 <h4 className="font-medium text-muted-foreground mb-2">Productos con Stock Bajo:</h4>
                 <div className="space-y-2">
-                  {productosInventario
+                  {(productosInventario || [])
                     .filter(p => (p.cantidad_stock || 0) <= 10 && (p.cantidad_stock || 0) > 0)
                     .slice(0, 5)
                     .map(producto => (
@@ -145,11 +140,11 @@ const AnalyticaInventario = () => {
               </div>
             ) : null}
 
-            {productosInventario.filter(p => (p.cantidad_stock || 0) === 0).length > 0 ? (
+            {(productosInventario?.filter(p => (p.cantidad_stock || 0) === 0).length || 0) > 0 ? (
               <div>
                 <h4 className="font-medium text-muted-foreground mb-2">Productos Agotados:</h4>
                 <div className="space-y-2">
-                  {productosInventario
+                  {(productosInventario || [])
                     .filter(p => (p.cantidad_stock || 0) === 0)
                     .slice(0, 3)
                     .map(producto => (
@@ -164,7 +159,7 @@ const AnalyticaInventario = () => {
               </div>
             ) : null}
 
-            {productosInventario.filter(p => (p.cantidad_stock || 0) <= 10 || (p.cantidad_stock || 0) === 0).length === 0 && (
+            {(productosInventario?.filter(p => (p.cantidad_stock || 0) <= 10 || (p.cantidad_stock || 0) === 0).length || 0) === 0 && (
               <div className="text-center py-4 text-primary">
                 <Zap className="h-8 w-8 mx-auto mb-2" />
                 <p className="font-medium">¡Todo está bien!</p>

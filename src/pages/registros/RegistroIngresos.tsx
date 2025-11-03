@@ -24,6 +24,7 @@ import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useUpdateProducto, useDeleteProducto } from "@/hooks/useProductos";
+import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
 
 // Función helper para formatear montos con separador de comas
@@ -185,10 +186,10 @@ const RegistroIngresos = () => {
     data: subcuentas = []
   } = useSubcuentas();
   const {
-    data: productos = [],
-    isLoading: loadingProductos,
-    refetch: refetchProductos
-  } = useProductos();
+    data: productosInventarioData = [],
+    isLoading: loadingProductosInventario,
+    refetch: refetchProductosInventario
+  } = useInventarioConMovimientos();
   const {
     data: productosServicios = [],
     isLoading: loadingProductosServicios,
@@ -331,9 +332,8 @@ const RegistroIngresos = () => {
   const [editProductImage, setEditProductImage] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
-  // Filtrar todos los productos de inventario (código 1005), independientemente del stock
-  // Esto permite ventas con inventario negativo que serán confirmadas por el usuario
-  const productosInventario = productos.filter(producto => producto.cuenta_codigo === '1005');
+  // Productos de inventario ya vienen filtrados y calculados desde useInventarioConMovimientos
+  const productosInventario = productosInventarioData || [];
 
   // Función para manejar selección de producto de inventario
   const handleInventoryProductSelection = (productId: string) => {
@@ -341,8 +341,8 @@ const RegistroIngresos = () => {
     const selectedProduct = productosInventario.find(p => p.id === productId);
     if (selectedProduct) {
       // Usar precio de venta si está disponible, si no, usar costo unitario
-      const precioVenta = (selectedProduct as any).precio_venta;
-      const precioAUsar = precioVenta && precioVenta > 0 ? precioVenta.toString() : selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString();
+      const precioVenta = selectedProduct.precio_venta;
+      const precioAUsar = precioVenta && precioVenta > 0 ? precioVenta.toString() : selectedProduct.costo_unitario?.toString() || "0";
 
       // Si tiene precio de venta registrado, activar esa opción por defecto
       const tienePrecioRegistrado = precioVenta && precioVenta > 0;
@@ -352,7 +352,7 @@ const RegistroIngresos = () => {
       // Autocompletar descripción
       setDescripcion(`Venta de ${selectedProduct.nombre}`);
       // Calcular monto total
-      const precioNumerico = precioVenta && precioVenta > 0 ? precioVenta : selectedProduct.costo_unitario || selectedProduct.precio;
+      const precioNumerico = precioVenta && precioVenta > 0 ? precioVenta : selectedProduct.costo_unitario || 0;
       const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
       setMontoTotal(total);
     }
@@ -380,7 +380,7 @@ const RegistroIngresos = () => {
   const handleAddProductToList = () => {
     if (!selectedProductId) return;
     
-    const selectedProduct = productos.find(p => p.id === selectedProductId);
+    const selectedProduct = productosServicios.find(p => p.id === selectedProductId);
     if (!selectedProduct) return;
 
     const cantidad = parseFloat(productQuantity) || 1;
@@ -442,7 +442,7 @@ const RegistroIngresos = () => {
   // Función para manejar selección de producto precargado (para actualizar precio)
   const handleProductSelection = (productId: string) => {
     setSelectedProductId(productId);
-    const selectedProduct = productos.find(p => p.id === productId);
+    const selectedProduct = productosServicios.find(p => p.id === productId);
     if (selectedProduct) {
       setProductUnitPrice(selectedProduct.precio.toString());
     }
@@ -1005,7 +1005,7 @@ const RegistroIngresos = () => {
       
       if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
         // Para múltiples productos, usar la primera subcuenta o null
-        const firstProduct = productos.find(p => p.id === selectedProducts[0].id);
+        const firstProduct = productosServicios.find(p => p.id === selectedProducts[0].id);
         subcuentaToSend = firstProduct?.subcuenta_id || null;
         // Calcular monto total SIN descuento y el descuento total
         const subtotalSinDescuento = selectedProducts.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
@@ -1403,10 +1403,10 @@ const RegistroIngresos = () => {
               </div>
               <Select value={selectedInventoryProductId} onValueChange={handleInventoryProductSelection}>
                 <SelectTrigger className={hasFieldError('Producto de Inventario') ? 'border-destructive' : ''}>
-                  <SelectValue placeholder={loadingProductos ? "Cargando inventario..." : "Seleccionar producto del inventario"} />
+                  <SelectValue placeholder={loadingProductosInventario ? "Cargando inventario..." : "Seleccionar producto del inventario"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-80 z-50 bg-background border border-border w-full">
-                  {loadingProductos ? <SelectItem value="loading" disabled>Cargando inventario...</SelectItem> : productosInventario.length === 0 ? <SelectItem value="empty" disabled>No hay productos con stock disponible</SelectItem> : productosInventario.map(producto => <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
+                  {loadingProductosInventario ? <SelectItem value="loading" disabled>Cargando inventario...</SelectItem> : productosInventario.length === 0 ? <SelectItem value="empty" disabled>No hay productos con stock disponible</SelectItem> : productosInventario.map(producto => <SelectItem key={producto.id} value={producto.id} className="py-3 px-3 h-auto">
                          <div className="flex items-center space-x-3 w-full">
                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
                              {producto.imagen_url ? <img src={producto.imagen_url} alt={producto.nombre} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-muted flex items-center justify-center">
@@ -1420,13 +1420,13 @@ const RegistroIngresos = () => {
                                  Stock: {producto.cantidad_stock || 0}
                                </span>
                              </div>
-                             <div className="flex items-center justify-between">
-                               <span className="text-xs text-muted-foreground">
-                                 Costo: ${producto.costo_unitario || producto.precio}
-                               </span>
-                               {(producto as any).precio_venta && (producto as any).precio_venta > 0 ? <span className="text-xs text-green-600 font-medium">
-                                   Venta: ${(producto as any).precio_venta}
-                                 </span> : <span className="text-xs text-orange-600 font-medium">⚠️ Sin precio</span>}
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">
+                                  Costo: ${producto.costo_unitario || 0}
+                                </span>
+                                {producto.precio_venta && producto.precio_venta > 0 ? <span className="text-xs text-green-600 font-medium">
+                                    Venta: ${producto.precio_venta}
+                                  </span> : <span className="text-xs text-orange-600 font-medium">⚠️ Sin precio</span>}
                              </div>
                            </div>
                          </div>
@@ -1464,11 +1464,11 @@ const RegistroIngresos = () => {
                   if (useRegistrado) {
                     const selectedProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
                     if (selectedProduct) {
-                      const precioVenta = (selectedProduct as any).precio_venta;
-                      const precioAUsar = precioVenta && precioVenta > 0 ? precioVenta.toString() : selectedProduct.costo_unitario?.toString() || selectedProduct.precio.toString();
+                      const precioVenta = selectedProduct.precio_venta;
+                      const precioAUsar = precioVenta && precioVenta > 0 ? precioVenta.toString() : selectedProduct.costo_unitario?.toString() || "0";
                       setInventoryProductPrice(precioAUsar);
                       // Recalcular total
-                      const precioNumerico = precioVenta && precioVenta > 0 ? precioVenta : selectedProduct.costo_unitario || selectedProduct.precio;
+                      const precioNumerico = precioVenta && precioVenta > 0 ? precioVenta : selectedProduct.costo_unitario || 0;
                       const total = (precioNumerico * parseFloat(inventoryQuantity)).toFixed(2);
                       setMontoTotal(total);
                     }
@@ -2509,9 +2509,10 @@ const RegistroIngresos = () => {
                            <div className="flex items-start gap-3 mb-2">
                               {/* Imagen del producto si es precargado o inventariado */}
                               {(transaccion.tipo_ingreso === 'precargados' || transaccion.tipo_ingreso === 'inventariados') && (() => {
-                          // Buscar producto en la lista (precargados o inventario)
+                          // Buscar producto en la lista combinada (servicios + inventario)
                           const descripcionSinPrefijo = transaccion.descripcion.replace('Venta de ', '').replace('Venta: ', '');
-                          const producto = productos.find(p => 
+                          const todosProdutos = [...productosServicios, ...productosInventarioData];
+                          const producto = todosProdutos.find(p => 
                             p.nombre === transaccion.descripcion || 
                             p.nombre === descripcionSinPrefijo ||
                             transaccion.descripcion.includes(p.nombre)
@@ -3710,7 +3711,8 @@ const RegistroIngresos = () => {
                         const productosVentas = filteredTransactions.reduce((acc, t) => {
                           // Incluir TODAS las ventas
                           const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
-                          const producto = productos.find(p => 
+                          const todosProdutos = [...productosServicios, ...productosInventarioData];
+                          const producto = todosProdutos.find(p => 
                             p.nombre === t.descripcion || 
                             p.nombre === descripcionSinPrefijo ||
                             t.descripcion.includes(p.nombre)

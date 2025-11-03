@@ -96,17 +96,16 @@ export const useCreateProducto = () => {
       nombre: string; 
       precio: number;
       precioVenta?: number;
-      cantidad?: number; // Opcional para compatibilidad con ventas
+      cantidad?: number;
       descripcion?: string;
       subcuentaId?: string;
       imagen?: File;
     }) => {
-      // Si no se proporciona cantidad, es para ventas (usar cuenta 4001)
       const esCompraInventario = cantidad !== undefined;
       const cuentaCodigo = esCompraInventario ? "1005" : "4001";
       
       if (esCompraInventario) {
-        // Lógica de inventario - buscar producto existente
+        // Buscar producto existente
         const { data: productoExistente, error: searchError } = await supabase
           .from("productos")
           .select("*")
@@ -120,7 +119,6 @@ export const useCreateProducto = () => {
 
         let imagenUrl = null;
 
-        // Subir imagen si existe
         if (imagen) {
           const fileExt = imagen.name.split('.').pop();
           const fileName = `${Math.random()}.${fileExt}`;
@@ -130,9 +128,7 @@ export const useCreateProducto = () => {
             .from('product-images')
             .upload(filePath, imagen);
 
-          if (uploadError) {
-            throw new Error(`Error al subir imagen: ${uploadError.message}`);
-          }
+          if (uploadError) throw new Error(`Error al subir imagen: ${uploadError.message}`);
 
           const { data: { publicUrl } } = supabase.storage
             .from('product-images')
@@ -142,39 +138,27 @@ export const useCreateProducto = () => {
         }
 
         const costoTotal = precio * cantidad!;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Usuario no autenticado");
 
         if (productoExistente) {
-          // Producto existe - actualizar inventario con costo promedio ponderado
-          const cantidadActual = productoExistente.cantidad_stock || 0;
-          const costoActual = productoExistente.costo_unitario || 0;
-          const valorActual = cantidadActual * costoActual;
-          
-          const nuevaCantidad = cantidadActual + cantidad!;
-          const nuevoValorTotal = valorActual + costoTotal;
-          const nuevoCostoPromedio = nuevaCantidad > 0 ? nuevoValorTotal / nuevaCantidad : 0;
+          // Producto existe - solo actualizar info básica si hay imagen o descripción
+          if (imagenUrl || descripcion || precioVenta !== undefined) {
+            const { error: updateError } = await supabase
+              .from("productos")
+              .update({
+                descripcion: descripcion || productoExistente.descripcion,
+                imagen_url: imagenUrl || productoExistente.imagen_url,
+                subcuenta_id: subcuentaId || productoExistente.subcuenta_id,
+                precio_venta: precioVenta !== undefined ? precioVenta : productoExistente.precio_venta,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", productoExistente.id);
 
-           const { data: productoActualizado, error: updateError } = await supabase
-            .from("productos")
-            .update({
-              cantidad_stock: nuevaCantidad,
-              costo_unitario: nuevoCostoPromedio,
-              valor_total_inventario: nuevoValorTotal,
-              descripcion: descripcion || productoExistente.descripcion,
-              imagen_url: imagenUrl || productoExistente.imagen_url,
-              subcuenta_id: subcuentaId || productoExistente.subcuenta_id,
-              precio_venta: precioVenta !== undefined ? precioVenta : productoExistente.precio_venta,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", productoExistente.id)
-            .select()
-            .single();
+            if (updateError) throw updateError;
+          }
 
-          if (updateError) throw updateError;
-
-          // Obtener user_id actual
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) throw new Error("Usuario no autenticado");
-
+          // Crear movimiento (el trigger calcula todo automáticamente)
           const { error: movimientoError } = await supabase
             .from("movimientos_inventario")
             .insert({
@@ -184,20 +168,17 @@ export const useCreateProducto = () => {
               cantidad: cantidad!,
               costo_unitario: precio,
               costo_total: costoTotal,
-              descripcion: `Compra adicional - Costo anterior: $${costoActual.toFixed(2)}, Nuevo promedio: $${nuevoCostoPromedio.toFixed(2)}`
+              descripcion: `Compra adicional de inventario`
             });
 
           if (movimientoError) throw movimientoError;
 
           return {
-            ...productoActualizado,
-            esActualizacion: true,
-            cantidadAnterior: cantidadActual,
-            costoAnterior: costoActual,
-            nuevoCostoPromedio: nuevoCostoPromedio
+            id: productoExistente.id,
+            esActualizacion: true
           };
         } else {
-          // Producto nuevo para inventario
+          // Producto nuevo
           const { data, error } = await supabase
             .from("productos")
             .insert({
@@ -208,21 +189,14 @@ export const useCreateProducto = () => {
               subcuenta_id: subcuentaId || null,
               imagen_url: imagenUrl,
               cuenta_codigo: cuentaCodigo,
-              user_id: null,
-              cantidad_stock: cantidad!,
-              costo_unitario: precio,
-              cantidad_comprada: cantidad!,
-              valor_total_inventario: costoTotal
+              user_id: null
             })
             .select()
             .single();
 
           if (error) throw error;
 
-          // Obtener user_id actual
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) throw new Error("Usuario no autenticado");
-
+          // Crear movimiento inicial
           const { error: movimientoError } = await supabase
             .from("movimientos_inventario")
             .insert({
@@ -240,7 +214,7 @@ export const useCreateProducto = () => {
           return { ...data, esActualizacion: false };
         }
       } else {
-        // Lógica original para productos de ventas
+        // Productos de servicios (cuenta 4001)
         let imagenUrl = null;
 
         if (imagen) {
@@ -252,9 +226,7 @@ export const useCreateProducto = () => {
             .from('product-images')
             .upload(filePath, imagen);
 
-          if (uploadError) {
-            throw new Error(`Error al subir imagen: ${uploadError.message}`);
-          }
+          if (uploadError) throw new Error(`Error al subir imagen: ${uploadError.message}`);
 
           const { data: { publicUrl } } = supabase.storage
             .from('product-images')
@@ -287,12 +259,12 @@ export const useCreateProducto = () => {
       if (data.esActualizacion) {
         toast({
           title: "Inventario actualizado",
-          description: `Se agregaron ${data.cantidad_stock - data.cantidadAnterior} unidades. Nuevo costo promedio: $${data.nuevoCostoPromedio?.toFixed(2)}`,
+          description: `Se agregó nueva compra al producto existente`,
         });
       } else {
         toast({
           title: "Producto agregado al inventario",
-          description: `Se creó un nuevo producto con ${data.cantidad_stock} unidades`,
+          description: `Se creó un nuevo producto en el inventario`,
         });
       }
     },

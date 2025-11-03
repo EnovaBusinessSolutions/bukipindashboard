@@ -19,7 +19,7 @@ import {
   Label,
 } from "recharts";
 import { TrendingUp } from "lucide-react";
-import { useProductos } from "@/hooks/useProductos";
+import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useHistoricoInventario } from "@/hooks/useHistoricoInventario";
 
 type Periodo = "mensual" | "anual";
@@ -32,11 +32,8 @@ const GraficaHistorialInventario = () => {
   const [unidad, setUnidad] = useState<Unidad>("unidades");
   const [formato, setFormato] = useState<Formato>("general");
   
-  const { data: productos } = useProductos();
+  const { data: productosInventario } = useInventarioConMovimientos();
   const { data: datosHistoricos, isLoading } = useHistoricoInventario(productoSeleccionado, periodo);
-
-  // Filtrar solo productos de inventario (código 1005)
-  const productosInventario = productos?.filter((p) => p.cuenta_codigo === "1005" && p.activo) || [];
 
   // Formatear valores según el formato seleccionado
   const formatearValor = (valor: number): number => {
