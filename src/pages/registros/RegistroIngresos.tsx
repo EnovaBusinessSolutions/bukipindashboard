@@ -559,9 +559,7 @@ const RegistroIngresos = () => {
     if (selectedIncomeType === 'precargados') {
       if (selectedProducts.length === 0) errors.push('Debe agregar al menos un producto');
     } else if (selectedIncomeType === 'inventariados') {
-      if (!selectedInventoryProductId) errors.push('Producto de Inventario');
-      if (!inventoryQuantity || parseFloat(inventoryQuantity) <= 0) errors.push('Cantidad');
-      // Removida validación de stock - ahora permitimos inventario negativo
+      if (selectedInventoryProducts.length === 0) errors.push('Debe agregar al menos un producto del inventario');
     } else if (selectedIncomeType === 'general' || selectedIncomeType === 'otros') {
       if (!descripcion.trim()) errors.push('Descripción');
     }
