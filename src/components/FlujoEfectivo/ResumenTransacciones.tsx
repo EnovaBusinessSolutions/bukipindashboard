@@ -45,6 +45,89 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
       const financiamientos: any[] = [];
       const amortizaciones: any[] = [];
 
+      // Detectar transacciones canceladas PRIMERO
+      const transaccionesCanceladas: any[] = [];
+      const asientosReversiones = new Set<string>();
+
+      asientos?.forEach((asiento: any) => {
+        // Detectar si es un asiento de reversión
+        if (asiento.descripcion.includes('REVERSIÓN:') || 
+            asiento.numero_asiento.startsWith('REV-')) {
+          
+          // Extraer el nombre del producto de la descripción
+          const descripcionReversion = asiento.descripcion.replace('REVERSIÓN: Compra de inventario: ', '');
+          
+          // Buscar asiento original con el mismo producto en fechas cercanas
+          const asientoOriginal = asientos.find((a: any) => 
+            a.descripcion.includes(`Compra de inventario: ${descripcionReversion}`) &&
+            !a.descripcion.includes('REVERSIÓN:') &&
+            a.numero_asiento.startsWith('COMP-INV-') &&
+            // Buscar en un rango de 7 días antes de la reversión
+            new Date(a.fecha) <= new Date(asiento.fecha)
+          );
+          
+          if (asientoOriginal) {
+            // Marcar ambos como procesados para no duplicar
+            asientosReversiones.add(asiento.id);
+            asientosReversiones.add(asientoOriginal.id);
+            
+            // Obtener detalles de ambos asientos
+            const detallesOriginal = asientoOriginal.detalle_asientos || [];
+            const detallesReversion = asiento.detalle_asientos || [];
+            
+            // Calcular impacto en efectivo/bancos
+            let montoOriginal = 0;
+            let montoReversion = 0;
+            let metodoPago = "";
+            
+            detallesOriginal.forEach((det: any) => {
+              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
+                montoOriginal = (det.debe || 0) - (det.haber || 0);
+                metodoPago = det.cuenta_codigo === "1001" ? "efectivo" : "bancos";
+              }
+            });
+            
+            // Aplicar filtro de método de pago
+            const metodoCumpleFiltro = 
+              filtroMetodoPago === "consolidado" || 
+              (filtroMetodoPago === "efectivo" && metodoPago === "efectivo") ||
+              (filtroMetodoPago === "bancos" && metodoPago === "bancos");
+            
+            if (!metodoCumpleFiltro) return;
+            
+            detallesReversion.forEach((det: any) => {
+              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
+                montoReversion = (det.debe || 0) - (det.haber || 0);
+              }
+            });
+            
+            // Extraer motivo de cancelación de la descripción
+            let motivoCancelacion = "No especificado";
+            if (asiento.descripcion.includes('Motivo: ')) {
+              motivoCancelacion = asiento.descripcion.split('Motivo: ')[1];
+            }
+            
+            // Agregar a transacciones canceladas
+            transaccionesCanceladas.push({
+              id: `cancelacion-${asientoOriginal.numero_asiento}`,
+              movimiento_id: asientoOriginal.numero_asiento.replace('COMP-INV-', ''),
+              fecha_original: asientoOriginal.fecha,
+              fecha_cancelacion: asiento.fecha,
+              descripcion: descripcionReversion,
+              motivo_cancelacion: motivoCancelacion,
+              metodo_pago: metodoPago,
+              monto_original: Math.abs(montoOriginal),
+              monto_reversion: Math.abs(montoReversion),
+              monto_neto: 0,
+              asiento_original: asientoOriginal,
+              asiento_reversion: asiento,
+              detalles_original: detallesOriginal,
+              detalles_reversion: detallesReversion
+            });
+          }
+        }
+      });
+
       // Procesar cada asiento
       asientos?.forEach((asiento: any) => {
         const detalles = asiento.detalle_asientos || [];
@@ -74,6 +157,10 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
         if (filtroMetodoPago === "bancos" && !afectaBancos) return;
 
         const montoTotal = impactoEfectivo + impactoBancos;
+        
+        // Excluir asientos que son parte de reversiones detectadas
+        if (asientosReversiones.has(asiento.id)) return;
+        
         if (montoTotal === 0) return;
 
         // Clasificar según contrapartidas
@@ -171,78 +258,6 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
         });
       });
 
-      // Detectar transacciones canceladas
-      const transaccionesCanceladas: any[] = [];
-      const asientosReversiones = new Set<string>();
-
-      asientos?.forEach((asiento: any) => {
-        // Detectar si es un asiento de reversión
-        if (asiento.numero_asiento.startsWith('REV-COMP-INV-') || 
-            asiento.descripcion.includes('REVERSIÓN:')) {
-          
-          // Extraer ID del movimiento original
-          const movimientoId = asiento.numero_asiento.replace('REV-COMP-INV-', '');
-          
-          // Buscar asiento original correspondiente
-          const asientoOriginal = asientos.find((a: any) => 
-            a.numero_asiento === `COMP-INV-${movimientoId}`
-          );
-          
-          if (asientoOriginal) {
-            // Marcar ambos como procesados para no duplicar
-            asientosReversiones.add(asiento.id);
-            asientosReversiones.add(asientoOriginal.id);
-            
-            // Obtener detalles de ambos asientos
-            const detallesOriginal = asientoOriginal.detalle_asientos || [];
-            const detallesReversion = asiento.detalle_asientos || [];
-            
-            // Calcular impacto en efectivo/bancos
-            let montoOriginal = 0;
-            let montoReversion = 0;
-            let metodoPago = "";
-            
-            detallesOriginal.forEach((det: any) => {
-              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
-                montoOriginal = (det.debe || 0) - (det.haber || 0);
-                metodoPago = det.cuenta_codigo === "1001" ? "efectivo" : "bancos";
-              }
-            });
-            
-            // Aplicar filtro de método de pago
-            const metodoCumpleFiltro = 
-              filtroMetodoPago === "consolidado" || 
-              (filtroMetodoPago === "efectivo" && metodoPago === "efectivo") ||
-              (filtroMetodoPago === "bancos" && metodoPago === "bancos");
-            
-            if (!metodoCumpleFiltro) return;
-            
-            detallesReversion.forEach((det: any) => {
-              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
-                montoReversion = (det.debe || 0) - (det.haber || 0);
-              }
-            });
-            
-            // Agregar a transacciones canceladas
-            transaccionesCanceladas.push({
-              id: `cancelacion-${movimientoId}`,
-              movimiento_id: movimientoId,
-              fecha_original: asientoOriginal.fecha,
-              fecha_cancelacion: asiento.fecha,
-              descripcion: asientoOriginal.descripcion.replace('Compra de inventario: ', ''),
-              motivo_cancelacion: asiento.descripcion.split('Motivo: ')[1] || 'No especificado',
-              metodo_pago: metodoPago,
-              monto_original: Math.abs(montoOriginal),
-              monto_reversion: Math.abs(montoReversion),
-              monto_neto: 0,
-              asiento_original: asientoOriginal,
-              asiento_reversion: asiento,
-              detalles_original: detallesOriginal,
-              detalles_reversion: detallesReversion
-            });
-          }
-        }
-      });
 
       return {
         ingresos,
