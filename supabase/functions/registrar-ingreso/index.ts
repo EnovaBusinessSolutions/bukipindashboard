@@ -273,7 +273,7 @@ serve(async (req) => {
     // Para cada venta de inventario, debemos registrar 2 asientos adicionales:
     //
     // 1. RECONOCIMIENTO DEL COSTO DE VENTAS:
-    //    - DÉBITO a "5001 - Costo de Ventas" (Estado de Resultados - Aumenta Gastos)
+    //    - DÉBITO a "5002 - Costo de Ventas Inventario" (Estado de Resultados - Aumenta Gastos)
     //    - CRÉDITO a "1005 - Inventario" (Balance General - Disminuye Activos)
     //
     // Este asiento refleja el COSTO del producto vendido (no el precio de venta).
@@ -282,7 +282,7 @@ serve(async (req) => {
     // EJEMPLO NUMÉRICO:
     // Si vendemos 5 unidades de un producto con costo unitario de $100:
     //   - Costo de Venta = 5 × $100 = $500
-    //   - DÉBITO: Cuenta 5001 (Costo de Ventas) = $500
+    //   - DÉBITO: Cuenta 5002 (Costo de Ventas Inventario) = $500
     //   - CRÉDITO: Cuenta 1005 (Inventario) = $500
     //
     // EFECTO EN ESTADOS FINANCIEROS:
