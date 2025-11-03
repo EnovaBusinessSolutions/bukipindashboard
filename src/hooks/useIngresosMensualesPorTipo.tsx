@@ -26,24 +26,38 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
       ];
 
+      // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO (en lugar de 12)
+      const fechaInicioAño = `${añoActual}-01-01`;
+      const fechaFinAño = `${añoActual}-12-31`;
+
+      const { data: detallesAño } = await supabase
+        .from('detalle_asientos')
+        .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
+        .gte('asientos_contables.fecha', fechaInicioAño)
+        .lte('asientos_contables.fecha', fechaFinAño);
+
+      // Agrupar por mes en frontend
+      const detallesPorMes = new Map<number, any[]>();
+      
+      detallesAño?.forEach(detalle => {
+        const mes = new Date(detalle.asientos_contables.fecha).getMonth();
+        if (!detallesPorMes.has(mes)) {
+          detallesPorMes.set(mes, []);
+        }
+        detallesPorMes.get(mes)!.push(detalle);
+      });
+
+      // Procesar cada mes
       const ingresosMensuales: IngresoMensual[] = [];
 
       for (let mes = 0; mes < 12; mes++) {
-        const fechaInicio = new Date(añoActual, mes, 1).toISOString().split('T')[0];
-        const fechaFin = new Date(añoActual, mes + 1, 0).toISOString().split('T')[0];
-
-        // CONSULTAR DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
-        const { data: detalles } = await supabase
-          .from('detalle_asientos')
-          .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
-          .gte('asientos_contables.fecha', fechaInicio)
-          .lte('asientos_contables.fecha', fechaFin);
-
+        const detallesMes = detallesPorMes.get(mes) || [];
+        
         let ventas = 0;
         let otrosIngresos = 0;
 
         // Clasificar según el código de cuenta (cuentas 4XXX son ingresos)
-        detalles?.forEach(detalle => {
+        detallesMes.forEach(detalle => {
           const codigo = detalle.cuenta_codigo;
           // Las cuentas de ingreso tienen naturaleza acreedora (HABER aumenta, DEBE disminuye)
           const monto = (detalle.haber || 0) - (detalle.debe || 0);
@@ -60,7 +74,7 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
         ingresosMensuales.push({
           mes: meses[mes],
           mesNumero: mes + 1,
-          ventas: Math.max(0, ventas), // Asegurar que no sea negativo
+          ventas: Math.max(0, ventas),
           otrosIngresos: Math.max(0, otrosIngresos),
           total: Math.max(0, ventas + otrosIngresos)
         });

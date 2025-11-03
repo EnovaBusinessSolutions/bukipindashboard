@@ -24,21 +24,34 @@ export const useCostosMensuales = (año?: number) => {
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
       ];
 
+      // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO (en lugar de 12)
+      const fechaInicioAño = new Date(añoActual, 0, 1).toISOString();
+      const fechaFinAño = new Date(añoActual, 11, 31, 23, 59, 59).toISOString();
+
+      const { data: transaccionesAño } = await supabase
+        .from('transacciones_egresos')
+        .select('monto_total, cuenta_codigo, subcuenta_id, created_at')
+        .eq('tipo_egreso', 'costo')
+        .gte('created_at', fechaInicioAño)
+        .lte('created_at', fechaFinAño);
+
+      // Agrupar transacciones por mes en frontend
+      const transaccionesPorMes = new Map<number, any[]>();
+      
+      transaccionesAño?.forEach(transaccion => {
+        const mes = new Date(transaccion.created_at).getMonth();
+        if (!transaccionesPorMes.has(mes)) {
+          transaccionesPorMes.set(mes, []);
+        }
+        transaccionesPorMes.get(mes)!.push(transaccion);
+      });
+
       const costosMensuales: CostoMensual[] = [];
       const costosPorCuentaMap = new Map<string, CostoPorCuenta>();
 
-      // Obtener datos mes por mes
+      // Procesar cada mes
       for (let mes = 0; mes < 12; mes++) {
-        const fechaInicio = new Date(añoActual, mes, 1).toISOString();
-        const fechaFin = new Date(añoActual, mes + 1, 0, 23, 59, 59).toISOString();
-
-        // Obtener todas las transacciones de costos del mes con su cuenta
-        const { data: transacciones } = await supabase
-          .from('transacciones_egresos')
-          .select('monto_total, cuenta_codigo, subcuenta_id')
-          .eq('tipo_egreso', 'costo')
-          .gte('created_at', fechaInicio)
-          .lte('created_at', fechaFin);
+        const transaccionesMes = transaccionesPorMes.get(mes) || [];
 
         const costoMes: CostoMensual = {
           mes: meses[mes],
@@ -49,16 +62,14 @@ export const useCostosMensuales = (año?: number) => {
         const costosDelMes = new Map<string, number>();
 
         // Agrupar por cuenta_codigo
-        if (transacciones) {
-          for (const trans of transacciones) {
-            const monto = trans.monto_total || 0;
-            totalMes += monto;
+        for (const trans of transaccionesMes) {
+          const monto = trans.monto_total || 0;
+          totalMes += monto;
 
-            // Si tiene cuenta_codigo, agrupar por esa cuenta
-            if (trans.cuenta_codigo) {
-              const montoActual = costosDelMes.get(trans.cuenta_codigo) || 0;
-              costosDelMes.set(trans.cuenta_codigo, montoActual + monto);
-            }
+          // Si tiene cuenta_codigo, agrupar por esa cuenta
+          if (trans.cuenta_codigo) {
+            const montoActual = costosDelMes.get(trans.cuenta_codigo) || 0;
+            costosDelMes.set(trans.cuenta_codigo, montoActual + monto);
           }
         }
 
@@ -84,7 +95,7 @@ export const useCostosMensuales = (año?: number) => {
         costosMensuales.push(costoMes);
       }
 
-      // Obtener nombres de las cuentas
+      // Obtener nombres de las cuentas en una sola consulta
       const cuentasCodigos = Array.from(costosPorCuentaMap.keys());
       const { data: cuentasData } = await supabase
         .from('cuentas')
@@ -117,6 +128,10 @@ export const useCostosMensuales = (año?: number) => {
         costosPorCuenta,
         cuentas
       };
-    }
+    },
+    staleTime: 5 * 60 * 1000, // Cachear por 5 minutos
+    gcTime: 10 * 60 * 1000, // Mantener en memoria 10 minutos
+    retry: 1, // Solo 1 reintento
+    refetchOnWindowFocus: false, // No refrescar al cambiar de ventana
   });
 };
