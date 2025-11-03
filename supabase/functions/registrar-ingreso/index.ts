@@ -295,10 +295,10 @@ serve(async (req) => {
       // Calcular el costo total de la venta
       const costoVenta = costoUnitarioProducto * requestData.cantidadVendida
 
-      // DÉBITO a Cuenta 5001 - Costo de Ventas (Aumenta los gastos en el Estado de Resultados)
+      // DÉBITO a Cuenta 5002 - Costo de Ventas Inventario (Aumenta los gastos en el Estado de Resultados)
       detallesAsiento.push({
         asiento_id: asiento.id,
-        cuenta_codigo: '5001', // Costo de Ventas
+        cuenta_codigo: '5002', // Costo de Ventas Inventario
         debe: costoVenta,
         haber: 0,
         descripcion: `Costo de venta - ${nombreProducto} (${requestData.cantidadVendida} unidades)`
@@ -313,7 +313,7 @@ serve(async (req) => {
         descripcion: `Salida de inventario - ${nombreProducto} (${requestData.cantidadVendida} unidades)`
       })
 
-      console.log(`✅ Asiento de costo de venta registrado: $${costoVenta} para ${nombreProducto}`)
+      console.log(`✅ Asiento de costo de venta de inventario (5002) registrado: $${costoVenta} para ${nombreProducto}`)
     }
 
     // Insertar todos los detalles
