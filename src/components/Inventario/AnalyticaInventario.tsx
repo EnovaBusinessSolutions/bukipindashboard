@@ -17,10 +17,9 @@ import TablaRotacionInventario from "./TablaRotacionInventario";
 const AnalyticaInventario = () => {
   const { data: productos, isLoading } = useProductos();
 
-  // Filtrar solo productos de inventario
+  // Filtrar solo productos de inventario (cuenta_codigo 1005)
   const productosInventario = productos?.filter(producto => 
-    (producto.cantidad_stock && producto.cantidad_stock > 0) || 
-    (producto.cantidad_comprada && producto.cantidad_comprada > 0)
+    producto.cuenta_codigo === '1005'
   ) || [];
 
   if (isLoading) {
