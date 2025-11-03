@@ -67,29 +67,47 @@ export const useEstadoResultadosMensual = (año?: number) => {
 
         detallesMes.forEach(detalle => {
           const codigo = detalle.cuenta_codigo;
-          const saldo = (detalle.debe || 0) - (detalle.haber || 0);
+          const debe = detalle.debe || 0;
+          const haber = detalle.haber || 0;
           
-          // Ingresos (cuentas 4xxx) - naturaleza acreedora
-          if (codigo.startsWith('4')) {
-            ingresos += Math.abs(saldo);
+          // === INGRESOS (Cuentas 4XXX) ===
+          // Ventas (4001, 4004) - Naturaleza acreedora
+          if (codigo === '4001' || codigo === '4004') {
+            ingresos += haber - debe;
           }
-          // Costos (cuentas 5001-5099) - naturaleza deudora
-          else if (codigo.startsWith('5') && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099) {
-            costos += Math.abs(saldo);
+          // Devoluciones y Descuentos sobre Ventas (4002, 4003) - RESTAN
+          else if (codigo === '4002' || codigo === '4003') {
+            ingresos -= debe - haber;
           }
-          // Depreciación (cuentas 5109, 5110)
+          // Otros Ingresos (41XX) - Naturaleza acreedora
+          else if (codigo.startsWith('41')) {
+            ingresos += haber - debe;
+          }
+          
+          // === COSTOS (Cuentas 50XX) ===
+          // Costo de Ventas (5001, 5002) - Naturaleza deudora
+          else if (codigo === '5001' || codigo === '5002') {
+            costos += debe - haber;
+          }
+          // Devoluciones/Descuentos sobre Compras (5003, 5004) - RESTAN de costos
+          else if (codigo === '5003' || codigo === '5004') {
+            costos -= debe - haber;
+          }
+          
+          // === GASTOS (Cuentas 51XX) ===
+          // Depreciación (5109, 5110) - separada para cálculo de EBITDA
           else if (codigo === '5109' || codigo === '5110') {
-            depreciacion += Math.abs(saldo);
+            depreciacion += debe - haber;
           }
-          // Gastos (cuentas 5100-5108, 5202, 5203) - naturaleza deudora
-          else if ((codigo.startsWith('5') && parseInt(codigo) >= 5100 && parseInt(codigo) <= 5108) || 
+          // Gastos Operativos (5101-5108, 5202, 5203)
+          else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
                    codigo === '5202' || codigo === '5203') {
-            gastos += Math.abs(saldo);
+            gastos += debe - haber;
           }
-          // Intereses (cuentas 5111-5199, 5201)
-          else if ((codigo.startsWith('5') && parseInt(codigo) >= 5111 && parseInt(codigo) <= 5199) || 
-                   codigo === '5201') {
-            intereses += Math.abs(saldo);
+          
+          // === INTERESES (Cuenta 5201, 5111-5199) ===
+          else if (codigo === '5201' || (codigo.startsWith('51') && parseInt(codigo) >= 5111)) {
+            intereses += debe - haber;
           }
         });
 

@@ -50,18 +50,23 @@ export const useEgresosMensualesPorTipo = (año?: number) => {
         let costos = 0;
         let gastos = 0;
 
-        // Clasificar según el código de cuenta
+        // Clasificar según el código de cuenta con naturaleza contable correcta
         detallesMes.forEach(detalle => {
           const codigo = detalle.cuenta_codigo;
-          // Costos y gastos tienen naturaleza deudora (DEBE aumenta, HABER disminuye)
-          const monto = (detalle.debe || 0) - (detalle.haber || 0);
+          const debe = detalle.debe || 0;
+          const haber = detalle.haber || 0;
           
-          if (codigo.startsWith('5') && parseInt(codigo) >= 5001 && parseInt(codigo) <= 5099) {
-            // Costos de venta (5001-5099)
-            costos += monto;
-          } else if (codigo.startsWith('5') && parseInt(codigo) >= 5100) {
-            // Gastos operativos (5100+)
-            gastos += monto;
+          // Costos de Venta (5001, 5002) - Naturaleza deudora
+          if (codigo === '5001' || codigo === '5002') {
+            costos += debe - haber;
+          }
+          // Devoluciones/Descuentos sobre Compras (5003, 5004) - RESTAN de costos
+          else if (codigo === '5003' || codigo === '5004') {
+            costos -= debe - haber;
+          }
+          // Gastos Operativos (51XX, 5202, 5203) - Naturaleza deudora
+          else if ((codigo.startsWith('51') || codigo === '5202' || codigo === '5203')) {
+            gastos += debe - haber;
           }
         });
 

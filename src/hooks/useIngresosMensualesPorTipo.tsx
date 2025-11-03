@@ -56,18 +56,23 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
         let ventas = 0;
         let otrosIngresos = 0;
 
-        // Clasificar según el código de cuenta (cuentas 4XXX son ingresos)
+        // Clasificar según el código de cuenta con naturaleza contable correcta
         detallesMes.forEach(detalle => {
           const codigo = detalle.cuenta_codigo;
-          // Las cuentas de ingreso tienen naturaleza acreedora (HABER aumenta, DEBE disminuye)
-          const monto = (detalle.haber || 0) - (detalle.debe || 0);
+          const debe = detalle.debe || 0;
+          const haber = detalle.haber || 0;
           
-          if (codigo.startsWith('4001')) {
-            // Ventas
-            ventas += monto;
-          } else if (codigo.startsWith('4')) {
-            // Otros ingresos (4002, 4003, etc.)
-            otrosIngresos += monto;
+          // Ventas (cuenta 4001 y 4004) - Naturaleza acreedora
+          if (codigo === '4001' || codigo === '4004') {
+            ventas += haber - debe;
+          }
+          // Devoluciones y Descuentos sobre Ventas (4002, 4003) - RESTAN de ventas
+          else if (codigo === '4002' || codigo === '4003') {
+            ventas -= debe - haber;
+          }
+          // Otros Ingresos (41XX) - Naturaleza acreedora
+          else if (codigo.startsWith('41')) {
+            otrosIngresos += haber - debe;
           }
         });
 
