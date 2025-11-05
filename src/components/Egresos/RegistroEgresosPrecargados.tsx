@@ -257,7 +257,8 @@ const RegistroEgresosPrecargados = () => {
       }).select();
       if (error) throw error;
 
-      // Si el producto tiene cuenta contable de inventario (1005 o 1006), crear movimiento y asientos
+      // Si el producto tiene cuenta contable de inventario (1005 o 1006), crear movimiento
+      // El asiento contable será generado automáticamente por el trigger generar_asiento_compra_inventario
       if (selectedProduct?.cuenta_contable === '1005' || selectedProduct?.cuenta_contable === '1006') {
         // Buscar el producto en la tabla productos por nombre
         const { data: productoInventario } = await supabase
@@ -272,11 +273,11 @@ const RegistroEgresosPrecargados = () => {
           const costoUnitario = parseFloat(unitPrice);
           const costoTotal = cantidadComprada * costoUnitario;
 
-          // Crear movimiento de inventario
+          // Crear movimiento de inventario (el trigger generará automáticamente el asiento contable)
           const { error: movimientoError } = await supabase
             .from('movimientos_inventario')
             .insert({
-              user_id: user.id, // IMPORTANTE: incluir user_id
+              user_id: user.id,
               producto_id: productoInventario.id,
               tipo_movimiento: 'compra',
               cantidad: cantidadComprada,
@@ -287,89 +288,7 @@ const RegistroEgresosPrecargados = () => {
 
           if (movimientoError) {
             console.error('Error al crear movimiento de inventario:', movimientoError);
-          }
-
-          // Generar asiento contable para la compra de inventario
-          const { data: numeroAsiento } = await supabase
-            .rpc('generate_asiento_number', { p_user_id: user.id });
-
-          if (numeroAsiento && transaccionData && transaccionData[0]) {
-            // Crear asiento contable
-            const { data: asiento, error: asientoError } = await supabase
-              .from('asientos_contables')
-              .insert({
-                user_id: user.id,
-                numero_asiento: numeroAsiento,
-                descripcion: `Compra de inventario: ${selectedProduct.nombre}`,
-                fecha: new Date().toISOString().split('T')[0]
-              })
-              .select()
-              .single();
-
-            if (!asientoError && asiento) {
-              const detallesAsiento = [];
-
-              // Débito: Inventario (aumenta el activo)
-              detallesAsiento.push({
-                asiento_id: asiento.id,
-                cuenta_codigo: selectedProduct.cuenta_contable,
-                debe: costoTotal,
-                haber: 0,
-                descripcion: `Compra de ${selectedProduct.nombre} (${cantidadComprada} unidades)`
-              });
-
-              // Crédito: Según método de pago
-              if (paymentType === "contado") {
-                const cuentaPago = paymentMethod === "efectivo" ? '1001' : '1002';
-                detallesAsiento.push({
-                  asiento_id: asiento.id,
-                  cuenta_codigo: cuentaPago,
-                  debe: 0,
-                  haber: montoPagado,
-                  descripcion: `Pago ${paymentMethod === "efectivo" ? 'en efectivo' : 'por banco'} - ${selectedProduct.nombre}`
-                });
-              } else if (paymentType === "credito") {
-                // Todo a crédito
-                detallesAsiento.push({
-                  asiento_id: asiento.id,
-                  cuenta_codigo: '2001', // Cuentas por Pagar / Proveedores
-                  debe: 0,
-                  haber: costoTotal,
-                  descripcion: `Cuenta por pagar - ${supplierName || 'Proveedor'} - ${selectedProduct.nombre}`
-                });
-              } else if (paymentType === "parcial") {
-                // Parte pagada
-                if (montoPagado > 0) {
-                  const cuentaPago = paymentMethod === "efectivo" ? '1001' : '1002';
-                  detallesAsiento.push({
-                    asiento_id: asiento.id,
-                    cuenta_codigo: cuentaPago,
-                    debe: 0,
-                    haber: montoPagado,
-                    descripcion: `Pago parcial ${paymentMethod === "efectivo" ? 'en efectivo' : 'por banco'} - ${selectedProduct.nombre}`
-                  });
-                }
-                // Parte a crédito
-                if (montoPendiente > 0) {
-                  detallesAsiento.push({
-                    asiento_id: asiento.id,
-                    cuenta_codigo: '2001', // Cuentas por Pagar / Proveedores
-                    debe: 0,
-                    haber: montoPendiente,
-                    descripcion: `Cuenta por pagar - ${supplierName || 'Proveedor'} - ${selectedProduct.nombre}`
-                  });
-                }
-              }
-
-              // Insertar detalles del asiento
-              const { error: detallesError } = await supabase
-                .from('detalle_asientos')
-                .insert(detallesAsiento);
-
-              if (detallesError) {
-                console.error('Error al crear detalles del asiento:', detallesError);
-              }
-            }
+            throw movimientoError;
           }
         }
       }
