@@ -140,15 +140,15 @@ serve(async (req) => {
         console.warn(`No se encontraron movimientos de compra para calcular costo. Usando costo 0`)
       }
       
-      // Usar costo personalizado si fue proporcionado
+      // Usar costo personalizado si fue proporcionado (ANTES de registrar el movimiento)
       if (requestData.costoPersonalizado && requestData.costoPersonalizado > 0) {
         costoUnitarioProducto = requestData.costoPersonalizado
         console.log(`Usando costo personalizado: ${costoUnitarioProducto}`)
       }
       
-      console.log(`Procesando venta - Producto: ${nombreProducto}, Cantidad: ${requestData.cantidadVendida}, Costo unitario: ${costoUnitarioProducto}`)
+      console.log(`Procesando venta - Producto: ${nombreProducto}, Cantidad: ${requestData.cantidadVendida}, Costo unitario final: ${costoUnitarioProducto}`)
       
-      // Registrar movimiento de inventario (negativo = salida)
+      // Registrar movimiento de inventario con el costo correcto (ya sea promedio o personalizado)
       const { error: movimientoError } = await supabaseClient
         .from('movimientos_inventario')
         .insert({
@@ -165,7 +165,7 @@ serve(async (req) => {
         throw new Error(`Error al registrar movimiento de inventario: ${movimientoError.message}`)
       }
 
-      console.log(`Movimiento de venta registrado para ${nombreProducto}`)
+      console.log(`Movimiento de venta registrado para ${nombreProducto} con costo ${costoUnitarioProducto}`)
     }
 
     // 1. Crear la transacción de ingreso
