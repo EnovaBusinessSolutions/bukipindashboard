@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PeriodType } from "@/pages/EstadoResultados";
+import { clasificarAsiento, agruparPorCategoria, calcularSaldoInicial } from "@/lib/flujoEfectivoUtils";
 
 interface FlujoEfectivoOperativoProps {
   startDate: Date;
@@ -25,269 +26,86 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       if (!count || count === 0) {
         return {
           saldoInicial: { efectivo: 0, bancos: 0, total: 0 },
-          operativo: {
-            ingresos: 0,
-            ingresosEfectivo: 0,
-            ingresosBancos: 0,
-            costos: 0,
-            costosEfectivo: 0,
-            costosBancos: 0,
-            gastos: 0,
-            gastosEfectivo: 0,
-            gastosBancos: 0
-          },
-          inversion: {},
-          inversionEfectivo: {},
-          inversionBancos: {},
-          financiamiento: {
-            disposiciones: 0,
-            amortizaciones: 0,
-            amortizacionesEfectivo: 0,
-            amortizacionesBancos: 0,
-            intereses: 0,
-            interesesEfectivo: 0,
-            interesesBancos: 0
-          },
+          operativo: { efectivo: 0, bancos: 0, total: 0, desglose: {} },
+          inversion: { efectivo: 0, bancos: 0, total: 0, desglose: {} },
+          financiamiento: { efectivo: 0, bancos: 0, total: 0, desglose: {} },
           sinDatos: true
         };
       }
 
-      // Calcular saldo inicial
-      const { data: saldoInicialData } = await supabase
-        .from("detalle_asientos")
-        .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
-        .in("cuenta_codigo", ["1001", "1002"])
-        .lt("asientos_contables.fecha", startDate.toISOString().split('T')[0]);
+      // Calcular saldo inicial usando función compartida
+      const saldoInicial = await calcularSaldoInicial(supabase, startDate);
 
-      const saldoInicial = {
-        efectivo: 0,
-        bancos: 0,
-        total: 0
-      };
-
-      saldoInicialData?.forEach(detalle => {
-        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
-        if (detalle.cuenta_codigo === "1001") {
-          saldoInicial.efectivo += saldo;
-        } else if (detalle.cuenta_codigo === "1002") {
-          saldoInicial.bancos += saldo;
-        }
-      });
-      saldoInicial.total = saldoInicial.efectivo + saldoInicial.bancos;
-
-      // Calcular movimiento neto en efectivo durante el período
-      const { data: movimientosEfectivo } = await supabase
-        .from("detalle_asientos")
-        .select("debe, haber, asientos_contables!inner(fecha)")
-        .eq("cuenta_codigo", "1001")
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
-
-      let flujoEfectivo = 0;
-      movimientosEfectivo?.forEach(mov => {
-        flujoEfectivo += (mov.debe || 0) - (mov.haber || 0);
-      });
-
-      // Calcular movimiento neto en bancos durante el período
-      const { data: movimientosBancos } = await supabase
-        .from("detalle_asientos")
-        .select("debe, haber, asientos_contables!inner(fecha)")
-        .eq("cuenta_codigo", "1002")
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
-
-      let flujoBancos = 0;
-      movimientosBancos?.forEach(mov => {
-        flujoBancos += (mov.debe || 0) - (mov.haber || 0);
-      });
-
-      // ============= CALCULAR ACTIVIDADES OPERATIVAS DETALLADAMENTE =============
+      // ============= CLASIFICAR TODOS LOS ASIENTOS DEL PERÍODO =============
       
-      // 1. INGRESOS: Cobros por ventas (cuenta 4XXX genera DEBE en efectivo/bancos)
-      const { data: ingresosData } = await supabase
+      // Obtener todos los movimientos de efectivo/bancos con sus asientos completos
+      const { data: movimientosData } = await supabase
         .from("detalle_asientos")
         .select(`
           debe, haber, cuenta_codigo,
-          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
+          asientos_contables!inner(id, fecha, descripcion, detalle_asientos(cuenta_codigo, debe, haber))
         `)
         .in("cuenta_codigo", ["1001", "1002"])
         .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
         .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
 
-      let ingresosEfectivo = 0;
-      let ingresosBancos = 0;
+      const asientosProcesados = new Set();
+      const clasificaciones = [];
 
-      // Procesar ingresos: calcular impacto neto (debe - haber) en 1001/1002 para asientos con contrapartida 4XXX
-      const asientosIngreso = new Set();
-      ingresosData?.forEach((det: any) => {
+      movimientosData?.forEach((det: any) => {
         const asientoId = det.asientos_contables?.id;
+        if (asientosProcesados.has(asientoId)) return;
+        asientosProcesados.add(asientoId);
+
+        const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
+        const clasificacion = clasificarAsiento(detallesAsiento);
         
-        if (asientoId && !asientosIngreso.has(asientoId)) {
-          const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
-          
-          // Verificar si el asiento tiene contrapartida de ingreso (4XXX)
-          const tieneIngreso = detallesAsiento.some((d: any) => d.cuenta_codigo?.startsWith("4"));
-          
-          if (tieneIngreso) {
-            // Calcular impacto NETO en efectivo y bancos (debe - haber)
-            let impactoEfectivo = 0;
-            let impactoBancos = 0;
-            
-            detallesAsiento.forEach((d: any) => {
-              if (d.cuenta_codigo === "1001") {
-                impactoEfectivo += (d.debe || 0) - (d.haber || 0);
-              } else if (d.cuenta_codigo === "1002") {
-                impactoBancos += (d.debe || 0) - (d.haber || 0);
-              }
-            });
-            
-            if (impactoEfectivo !== 0 || impactoBancos !== 0) {
-              ingresosEfectivo += impactoEfectivo;
-              ingresosBancos += impactoBancos;
-              asientosIngreso.add(asientoId);
-            }
-          }
+        if (clasificacion.categoria !== "Sin Clasificar") {
+          clasificaciones.push(clasificacion);
         }
       });
 
-      // 2. COSTOS: Compras de inventario (1005, 1006) y costo de ventas (5001)
-      const { data: costosData } = await supabase
-        .from("detalle_asientos")
-        .select(`
-          debe, haber, cuenta_codigo,
-          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
-        `)
-        .in("cuenta_codigo", ["1001", "1002"])
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
+      // Agrupar clasificaciones por categoría
+      const { operativo, inversion, financiamiento } = agruparPorCategoria(clasificaciones);
 
-      let costosEfectivo = 0;
-      let costosBancos = 0;
-
-      // Procesar costos: calcular impacto neto (debe - haber) en 1001/1002 para asientos con contrapartida de costo
-      const asientosCosto = new Set();
-      costosData?.forEach((det: any) => {
-        const asientoId = det.asientos_contables?.id;
-        
-        if (asientoId && !asientosCosto.has(asientoId) && !asientosIngreso.has(asientoId)) {
-          const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
-          
-          // Verificar si el asiento tiene contrapartida de costo (1005, 1006, 5001)
-          const tieneCosto = detallesAsiento.some((d: any) => 
-            ["1005", "1006", "5001"].includes(d.cuenta_codigo)
-          );
-          
-          if (tieneCosto) {
-            // Calcular impacto NETO en efectivo y bancos (debe - haber)
-            let impactoEfectivo = 0;
-            let impactoBancos = 0;
-            
-            detallesAsiento.forEach((d: any) => {
-              if (d.cuenta_codigo === "1001") {
-                impactoEfectivo += (d.debe || 0) - (d.haber || 0);
-              } else if (d.cuenta_codigo === "1002") {
-                impactoBancos += (d.debe || 0) - (d.haber || 0);
-              }
-            });
-            
-            // Los costos reducen el efectivo, así que invertimos el signo
-            if (impactoEfectivo !== 0 || impactoBancos !== 0) {
-              costosEfectivo += -impactoEfectivo;
-              costosBancos += -impactoBancos;
-              asientosCosto.add(asientoId);
-            }
-          }
+      // Preparar desglose para OPERATIVO
+      const desgloseOperativo: any = {};
+      operativo.detalles.forEach(d => {
+        if (!desgloseOperativo[d.subcategoria]) {
+          desgloseOperativo[d.subcategoria] = { efectivo: 0, bancos: 0, total: 0 };
         }
+        desgloseOperativo[d.subcategoria].efectivo += d.impactoEfectivo;
+        desgloseOperativo[d.subcategoria].bancos += d.impactoBancos;
+        desgloseOperativo[d.subcategoria].total += d.impactoTotal;
       });
 
-      // 3. GASTOS: Pagos por gastos operativos (51XX, 6XXX) y proveedores (2001-2006)
-      const { data: gastosData } = await supabase
-        .from("detalle_asientos")
-        .select(`
-          debe, haber, cuenta_codigo,
-          asientos_contables!inner(id, fecha, detalle_asientos(cuenta_codigo, debe, haber))
-        `)
-        .in("cuenta_codigo", ["1001", "1002"])
-        .gte("asientos_contables.fecha", startDate.toISOString().split('T')[0])
-        .lte("asientos_contables.fecha", endDate.toISOString().split('T')[0]);
-
-      let gastosEfectivo = 0;
-      let gastosBancos = 0;
-
-      // Procesar gastos: calcular impacto neto (debe - haber) en 1001/1002 para asientos con contrapartida de gasto
-      const asientosGasto = new Set();
-      gastosData?.forEach((det: any) => {
-        const asientoId = det.asientos_contables?.id;
-        
-        // Evitar duplicados con costos e ingresos
-        if (asientoId && !asientosGasto.has(asientoId) && !asientosCosto.has(asientoId) && !asientosIngreso.has(asientoId)) {
-          const detallesAsiento = det.asientos_contables?.detalle_asientos || [];
-          
-          // Verificar si el asiento tiene contrapartida de gasto (51XX, 6XXX, 2XXX, 1007, 1008)
-          const tieneGasto = detallesAsiento.some((d: any) => {
-            const codigo = d.cuenta_codigo;
-            return (
-              codigo?.startsWith("51") || codigo?.startsWith("6") || 
-              ["2001", "2002", "2003", "2004", "2005", "2006", "1007", "1008"].includes(codigo)
-            );
-          });
-          
-          if (tieneGasto) {
-            // Calcular impacto NETO en efectivo y bancos (debe - haber)
-            let impactoEfectivo = 0;
-            let impactoBancos = 0;
-            
-            detallesAsiento.forEach((d: any) => {
-              if (d.cuenta_codigo === "1001") {
-                impactoEfectivo += (d.debe || 0) - (d.haber || 0);
-              } else if (d.cuenta_codigo === "1002") {
-                impactoBancos += (d.debe || 0) - (d.haber || 0);
-              }
-            });
-            
-            // Los gastos reducen el efectivo, así que invertimos el signo
-            if (impactoEfectivo !== 0 || impactoBancos !== 0) {
-              gastosEfectivo += -impactoEfectivo;
-              gastosBancos += -impactoBancos;
-              asientosGasto.add(asientoId);
-            }
-          }
+      // Preparar desglose para INVERSIÓN
+      const desgloseInversion: any = {};
+      inversion.detalles.forEach(d => {
+        if (!desgloseInversion[d.subcategoria]) {
+          desgloseInversion[d.subcategoria] = { efectivo: 0, bancos: 0, total: 0 };
         }
+        desgloseInversion[d.subcategoria].efectivo += d.impactoEfectivo;
+        desgloseInversion[d.subcategoria].bancos += d.impactoBancos;
+        desgloseInversion[d.subcategoria].total += d.impactoTotal;
       });
 
-      const operativo = {
-        ingresos: ingresosEfectivo + ingresosBancos,
-        ingresosEfectivo: ingresosEfectivo,
-        ingresosBancos: ingresosBancos,
-        costos: costosEfectivo + costosBancos,
-        costosEfectivo: costosEfectivo,
-        costosBancos: costosBancos,
-        gastos: gastosEfectivo + gastosBancos,
-        gastosEfectivo: gastosEfectivo,
-        gastosBancos: gastosBancos
-      };
-
-      const inversion: any = {};
-      const inversionEfectivo: any = {};
-      const inversionBancos: any = {};
-
-      const financiamiento = {
-        disposiciones: 0,
-        amortizaciones: 0,
-        amortizacionesEfectivo: 0,
-        amortizacionesBancos: 0,
-        intereses: 0,
-        interesesEfectivo: 0,
-        interesesBancos: 0
-      };
+      // Preparar desglose para FINANCIAMIENTO
+      const desgloseFinanciamiento: any = {};
+      financiamiento.detalles.forEach(d => {
+        if (!desgloseFinanciamiento[d.subcategoria]) {
+          desgloseFinanciamiento[d.subcategoria] = { efectivo: 0, bancos: 0, total: 0 };
+        }
+        desgloseFinanciamiento[d.subcategoria].efectivo += d.impactoEfectivo;
+        desgloseFinanciamiento[d.subcategoria].bancos += d.impactoBancos;
+        desgloseFinanciamiento[d.subcategoria].total += d.impactoTotal;
+      });
 
       return {
         saldoInicial,
-        operativo,
-        inversion,
-        inversionEfectivo,
-        inversionBancos,
-        financiamiento
+        operativo: { ...operativo, desglose: desgloseOperativo },
+        inversion: { ...inversion, desglose: desgloseInversion },
+        financiamiento: { ...financiamiento, desglose: desgloseFinanciamiento }
       };
     },
   });
@@ -325,41 +143,16 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
 
   const isDetallada = vistaColumnas === "detallada";
 
-  // Siempre calcular efectivo y bancos por separado para garantizar consistencia
-  const operativoDetalle = {
-    efectivo: flujoData.operativo.ingresosEfectivo - flujoData.operativo.costosEfectivo - flujoData.operativo.gastosEfectivo,
-    bancos: flujoData.operativo.ingresosBancos - flujoData.operativo.costosBancos - flujoData.operativo.gastosBancos,
-    total: flujoData.operativo.ingresos - flujoData.operativo.costos - flujoData.operativo.gastos
-  };
-
-  const inversionDetalle = {
-    efectivo: -Object.values(flujoData.inversionEfectivo).reduce((sum: number, val) => sum + (val as number), 0),
-    bancos: -Object.values(flujoData.inversionBancos).reduce((sum: number, val) => sum + (val as number), 0),
-    total: -Object.values(flujoData.inversion).reduce((sum: number, val) => sum + (val as number), 0)
-  };
-
-  const disposicionesEfectivo = flujoData.financiamiento.disposiciones * 0.3;
-  const disposicionesBancos = flujoData.financiamiento.disposiciones * 0.7;
-  const financiamientoDetalle = {
-    efectivo: disposicionesEfectivo - flujoData.financiamiento.amortizacionesEfectivo - flujoData.financiamiento.interesesEfectivo,
-    bancos: disposicionesBancos - flujoData.financiamiento.amortizacionesBancos - flujoData.financiamiento.interesesBancos,
-    total: flujoData.financiamiento.disposiciones - flujoData.financiamiento.amortizaciones - flujoData.financiamiento.intereses
-  };
-
-  const flujoNetoEfectivo = operativoDetalle.efectivo + inversionDetalle.efectivo + financiamientoDetalle.efectivo;
-  const flujoNetoBancos = operativoDetalle.bancos + inversionDetalle.bancos + financiamientoDetalle.bancos;
-  const flujoNetoTotal = flujoNetoEfectivo + flujoNetoBancos;
+  // Calcular flujo neto de cada categoría
+  const flujoNetoEfectivo = flujoData.operativo.efectivo + flujoData.inversion.efectivo + flujoData.financiamiento.efectivo;
+  const flujoNetoBancos = flujoData.operativo.bancos + flujoData.inversion.bancos + flujoData.financiamiento.bancos;
+  const flujoNetoTotal = flujoData.operativo.total + flujoData.inversion.total + flujoData.financiamiento.total;
 
   const saldoFinal = {
     efectivo: flujoData.saldoInicial.efectivo + flujoNetoEfectivo,
     bancos: flujoData.saldoInicial.bancos + flujoNetoBancos,
     total: flujoData.saldoInicial.total + flujoNetoTotal
   };
-
-  // Funciones auxiliares para compatibilidad con renderizado
-  const getOperativoData = () => isDetallada ? operativoDetalle : { total: operativoDetalle.total };
-  const getInversionData = () => isDetallada ? inversionDetalle : { total: inversionDetalle.total };
-  const getFinanciamientoData = () => isDetallada ? financiamientoDetalle : { total: financiamientoDetalle.total };
 
   const renderValue = (efectivo?: number, bancos?: number, total?: number) => {
     if (isDetallada && efectivo !== undefined && bancos !== undefined) {
@@ -429,70 +222,22 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-finance-success"></div>
-                <span className="font-medium">Cobros por Ventas</span>
-              </div>
-              {renderValue(
-                flujoData.operativo.ingresosEfectivo,
-                flujoData.operativo.ingresosBancos,
-                flujoData.operativo.ingresos
-              )}
-            </div>
-
-            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-destructive"></div>
-                <span className="font-medium">Pagos por Costos</span>
-              </div>
-              {isDetallada ? (
-                <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                  <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.costosEfectivo)}</span>
-                  <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.costosBancos)}</span>
-                  <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.costos)}</span>
+            {/* Desglose de actividades operativas */}
+            {Object.entries(flujoData.operativo.desglose).map(([concepto, valores]: [string, any]) => (
+              <div key={concepto} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${valores.total >= 0 ? 'bg-finance-success' : 'bg-destructive'}`}></div>
+                  <span className="font-medium">{concepto}</span>
                 </div>
-              ) : (
-                <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.costos)}</span>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-destructive"></div>
-                <span className="font-medium">Pagos por Gastos</span>
+                {renderValue(valores.efectivo, valores.bancos, valores.total)}
               </div>
-              {isDetallada ? (
-                <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                  <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.gastosEfectivo)}</span>
-                  <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.gastosBancos)}</span>
-                  <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.gastos)}</span>
-                </div>
-              ) : (
-                <span className="font-bold text-destructive">-{formatCurrency(flujoData.operativo.gastos)}</span>
-              )}
-            </div>
+            ))}
 
-            <div className="border-t-2 pt-3 mt-2">
+            {/* Flujo Neto Operativo */}
+            <div className="border-t-2 pt-3 mt-4">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Flujo Neto Operativo</span>
-                {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                    <span className={`text-lg font-bold ${(operativoDetalle.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(operativoDetalle.efectivo || 0)}
-                    </span>
-                    <span className={`text-lg font-bold ${(operativoDetalle.bancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(operativoDetalle.bancos || 0)}
-                    </span>
-                    <span className={`text-lg font-bold ${operativoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(operativoDetalle.total)}
-                    </span>
-                  </div>
-                ) : (
-                  <span className={`text-lg font-bold ${operativoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                    {formatCurrency(operativoDetalle.total)}
-                  </span>
-                )}
+                <span className="text-xl font-bold">Flujo Neto Operativo</span>
+                {renderValue(flujoData.operativo.efectivo, flujoData.operativo.bancos, flujoData.operativo.total)}
               </div>
             </div>
           </div>
@@ -518,49 +263,26 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-3">
-            {Object.keys(flujoData.inversion).length > 0 ? (
-              Object.entries(flujoData.inversion).map(([categoria, valor]) => (
-                <div key={categoria} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                  <span className="font-medium capitalize">{categoria.replace('_', ' ')}</span>
-                  {isDetallada ? (
-                    <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                      <span className="font-bold text-destructive">
-                        -{formatCurrency(flujoData.inversionEfectivo[categoria] || 0)}
-                      </span>
-                      <span className="font-bold text-destructive">
-                        -{formatCurrency(flujoData.inversionBancos[categoria] || 0)}
-                      </span>
-                      <span className="font-bold text-destructive">-{formatCurrency(valor as number)}</span>
+            {Object.entries(flujoData.inversion.desglose).length > 0 ? (
+              <>
+                {Object.entries(flujoData.inversion.desglose).map(([concepto, valores]: [string, any]) => (
+                  <div key={concepto} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${valores.total >= 0 ? 'bg-finance-success' : 'bg-destructive'}`}></div>
+                      <span className="font-medium">{concepto}</span>
                     </div>
-                  ) : (
-                    <span className="font-bold text-destructive">-{formatCurrency(valor as number)}</span>
-                  )}
-                </div>
-              ))
+                    {renderValue(valores.efectivo, valores.bancos, valores.total)}
+                  </div>
+                ))}
+              </>
             ) : (
               <p className="text-muted-foreground text-center py-4">No hay inversiones en este período</p>
             )}
 
-            <div className="border-t-2 pt-3 mt-2">
+            <div className="border-t-2 pt-3 mt-4">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Flujo Neto de Inversión</span>
-                {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                    <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(inversionDetalle.efectivo || 0)}
-                    </span>
-                    <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(inversionDetalle.bancos || 0)}
-                    </span>
-                    <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(inversionDetalle.total)}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-lg font-bold text-destructive">
-                    {formatCurrency(inversionDetalle.total)}
-                  </span>
-                )}
+                <span className="text-xl font-bold">Flujo Neto de Inversión</span>
+                {renderValue(flujoData.inversion.efectivo, flujoData.inversion.bancos, flujoData.inversion.total)}
               </div>
             </div>
           </div>
@@ -586,54 +308,26 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-              <span className="font-medium">Disposiciones de Crédito</span>
-              <span className="font-bold text-finance-success">
-                {formatCurrency(flujoData.financiamiento.disposiciones)}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-              <span className="font-medium">Pagos de Capital</span>
-              {isDetallada ? (
-                <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                  <span className="font-bold text-destructive">
-                    -{formatCurrency(flujoData.financiamiento.amortizacionesEfectivo)}
-                  </span>
-                  <span className="font-bold text-destructive">
-                    -{formatCurrency(flujoData.financiamiento.amortizacionesBancos)}
-                  </span>
-                  <span className="font-bold text-destructive">
-                    -{formatCurrency(flujoData.financiamiento.amortizaciones)}
-                  </span>
-                </div>
-              ) : (
-                <span className="font-bold text-destructive">
-                  -{formatCurrency(flujoData.financiamiento.amortizaciones)}
-                </span>
-              )}
-            </div>
-
-            <div className="border-t-2 pt-3 mt-2">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Flujo Neto de Financiamiento</span>
-                {isDetallada ? (
-                  <div className="grid grid-cols-3 gap-8 text-center min-w-[400px]">
-                    <span className={`text-lg font-bold ${(financiamientoDetalle.efectivo || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(financiamientoDetalle.efectivo || 0)}
-                    </span>
-                    <span className={`text-lg font-bold ${(financiamientoDetalle.bancos || 0) >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(financiamientoDetalle.bancos || 0)}
-                    </span>
-                    <span className={`text-lg font-bold ${financiamientoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                      {formatCurrency(financiamientoDetalle.total)}
-                    </span>
+            {Object.entries(flujoData.financiamiento.desglose).length > 0 ? (
+              <>
+                {Object.entries(flujoData.financiamiento.desglose).map(([concepto, valores]: [string, any]) => (
+                  <div key={concepto} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${valores.total >= 0 ? 'bg-finance-success' : 'bg-destructive'}`}></div>
+                      <span className="font-medium">{concepto}</span>
+                    </div>
+                    {renderValue(valores.efectivo, valores.bancos, valores.total)}
                   </div>
-                ) : (
-                  <span className={`text-lg font-bold ${financiamientoDetalle.total >= 0 ? 'text-finance-success' : 'text-destructive'}`}>
-                    {formatCurrency(financiamientoDetalle.total)}
-                  </span>
-                )}
+                ))}
+              </>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No hay financiamientos en este período</p>
+            )}
+
+            <div className="border-t-2 pt-3 mt-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xl font-bold">Flujo Neto de Financiamiento</span>
+                {renderValue(flujoData.financiamiento.efectivo, flujoData.financiamiento.bancos, flujoData.financiamiento.total)}
               </div>
             </div>
           </div>
