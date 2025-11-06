@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
+import { useComprasInventario } from "@/hooks/useComprasInventario";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const ResumenEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(200);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
+  const { data: comprasInventario, isLoading: loadingComprasInventario } = useComprasInventario();
   const { data: cuentasData } = useCuentas();
   const { toast } = useToast();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
@@ -101,6 +103,7 @@ const ResumenEgresos = () => {
   // Calcular subtotales
   const resumenFiltrado = useMemo(() => {
     const totalCostosVentaInventario = costosVentaInventario?.reduce((sum, c) => sum + c.monto, 0) || 0;
+    const totalComprasInventario = comprasInventario?.reduce((sum, c) => sum + c.costo_total, 0) || 0;
     
     return {
       totalTransacciones: transaccionesFiltradas.length,
@@ -109,10 +112,11 @@ const ResumenEgresos = () => {
       montoPendiente: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pendiente, 0),
       totalCostos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0),
       totalGastos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'gasto').reduce((sum, t) => sum + t.monto_total, 0),
+      totalComprasInventario,
       totalCostosVentaInventario,
       totalCostosGlobal: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0) + totalCostosVentaInventario,
     };
-  }, [transaccionesFiltradas, costosVentaInventario]);
+  }, [transaccionesFiltradas, costosVentaInventario, comprasInventario]);
 
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -507,7 +511,7 @@ const ResumenEgresos = () => {
               </div>
               
               {/* Resumen de datos filtrados */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 pt-4 border-t">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Transacciones</div>
                   <div className="text-lg font-semibold">{resumenFiltrado.totalTransacciones}</div>
@@ -537,6 +541,12 @@ const ResumenEgresos = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Compras Inventario</div>
+                  <div className="text-lg font-semibold text-blue-600">
+                    ${formatMonto(resumenFiltrado.totalComprasInventario)}
+                  </div>
+                </div>
+                <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Costo Venta Inventario</div>
                   <div className="text-lg font-semibold text-purple-600">
                     ${formatMonto(resumenFiltrado.totalCostosVentaInventario)}
@@ -554,14 +564,18 @@ const ResumenEgresos = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="egresos-manuales" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
               <TabsTrigger value="egresos-manuales">
                 <FileText className="h-4 w-4 mr-2" />
                 Egresos Manuales
               </TabsTrigger>
+              <TabsTrigger value="compras-inventario">
+                <Package className="h-4 w-4 mr-2" />
+                Compras Inventario
+              </TabsTrigger>
               <TabsTrigger value="costos-inventario">
                 <Package className="h-4 w-4 mr-2" />
-                Costos Venta Inventario
+                Costos Venta
               </TabsTrigger>
             </TabsList>
             
@@ -674,6 +688,76 @@ const ResumenEgresos = () => {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="compras-inventario">
+              {loadingComprasInventario ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>Cargando compras de inventario...</p>
+                </div>
+              ) : !comprasInventario || comprasInventario.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>No hay compras de inventario registradas</p>
+                  <p className="text-sm mt-2">Las compras de inventario que realices aparecerán aquí</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Cantidad</TableHead>
+                        <TableHead className="text-right">Costo Unitario</TableHead>
+                        <TableHead className="text-right">Costo Total</TableHead>
+                        <TableHead>Descripción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {comprasInventario.map((compra) => (
+                        <TableRow key={compra.id}>
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(compra.fecha).toLocaleDateString('es-MX', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-blue-600" />
+                              {compra.producto_nombre}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {compra.cantidad}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            ${formatMonto(compra.costo_unitario)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-semibold text-blue-600">
+                              ${formatMonto(compra.costo_total)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate text-muted-foreground">
+                            {compra.descripcion || '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Total de compras de inventario
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      ${formatMonto(resumenFiltrado.totalComprasInventario)}
+                    </div>
+                  </div>
                 </div>
               )}
             </TabsContent>
