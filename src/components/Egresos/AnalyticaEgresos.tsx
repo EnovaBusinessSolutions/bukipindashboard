@@ -2,13 +2,15 @@ import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line 
+  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Treemap
 } from "recharts";
 import { TrendingDown, Calendar, DollarSign, Package, AlertCircle } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
 import { useEgresosPorPeriodo, DatosEvolucionSimple, DatosEvolucionCombinada } from "@/hooks/useEgresosPorPeriodo";
+import { useSubcuentas } from "@/hooks/useSubcuentas";
+import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,6 +20,8 @@ const AnalyticaEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(1000);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
   const { data: resumenes, isLoading: loadingResumen } = useResumenEgresosPorPeriodo();
+  const { data: subcuentas } = useSubcuentas();
+  const { data: productosEgresos } = useProductosEgresos();
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "combinada">("total");
@@ -180,31 +184,141 @@ const AnalyticaEgresos = () => {
       .sort((a, b) => b.monto - a.monto);
   };
 
-  // Todos los gastos
-  const topGastos = () => {
-    // Combinar transacciones manuales con costos de inventario
-    const gastosTransacciones = filteredTransactions.map(t => ({
-      id: t.id,
-      descripcion: t.descripcion,
-      tipo_egreso: t.tipo_egreso,
-      monto_total: t.monto_total,
-      es_inventario: false,
-      producto_nombre: null,
-      fecha: t.created_at
-    }));
+  // Egresos por Subcuenta
+  const egresosPorSubcuenta = () => {
+    const grouped: Record<string, number> = {};
 
-    const gastosInventario = filteredCostosInventario.map(c => ({
-      id: c.numero_asiento,
-      descripcion: c.descripcion,
-      tipo_egreso: 'Costo Venta',
-      monto_total: c.monto,
-      es_inventario: true,
-      producto_nombre: c.producto_nombre,
-      fecha: c.fecha
-    }));
+    filteredTransactions.forEach(t => {
+      // TransaccionEgreso no tiene subcuenta_id, usar descripción o agrupar todo
+      const subcuentaNombre = 'Sin subcuenta asignada';
+      
+      if (!grouped[subcuentaNombre]) {
+        grouped[subcuentaNombre] = 0;
+      }
+      grouped[subcuentaNombre] += t.monto_total;
+    });
 
-    return [...gastosTransacciones, ...gastosInventario]
-      .sort((a, b) => b.monto_total - a.monto_total);
+    // Agregar costos de inventario
+    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostosInventario > 0) {
+      if (!grouped['Sin subcuenta asignada']) {
+        grouped['Sin subcuenta asignada'] = 0;
+      }
+      grouped['Sin subcuenta asignada'] += totalCostosInventario;
+    }
+
+    return Object.entries(grouped)
+      .map(([subcuenta, monto]) => ({ subcuenta, monto }))
+      .sort((a, b) => b.monto - a.monto)
+      .slice(0, 10);
+  };
+
+  // Egresos por Método de Pago
+  const egresosPorMetodoPago = () => {
+    const efectivo = filteredTransactions
+      .filter(t => t.metodo_pago === 'efectivo')
+      .reduce((sum, t) => sum + t.monto_pagado, 0);
+    
+    const bancosTarjeta = filteredTransactions
+      .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo')
+      .reduce((sum, t) => sum + t.monto_pagado, 0);
+
+    return [
+      { name: 'Efectivo', value: efectivo, fill: 'hsl(142, 70%, 50%)' },
+      { name: 'Bancos/Tarjeta', value: bancosTarjeta, fill: 'hsl(220, 70%, 55%)' }
+    ].filter(item => item.value > 0);
+  };
+
+  // Egresos por Producto
+  const egresosPorProducto = () => {
+    const grouped: Record<string, {
+      nombre: string;
+      imagen: string | null;
+      monto: number;
+      transacciones: number;
+      tieneAsignacion: boolean;
+    }> = {};
+
+    // Agrupar por descripción como proxy de producto
+    filteredTransactions.forEach(t => {
+      const key = t.descripcion || 'Sin descripción';
+      if (!grouped[key]) {
+        grouped[key] = {
+          nombre: key,
+          imagen: t.imagen_comprobante || null,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion: true
+        };
+      }
+      grouped[key].monto += t.monto_total;
+      grouped[key].transacciones += 1;
+    });
+
+    // Agregar costos de inventario
+    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostosInventario > 0) {
+      if (!grouped['Costo Venta Inventario']) {
+        grouped['Costo Venta Inventario'] = {
+          nombre: 'Costo Venta Inventario',
+          imagen: null,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion: false
+        };
+      }
+      grouped['Costo Venta Inventario'].monto += totalCostosInventario;
+    }
+
+    const productosArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
+    const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
+    
+    return { productos: productosArray.slice(0, 10), totalGeneral };
+  };
+
+  // Egresos por Proveedor mejorado
+  const egresosPorProveedorMejorado = () => {
+    const grouped: Record<string, {
+      nombre: string;
+      monto: number;
+      transacciones: number;
+      tieneAsignacion: boolean;
+    }> = {};
+
+    filteredTransactions.forEach(t => {
+      const proveedorNombre = t.proveedor_nombre || 'Sin proveedor asignado';
+      const tieneAsignacion = !!t.proveedor_nombre;
+      
+      if (!grouped[proveedorNombre]) {
+        grouped[proveedorNombre] = {
+          nombre: proveedorNombre,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion
+        };
+      }
+      grouped[proveedorNombre].monto += t.monto_total;
+      grouped[proveedorNombre].transacciones += 1;
+    });
+
+    // Agregar costos de inventario
+    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostosInventario > 0) {
+      if (!grouped['Sin proveedor asignado']) {
+        grouped['Sin proveedor asignado'] = {
+          nombre: 'Sin proveedor asignado',
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion: false
+        };
+      }
+      grouped['Sin proveedor asignado'].monto += totalCostosInventario;
+    }
+
+    const proveedoresArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
+    const totalGeneral = proveedoresArray.reduce((sum, p) => sum + p.monto, 0);
+    
+    return { proveedores: proveedoresArray.slice(0, 10), totalGeneral };
   };
 
   if (loading || loadingCostosVenta || loadingResumen || loadingGrafica || !resumenes) {
@@ -623,16 +737,18 @@ const AnalyticaEgresos = () => {
                     outerRadius={100}
                     paddingAngle={3}
                     labelLine={false}
-                    label={({ tipo, percent }) => `${tipo}\n${(percent * 100).toFixed(1)}%`}
+                    label={({ tipo, monto, percent }) => 
+                      `${tipo}\n${(percent * 100).toFixed(1)}%\n$${monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                    }
                     fill="#8884d8"
                     dataKey="monto"
                   >
                     {egresosPorTipo().map((entry, index) => {
                       const colors = [
-                        "hsl(180 50% 55%)",
-                        "hsl(0 70% 55%)",
-                        "hsl(280 60% 55%)",
-                        "hsl(180 40% 40%)"
+                        "hsl(180, 50%, 50%)",
+                        "hsl(0, 60%, 55%)",
+                        "hsl(280, 55%, 55%)",
+                        "hsl(45, 85%, 60%)"
                       ];
                       return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
                     })}
@@ -675,13 +791,15 @@ const AnalyticaEgresos = () => {
                     outerRadius={100}
                     paddingAngle={3}
                     labelLine={false}
-                    label={({ estado, percent }) => `${estado}\n${(percent * 100).toFixed(1)}%`}
+                    label={({ estado, monto, percent }) => 
+                      `${estado}\n${(percent * 100).toFixed(1)}%\n$${monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                    }
                     fill="#8884d8"
                     dataKey="monto"
                   >
-                    <Cell fill="hsl(142 76% 36%)" />
-                    <Cell fill="hsl(48 96% 53%)" />
-                    <Cell fill="hsl(0 84% 60%)" />
+                    <Cell fill="hsl(142, 70%, 40%)" />
+                    <Cell fill="hsl(45, 85%, 55%)" />
+                    <Cell fill="hsl(0, 65%, 55%)" />
                   </Pie>
                   <Tooltip 
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
@@ -699,96 +817,225 @@ const AnalyticaEgresos = () => {
         </Card>
       </div>
 
+      {/* Nuevas Gráficas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Egresos por Subcuenta */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Egresos por Subcuenta</CardTitle>
+            <CardDescription>Desglose de egresos por clasificación detallada</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {egresosPorSubcuenta().length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
+                <p>No hay datos para mostrar</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={egresosPorSubcuenta()} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(value) => `$${value.toLocaleString('es-MX')}`} />
+                  <YAxis dataKey="subcuenta" type="category" width={150} />
+                  <Tooltip 
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Bar dataKey="monto" fill="hsl(180, 50%, 50%)" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Métodos de Pago */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Métodos de Pago</CardTitle>
+            <CardDescription>Distribución de pagos realizados</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {egresosPorMetodoPago().length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
+                <p>No hay datos para mostrar</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={350}>
+                <Treemap
+                  data={egresosPorMetodoPago()}
+                  dataKey="value"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  fill="hsl(180, 50%, 50%)"
+                >
+                  <Tooltip 
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Pagado']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                  />
+                </Treemap>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Tablas de Detalles */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Todos los Proveedores */}
+        {/* Egresos por Producto */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Egresos por Producto</CardTitle>
+            <CardDescription>Top 10 productos con mayor egreso</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {egresosPorProducto().productos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <Package className="h-12 w-12 mb-4 opacity-50" />
+                <p>No hay productos para mostrar</p>
+              </div>
+            ) : (
+              <>
+                {egresosPorProducto().productos.map((producto) => {
+                  const porcentaje = egresosPorProducto().totalGeneral > 0 
+                    ? ((producto.monto / egresosPorProducto().totalGeneral) * 100).toFixed(1) 
+                    : '0.0';
+                  
+                  return (
+                    <div 
+                      key={producto.nombre} 
+                      className={`flex items-center gap-3 p-3 border rounded-lg ${
+                        !producto.tieneAsignacion 
+                          ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' 
+                          : ''
+                      }`}
+                    >
+                      {producto.imagen ? (
+                        <img 
+                          src={producto.imagen} 
+                          alt={producto.nombre} 
+                          className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                          !producto.tieneAsignacion 
+                            ? 'bg-amber-100 dark:bg-amber-900/30' 
+                            : 'bg-muted'
+                        }`}>
+                          <Package className={`w-5 h-5 ${
+                            !producto.tieneAsignacion 
+                              ? 'text-amber-600 dark:text-amber-400' 
+                              : 'text-muted-foreground'
+                          }`} />
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{producto.nombre}</p>
+                          {!producto.tieneAsignacion && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                              Sin asignar
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {producto.transacciones} {producto.transacciones === 1 ? 'transacción' : 'transacciones'}
+                        </p>
+                      </div>
+                      
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-bold text-foreground">
+                          ${producto.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      
+                      <div className="flex-shrink-0">
+                        <Badge variant="outline" className="bg-teal-50/50 text-teal-700 border-teal-300 dark:bg-teal-950/50 dark:text-teal-300">
+                          {porcentaje}%
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Fila de Total */}
+                <div className="flex items-center justify-between pt-3 border-t">
+                  <span className="font-semibold text-primary">Total General</span>
+                  <span className="text-lg font-bold text-foreground">
+                    ${egresosPorProducto().totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Egresos por Proveedor */}
         <Card>
           <CardHeader>
             <CardTitle>Egresos por Proveedor</CardTitle>
-            <CardDescription>Todos los proveedores con egresos registrados</CardDescription>
+            <CardDescription>Top 10 proveedores por monto de egresos</CardDescription>
           </CardHeader>
-          <CardContent>
-            {topProveedores().length === 0 ? (
+          <CardContent className="space-y-3">
+            {egresosPorProveedorMejorado().proveedores.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <Package className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay proveedores para mostrar</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Proveedor</TableHead>
-                    <TableHead className="text-right">Monto Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topProveedores().map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="max-w-xs truncate">{item.proveedor}</TableCell>
-                      <TableCell className="text-right font-semibold">
-                        ${item.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Todos los Gastos */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Gastos por Monto</CardTitle>
-            <CardDescription>Todos los egresos ordenados por monto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topGastos().length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <DollarSign className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay gastos para mostrar</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topGastos().map((item, index) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {item.es_inventario && item.producto_nombre ? (
-                          <div>
-                            <div className="font-medium">{item.producto_nombre}</div>
-                            <div className="text-xs text-muted-foreground">{item.descripcion}</div>
-                          </div>
-                        ) : (
-                          item.descripcion
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          item.es_inventario ? 'secondary' : 
-                          item.tipo_egreso === 'costo' ? 'destructive' : 'default'
-                        }>
-                          {item.tipo_egreso}
+              <>
+                {egresosPorProveedorMejorado().proveedores.map((proveedor) => {
+                  const porcentaje = egresosPorProveedorMejorado().totalGeneral > 0 
+                    ? ((proveedor.monto / egresosPorProveedorMejorado().totalGeneral) * 100).toFixed(1) 
+                    : '0.0';
+                  
+                  return (
+                    <div 
+                      key={proveedor.nombre} 
+                      className={`flex items-center gap-3 p-3 border rounded-lg ${
+                        !proveedor.tieneAsignacion 
+                          ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' 
+                          : ''
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{proveedor.nombre}</p>
+                          {!proveedor.tieneAsignacion && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                              Sin asignar
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {proveedor.transacciones} {proveedor.transacciones === 1 ? 'transacción' : 'transacciones'}
+                        </p>
+                      </div>
+                      
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-bold text-foreground">
+                          ${proveedor.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      
+                      <div className="flex-shrink-0">
+                        <Badge variant="outline" className="bg-teal-50/50 text-teal-700 border-teal-300 dark:bg-teal-950/50 dark:text-teal-300">
+                          {porcentaje}%
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        ${item.monto_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Fila de Total */}
+                <div className="flex items-center justify-between pt-3 border-t">
+                  <span className="font-semibold text-primary">Total General</span>
+                  <span className="text-lg font-bold text-foreground">
+                    ${egresosPorProveedorMejorado().totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
