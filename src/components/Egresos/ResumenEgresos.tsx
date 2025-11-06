@@ -218,6 +218,43 @@ const ResumenEgresos = () => {
     return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  const getTipoEgresoDisplay = (transaccion: any) => {
+    const codigo = transaccion.cuenta_codigo;
+    
+    if (codigo?.startsWith('50')) {
+      // Si tiene datos de inventario (imagen, cantidad, costo unitario)
+      if (transaccion.imagen_url && transaccion.cantidad && transaccion.costo_unitario) {
+        return {
+          label: 'Costo de Venta Inventario',
+          className: 'bg-purple-100 text-purple-700 border-purple-300'
+        };
+      }
+      return {
+        label: 'Costos de Venta',
+        className: 'bg-red-100 text-red-700 border-red-300'
+      };
+    }
+    
+    if (codigo?.startsWith('51') || codigo?.startsWith('52')) {
+      return {
+        label: 'Gastos',
+        className: 'bg-orange-100 text-orange-700 border-orange-300'
+      };
+    }
+    
+    if (codigo?.startsWith('6')) {
+      return {
+        label: 'Otros Gastos',
+        className: 'bg-gray-100 text-gray-700 border-gray-300'
+      };
+    }
+    
+    return {
+      label: 'Sin categoría',
+      className: 'bg-gray-50 text-gray-600 border-gray-200'
+    };
+  };
+
   const handleViewDetails = async (transaction: any) => {
     setSelectedTransaction(transaction);
     setDetailsOpen(true);
@@ -707,12 +744,12 @@ const ResumenEgresos = () => {
                     <TableHead className="w-16">Imagen</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Descripción</TableHead>
+                    <TableHead>Tipo de Egreso</TableHead>
                     <TableHead>Cuenta</TableHead>
                     <TableHead>Proveedor</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
                     <TableHead className="text-right">Costo Unit.</TableHead>
                     <TableHead className="text-right">Monto Total</TableHead>
-                    <TableHead>Asiento</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -752,6 +789,21 @@ const ResumenEgresos = () => {
                         </div>
                       </TableCell>
                       
+                      {/* Tipo de Egreso */}
+                      <TableCell>
+                        {(() => {
+                          const tipoInfo = getTipoEgresoDisplay(transaccion);
+                          return (
+                            <Badge 
+                              variant="outline" 
+                              className={`${tipoInfo.className} text-xs font-medium`}
+                            >
+                              {tipoInfo.label}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                      
                       {/* Cuenta contable */}
                       <TableCell>
                         <Badge 
@@ -765,9 +817,15 @@ const ResumenEgresos = () => {
                       {/* Proveedor */}
                       <TableCell>
                         {transaccion.proveedor_nombre ? (
-                          <span className="text-sm">{transaccion.proveedor_nombre}</span>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{transaccion.proveedor_nombre}</span>
+                          </div>
                         ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground opacity-50" />
+                            <span className="text-xs text-muted-foreground italic">Sin proveedor asignado</span>
+                          </div>
                         )}
                       </TableCell>
                       
@@ -805,18 +863,6 @@ const ResumenEgresos = () => {
                           <div className="text-xs text-yellow-600">
                             Pendiente: ${formatMonto(transaccion.monto_pendiente)}
                           </div>
-                        )}
-                      </TableCell>
-                      
-                      {/* Número de asiento */}
-                      <TableCell>
-                        {transaccion.numero_asiento ? (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            <BookOpen className="h-3 w-3 mr-1" />
-                            {transaccion.numero_asiento}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </TableCell>
                       
