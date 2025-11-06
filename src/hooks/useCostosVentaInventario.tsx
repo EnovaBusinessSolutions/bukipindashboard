@@ -80,33 +80,31 @@ export const useCostosVentaInventario = () => {
           productoNombre = descripcionAsiento.split('Venta:')[1]?.trim() || productoNombre;
         }
 
-        // Buscar TODOS los movimientos de inventario del día
-        const { data: movimientos } = await supabase
+        // Buscar el movimiento de inventario específico cuyo costo_total coincida con el monto del asiento
+        const { data: movimiento } = await supabase
           .from('movimientos_inventario')
-          .select('id, cantidad, producto_id')
+          .select('id, cantidad, producto_id, costo_total')
           .eq('tipo_movimiento', 'venta')
           .eq('fecha', asiento.fecha)
           .eq('estado', 'activo')
-          .ilike('descripcion', `%${productoNombre}%`);
+          .ilike('descripcion', `%${productoNombre}%`)
+          .eq('costo_total', Number(detalleCosto.debe))  // Match exacto del monto
+          .maybeSingle();
 
-        if (movimientos && movimientos.length > 0) {
-          // Sumar todas las cantidades del día
-          cantidad = movimientos.reduce((sum, m) => sum + Math.abs(Number(m.cantidad)), 0);
+        if (movimiento && movimiento.cantidad) {
+          cantidad = Math.abs(Number(movimiento.cantidad));
           
-          // Usar el producto_id del primer movimiento
-          const primerMovimiento = movimientos[0];
-          
-          // CALCULAR el costo unitario promedio = monto total / cantidad total
+          // CALCULAR el costo unitario = monto total / cantidad
           if (cantidad > 0) {
             costoUnitario = Number(detalleCosto.debe) / cantidad;
           }
           
           // Obtener datos del producto con una query separada
-          if (primerMovimiento.producto_id) {
+          if (movimiento.producto_id) {
             const { data: producto } = await supabase
               .from('productos')
               .select('nombre, imagen_url')
-              .eq('id', primerMovimiento.producto_id)
+              .eq('id', movimiento.producto_id)
               .maybeSingle();
             
             if (producto) {
