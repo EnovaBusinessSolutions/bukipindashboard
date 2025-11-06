@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package, Info, AlertCircle } from "lucide-react";
+import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package, AlertCircle } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
@@ -12,7 +12,6 @@ import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useCuentas } from "@/hooks/useCuentas";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -829,71 +828,6 @@ const ResumenEgresos = () => {
                       {/* Acciones */}
                       <TableCell>
                         <div className="flex gap-2">
-                          {/* Botón Popover Rápido - Registros Contables */}
-                          {transaccion.detalles_asiento && transaccion.detalles_asiento.length > 0 ? (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="sm" title="Ver registros contables">
-                                  <Info className="h-4 w-4" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[500px]" align="end">
-                                <div className="space-y-3">
-                                  <div className="border-b pb-2">
-                                    <h4 className="font-semibold text-sm">Registros Contables</h4>
-                                    <p className="text-xs text-muted-foreground">
-                                      Asiento: {transaccion.numero_asiento}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {transaccion.detalles_asiento.map((detalle: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between text-xs border-b pb-2 last:border-0">
-                                        <div className="flex-1">
-                                          <div className="font-mono font-semibold text-sm">{detalle.cuenta_codigo}</div>
-                                          <div className="text-muted-foreground">{detalle.cuenta_nombre || detalle.descripcion}</div>
-                                        </div>
-                                        <div className="text-right ml-4">
-                                          {detalle.debe > 0 && (
-                                            <div className="text-red-600 font-semibold">
-                                              Debe: ${formatMonto(detalle.debe)}
-                                            </div>
-                                          )}
-                                          {detalle.haber > 0 && (
-                                            <div className="text-green-600 font-semibold">
-                                              Haber: ${formatMonto(detalle.haber)}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                   <div className="pt-2 border-t bg-muted/50 -mx-4 px-4 -mb-4 pb-4 rounded-b-lg">
-                                     <div className="flex justify-between text-sm font-bold">
-                                       <span>Totales:</span>
-                                       <div className="flex gap-4">
-                                         <span className="text-red-600">
-                                           ${formatMonto((transaccion.detalles_asiento as any[]).reduce((sum: number, d: any) => sum + (Number(d.debe) || 0), 0))}
-                                         </span>
-                                         <span className="text-green-600">
-                                           ${formatMonto((transaccion.detalles_asiento as any[]).reduce((sum: number, d: any) => sum + (Number(d.haber) || 0), 0))}
-                                         </span>
-                                       </div>
-                                     </div>
-                                   </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          ) : (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="Sin registros contables disponibles"
-                              disabled
-                            >
-                              <Info className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          )}
-                          
                           {/* Botón Ver Detalle */}
                           <Dialog onOpenChange={(open) => {
                             if (open) {
@@ -912,128 +846,216 @@ const ResumenEgresos = () => {
                               <DialogHeader>
                                 <DialogTitle>Detalles de la Transacción</DialogTitle>
                                 <DialogDescription>
-                                  Información completa y asientos contables en balanza
+                                  Información completa y asientos contables
                                 </DialogDescription>
                               </DialogHeader>
                               
                               {selectedTransaction && (
-                                <div className="space-y-4">
-                                  {/* Información General y Montos en 2 columnas */}
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <h4 className="font-semibold text-sm mb-2">Información General</h4>
-                                      <div className="space-y-1 text-sm">
-                                        <p><span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}</p>
-                                        <p><span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}</p>
-                                        {selectedTransaction.subtipo_egreso && (
-                                          <p><span className="font-medium">Subtipo:</span> {selectedTransaction.subtipo_egreso}</p>
-                                        )}
-                                        <p><span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || 'N/A'}</p>
-                                        <p><span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago}</p>
-                                        <p><span className="font-medium">Fecha:</span> {new Date(selectedTransaction.created_at).toLocaleDateString('es-ES')}</p>
+                                <Tabs defaultValue="general" className="w-full">
+                                  <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="general">Información General</TabsTrigger>
+                                    <TabsTrigger value="registros">Registros Contables</TabsTrigger>
+                                  </TabsList>
+                                  
+                                  <TabsContent value="general" className="space-y-4">
+                                    {/* Información General y Montos en 2 columnas */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <h4 className="font-semibold text-sm mb-2">Información General</h4>
+                                        <div className="space-y-1 text-sm">
+                                          <p><span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}</p>
+                                          <p><span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}</p>
+                                          {selectedTransaction.subtipo_egreso && (
+                                            <p><span className="font-medium">Subtipo:</span> {selectedTransaction.subtipo_egreso}</p>
+                                          )}
+                                          <p><span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || 'N/A'}</p>
+                                          <p><span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago}</p>
+                                          <p><span className="font-medium">Fecha:</span> {new Date(selectedTransaction.created_at).toLocaleDateString('es-ES')}</p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div>
+                                        <h4 className="font-semibold text-sm mb-2">Montos</h4>
+                                        <div className="space-y-1 text-sm">
+                                          <p><span className="font-medium">Total:</span> ${formatMonto(selectedTransaction.monto_total)}</p>
+                                          <p><span className="font-medium">Pagado:</span> ${formatMonto(selectedTransaction.monto_pagado)}</p>
+                                          <p><span className="font-medium">Pendiente:</span> ${formatMonto(selectedTransaction.monto_pendiente)}</p>
+                                          {selectedTransaction.cantidad && <p><span className="font-medium">Cantidad:</span> {selectedTransaction.cantidad}</p>}
+                                          {selectedTransaction.precio_unitario && <p><span className="font-medium">Precio Unitario:</span> ${formatMonto(selectedTransaction.precio_unitario)}</p>}
+                                        </div>
                                       </div>
                                     </div>
                                     
+                                    {/* Información del Proveedor */}
+                                    {selectedTransaction.proveedor_nombre && (
+                                      <div>
+                                        <h4 className="font-semibold text-sm mb-2">Información del Proveedor</h4>
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                          <p><span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}</p>
+                                          {selectedTransaction.proveedor_telefono && <p><span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}</p>}
+                                          {selectedTransaction.proveedor_email && <p><span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}</p>}
+                                          {selectedTransaction.proveedor_rfc && <p><span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}</p>}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Información Contable */}
                                     <div>
-                                      <h4 className="font-semibold text-sm mb-2">Montos</h4>
-                                      <div className="space-y-1 text-sm">
-                                        <p><span className="font-medium">Total:</span> ${formatMonto(selectedTransaction.monto_total)}</p>
-                                        <p><span className="font-medium">Pagado:</span> ${formatMonto(selectedTransaction.monto_pagado)}</p>
-                                        <p><span className="font-medium">Pendiente:</span> ${formatMonto(selectedTransaction.monto_pendiente)}</p>
-                                        {selectedTransaction.cantidad && <p><span className="font-medium">Cantidad:</span> {selectedTransaction.cantidad}</p>}
-                                        {selectedTransaction.precio_unitario && <p><span className="font-medium">Precio Unitario:</span> ${formatMonto(selectedTransaction.precio_unitario)}</p>}
+                                      <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
+                                      <div className="text-sm space-y-1">
+                                        <p><span className="font-medium">Cuenta Principal:</span> {selectedTransaction.cuenta_codigo}</p>
                                       </div>
                                     </div>
-                                  </div>
-                                  
-                                  {/* Información del Proveedor */}
-                                  {selectedTransaction.proveedor_nombre && (
-                                    <div>
-                                      <h4 className="font-semibold text-sm mb-2">Información del Proveedor</h4>
-                                      <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <p><span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}</p>
-                                        {selectedTransaction.proveedor_telefono && <p><span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}</p>}
-                                        {selectedTransaction.proveedor_email && <p><span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}</p>}
-                                        {selectedTransaction.proveedor_rfc && <p><span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}</p>}
+                                    
+                                    {/* Comentarios */}
+                                    {selectedTransaction.comentarios && (
+                                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md">
+                                        <p className="font-medium text-blue-700 dark:text-blue-300 text-sm mb-1">💬 Comentarios</p>
+                                        <p className="text-blue-600 dark:text-blue-400 text-sm">{selectedTransaction.comentarios}</p>
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
+                                  </TabsContent>
                                   
-                                  {/* Información Contable */}
-                                  <div>
-                                    <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
-                                    <div className="text-sm space-y-1">
-                                      <p><span className="font-medium">Cuenta Principal:</span> {selectedTransaction.cuenta_codigo}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Asientos Contables */}
-                                  {loadingAsientos ? (
-                                    <div className="text-center py-4">Cargando asientos contables...</div>
-                                  ) : currentAsientos ? (
-                                    <div>
-                                      <h4 className="font-semibold text-sm mb-2">Asientos Contables en Balanza</h4>
-                                      <div className="overflow-x-auto">
-                                        <table className="w-full text-sm border">
-                                          <thead className="bg-muted">
-                                            <tr>
-                                              <th className="p-3 text-left">Cuenta</th>
-                                              <th className="p-3 text-left">Descripción</th>
-                                              <th className="p-3 text-right">Debe</th>
-                                              <th className="p-3 text-right">Haber</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {currentAsientos.detalles?.map((detalle: any, idx: number) => (
-                                              <tr key={idx} className="border-b">
-                                                <td className="p-3">
-                                                  <div className="font-medium">{detalle.cuenta_codigo}</div>
-                                                  <div className="text-xs text-muted-foreground">{detalle.cuenta_nombre}</div>
+                                  <TabsContent value="registros" className="space-y-4">
+                                    {loadingAsientos ? (
+                                      <div className="text-center py-8">
+                                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                        <p className="mt-2 text-sm text-muted-foreground">Cargando asientos contables...</p>
+                                      </div>
+                                    ) : selectedTransaction.detalles_asiento && selectedTransaction.detalles_asiento.length > 0 ? (
+                                      <div>
+                                        <div className="border-b pb-3 mb-4">
+                                          <h4 className="font-semibold text-base">Registros Contables</h4>
+                                          <p className="text-sm text-muted-foreground mt-1">
+                                            Asiento: {selectedTransaction.numero_asiento || 'N/A'}
+                                          </p>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-sm border rounded-lg overflow-hidden">
+                                            <thead className="bg-muted">
+                                              <tr>
+                                                <th className="p-3 text-left">Cuenta</th>
+                                                <th className="p-3 text-left">Descripción</th>
+                                                <th className="p-3 text-right">Debe</th>
+                                                <th className="p-3 text-right">Haber</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {selectedTransaction.detalles_asiento.map((detalle: any, idx: number) => (
+                                                <tr key={idx} className="border-b last:border-0">
+                                                  <td className="p-3">
+                                                    <div className="font-mono font-semibold">{detalle.cuenta_codigo}</div>
+                                                    <div className="text-xs text-muted-foreground">{detalle.cuenta_nombre}</div>
+                                                  </td>
+                                                  <td className="p-3">{detalle.descripcion}</td>
+                                                  <td className="p-3 text-right">
+                                                    {detalle.debe > 0 ? (
+                                                      <span className="text-red-600 font-semibold">${formatMonto(detalle.debe)}</span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                  </td>
+                                                  <td className="p-3 text-right">
+                                                    {detalle.haber > 0 ? (
+                                                      <span className="text-green-600 font-semibold">${formatMonto(detalle.haber)}</span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                              <tr className="border-t-2 bg-muted/50 font-bold">
+                                                <td colSpan={2} className="p-3">TOTALES</td>
+                                                <td className="p-3 text-right text-red-600">
+                                                  ${formatMonto((selectedTransaction.detalles_asiento as any[]).reduce((sum: number, d: any) => sum + (Number(d.debe) || 0), 0))}
                                                 </td>
-                                                <td className="p-3">{detalle.descripcion}</td>
-                                                <td className="p-3 text-right font-medium">
-                                                  {detalle.debe > 0 ? `$${formatMonto(detalle.debe)}` : '-'}
-                                                </td>
-                                                <td className="p-3 text-right font-medium">
-                                                  {detalle.haber > 0 ? `$${formatMonto(detalle.haber)}` : '-'}
+                                                <td className="p-3 text-right text-green-600">
+                                                  ${formatMonto((selectedTransaction.detalles_asiento as any[]).reduce((sum: number, d: any) => sum + (Number(d.haber) || 0), 0))}
                                                 </td>
                                               </tr>
-                                            ))}
-                                            <tr className="border-t-2 bg-muted/50 font-bold">
-                                              <td colSpan={2} className="p-3">TOTALES</td>
-                                              <td className="p-3 text-right">
-                                                ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.debe), 0) || 0)}
-                                              </td>
-                                              <td className="p-3 text-right">
-                                                ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.haber), 0) || 0)}
-                                              </td>
-                                            </tr>
-                                          </tbody>
-                                        </table>
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm mt-4">
+                                          <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Información</p>
+                                          <p className="text-blue-600 dark:text-blue-400">
+                                            Este asiento contable refleja cómo esta transacción afecta a las diferentes
+                                            cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                                          </p>
+                                        </div>
                                       </div>
-                                      
-                                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm mt-3">
-                                        <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Información</p>
-                                        <p className="text-blue-600 dark:text-blue-400">
-                                          Este asiento contable refleja cómo esta transacción afecta a las diferentes
-                                          cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                                    ) : currentAsientos?.detalles ? (
+                                      <div>
+                                        <div className="border-b pb-3 mb-4">
+                                          <h4 className="font-semibold text-base">Asientos Contables en Balanza</h4>
+                                          <p className="text-sm text-muted-foreground mt-1">
+                                            Asiento #{currentAsientos.numero_asiento}
+                                          </p>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-sm border rounded-lg overflow-hidden">
+                                            <thead className="bg-muted">
+                                              <tr>
+                                                <th className="p-3 text-left">Cuenta</th>
+                                                <th className="p-3 text-left">Descripción</th>
+                                                <th className="p-3 text-right">Debe</th>
+                                                <th className="p-3 text-right">Haber</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {currentAsientos.detalles.map((detalle: any, idx: number) => (
+                                                <tr key={idx} className="border-b last:border-0">
+                                                  <td className="p-3">
+                                                    <div className="font-mono font-semibold">{detalle.cuenta_codigo}</div>
+                                                    <div className="text-xs text-muted-foreground">{detalle.cuenta_nombre}</div>
+                                                  </td>
+                                                  <td className="p-3">{detalle.descripcion}</td>
+                                                  <td className="p-3 text-right">
+                                                    {detalle.debe > 0 ? (
+                                                      <span className="text-red-600 font-semibold">${formatMonto(detalle.debe)}</span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                  </td>
+                                                  <td className="p-3 text-right">
+                                                    {detalle.haber > 0 ? (
+                                                      <span className="text-green-600 font-semibold">${formatMonto(detalle.haber)}</span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                              <tr className="border-t-2 bg-muted/50 font-bold">
+                                                <td colSpan={2} className="p-3">TOTALES</td>
+                                                <td className="p-3 text-right text-red-600">
+                                                  ${formatMonto(currentAsientos.detalles.reduce((sum: number, d: any) => sum + Number(d.debe), 0))}
+                                                </td>
+                                                <td className="p-3 text-right text-green-600">
+                                                  ${formatMonto(currentAsientos.detalles.reduce((sum: number, d: any) => sum + Number(d.haber), 0))}
+                                                </td>
+                                              </tr>
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm mt-4">
+                                          <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Información</p>
+                                          <p className="text-blue-600 dark:text-blue-400">
+                                            Este asiento contable refleja cómo esta transacción afecta a las diferentes
+                                            cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                                          </p>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="p-8 bg-muted/50 rounded-lg text-center">
+                                        <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                                        <p className="text-sm text-muted-foreground">
+                                          No se encontraron registros contables para esta transacción
                                         </p>
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center">
-                                      No se encontraron asientos contables para esta transacción
-                                    </div>
-                                  )}
-                                  
-                                  {/* Comentarios */}
-                                  {selectedTransaction.comentarios && (
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md">
-                                      <p className="font-medium text-blue-700 dark:text-blue-300 text-sm mb-1">💬 Comentarios</p>
-                                      <p className="text-blue-600 dark:text-blue-400 text-sm">{selectedTransaction.comentarios}</p>
-                                    </div>
-                                  )}
-                                </div>
+                                    )}
+                                  </TabsContent>
+                                </Tabs>
                               )}
                             </DialogContent>
                           </Dialog>
