@@ -14,7 +14,7 @@ export const useCostosVentaInventario = () => {
   return useQuery({
     queryKey: ["costos-venta-inventario"],
     queryFn: async (): Promise<CostoVentaInventario[]> => {
-      // Obtener todos los asientos que tienen movimientos en la cuenta 5001 (Costo de Ventas)
+      // Obtener todos los asientos que tienen movimientos en la cuenta 5002 (Costo de Ventas Inventario)
       const { data: asientos, error: asientosError } = await supabase
         .from('asientos_contables')
         .select(`
@@ -30,7 +30,7 @@ export const useCostosVentaInventario = () => {
             descripcion
           )
         `)
-        .eq('detalle_asientos.cuenta_codigo', '5001')
+        .eq('detalle_asientos.cuenta_codigo', '5002')
         .order('fecha', { ascending: false });
 
       if (asientosError) {
@@ -42,9 +42,9 @@ export const useCostosVentaInventario = () => {
       const costosVenta: CostoVentaInventario[] = [];
 
       asientos?.forEach((asiento: any) => {
-        // Buscar el detalle que corresponde al costo de venta (cuenta 5001)
+        // Buscar el detalle que corresponde al costo de venta (cuenta 5002)
         const detalleCosto = asiento.detalle_asientos?.find(
-          (detalle: any) => detalle.cuenta_codigo === '5001' && detalle.debe > 0
+          (detalle: any) => detalle.cuenta_codigo === '5002' && detalle.debe > 0
         );
 
         if (detalleCosto) {
