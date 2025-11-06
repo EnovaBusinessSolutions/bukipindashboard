@@ -76,9 +76,11 @@ export const useCostosVentaInventario = () => {
         
         const descripcionAsiento = asiento.descripcion || '';
         
-        // La descripción del asiento generalmente tiene el formato "Venta: [Nombre Producto]"
+        // Extraer el nombre del producto según el tipo de asiento
         if (descripcionAsiento.includes('Venta:')) {
           productoNombre = descripcionAsiento.split('Venta:')[1]?.trim() || productoNombre;
+        } else if (descripcionAsiento.includes('Egreso:')) {
+          productoNombre = descripcionAsiento.split('Egreso:')[1]?.trim() || productoNombre;
         }
 
         // Buscar el movimiento de inventario específico cuyo costo_total coincida con el monto del asiento
@@ -118,15 +120,14 @@ export const useCostosVentaInventario = () => {
         // Si no encontramos imagen en inventario, buscar en productos_egresos
         if (!productoImagen && detalleCosto) {
           // Buscar la transacción de egreso relacionada por descripción y monto
-          const descripcionBusqueda = asiento.descripcion.replace('Egreso: ', '').trim();
+          const descripcionBusqueda = asiento.descripcion.replace('Egreso: ', '').replace('Venta: ', '').trim();
           
           const { data: transaccionEgreso } = await supabase
             .from('transacciones_egresos')
             .select('producto_egreso_id, cantidad, precio_unitario')
-            .ilike('descripcion', `%${descripcionBusqueda}%`)
+            .eq('descripcion', descripcionBusqueda)
             .eq('user_id', asiento.user_id)
-            .gte('created_at', new Date(asiento.fecha).toISOString())
-            .lte('created_at', new Date(new Date(asiento.fecha).getTime() + 24 * 60 * 60 * 1000).toISOString())
+            .eq('monto_total', Number(detalleCosto.debe))
             .maybeSingle();
           
           if (transaccionEgreso?.producto_egreso_id) {
