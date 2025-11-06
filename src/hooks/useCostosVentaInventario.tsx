@@ -80,16 +80,10 @@ export const useCostosVentaInventario = () => {
           productoNombre = descripcionAsiento.split('Venta:')[1]?.trim() || productoNombre;
         }
 
-        // Buscar el movimiento de inventario relacionado para obtener cantidad, producto e imagen
+        // Buscar el movimiento de inventario relacionado para obtener cantidad y producto_id
         const { data: movimiento } = await supabase
           .from('movimientos_inventario')
-          .select(`
-            cantidad,
-            productos (
-              nombre,
-              imagen_url
-            )
-          `)
+          .select('id, cantidad, producto_id')
           .eq('tipo_movimiento', 'venta')
           .eq('fecha', asiento.fecha)
           .eq('estado', 'activo')
@@ -104,10 +98,18 @@ export const useCostosVentaInventario = () => {
             costoUnitario = Number(detalleCosto.debe) / cantidad;
           }
           
-          // Obtener datos del producto desde el JOIN
-          if (movimiento.productos) {
-            productoNombre = movimiento.productos.nombre;
-            productoImagen = movimiento.productos.imagen_url;
+          // Obtener datos del producto con una query separada
+          if (movimiento.producto_id) {
+            const { data: producto } = await supabase
+              .from('productos')
+              .select('nombre, imagen_url')
+              .eq('id', movimiento.producto_id)
+              .maybeSingle();
+            
+            if (producto) {
+              productoNombre = producto.nombre;
+              productoImagen = producto.imagen_url;
+            }
           }
         }
 
