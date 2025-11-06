@@ -3,8 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package, Info } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package, Info, AlertCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +41,12 @@ const ResumenEgresos = () => {
   const [filterFechaFin, setFilterFechaFin] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [filterCategoriaContable, setFilterCategoriaContable] = useState<string>("todos");
+  
+  // Estados para cancelación
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [transaccionACancelar, setTransaccionACancelar] = useState<any>(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [isCanceling, setIsCanceling] = useState(false);
 
   // Obtener valores únicos para filtros
   const proveedoresUnicos = useMemo(() => {
@@ -332,6 +340,49 @@ const ResumenEgresos = () => {
       });
     } finally {
       setUploadingComprobante(false);
+    }
+  };
+
+  const handleCancelarTransaccion = async () => {
+    if (!transaccionACancelar || !motivoCancelacion.trim()) {
+      toast({
+        title: "Error",
+        description: "Por favor proporciona un motivo de cancelación",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCanceling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('cancelar-egreso', {
+        body: {
+          transaccionId: transaccionACancelar.id,
+          motivo: motivoCancelacion
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Transacción cancelada",
+        description: "La transacción ha sido cancelada exitosamente",
+      });
+
+      setIsCancelDialogOpen(false);
+      setMotivoCancelacion("");
+      setTransaccionACancelar(null);
+      // Refrescar datos
+      window.location.reload();
+    } catch (error) {
+      console.error('Error cancelando transacción:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo cancelar la transacción",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCanceling(false);
     }
   };
 
@@ -663,7 +714,8 @@ const ResumenEgresos = () => {
                     <TableHead className="text-right">Costo Unit.</TableHead>
                     <TableHead className="text-right">Monto Total</TableHead>
                     <TableHead>Asiento</TableHead>
-                    <TableHead>Detalle</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -769,69 +821,171 @@ const ResumenEgresos = () => {
                         )}
                       </TableCell>
                       
-                      {/* Detalle (popover o botón) */}
+                      {/* Estado */}
                       <TableCell>
-                        {transaccion.detalles_asiento && transaccion.detalles_asiento.length > 0 ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
+                        <Badge variant="outline">✅ Activa</Badge>
+                      </TableCell>
+                      
+                      {/* Acciones */}
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {/* Botón Ver Detalle */}
+                          <Dialog onOpenChange={(open) => {
+                            if (open) {
+                              setSelectedTransaction(transaccion);
+                              loadAsientosContables(transaccion.id);
+                            } else {
+                              setCurrentAsientos(null);
+                            }
+                          }}>
+                            <DialogTrigger asChild>
                               <Button variant="ghost" size="sm">
-                                <Info className="h-4 w-4" />
+                                <FileText className="h-4 w-4" />
                               </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[500px]" align="end">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2">Detalle Contable</h4>
-                                  <div className="space-y-2">
-                                    {transaccion.detalles_asiento.map((detalle: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between text-xs border-b pb-2">
-                                        <div className="flex-1">
-                                          <div className="font-mono font-semibold">{detalle.cuenta_codigo}</div>
-                                          <div className="text-muted-foreground">{detalle.cuenta_nombre}</div>
-                                        </div>
-                                        <div className="text-right">
-                                          {detalle.debe > 0 && (
-                                            <div className="text-red-600 font-semibold">
-                                              Debe: ${formatMonto(detalle.debe)}
-                                            </div>
-                                          )}
-                                          {detalle.haber > 0 && (
-                                            <div className="text-green-600 font-semibold">
-                                              Haber: ${formatMonto(detalle.haber)}
-                                            </div>
-                                          )}
-                                        </div>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>Detalles de la Transacción</DialogTitle>
+                                <DialogDescription>
+                                  Información completa y asientos contables en balanza
+                                </DialogDescription>
+                              </DialogHeader>
+                              
+                              {selectedTransaction && (
+                                <div className="space-y-4">
+                                  {/* Información General y Montos en 2 columnas */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <h4 className="font-semibold text-sm mb-2">Información General</h4>
+                                      <div className="space-y-1 text-sm">
+                                        <p><span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}</p>
+                                        <p><span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}</p>
+                                        {selectedTransaction.subtipo_egreso && (
+                                          <p><span className="font-medium">Subtipo:</span> {selectedTransaction.subtipo_egreso}</p>
+                                        )}
+                                        <p><span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || 'N/A'}</p>
+                                        <p><span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago}</p>
+                                        <p><span className="font-medium">Fecha:</span> {new Date(selectedTransaction.created_at).toLocaleDateString('es-ES')}</p>
                                       </div>
-                                    ))}
-                                  </div>
-                                </div>
-                                {transaccion.cantidad && transaccion.costo_unitario && (
-                                  <div className="pt-2 border-t">
-                                    <h4 className="font-semibold text-sm mb-2">Información Adicional</h4>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div>
-                                        <span className="text-muted-foreground">Cantidad:</span>
-                                        <span className="ml-2 font-medium">{transaccion.cantidad}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground">Costo Unitario:</span>
-                                        <span className="ml-2 font-medium">${formatMonto(transaccion.costo_unitario)}</span>
+                                    </div>
+                                    
+                                    <div>
+                                      <h4 className="font-semibold text-sm mb-2">Montos</h4>
+                                      <div className="space-y-1 text-sm">
+                                        <p><span className="font-medium">Total:</span> ${formatMonto(selectedTransaction.monto_total)}</p>
+                                        <p><span className="font-medium">Pagado:</span> ${formatMonto(selectedTransaction.monto_pagado)}</p>
+                                        <p><span className="font-medium">Pendiente:</span> ${formatMonto(selectedTransaction.monto_pendiente)}</p>
+                                        {selectedTransaction.cantidad && <p><span className="font-medium">Cantidad:</span> {selectedTransaction.cantidad}</p>}
+                                        {selectedTransaction.precio_unitario && <p><span className="font-medium">Precio Unitario:</span> ${formatMonto(selectedTransaction.precio_unitario)}</p>}
                                       </div>
                                     </div>
                                   </div>
-                                )}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <Button 
-                            variant="ghost" 
+                                  
+                                  {/* Información del Proveedor */}
+                                  {selectedTransaction.proveedor_nombre && (
+                                    <div>
+                                      <h4 className="font-semibold text-sm mb-2">Información del Proveedor</h4>
+                                      <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <p><span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}</p>
+                                        {selectedTransaction.proveedor_telefono && <p><span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}</p>}
+                                        {selectedTransaction.proveedor_email && <p><span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}</p>}
+                                        {selectedTransaction.proveedor_rfc && <p><span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}</p>}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Información Contable */}
+                                  <div>
+                                    <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
+                                    <div className="text-sm space-y-1">
+                                      <p><span className="font-medium">Cuenta Principal:</span> {selectedTransaction.cuenta_codigo}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Asientos Contables */}
+                                  {loadingAsientos ? (
+                                    <div className="text-center py-4">Cargando asientos contables...</div>
+                                  ) : currentAsientos ? (
+                                    <div>
+                                      <h4 className="font-semibold text-sm mb-2">Asientos Contables en Balanza</h4>
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm border">
+                                          <thead className="bg-muted">
+                                            <tr>
+                                              <th className="p-3 text-left">Cuenta</th>
+                                              <th className="p-3 text-left">Descripción</th>
+                                              <th className="p-3 text-right">Debe</th>
+                                              <th className="p-3 text-right">Haber</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {currentAsientos.detalles?.map((detalle: any, idx: number) => (
+                                              <tr key={idx} className="border-b">
+                                                <td className="p-3">
+                                                  <div className="font-medium">{detalle.cuenta_codigo}</div>
+                                                  <div className="text-xs text-muted-foreground">{detalle.cuenta_nombre}</div>
+                                                </td>
+                                                <td className="p-3">{detalle.descripcion}</td>
+                                                <td className="p-3 text-right font-medium">
+                                                  {detalle.debe > 0 ? `$${formatMonto(detalle.debe)}` : '-'}
+                                                </td>
+                                                <td className="p-3 text-right font-medium">
+                                                  {detalle.haber > 0 ? `$${formatMonto(detalle.haber)}` : '-'}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                            <tr className="border-t-2 bg-muted/50 font-bold">
+                                              <td colSpan={2} className="p-3">TOTALES</td>
+                                              <td className="p-3 text-right">
+                                                ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.debe), 0) || 0)}
+                                              </td>
+                                              <td className="p-3 text-right">
+                                                ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.haber), 0) || 0)}
+                                              </td>
+                                            </tr>
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                      
+                                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm mt-3">
+                                        <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Información</p>
+                                        <p className="text-blue-600 dark:text-blue-400">
+                                          Este asiento contable refleja cómo esta transacción afecta a las diferentes
+                                          cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center">
+                                      No se encontraron asientos contables para esta transacción
+                                    </div>
+                                  )}
+                                  
+                                  {/* Comentarios */}
+                                  {selectedTransaction.comentarios && (
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md">
+                                      <p className="font-medium text-blue-700 dark:text-blue-300 text-sm mb-1">💬 Comentarios</p>
+                                      <p className="text-blue-600 dark:text-blue-400 text-sm">{selectedTransaction.comentarios}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          
+                          {/* Botón Cancelar */}
+                          <Button
+                            variant="outline"
                             size="sm"
-                            onClick={() => handleViewDetails(transaccion)}
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setTransaccionACancelar(transaccion);
+                              setIsCancelDialogOpen(true);
+                            }}
                           >
-                            <Info className="h-4 w-4" />
+                            ❌
                           </Button>
-                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -865,6 +1019,59 @@ const ResumenEgresos = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de cancelación */}
+      <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar Transacción</DialogTitle>
+            <DialogDescription>
+              Esta acción creará un asiento de reversión y marcará la transacción como cancelada.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>Motivo de Cancelación *</Label>
+              <Textarea
+                value={motivoCancelacion}
+                onChange={(e) => setMotivoCancelacion(e.target.value)}
+                placeholder="Describe el motivo de la cancelación..."
+                rows={4}
+              />
+            </div>
+            
+            {transaccionACancelar && (
+              <div className="p-3 bg-muted rounded-md text-sm">
+                <p className="font-medium mb-2">Transacción a cancelar:</p>
+                <p><span className="font-medium">Descripción:</span> {transaccionACancelar.descripcion}</p>
+                <p><span className="font-medium">Monto:</span> ${formatMonto(transaccionACancelar.monto_total)}</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCancelDialogOpen(false);
+                setMotivoCancelacion("");
+                setTransaccionACancelar(null);
+              }}
+              disabled={isCanceling}
+            >
+              Cerrar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelarTransaccion}
+              disabled={isCanceling || !motivoCancelacion.trim()}
+            >
+              {isCanceling ? "Cancelando..." : "Confirmar Cancelación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de detalles */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
