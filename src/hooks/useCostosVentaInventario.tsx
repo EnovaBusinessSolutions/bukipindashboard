@@ -26,7 +26,7 @@ export const useCostosVentaInventario = () => {
   return useQuery({
     queryKey: ["costos-venta-inventario"],
     queryFn: async (): Promise<CostoVentaInventario[]> => {
-      // Obtener todos los asientos que tienen movimientos en la cuenta 5002 (Costo de Ventas Inventario)
+      // Obtener todos los asientos que tienen movimientos en cuentas de costos (50XX)
       const { data: asientos, error: asientosError } = await supabase
         .from('asientos_contables')
         .select(`
@@ -34,6 +34,7 @@ export const useCostosVentaInventario = () => {
           numero_asiento,
           descripcion,
           fecha,
+          user_id,
           detalle_asientos(
             id,
             cuenta_codigo,
@@ -60,9 +61,9 @@ export const useCostosVentaInventario = () => {
       const costosVenta: CostoVentaInventario[] = [];
 
       for (const asiento of asientos || []) {
-        // Buscar el detalle que corresponde al costo de venta (cuenta 5002)
+        // Buscar CUALQUIER cuenta de costos (50XX) con saldo deudor
         const detalleCosto = asiento.detalle_asientos?.find(
-          (detalle: any) => detalle.cuenta_codigo === '5002' && detalle.debe > 0
+          (detalle: any) => detalle.cuenta_codigo?.startsWith('50') && detalle.debe > 0
         );
 
         if (!detalleCosto) continue;
@@ -110,6 +111,42 @@ export const useCostosVentaInventario = () => {
             if (producto) {
               productoNombre = producto.nombre;
               productoImagen = producto.imagen_url;
+            }
+          }
+        }
+
+        // Si no encontramos imagen en inventario, buscar en productos_egresos
+        if (!productoImagen && detalleCosto) {
+          // Buscar la transacción de egreso relacionada por descripción y monto
+          const descripcionBusqueda = asiento.descripcion.replace('Egreso: ', '').trim();
+          
+          const { data: transaccionEgreso } = await supabase
+            .from('transacciones_egresos')
+            .select('producto_egreso_id, cantidad, precio_unitario')
+            .ilike('descripcion', `%${descripcionBusqueda}%`)
+            .eq('user_id', asiento.user_id)
+            .gte('created_at', new Date(asiento.fecha).toISOString())
+            .lte('created_at', new Date(new Date(asiento.fecha).getTime() + 24 * 60 * 60 * 1000).toISOString())
+            .maybeSingle();
+          
+          if (transaccionEgreso?.producto_egreso_id) {
+            const { data: productoEgreso } = await supabase
+              .from('productos_egresos')
+              .select('nombre, imagen_url')
+              .eq('id', transaccionEgreso.producto_egreso_id)
+              .maybeSingle();
+            
+            if (productoEgreso) {
+              productoNombre = productoEgreso.nombre;
+              productoImagen = productoEgreso.imagen_url;
+              
+              // Calcular cantidad y costo unitario desde transacciones_egresos
+              if (transaccionEgreso.cantidad) {
+                cantidad = Math.abs(Number(transaccionEgreso.cantidad));
+                if (cantidad > 0) {
+                  costoUnitario = Number(detalleCosto.debe) / cantidad;
+                }
+              }
             }
           }
         }
