@@ -161,6 +161,12 @@ const ResumenEgresos = () => {
     );
   }, [costosVentaInventario, transaccionesGastos]);
 
+  // Logs de depuración para verificar datos
+  React.useEffect(() => {
+    console.log('🔍 Costos de Venta Inventario:', costosVentaInventario);
+    console.log('🔍 Transacciones Unificadas:', transaccionesEgresosUnificadas);
+  }, [costosVentaInventario, transaccionesEgresosUnificadas]);
+
   // Aplicar filtro de categoría contable
   const transaccionesFiltadasPorCategoria = useMemo(() => {
     if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
@@ -221,14 +227,23 @@ const ResumenEgresos = () => {
   const getTipoEgresoDisplay = (transaccion: any) => {
     const codigo = transaccion.cuenta_codigo;
     
+    // Clasificación basada EXCLUSIVAMENTE en código de cuenta
+    if (codigo === '5001') {
+      return {
+        label: 'Costos de Venta',
+        className: 'bg-red-100 text-red-700 border-red-300'
+      };
+    }
+    
+    if (codigo === '5002') {
+      return {
+        label: 'Costo de Venta Inventario',
+        className: 'bg-purple-100 text-purple-700 border-purple-300'
+      };
+    }
+    
+    // Para otros códigos 50XX genéricos
     if (codigo?.startsWith('50')) {
-      // Si tiene datos de inventario (imagen, cantidad, costo unitario)
-      if (transaccion.imagen_url && transaccion.cantidad && transaccion.costo_unitario) {
-        return {
-          label: 'Costo de Venta Inventario',
-          className: 'bg-purple-100 text-purple-700 border-purple-300'
-        };
-      }
       return {
         label: 'Costos de Venta',
         className: 'bg-red-100 text-red-700 border-red-300'
@@ -765,6 +780,9 @@ const ResumenEgresos = () => {
                               src={transaccion.imagen_url} 
                               alt={transaccion.descripcion}
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = '/placeholder.svg';
+                              }}
                             />
                           ) : (
                             <Package className="h-5 w-5 text-muted-foreground" />
