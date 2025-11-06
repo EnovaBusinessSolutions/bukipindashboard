@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
-import { useComprasInventario } from "@/hooks/useComprasInventario";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +19,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const ResumenEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(200);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
-  const { data: comprasInventario, isLoading: loadingComprasInventario } = useComprasInventario();
   const { data: cuentasData } = useCuentas();
   const { toast } = useToast();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
@@ -63,7 +61,7 @@ const ResumenEgresos = () => {
   const transaccionesFiltradas = useMemo(() => {
     return transacciones.filter((t) => {
       // Filtrar solo costos y gastos
-      if (t.tipo_egreso !== 'costo' && t.tipo_egreso !== 'gasto') return false;
+      if (t.tipo_egreso !== 'costo' && t.tipo_egreso !== 'gasto' && t.tipo_egreso !== 'otro') return false;
       
       const fecha = new Date(t.created_at);
       
@@ -100,23 +98,44 @@ const ResumenEgresos = () => {
     });
   }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado, filterMes, filterAno, filterFechaInicio, filterFechaFin]);
 
+  // Filtrar transacciones por categoría contable
+  const transaccionesCostosGenerales = useMemo(() => {
+    return transaccionesFiltradas.filter(t => 
+      t.cuenta_codigo && 
+      t.cuenta_codigo.startsWith('50') && 
+      t.cuenta_codigo !== '5002'
+    );
+  }, [transaccionesFiltradas]);
+
+  const transaccionesGastos = useMemo(() => {
+    return transaccionesFiltradas.filter(t => 
+      t.cuenta_codigo && (
+        t.cuenta_codigo.startsWith('51') || 
+        t.cuenta_codigo.startsWith('52') ||
+        (t.cuenta_codigo.startsWith('6') && 
+         t.cuenta_codigo !== '6001' && 
+         t.cuenta_codigo !== '6002')
+      )
+    );
+  }, [transaccionesFiltradas]);
+
   // Calcular subtotales
   const resumenFiltrado = useMemo(() => {
+    const totalCostosGenerales = transaccionesCostosGenerales.reduce((sum, t) => sum + t.monto_total, 0);
+    const totalGastos = transaccionesGastos.reduce((sum, t) => sum + t.monto_total, 0);
     const totalCostosVentaInventario = costosVentaInventario?.reduce((sum, c) => sum + c.monto, 0) || 0;
-    const totalComprasInventario = comprasInventario?.reduce((sum, c) => sum + c.costo_total, 0) || 0;
     
     return {
       totalTransacciones: transaccionesFiltradas.length,
       montoTotal: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0),
       montoPagado: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pagado, 0),
       montoPendiente: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pendiente, 0),
-      totalCostos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0),
-      totalGastos: transaccionesFiltradas.filter(t => t.tipo_egreso === 'gasto').reduce((sum, t) => sum + t.monto_total, 0),
-      totalComprasInventario,
+      totalCostosGenerales,
+      totalGastos,
       totalCostosVentaInventario,
-      totalCostosGlobal: transaccionesFiltradas.filter(t => t.tipo_egreso === 'costo').reduce((sum, t) => sum + t.monto_total, 0) + totalCostosVentaInventario,
+      totalGlobalEgresos: totalCostosGenerales + totalGastos + totalCostosVentaInventario,
     };
-  }, [transaccionesFiltradas, costosVentaInventario, comprasInventario]);
+  }, [transaccionesFiltradas, transaccionesCostosGenerales, transaccionesGastos, costosVentaInventario]);
 
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -535,27 +554,27 @@ const ResumenEgresos = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Costos Manuales</div>
+                  <div className="text-xs text-muted-foreground">Costos Generales (50XX)</div>
                   <div className="text-lg font-semibold text-destructive">
-                    ${formatMonto(resumenFiltrado.totalCostos)}
+                    ${formatMonto(resumenFiltrado.totalCostosGenerales)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Compras Inventario</div>
-                  <div className="text-lg font-semibold text-blue-600">
-                    ${formatMonto(resumenFiltrado.totalComprasInventario)}
+                  <div className="text-xs text-muted-foreground">Gastos y Otros (51XX, 52XX, 6XXX)</div>
+                  <div className="text-lg font-semibold text-orange-600">
+                    ${formatMonto(resumenFiltrado.totalGastos)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Costo Venta Inventario</div>
+                  <div className="text-xs text-muted-foreground">Costo Venta Inventario (5002)</div>
                   <div className="text-lg font-semibold text-purple-600">
                     ${formatMonto(resumenFiltrado.totalCostosVentaInventario)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Total Gastos</div>
-                  <div className="text-lg font-semibold text-orange-600">
-                    ${formatMonto(resumenFiltrado.totalGastos)}
+                  <div className="text-xs text-muted-foreground">Total Global de Egresos</div>
+                  <div className="text-lg font-semibold text-primary">
+                    ${formatMonto(resumenFiltrado.totalGlobalEgresos)}
                   </div>
                 </div>
               </div>
@@ -563,28 +582,28 @@ const ResumenEgresos = () => {
           )}
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="egresos-manuales" className="w-full">
+          <Tabs defaultValue="costos-generales" className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-4">
-              <TabsTrigger value="egresos-manuales">
-                <FileText className="h-4 w-4 mr-2" />
-                Egresos Manuales
-              </TabsTrigger>
-              <TabsTrigger value="compras-inventario">
+              <TabsTrigger value="costos-generales">
                 <Package className="h-4 w-4 mr-2" />
-                Compras Inventario
+                Costos de Venta Generales
               </TabsTrigger>
-              <TabsTrigger value="costos-inventario">
+              <TabsTrigger value="gastos">
+                <DollarSign className="h-4 w-4 mr-2" />
+                Gastos y Otros Gastos
+              </TabsTrigger>
+              <TabsTrigger value="costo-venta-inventario">
                 <Package className="h-4 w-4 mr-2" />
-                Costos Venta
+                Costo de Venta Inventario
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="egresos-manuales">
-              {transaccionesFiltradas.length === 0 ? (
+            <TabsContent value="costos-generales">
+              {transaccionesCostosGenerales.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>No hay costos o gastos manuales registrados aún</p>
-                  <p className="text-sm mt-2">Los costos y gastos que registres aparecerán aquí</p>
+                  <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>No hay costos de venta generales registrados aún</p>
+                  <p className="text-sm mt-2">Los costos operativos (cuentas 50XX excepto 5002) aparecerán aquí</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -596,6 +615,7 @@ const ResumenEgresos = () => {
                         <TableHead>Tipo</TableHead>
                         <TableHead>Descripción</TableHead>
                         <TableHead>Proveedor</TableHead>
+                        <TableHead>Cuenta</TableHead>
                         <TableHead>Asiento</TableHead>
                         <TableHead>Monto Total</TableHead>
                         <TableHead>Estado</TableHead>
@@ -603,7 +623,7 @@ const ResumenEgresos = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transaccionesFiltradas.map((transaccion) => (
+                      {transaccionesCostosGenerales.map((transaccion) => (
                         <TableRow key={transaccion.id}>
                           <TableCell>
                             <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
@@ -641,6 +661,11 @@ const ResumenEgresos = () => {
                           </TableCell>
                           <TableCell className="max-w-xs truncate">
                             {transaccion.proveedor_nombre || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="font-mono text-xs">
+                              {transaccion.cuenta_codigo}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="font-mono text-xs">
@@ -688,63 +713,128 @@ const ResumenEgresos = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Total Costos de Venta Generales (50XX excepto 5002)
+                    </div>
+                    <div className="text-2xl font-bold text-destructive">
+                      ${formatMonto(resumenFiltrado.totalCostosGenerales)}
+                    </div>
+                  </div>
                 </div>
               )}
             </TabsContent>
             
-            <TabsContent value="compras-inventario">
-              {loadingComprasInventario ? (
+            <TabsContent value="gastos">
+              {transaccionesGastos.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <p>Cargando compras de inventario...</p>
-                </div>
-              ) : !comprasInventario || comprasInventario.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>No hay compras de inventario registradas</p>
-                  <p className="text-sm mt-2">Las compras de inventario que realices aparecerán aquí</p>
+                  <DollarSign className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>No hay gastos registrados aún</p>
+                  <p className="text-sm mt-2">Los gastos operativos (cuentas 51XX, 52XX, 6XXX excepto impuestos) aparecerán aquí</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-16">Imagen</TableHead>
                         <TableHead>Fecha</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>Cantidad</TableHead>
-                        <TableHead className="text-right">Costo Unitario</TableHead>
-                        <TableHead className="text-right">Costo Total</TableHead>
+                        <TableHead>Tipo</TableHead>
                         <TableHead>Descripción</TableHead>
+                        <TableHead>Proveedor</TableHead>
+                        <TableHead>Cuenta</TableHead>
+                        <TableHead>Asiento</TableHead>
+                        <TableHead>Monto Total</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {comprasInventario.map((compra) => (
-                        <TableRow key={compra.id}>
+                      {transaccionesGastos.map((transaccion) => (
+                        <TableRow key={transaccion.id}>
+                          <TableCell>
+                            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
+                              {transaccion.imagen_comprobante ? (
+                                <img 
+                                  src={transaccion.imagen_comprobante} 
+                                  alt="Imagen" 
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {new Date(compra.fecha).toLocaleDateString('es-MX', {
+                            {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric'
                             })}
                           </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4 text-blue-600" />
-                              {compra.producto_nombre}
-                            </div>
+                          <TableCell>
+                            <Badge variant={getTipoEgresoBadge(transaccion.tipo_egreso)}>
+                              {transaccion.tipo_egreso}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs">
+                            <div className="font-medium truncate">{transaccion.descripcion}</div>
+                            {transaccion.comentarios && (
+                              <div className="text-xs text-muted-foreground truncate mt-1">
+                                {transaccion.comentarios.substring(0, 50)}
+                                {transaccion.comentarios.length > 50 && '...'}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {transaccion.proveedor_nombre || '-'}
                           </TableCell>
                           <TableCell>
-                            {compra.cantidad}
+                            <Badge variant="secondary" className="font-mono text-xs">
+                              {transaccion.cuenta_codigo}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono text-xs">
+                              <BookOpen className="h-3 w-3 mr-1" />
+                              EGR-{transaccion.id.substring(0, 8)}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            ${formatMonto(compra.costo_unitario)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-semibold text-blue-600">
-                              ${formatMonto(compra.costo_total)}
+                            <span className="font-semibold">
+                              ${formatMonto(transaccion.monto_total)}
                             </span>
+                            {transaccion.monto_pagado > 0 && (
+                              <div className="text-xs text-green-600">
+                                Pagado: ${formatMonto(transaccion.monto_pagado)}
+                              </div>
+                            )}
+                            {transaccion.monto_pendiente > 0 && (
+                              <div className="text-xs text-yellow-600">
+                                Pendiente: ${formatMonto(transaccion.monto_pendiente)}
+                              </div>
+                            )}
                           </TableCell>
-                          <TableCell className="max-w-xs truncate text-muted-foreground">
-                            {compra.descripcion || '-'}
+                          <TableCell>
+                            {transaccion.monto_pendiente > 0 ? (
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                Pendiente
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                Pagado
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewDetails(transaccion)}
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              Ver Detalle
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -752,17 +842,17 @@ const ResumenEgresos = () => {
                   </Table>
                   <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
-                      Total de compras de inventario
+                      Total Gastos y Otros (51XX, 52XX, 6XXX excepto impuestos)
                     </div>
-                    <div className="text-2xl font-bold text-blue-600">
-                      ${formatMonto(resumenFiltrado.totalComprasInventario)}
+                    <div className="text-2xl font-bold text-orange-600">
+                      ${formatMonto(resumenFiltrado.totalGastos)}
                     </div>
                   </div>
                 </div>
               )}
             </TabsContent>
             
-            <TabsContent value="costos-inventario">
+            <TabsContent value="costo-venta-inventario">
               {loadingCostosVenta ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <p>Cargando costos de venta...</p>
