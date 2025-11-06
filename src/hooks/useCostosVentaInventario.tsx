@@ -80,30 +80,33 @@ export const useCostosVentaInventario = () => {
           productoNombre = descripcionAsiento.split('Venta:')[1]?.trim() || productoNombre;
         }
 
-        // Buscar el movimiento de inventario relacionado para obtener cantidad y producto_id
-        const { data: movimiento } = await supabase
+        // Buscar TODOS los movimientos de inventario del día
+        const { data: movimientos } = await supabase
           .from('movimientos_inventario')
           .select('id, cantidad, producto_id')
           .eq('tipo_movimiento', 'venta')
           .eq('fecha', asiento.fecha)
           .eq('estado', 'activo')
-          .ilike('descripcion', `%${productoNombre}%`)
-          .maybeSingle();
+          .ilike('descripcion', `%${productoNombre}%`);
 
-        if (movimiento && movimiento.cantidad) {
-          cantidad = Math.abs(Number(movimiento.cantidad));
+        if (movimientos && movimientos.length > 0) {
+          // Sumar todas las cantidades del día
+          cantidad = movimientos.reduce((sum, m) => sum + Math.abs(Number(m.cantidad)), 0);
           
-          // CALCULAR el costo unitario = monto total / cantidad
+          // Usar el producto_id del primer movimiento
+          const primerMovimiento = movimientos[0];
+          
+          // CALCULAR el costo unitario promedio = monto total / cantidad total
           if (cantidad > 0) {
             costoUnitario = Number(detalleCosto.debe) / cantidad;
           }
           
           // Obtener datos del producto con una query separada
-          if (movimiento.producto_id) {
+          if (primerMovimiento.producto_id) {
             const { data: producto } = await supabase
               .from('productos')
               .select('nombre, imagen_url')
-              .eq('id', movimiento.producto_id)
+              .eq('id', primerMovimiento.producto_id)
               .maybeSingle();
             
             if (producto) {
