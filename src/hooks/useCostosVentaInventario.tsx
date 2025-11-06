@@ -80,30 +80,35 @@ export const useCostosVentaInventario = () => {
           productoNombre = descripcionAsiento.split('Venta:')[1]?.trim() || productoNombre;
         }
 
-        // Buscar el producto para obtener su imagen
-        const { data: producto } = await supabase
-          .from('productos')
-          .select('imagen_url')
-          .eq('nombre', productoNombre)
-          .maybeSingle();
-
-        if (producto) {
-          productoImagen = producto.imagen_url;
-        }
-
-        // Buscar el movimiento de inventario relacionado para obtener cantidad y costo unitario
+        // Buscar el movimiento de inventario relacionado para obtener cantidad, producto e imagen
         const { data: movimiento } = await supabase
           .from('movimientos_inventario')
-          .select('cantidad, costo_unitario')
+          .select(`
+            cantidad,
+            productos (
+              nombre,
+              imagen_url
+            )
+          `)
           .eq('tipo_movimiento', 'venta')
-          .eq('descripcion', asiento.descripcion)
-          .gte('fecha', new Date(new Date(asiento.fecha).getTime() - 24*60*60*1000).toISOString().split('T')[0])
-          .lte('fecha', new Date(new Date(asiento.fecha).getTime() + 24*60*60*1000).toISOString().split('T')[0])
+          .eq('fecha', asiento.fecha)
+          .eq('estado', 'activo')
+          .ilike('descripcion', `%${productoNombre}%`)
           .maybeSingle();
 
-        if (movimiento) {
+        if (movimiento && movimiento.cantidad) {
           cantidad = Math.abs(Number(movimiento.cantidad));
-          costoUnitario = Number(movimiento.costo_unitario);
+          
+          // CALCULAR el costo unitario = monto total / cantidad
+          if (cantidad > 0) {
+            costoUnitario = Number(detalleCosto.debe) / cantidad;
+          }
+          
+          // Obtener datos del producto desde el JOIN
+          if (movimiento.productos) {
+            productoNombre = movimiento.productos.nombre;
+            productoImagen = movimiento.productos.imagen_url;
+          }
         }
 
         // Obtener todos los detalles del asiento con nombres de cuenta
