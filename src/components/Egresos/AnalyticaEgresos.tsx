@@ -224,8 +224,8 @@ const AnalyticaEgresos = () => {
       .reduce((sum, t) => sum + t.monto_pagado, 0);
 
     return [
-      { name: 'Efectivo', value: efectivo, fill: 'hsl(142, 70%, 50%)' },
-      { name: 'Bancos/Tarjeta', value: bancosTarjeta, fill: 'hsl(220, 70%, 55%)' }
+      { name: 'Efectivo', value: efectivo, fill: 'hsl(160, 55%, 50%)' },
+      { name: 'Bancos/Tarjeta', value: bancosTarjeta, fill: 'hsl(200, 55%, 55%)' }
     ].filter(item => item.value > 0);
   };
 
@@ -268,6 +268,7 @@ const AnalyticaEgresos = () => {
         };
       }
       grouped['Costo Venta Inventario'].monto += totalCostosInventario;
+      grouped['Costo Venta Inventario'].transacciones += filteredCostosInventario.length;
     }
 
     const productosArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
@@ -313,6 +314,7 @@ const AnalyticaEgresos = () => {
         };
       }
       grouped['Sin proveedor asignado'].monto += totalCostosInventario;
+      grouped['Sin proveedor asignado'].transacciones += filteredCostosInventario.length;
     }
 
     const proveedoresArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
@@ -745,10 +747,10 @@ const AnalyticaEgresos = () => {
                   >
                     {egresosPorTipo().map((entry, index) => {
                       const colors = [
-                        "hsl(180, 50%, 50%)",
-                        "hsl(0, 60%, 55%)",
-                        "hsl(280, 55%, 55%)",
-                        "hsl(45, 85%, 60%)"
+                        "hsl(180, 50%, 55%)",
+                        "hsl(200, 55%, 50%)",
+                        "hsl(160, 45%, 50%)",
+                        "hsl(220, 50%, 55%)"
                       ];
                       return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
                     })}
@@ -797,9 +799,9 @@ const AnalyticaEgresos = () => {
                     fill="#8884d8"
                     dataKey="monto"
                   >
-                    <Cell fill="hsl(142, 70%, 40%)" />
-                    <Cell fill="hsl(45, 85%, 55%)" />
-                    <Cell fill="hsl(0, 65%, 55%)" />
+                    <Cell fill="hsl(160, 60%, 45%)" />
+                    <Cell fill="hsl(200, 50%, 55%)" />
+                    <Cell fill="hsl(220, 45%, 50%)" />
                   </Pie>
                   <Tooltip 
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
@@ -841,7 +843,16 @@ const AnalyticaEgresos = () => {
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                   />
-                  <Bar dataKey="monto" fill="hsl(180, 50%, 50%)" />
+                  <Bar 
+                    dataKey="monto" 
+                    fill="hsl(180, 50%, 50%)"
+                    label={{
+                      position: 'right',
+                      fill: 'hsl(var(--foreground))',
+                      fontSize: 11,
+                      formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -867,7 +878,6 @@ const AnalyticaEgresos = () => {
                   dataKey="value"
                   aspectRatio={4 / 3}
                   stroke="#fff"
-                  fill="hsl(180, 50%, 50%)"
                 >
                   <Tooltip 
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Pagado']}
