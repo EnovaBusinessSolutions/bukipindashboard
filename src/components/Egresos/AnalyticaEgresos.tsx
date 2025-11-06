@@ -7,6 +7,7 @@ import {
 import { TrendingDown, Calendar, DollarSign, Package, AlertCircle } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
+import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 const AnalyticaEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(1000);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
+  const { data: resumenes, isLoading: loadingResumen } = useResumenEgresosPorPeriodo();
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "combinada">("total");
@@ -78,79 +80,11 @@ const AnalyticaEgresos = () => {
 
   const filteredCostosInventario = getFilteredCostosInventario();
 
-  // Calcular resúmenes por período
-  const calcularResumenes = () => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const todayStr = today.toISOString().split('T')[0];
-
-    // Costos de inventario
-    const costosInventarioDia = costosVentaInventario
-      ?.filter(c => new Date(c.fecha).toISOString().split('T')[0] === todayStr)
-      .reduce((sum, c) => sum + c.monto, 0) || 0;
-
-    const costosInventarioMes = costosVentaInventario
-      ?.filter(c => {
-        const cDate = new Date(c.fecha);
-        return cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear;
-      })
-      .reduce((sum, c) => sum + c.monto, 0) || 0;
-
-    const costosInventarioAnio = costosVentaInventario
-      ?.filter(c => new Date(c.fecha).getFullYear() === currentYear)
-      .reduce((sum, c) => sum + c.monto, 0) || 0;
-
-    // Día
-    const egresosDelDia = transaccionesFiltradas
-      .filter(t => new Date(t.created_at).toISOString().split('T')[0] === todayStr)
-      .reduce((sum, t) => sum + t.monto_total, 0);
-
-    const pendientesDelDia = transaccionesFiltradas
-      .filter(t => new Date(t.created_at).toISOString().split('T')[0] === todayStr)
-      .reduce((sum, t) => sum + t.monto_pendiente, 0);
-
-    // Mes
-    const egresosDelMes = transaccionesFiltradas
-      .filter(t => {
-        const tDate = new Date(t.created_at);
-        return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
-      })
-      .reduce((sum, t) => sum + t.monto_total, 0);
-
-    const pendientesDelMes = transaccionesFiltradas
-      .filter(t => {
-        const tDate = new Date(t.created_at);
-        return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
-      })
-      .reduce((sum, t) => sum + t.monto_pendiente, 0);
-
-    // Año
-    const egresosDelAnio = transaccionesFiltradas
-      .filter(t => new Date(t.created_at).getFullYear() === currentYear)
-      .reduce((sum, t) => sum + t.monto_total, 0);
-
-    const pendientesDelAnio = transaccionesFiltradas
-      .filter(t => new Date(t.created_at).getFullYear() === currentYear)
-      .reduce((sum, t) => sum + t.monto_pendiente, 0);
-
-    return {
-      egresosDelDia: egresosDelDia + costosInventarioDia,
-      pendientesDelDia,
-      pagadosDelDia: egresosDelDia - pendientesDelDia,
-      costosInventarioDia,
-      egresosDelMes: egresosDelMes + costosInventarioMes,
-      pendientesDelMes,
-      pagadosDelMes: egresosDelMes - pendientesDelMes,
-      costosInventarioMes,
-      egresosDelAnio: egresosDelAnio + costosInventarioAnio,
-      pendientesDelAnio,
-      pagadosDelAnio: egresosDelAnio - pendientesDelAnio,
-      costosInventarioAnio
-    };
+  // Función helper para calcular porcentajes de forma segura
+  const calcularPorcentaje = (monto: number, total: number): string => {
+    if (total === 0) return '0.0';
+    return ((monto / total) * 100).toFixed(1);
   };
-
-  const resumenes = calcularResumenes();
 
   // Función para formatear montos según el filtro
   const formatearMonto = (monto: number) => {
@@ -448,7 +382,7 @@ const AnalyticaEgresos = () => {
       .sort((a, b) => b.monto_total - a.monto_total);
   };
 
-  if (loading || loadingCostosVenta) {
+  if (loading || loadingCostosVenta || loadingResumen || !resumenes) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -488,32 +422,71 @@ const AnalyticaEgresos = () => {
         {/* Día */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
+            <CardTitle className="text-lg font-semibold text-primary">
+              Resumen del Día
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Egresos Totales:</span>
-              <span className="font-semibold text-destructive">
-                ${resumenes.egresosDelDia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          <CardContent className="space-y-2">
+            {/* Costos de Venta */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-300">
+                  {calcularPorcentaje(resumenes.dia.costosVenta5001, resumenes.dia.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Costos de Venta</span>
+              </div>
+              <span className="font-semibold text-red-600">
+                ${resumenes.dia.costosVenta5001.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-purple-600">Costo Venta Inventario:</span>
-              <span className="font-medium text-purple-600">
-                ${resumenes.costosInventarioDia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Costos de Venta Inventario */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                  {calcularPorcentaje(resumenes.dia.costosVenta5002, resumenes.dia.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
+              </div>
+              <span className="font-semibold text-purple-600">
+                ${resumenes.dia.costosVenta5002.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600">Pagado:</span>
-              <span className="font-semibold text-green-600">
-                ${resumenes.pagadosDelDia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Gastos */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">
+                  {calcularPorcentaje(resumenes.dia.gastos, resumenes.dia.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Gastos</span>
+              </div>
+              <span className="font-semibold text-orange-600">
+                ${resumenes.dia.gastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="h-px bg-border"></div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-semibold text-yellow-600">Pendiente:</span>
-              <span className="text-lg font-bold text-yellow-600">
-                ${resumenes.pendientesDelDia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Otros Gastos */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-300">
+                  {calcularPorcentaje(resumenes.dia.otrosGastos, resumenes.dia.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Otros Gastos</span>
+              </div>
+              <span className="font-semibold text-gray-600">
+                ${resumenes.dia.otrosGastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Divisor */}
+            <div className="h-px bg-border my-2"></div>
+
+            {/* Total Egresos */}
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-sm font-semibold text-primary">Total Egresos</span>
+              <span className="text-lg font-bold text-destructive">
+                ${resumenes.dia.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </CardContent>
@@ -522,32 +495,71 @@ const AnalyticaEgresos = () => {
         {/* Mes */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
+            <CardTitle className="text-lg font-semibold text-primary">
+              Resumen del Mes
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Egresos Totales:</span>
-              <span className="font-semibold text-destructive">
-                ${resumenes.egresosDelMes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          <CardContent className="space-y-2">
+            {/* Costos de Venta */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-300">
+                  {calcularPorcentaje(resumenes.mes.costosVenta5001, resumenes.mes.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Costos de Venta</span>
+              </div>
+              <span className="font-semibold text-red-600">
+                ${resumenes.mes.costosVenta5001.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-purple-600">Costo Venta Inventario:</span>
-              <span className="font-medium text-purple-600">
-                ${resumenes.costosInventarioMes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Costos de Venta Inventario */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                  {calcularPorcentaje(resumenes.mes.costosVenta5002, resumenes.mes.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
+              </div>
+              <span className="font-semibold text-purple-600">
+                ${resumenes.mes.costosVenta5002.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600">Pagado:</span>
-              <span className="font-semibold text-green-600">
-                ${resumenes.pagadosDelMes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Gastos */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">
+                  {calcularPorcentaje(resumenes.mes.gastos, resumenes.mes.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Gastos</span>
+              </div>
+              <span className="font-semibold text-orange-600">
+                ${resumenes.mes.gastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="h-px bg-border"></div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-semibold text-yellow-600">Pendiente:</span>
-              <span className="text-lg font-bold text-yellow-600">
-                ${resumenes.pendientesDelMes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Otros Gastos */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-300">
+                  {calcularPorcentaje(resumenes.mes.otrosGastos, resumenes.mes.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Otros Gastos</span>
+              </div>
+              <span className="font-semibold text-gray-600">
+                ${resumenes.mes.otrosGastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Divisor */}
+            <div className="h-px bg-border my-2"></div>
+
+            {/* Total Egresos */}
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-sm font-semibold text-primary">Total Egresos</span>
+              <span className="text-lg font-bold text-destructive">
+                ${resumenes.mes.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </CardContent>
@@ -556,32 +568,71 @@ const AnalyticaEgresos = () => {
         {/* Año */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
+            <CardTitle className="text-lg font-semibold text-primary">
+              Resumen del Año
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Egresos Totales:</span>
-              <span className="font-semibold text-destructive">
-                ${resumenes.egresosDelAnio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          <CardContent className="space-y-2">
+            {/* Costos de Venta */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-300">
+                  {calcularPorcentaje(resumenes.anio.costosVenta5001, resumenes.anio.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Costos de Venta</span>
+              </div>
+              <span className="font-semibold text-red-600">
+                ${resumenes.anio.costosVenta5001.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-purple-600">Costo Venta Inventario:</span>
-              <span className="font-medium text-purple-600">
-                ${resumenes.costosInventarioAnio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Costos de Venta Inventario */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                  {calcularPorcentaje(resumenes.anio.costosVenta5002, resumenes.anio.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
+              </div>
+              <span className="font-semibold text-purple-600">
+                ${resumenes.anio.costosVenta5002.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600">Pagado:</span>
-              <span className="font-semibold text-green-600">
-                ${resumenes.pagadosDelAnio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Gastos */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">
+                  {calcularPorcentaje(resumenes.anio.gastos, resumenes.anio.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Gastos</span>
+              </div>
+              <span className="font-semibold text-orange-600">
+                ${resumenes.anio.gastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="h-px bg-border"></div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-semibold text-yellow-600">Pendiente:</span>
-              <span className="text-lg font-bold text-yellow-600">
-                ${resumenes.pendientesDelAnio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+
+            {/* Otros Gastos */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-300">
+                  {calcularPorcentaje(resumenes.anio.otrosGastos, resumenes.anio.total)}%
+                </Badge>
+                <span className="text-sm text-muted-foreground">Otros Gastos</span>
+              </div>
+              <span className="font-semibold text-gray-600">
+                ${resumenes.anio.otrosGastos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Divisor */}
+            <div className="h-px bg-border my-2"></div>
+
+            {/* Total Egresos */}
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-sm font-semibold text-primary">Total Egresos</span>
+              <span className="text-lg font-bold text-destructive">
+                ${resumenes.anio.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </CardContent>
