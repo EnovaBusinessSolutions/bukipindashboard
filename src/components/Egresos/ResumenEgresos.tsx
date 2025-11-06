@@ -829,6 +829,71 @@ const ResumenEgresos = () => {
                       {/* Acciones */}
                       <TableCell>
                         <div className="flex gap-2">
+                          {/* Botón Popover Rápido - Registros Contables */}
+                          {transaccion.detalles_asiento && transaccion.detalles_asiento.length > 0 ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" title="Ver registros contables">
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[500px]" align="end">
+                                <div className="space-y-3">
+                                  <div className="border-b pb-2">
+                                    <h4 className="font-semibold text-sm">Registros Contables</h4>
+                                    <p className="text-xs text-muted-foreground">
+                                      Asiento: {transaccion.numero_asiento}
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {transaccion.detalles_asiento.map((detalle: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between text-xs border-b pb-2 last:border-0">
+                                        <div className="flex-1">
+                                          <div className="font-mono font-semibold text-sm">{detalle.cuenta_codigo}</div>
+                                          <div className="text-muted-foreground">{detalle.cuenta_nombre || detalle.descripcion}</div>
+                                        </div>
+                                        <div className="text-right ml-4">
+                                          {detalle.debe > 0 && (
+                                            <div className="text-red-600 font-semibold">
+                                              Debe: ${formatMonto(detalle.debe)}
+                                            </div>
+                                          )}
+                                          {detalle.haber > 0 && (
+                                            <div className="text-green-600 font-semibold">
+                                              Haber: ${formatMonto(detalle.haber)}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                   <div className="pt-2 border-t bg-muted/50 -mx-4 px-4 -mb-4 pb-4 rounded-b-lg">
+                                     <div className="flex justify-between text-sm font-bold">
+                                       <span>Totales:</span>
+                                       <div className="flex gap-4">
+                                         <span className="text-red-600">
+                                           ${formatMonto((transaccion.detalles_asiento as any[]).reduce((sum: number, d: any) => sum + (Number(d.debe) || 0), 0))}
+                                         </span>
+                                         <span className="text-green-600">
+                                           ${formatMonto((transaccion.detalles_asiento as any[]).reduce((sum: number, d: any) => sum + (Number(d.haber) || 0), 0))}
+                                         </span>
+                                       </div>
+                                     </div>
+                                   </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Sin registros contables disponibles"
+                              disabled
+                            >
+                              <Info className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          )}
+                          
                           {/* Botón Ver Detalle */}
                           <Dialog onOpenChange={(open) => {
                             if (open) {
@@ -839,7 +904,7 @@ const ResumenEgresos = () => {
                             }
                           }}>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" title="Ver detalles completos">
                                 <FileText className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>
