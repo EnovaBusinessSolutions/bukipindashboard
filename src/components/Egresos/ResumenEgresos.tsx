@@ -38,6 +38,7 @@ const ResumenEgresos = () => {
   const [filterFechaInicio, setFilterFechaInicio] = useState<string>("");
   const [filterFechaFin, setFilterFechaFin] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
+  const [filterCategoriaContable, setFilterCategoriaContable] = useState<string>("todos");
 
   // Obtener valores únicos para filtros
   const proveedoresUnicos = useMemo(() => {
@@ -98,44 +99,95 @@ const ResumenEgresos = () => {
     });
   }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado, filterMes, filterAno, filterFechaInicio, filterFechaFin]);
 
-  // Filtrar transacciones por categoría contable
-  const transaccionesCostosGenerales = useMemo(() => {
-    return transaccionesFiltradas.filter(t => 
-      t.cuenta_codigo && 
-      t.cuenta_codigo.startsWith('50') && 
-      t.cuenta_codigo !== '5002'
-    );
-  }, [transaccionesFiltradas]);
-
+  // Filtrar solo gastos operativos (EXCLUIR cuentas 6XXX)
   const transaccionesGastos = useMemo(() => {
     return transaccionesFiltradas.filter(t => 
       t.cuenta_codigo && (
         t.cuenta_codigo.startsWith('51') || 
-        t.cuenta_codigo.startsWith('52') ||
-        (t.cuenta_codigo.startsWith('6') && 
-         t.cuenta_codigo !== '6001' && 
-         t.cuenta_codigo !== '6002')
+        t.cuenta_codigo.startsWith('52')
       )
     );
   }, [transaccionesFiltradas]);
 
+  // Unificar TODAS las transacciones de egresos (50XX + 51XX + 52XX)
+  const transaccionesEgresosUnificadas = useMemo(() => {
+    // Combinar datos del hook (50XX con foto, cantidad, etc.) con transacciones manuales
+    const costosConDetalle = costosVentaInventario?.map(c => ({
+      id: c.id,
+      created_at: c.fecha,
+      tipo_egreso: 'costo',
+      descripcion: c.producto_nombre,
+      cuenta_codigo: c.detalles_asiento.find(d => d.cuenta_codigo.startsWith('50'))?.cuenta_codigo || '50XX',
+      monto_total: c.monto,
+      proveedor_nombre: null,
+      imagen_url: c.producto_imagen,
+      cantidad: c.cantidad,
+      costo_unitario: c.costo_unitario,
+      numero_asiento: c.numero_asiento,
+      detalles_asiento: c.detalles_asiento,
+      tipo_pago: null,
+      monto_pagado: c.monto,
+      monto_pendiente: 0,
+    })) || [];
+
+    const gastosConDetalle = transaccionesGastos.map(g => ({
+      id: g.id,
+      created_at: g.created_at,
+      tipo_egreso: g.tipo_egreso,
+      descripcion: g.descripcion,
+      cuenta_codigo: g.cuenta_codigo,
+      monto_total: g.monto_total,
+      proveedor_nombre: g.proveedor_nombre,
+      imagen_url: g.imagen_comprobante,
+      cantidad: g.cantidad,
+      costo_unitario: g.precio_unitario,
+      numero_asiento: null,
+      detalles_asiento: [],
+      tipo_pago: g.tipo_pago,
+      monto_pagado: g.monto_pagado,
+      monto_pendiente: g.monto_pendiente,
+    }));
+
+    // Combinar y ordenar por fecha
+    return [...costosConDetalle, ...gastosConDetalle].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [costosVentaInventario, transaccionesGastos]);
+
+  // Aplicar filtro de categoría contable
+  const transaccionesFiltadasPorCategoria = useMemo(() => {
+    if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
+    if (filterCategoriaContable === "costos") {
+      return transaccionesEgresosUnificadas.filter(t => t.cuenta_codigo?.startsWith('50'));
+    }
+    if (filterCategoriaContable === "gastos") {
+      return transaccionesEgresosUnificadas.filter(t => 
+        t.cuenta_codigo?.startsWith('51') || t.cuenta_codigo?.startsWith('52')
+      );
+    }
+    return transaccionesEgresosUnificadas;
+  }, [transaccionesEgresosUnificadas, filterCategoriaContable]);
+
   // Calcular subtotales
   const resumenFiltrado = useMemo(() => {
-    const totalCostosGenerales = transaccionesCostosGenerales.reduce((sum, t) => sum + t.monto_total, 0);
-    const totalGastos = transaccionesGastos.reduce((sum, t) => sum + t.monto_total, 0);
-    const totalCostosVentaInventario = costosVentaInventario?.reduce((sum, c) => sum + c.monto, 0) || 0;
+    const totalCostos = transaccionesEgresosUnificadas
+      .filter(t => t.cuenta_codigo?.startsWith('50'))
+      .reduce((sum, t) => sum + t.monto_total, 0);
+    
+    const totalGastos = transaccionesEgresosUnificadas
+      .filter(t => t.cuenta_codigo?.startsWith('51') || t.cuenta_codigo?.startsWith('52'))
+      .reduce((sum, t) => sum + t.monto_total, 0);
     
     return {
-      totalTransacciones: transaccionesFiltradas.length,
-      montoTotal: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0),
-      montoPagado: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pagado, 0),
-      montoPendiente: transaccionesFiltradas.reduce((sum, t) => sum + t.monto_pendiente, 0),
-      totalCostosGenerales,
+      totalTransacciones: transaccionesEgresosUnificadas.length,
+      montoTotal: transaccionesEgresosUnificadas.reduce((sum, t) => sum + t.monto_total, 0),
+      montoPagado: transaccionesEgresosUnificadas.reduce((sum, t) => sum + t.monto_pagado, 0),
+      montoPendiente: transaccionesEgresosUnificadas.reduce((sum, t) => sum + t.monto_pendiente, 0),
+      totalCostos,
       totalGastos,
-      totalCostosVentaInventario,
-      totalGlobalEgresos: totalCostosGenerales + totalGastos + totalCostosVentaInventario,
+      totalGlobalEgresos: totalCostos + totalGastos,
     };
-  }, [transaccionesFiltradas, transaccionesCostosGenerales, transaccionesGastos, costosVentaInventario]);
+  }, [transaccionesEgresosUnificadas]);
 
   const getTipoEgresoBadge = (tipo: string) => {
     const variants: Record<string, any> = {
@@ -293,6 +345,7 @@ const ResumenEgresos = () => {
     setFilterAno("todos");
     setFilterFechaInicio("");
     setFilterFechaFin("");
+    setFilterCategoriaContable("todos");
   };
 
   const getCuentasAfectadas = (transaction: any) => {
@@ -444,6 +497,20 @@ const ResumenEgresos = () => {
                 </div>
                 
                 <div className="space-y-2">
+                  <label className="text-sm font-medium">Categoría Contable</label>
+                  <Select value={filterCategoriaContable} onValueChange={setFilterCategoriaContable}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="costos">Costos de Venta (50XX)</SelectItem>
+                      <SelectItem value="gastos">Gastos Operativos (51XX-52XX)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
                   <label className="text-sm font-medium">Estado de Pago</label>
                   <Select value={filterEstado} onValueChange={setFilterEstado}>
                     <SelectTrigger>
@@ -554,25 +621,19 @@ const ResumenEgresos = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Costos Generales (50XX)</div>
-                  <div className="text-lg font-semibold text-destructive">
-                    ${formatMonto(resumenFiltrado.totalCostosGenerales)}
+                  <div className="text-xs text-muted-foreground">Costos de Venta (50XX)</div>
+                  <div className="text-lg font-semibold text-purple-600">
+                    ${formatMonto(resumenFiltrado.totalCostos)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Gastos y Otros (51XX, 52XX, 6XXX)</div>
+                  <div className="text-xs text-muted-foreground">Gastos Operativos (51XX-52XX)</div>
                   <div className="text-lg font-semibold text-orange-600">
                     ${formatMonto(resumenFiltrado.totalGastos)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Costo Venta Inventario (5002)</div>
-                  <div className="text-lg font-semibold text-purple-600">
-                    ${formatMonto(resumenFiltrado.totalCostosVentaInventario)}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Total Global de Egresos</div>
+                  <div className="text-xs text-muted-foreground">Total de Egresos</div>
                   <div className="text-lg font-semibold text-primary">
                     ${formatMonto(resumenFiltrado.totalGlobalEgresos)}
                   </div>
@@ -582,474 +643,226 @@ const ResumenEgresos = () => {
           )}
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="costos-generales" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-4">
-              <TabsTrigger value="costos-generales">
-                <Package className="h-4 w-4 mr-2" />
-                Costos de Venta Generales
-              </TabsTrigger>
-              <TabsTrigger value="gastos">
-                <DollarSign className="h-4 w-4 mr-2" />
-                Gastos y Otros Gastos
-              </TabsTrigger>
-              <TabsTrigger value="costo-venta-inventario">
-                <Package className="h-4 w-4 mr-2" />
-                Costo de Venta Inventario
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="costos-generales">
-              {transaccionesCostosGenerales.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>No hay costos de venta generales registrados aún</p>
-                  <p className="text-sm mt-2">Los costos operativos (cuentas 50XX excepto 5002) aparecerán aquí</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-16">Imagen</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead>Proveedor</TableHead>
-                        <TableHead>Cuenta</TableHead>
-                        <TableHead>Asiento</TableHead>
-                        <TableHead>Monto Total</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transaccionesCostosGenerales.map((transaccion) => (
-                        <TableRow key={transaccion.id}>
-                          <TableCell>
-                            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
-                              {transaccion.imagen_comprobante ? (
-                                <img 
-                                  src={transaccion.imagen_comprobante} 
-                                  alt="Imagen" 
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getTipoEgresoBadge(transaccion.tipo_egreso)}>
-                              {transaccion.tipo_egreso}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <div className="font-medium truncate">{transaccion.descripcion}</div>
-                            {transaccion.comentarios && (
-                              <div className="text-xs text-muted-foreground truncate mt-1">
-                                {transaccion.comentarios.substring(0, 50)}
-                                {transaccion.comentarios.length > 50 && '...'}
+          {transaccionesFiltadasPorCategoria.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
+              <p>No hay egresos registrados</p>
+              <p className="text-sm mt-2">Los costos (50XX) y gastos (51XX-52XX) aparecerán aquí</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">Imagen</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead>Cuenta</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-right">Costo Unit.</TableHead>
+                    <TableHead className="text-right">Monto Total</TableHead>
+                    <TableHead>Asiento</TableHead>
+                    <TableHead>Detalle</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transaccionesFiltadasPorCategoria.map((transaccion) => (
+                    <TableRow key={transaccion.id}>
+                      {/* Imagen */}
+                      <TableCell>
+                        <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center border">
+                          {transaccion.imagen_url ? (
+                            <img 
+                              src={transaccion.imagen_url} 
+                              alt={transaccion.descripcion}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </div>
+                      </TableCell>
+                      
+                      {/* Fecha */}
+                      <TableCell className="whitespace-nowrap">
+                        {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </TableCell>
+                      
+                      {/* Descripción */}
+                      <TableCell>
+                        <div className="font-medium">{transaccion.descripcion}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {transaccion.cuenta_codigo?.startsWith('50') ? 'Costo de Venta' : 'Gasto Operativo'}
+                        </div>
+                      </TableCell>
+                      
+                      {/* Cuenta contable */}
+                      <TableCell>
+                        <Badge 
+                          variant={transaccion.cuenta_codigo?.startsWith('50') ? 'destructive' : 'default'}
+                          className="font-mono text-xs"
+                        >
+                          {transaccion.cuenta_codigo || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                      
+                      {/* Proveedor */}
+                      <TableCell>
+                        {transaccion.proveedor_nombre ? (
+                          <span className="text-sm">{transaccion.proveedor_nombre}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      
+                      {/* Cantidad */}
+                      <TableCell className="text-right">
+                        {transaccion.cantidad ? (
+                          <span className="font-medium">{transaccion.cantidad}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      
+                      {/* Costo unitario */}
+                      <TableCell className="text-right">
+                        {transaccion.costo_unitario ? (
+                          <span className="font-medium">${formatMonto(transaccion.costo_unitario)}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      
+                      {/* Monto total */}
+                      <TableCell className="text-right">
+                        <span className={`font-semibold ${
+                          transaccion.cuenta_codigo?.startsWith('50') ? 'text-purple-600' : 'text-orange-600'
+                        }`}>
+                          ${formatMonto(transaccion.monto_total)}
+                        </span>
+                        {transaccion.monto_pagado > 0 && transaccion.monto_pagado < transaccion.monto_total && (
+                          <div className="text-xs text-green-600">
+                            Pagado: ${formatMonto(transaccion.monto_pagado)}
+                          </div>
+                        )}
+                        {transaccion.monto_pendiente > 0 && (
+                          <div className="text-xs text-yellow-600">
+                            Pendiente: ${formatMonto(transaccion.monto_pendiente)}
+                          </div>
+                        )}
+                      </TableCell>
+                      
+                      {/* Número de asiento */}
+                      <TableCell>
+                        {transaccion.numero_asiento ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            <BookOpen className="h-3 w-3 mr-1" />
+                            {transaccion.numero_asiento}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      
+                      {/* Detalle (popover o botón) */}
+                      <TableCell>
+                        {transaccion.detalles_asiento && transaccion.detalles_asiento.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[500px]" align="end">
+                              <div className="space-y-3">
+                                <div>
+                                  <h4 className="font-semibold text-sm mb-2">Detalle Contable</h4>
+                                  <div className="space-y-2">
+                                    {transaccion.detalles_asiento.map((detalle: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between text-xs border-b pb-2">
+                                        <div className="flex-1">
+                                          <div className="font-mono font-semibold">{detalle.cuenta_codigo}</div>
+                                          <div className="text-muted-foreground">{detalle.cuenta_nombre}</div>
+                                        </div>
+                                        <div className="text-right">
+                                          {detalle.debe > 0 && (
+                                            <div className="text-red-600 font-semibold">
+                                              Debe: ${formatMonto(detalle.debe)}
+                                            </div>
+                                          )}
+                                          {detalle.haber > 0 && (
+                                            <div className="text-green-600 font-semibold">
+                                              Haber: ${formatMonto(detalle.haber)}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                                {transaccion.cantidad && transaccion.costo_unitario && (
+                                  <div className="pt-2 border-t">
+                                    <h4 className="font-semibold text-sm mb-2">Información Adicional</h4>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                      <div>
+                                        <span className="text-muted-foreground">Cantidad:</span>
+                                        <span className="ml-2 font-medium">{transaccion.cantidad}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">Costo Unitario:</span>
+                                        <span className="ml-2 font-medium">${formatMonto(transaccion.costo_unitario)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {transaccion.proveedor_nombre || '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="font-mono text-xs">
-                              {transaccion.cuenta_codigo}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono text-xs">
-                              <BookOpen className="h-3 w-3 mr-1" />
-                              EGR-{transaccion.id.substring(0, 8)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-semibold">
-                              ${formatMonto(transaccion.monto_total)}
-                            </span>
-                            {transaccion.monto_pagado > 0 && (
-                              <div className="text-xs text-green-600">
-                                Pagado: ${formatMonto(transaccion.monto_pagado)}
-                              </div>
-                            )}
-                            {transaccion.monto_pendiente > 0 && (
-                              <div className="text-xs text-yellow-600">
-                                Pendiente: ${formatMonto(transaccion.monto_pendiente)}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {transaccion.monto_pendiente > 0 ? (
-                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                                Pendiente
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                Pagado
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewDetails(transaccion)}
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Ver Detalle
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      Total Costos de Venta Generales (50XX excepto 5002)
-                    </div>
-                    <div className="text-2xl font-bold text-destructive">
-                      ${formatMonto(resumenFiltrado.totalCostosGenerales)}
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewDetails(transaccion)}
+                          >
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              
+              {/* Footer con totales */}
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Costos de Venta (50XX)</div>
+                    <div className="text-lg font-bold text-purple-600">
+                      ${formatMonto(resumenFiltrado.totalCostos)}
                     </div>
                   </div>
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="gastos">
-              {transaccionesGastos.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <DollarSign className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>No hay gastos registrados aún</p>
-                  <p className="text-sm mt-2">Los gastos operativos (cuentas 51XX, 52XX, 6XXX excepto impuestos) aparecerán aquí</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-16">Imagen</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead>Proveedor</TableHead>
-                        <TableHead>Cuenta</TableHead>
-                        <TableHead>Asiento</TableHead>
-                        <TableHead>Monto Total</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transaccionesGastos.map((transaccion) => (
-                        <TableRow key={transaccion.id}>
-                          <TableCell>
-                            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
-                              {transaccion.imagen_comprobante ? (
-                                <img 
-                                  src={transaccion.imagen_comprobante} 
-                                  alt="Imagen" 
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {new Date(transaccion.created_at).toLocaleDateString('es-MX', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getTipoEgresoBadge(transaccion.tipo_egreso)}>
-                              {transaccion.tipo_egreso}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <div className="font-medium truncate">{transaccion.descripcion}</div>
-                            {transaccion.comentarios && (
-                              <div className="text-xs text-muted-foreground truncate mt-1">
-                                {transaccion.comentarios.substring(0, 50)}
-                                {transaccion.comentarios.length > 50 && '...'}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {transaccion.proveedor_nombre || '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="font-mono text-xs">
-                              {transaccion.cuenta_codigo}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono text-xs">
-                              <BookOpen className="h-3 w-3 mr-1" />
-                              EGR-{transaccion.id.substring(0, 8)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-semibold">
-                              ${formatMonto(transaccion.monto_total)}
-                            </span>
-                            {transaccion.monto_pagado > 0 && (
-                              <div className="text-xs text-green-600">
-                                Pagado: ${formatMonto(transaccion.monto_pagado)}
-                              </div>
-                            )}
-                            {transaccion.monto_pendiente > 0 && (
-                              <div className="text-xs text-yellow-600">
-                                Pendiente: ${formatMonto(transaccion.monto_pendiente)}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {transaccion.monto_pendiente > 0 ? (
-                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                                Pendiente
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                Pagado
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewDetails(transaccion)}
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Ver Detalle
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      Total Gastos y Otros (51XX, 52XX, 6XXX excepto impuestos)
-                    </div>
-                    <div className="text-2xl font-bold text-orange-600">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Gastos Operativos (51XX-52XX)</div>
+                    <div className="text-lg font-bold text-orange-600">
                       ${formatMonto(resumenFiltrado.totalGastos)}
                     </div>
                   </div>
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="costo-venta-inventario">
-              {loadingCostosVenta ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <p>Cargando costos de venta...</p>
-                </div>
-              ) : !costosVentaInventario || costosVentaInventario.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>No hay costos de venta de inventario registrados</p>
-                  <p className="text-sm mt-2">Los costos se generan automáticamente al vender productos inventariados</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Imagen</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead>Número de Asiento</TableHead>
-                        <TableHead className="text-right">Costo</TableHead>
-                        <TableHead>Detalle</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {costosVentaInventario.map((costo) => (
-                        <TableRow key={costo.id}>
-                          <TableCell>
-                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex items-center justify-center border">
-                              {costo.producto_imagen ? (
-                                <img 
-                                  src={costo.producto_imagen} 
-                                  alt={costo.producto_nombre}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <Package className="h-5 w-5 text-muted-foreground" />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {new Date(costo.fecha).toLocaleDateString('es-MX', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4 text-purple-600" />
-                              {costo.producto_nombre}
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate text-muted-foreground">
-                            {costo.descripcion}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {costo.numero_asiento}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-semibold text-purple-600">
-                              ${formatMonto(costo.monto)}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Info className="h-4 w-4" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[500px]" align="end">
-                                <div className="space-y-4">
-                                  {/* Información de la venta */}
-                                  <div>
-                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-sm">
-                                      <Package className="h-4 w-4" />
-                                      Información de la Venta
-                                    </h4>
-                                    <div className="grid grid-cols-3 gap-3 text-sm">
-                                      <div className="space-y-1">
-                                        <div className="text-muted-foreground">Cantidad</div>
-                                        <div className="font-medium">
-                                          {costo.cantidad ? `${costo.cantidad} unidades` : 'N/A'}
-                                        </div>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <div className="text-muted-foreground">Costo Unitario</div>
-                                        <div className="font-medium">
-                                          {costo.costo_unitario ? `$${formatMonto(costo.costo_unitario)}` : 'N/A'}
-                                        </div>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <div className="text-muted-foreground">Costo Total</div>
-                                        <div className="font-medium text-purple-600">
-                                          ${formatMonto(costo.monto)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Cuentas contables afectadas */}
-                                  <div className="border-t pt-4">
-                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-sm">
-                                      <BookOpen className="h-4 w-4" />
-                                      Cuentas Contables Afectadas
-                                    </h4>
-                                    <div className="border rounded-lg overflow-hidden">
-                                      <table className="w-full text-sm">
-                                        <thead className="bg-muted">
-                                          <tr>
-                                            <th className="text-left p-2 font-medium">Cuenta</th>
-                                            <th className="text-left p-2 font-medium">Nombre</th>
-                                            <th className="text-right p-2 font-medium">Debe</th>
-                                            <th className="text-right p-2 font-medium">Haber</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {costo.detalles_asiento.map((detalle, idx) => (
-                                            <tr key={idx} className="border-t">
-                                              <td className="p-2 font-mono text-xs">
-                                                {detalle.cuenta_codigo}
-                                              </td>
-                                              <td className="p-2">
-                                                {detalle.cuenta_nombre || detalle.descripcion}
-                                              </td>
-                                              <td className="p-2 text-right font-medium">
-                                                {detalle.debe > 0 ? (
-                                                  <span className="text-green-600">
-                                                    ${formatMonto(detalle.debe)}
-                                                  </span>
-                                                ) : (
-                                                  <span className="text-muted-foreground">-</span>
-                                                )}
-                                              </td>
-                                              <td className="p-2 text-right font-medium">
-                                                {detalle.haber > 0 ? (
-                                                  <span className="text-orange-600">
-                                                    ${formatMonto(detalle.haber)}
-                                                  </span>
-                                                ) : (
-                                                  <span className="text-muted-foreground">-</span>
-                                                )}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                          <tr className="border-t-2 bg-muted/50 font-semibold">
-                                            <td colSpan={2} className="p-2">
-                                              TOTALES
-                                            </td>
-                                            <td className="p-2 text-right text-green-600">
-                                              ${formatMonto(costo.detalles_asiento.reduce((sum, d) => sum + d.debe, 0))}
-                                            </td>
-                                            <td className="p-2 text-right text-orange-600">
-                                              ${formatMonto(costo.detalles_asiento.reduce((sum, d) => sum + d.haber, 0))}
-                                            </td>
-                                          </tr>
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
-
-                                  {/* Explicación */}
-                                  <div className="border-t pt-4">
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-xs">
-                                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                        💡 Explicación Contable
-                                      </p>
-                                      <p className="text-blue-600 dark:text-blue-400 leading-relaxed">
-                                        Este asiento refleja cómo la venta de inventario afecta a las diferentes cuentas: 
-                                        se registra el ingreso en efectivo/banco (Debe), se reconoce el costo del producto vendido (Debe), 
-                                        se reduce el inventario (Haber) y se registra el ingreso por venta (Haber).
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <div className="mt-4 p-4 bg-muted rounded-lg flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      Total de costos de venta de inventario
-                    </div>
-                    <div className="text-2xl font-bold text-purple-600">
-                      ${formatMonto(resumenFiltrado.totalCostosVentaInventario)}
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Total de Egresos</div>
+                    <div className="text-lg font-bold text-primary">
+                      ${formatMonto(resumenFiltrado.totalGlobalEgresos)}
                     </div>
                   </div>
                 </div>
-              )}
-            </TabsContent>
-          </Tabs>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
