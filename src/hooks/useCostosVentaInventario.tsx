@@ -22,6 +22,9 @@ interface CostoVentaInventario {
   detalles_asiento: DetalleAsiento[];
 }
 
+// Función helper para redondear a 2 decimales
+const redondear = (num: number) => Math.round(num * 100) / 100;
+
 export const useCostosVentaInventario = () => {
   return useQuery({
     queryKey: ["costos-venta-inventario"],
@@ -83,16 +86,21 @@ export const useCostosVentaInventario = () => {
           productoNombre = descripcionAsiento.split('Egreso:')[1]?.trim() || productoNombre;
         }
 
-        // Buscar el movimiento de inventario específico cuyo costo_total coincida con el monto del asiento
-        const { data: movimiento } = await supabase
+        // Buscar el movimiento de inventario con redondeo a 2 decimales
+        const montoBuscado = redondear(Number(detalleCosto.debe));
+        
+        const { data: movimientos } = await supabase
           .from('movimientos_inventario')
           .select('id, cantidad, producto_id, costo_total')
           .eq('tipo_movimiento', 'venta')
           .eq('fecha', asiento.fecha)
           .eq('estado', 'activo')
-          .ilike('descripcion', `%${productoNombre}%`)
-          .eq('costo_total', Number(detalleCosto.debe))  // Match exacto del monto
-          .maybeSingle();
+          .ilike('descripcion', `%${productoNombre}%`);
+        
+        // Filtrar en JavaScript comparando montos redondeados
+        const movimiento = movimientos?.find(m => 
+          redondear(Number(m.costo_total)) === montoBuscado
+        ) || null;
 
         if (movimiento && movimiento.cantidad) {
           cantidad = Math.abs(Number(movimiento.cantidad));
@@ -119,16 +127,20 @@ export const useCostosVentaInventario = () => {
 
         // Si no encontramos imagen en inventario, buscar en productos_egresos
         if (!productoImagen && detalleCosto) {
-          // Buscar la transacción de egreso relacionada por descripción y monto
+          // Buscar la transacción de egreso relacionada por descripción y monto (con redondeo)
           const descripcionBusqueda = asiento.descripcion.replace('Egreso: ', '').replace('Venta: ', '').trim();
+          const montoBuscadoEgreso = redondear(Number(detalleCosto.debe));
           
-          const { data: transaccionEgreso } = await supabase
+          const { data: transaccionesEgresos } = await supabase
             .from('transacciones_egresos')
-            .select('producto_egreso_id, cantidad, precio_unitario')
+            .select('producto_egreso_id, cantidad, precio_unitario, monto_total')
             .eq('descripcion', descripcionBusqueda)
-            .eq('user_id', asiento.user_id)
-            .eq('monto_total', Number(detalleCosto.debe))
-            .maybeSingle();
+            .eq('user_id', asiento.user_id);
+          
+          // Filtrar por monto redondeado
+          const transaccionEgreso = transaccionesEgresos?.find(te =>
+            redondear(Number(te.monto_total)) === montoBuscadoEgreso
+          ) || null;
           
           if (transaccionEgreso?.producto_egreso_id) {
             const { data: productoEgreso } = await supabase
