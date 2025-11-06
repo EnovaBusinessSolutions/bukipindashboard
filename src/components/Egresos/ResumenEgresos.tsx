@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package } from "lucide-react";
+import { FileText, Calendar, User, DollarSign, CreditCard, Image as ImageIcon, Filter, X, BookOpen, Package, Info } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -868,16 +868,31 @@ const ResumenEgresos = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Imagen</TableHead>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Producto</TableHead>
                         <TableHead>Descripción</TableHead>
                         <TableHead>Número de Asiento</TableHead>
                         <TableHead className="text-right">Costo</TableHead>
+                        <TableHead>Detalle</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {costosVentaInventario.map((costo) => (
                         <TableRow key={costo.id}>
+                          <TableCell>
+                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex items-center justify-center border">
+                              {costo.producto_imagen ? (
+                                <img 
+                                  src={costo.producto_imagen} 
+                                  alt={costo.producto_nombre}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Package className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {new Date(costo.fecha).toLocaleDateString('es-MX', {
                               year: 'numeric',
@@ -903,6 +918,121 @@ const ResumenEgresos = () => {
                             <span className="font-semibold text-purple-600">
                               ${formatMonto(costo.monto)}
                             </span>
+                          </TableCell>
+                          <TableCell>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[500px]" align="end">
+                                <div className="space-y-4">
+                                  {/* Información de la venta */}
+                                  <div>
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-sm">
+                                      <Package className="h-4 w-4" />
+                                      Información de la Venta
+                                    </h4>
+                                    <div className="grid grid-cols-3 gap-3 text-sm">
+                                      <div className="space-y-1">
+                                        <div className="text-muted-foreground">Cantidad</div>
+                                        <div className="font-medium">
+                                          {costo.cantidad ? `${costo.cantidad} unidades` : 'N/A'}
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <div className="text-muted-foreground">Costo Unitario</div>
+                                        <div className="font-medium">
+                                          {costo.costo_unitario ? `$${formatMonto(costo.costo_unitario)}` : 'N/A'}
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <div className="text-muted-foreground">Costo Total</div>
+                                        <div className="font-medium text-purple-600">
+                                          ${formatMonto(costo.monto)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Cuentas contables afectadas */}
+                                  <div className="border-t pt-4">
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-sm">
+                                      <BookOpen className="h-4 w-4" />
+                                      Cuentas Contables Afectadas
+                                    </h4>
+                                    <div className="border rounded-lg overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-muted">
+                                          <tr>
+                                            <th className="text-left p-2 font-medium">Cuenta</th>
+                                            <th className="text-left p-2 font-medium">Nombre</th>
+                                            <th className="text-right p-2 font-medium">Debe</th>
+                                            <th className="text-right p-2 font-medium">Haber</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {costo.detalles_asiento.map((detalle, idx) => (
+                                            <tr key={idx} className="border-t">
+                                              <td className="p-2 font-mono text-xs">
+                                                {detalle.cuenta_codigo}
+                                              </td>
+                                              <td className="p-2">
+                                                {detalle.cuenta_nombre || detalle.descripcion}
+                                              </td>
+                                              <td className="p-2 text-right font-medium">
+                                                {detalle.debe > 0 ? (
+                                                  <span className="text-green-600">
+                                                    ${formatMonto(detalle.debe)}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-muted-foreground">-</span>
+                                                )}
+                                              </td>
+                                              <td className="p-2 text-right font-medium">
+                                                {detalle.haber > 0 ? (
+                                                  <span className="text-orange-600">
+                                                    ${formatMonto(detalle.haber)}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-muted-foreground">-</span>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                          <tr className="border-t-2 bg-muted/50 font-semibold">
+                                            <td colSpan={2} className="p-2">
+                                              TOTALES
+                                            </td>
+                                            <td className="p-2 text-right text-green-600">
+                                              ${formatMonto(costo.detalles_asiento.reduce((sum, d) => sum + d.debe, 0))}
+                                            </td>
+                                            <td className="p-2 text-right text-orange-600">
+                                              ${formatMonto(costo.detalles_asiento.reduce((sum, d) => sum + d.haber, 0))}
+                                            </td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+
+                                  {/* Explicación */}
+                                  <div className="border-t pt-4">
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-xs">
+                                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                        💡 Explicación Contable
+                                      </p>
+                                      <p className="text-blue-600 dark:text-blue-400 leading-relaxed">
+                                        Este asiento refleja cómo la venta de inventario afecta a las diferentes cuentas: 
+                                        se registra el ingreso en efectivo/banco (Debe), se reconoce el costo del producto vendido (Debe), 
+                                        se reduce el inventario (Haber) y se registra el ingreso por venta (Haber).
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                         </TableRow>
                       ))}
