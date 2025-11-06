@@ -37,6 +37,11 @@ const AnalyticaEgresos = () => {
     )
   );
 
+  // Filtrar todas las transacciones EXCLUYENDO ISR/impuestos (cuenta 6001)
+  const transaccionesSinImpuestos = transacciones.filter(
+    (t) => t.cuenta_codigo !== '6001' && t.tipo_egreso !== 'impuesto'
+  );
+
   // Función para filtrar transacciones según el período
   const getFilteredTransactions = () => {
     const today = new Date();
@@ -149,17 +154,25 @@ const AnalyticaEgresos = () => {
     return data;
   };
 
-  // Estado de pagos
+  // Métodos de pago utilizados
   const estadoPagos = () => {
-    const pagadoTotal = filteredTransactions.filter(t => t.monto_pendiente === 0).reduce((sum, t) => sum + t.monto_total, 0);
-    const parcial = filteredTransactions.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0).reduce((sum, t) => sum + t.monto_total, 0);
-    const porPagar = filteredTransactions.filter(t => t.monto_pagado === 0).reduce((sum, t) => sum + t.monto_total, 0);
+    const grouped: Record<string, number> = {};
+    
+    transaccionesSinImpuestos
+      .filter(t => t.monto_pagado > 0) // Solo los que tienen pago
+      .forEach(t => {
+        const metodo = t.metodo_pago || 'Sin método especificado';
+        const metodoCap = metodo.charAt(0).toUpperCase() + metodo.slice(1);
+        
+        if (!grouped[metodoCap]) {
+          grouped[metodoCap] = 0;
+        }
+        grouped[metodoCap] += t.monto_pagado;
+      });
 
-    return [
-      { estado: 'Pagado Total', monto: pagadoTotal },
-      { estado: 'Pago Parcial', monto: parcial },
-      { estado: 'Por Pagar', monto: porPagar }
-    ].filter(item => item.monto > 0);
+    return Object.entries(grouped)
+      .map(([estado, monto]) => ({ estado, monto }))
+      .sort((a, b) => b.monto - a.monto);
   };
 
   // Todos los proveedores (SOLO gastos operativos)
@@ -186,7 +199,15 @@ const AnalyticaEgresos = () => {
 
     // Procesar SOLO gastos operativos (51XX, 52XX)
     filteredTransactions.forEach(t => {
-      const subcuentaNombre = 'Sin subcuenta asignada';
+      let subcuentaNombre = 'Sin subcuenta asignada';
+      
+      // Buscar nombre de subcuenta si existe
+      if (t.subcuenta_id) {
+        const subcuenta = subcuentas?.find(s => s.id === t.subcuenta_id);
+        if (subcuenta) {
+          subcuentaNombre = subcuenta.nombre;
+        }
+      }
       
       if (!grouped[subcuentaNombre]) {
         grouped[subcuentaNombre] = 0;
@@ -197,10 +218,7 @@ const AnalyticaEgresos = () => {
     // Agregar costos de inventario (50XX) por separado
     const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
-      if (!grouped['Costos de Venta']) {
-        grouped['Costos de Venta'] = 0;
-      }
-      grouped['Costos de Venta'] += totalCostosInventario;
+      grouped['Costos de Venta (Inventario)'] = totalCostosInventario;
     }
 
     return Object.entries(grouped)
@@ -211,12 +229,12 @@ const AnalyticaEgresos = () => {
 
   // Egresos por Método de Pago
   const egresosPorMetodoPago = () => {
-    const efectivo = filteredTransactions
-      .filter(t => t.metodo_pago === 'efectivo')
+    const efectivo = transaccionesSinImpuestos
+      .filter(t => t.metodo_pago === 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
     
-    const bancosTarjeta = filteredTransactions
-      .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo')
+    const bancosTarjeta = transaccionesSinImpuestos
+      .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
 
     return [
@@ -767,11 +785,11 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* Estado de Pagos */}
+        {/* Métodos de Pago Utilizados */}
         <Card>
           <CardHeader>
-            <CardTitle>Estado de Pagos</CardTitle>
-            <CardDescription>Distribución por estado de pago</CardDescription>
+            <CardTitle>Métodos de Pago Utilizados</CardTitle>
+            <CardDescription>Desglose de egresos por forma de pago</CardDescription>
           </CardHeader>
           <CardContent>
             {estadoPagos().length === 0 ? (

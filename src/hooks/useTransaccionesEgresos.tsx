@@ -20,6 +20,7 @@ interface TransaccionEgreso {
   fecha_vencimiento: string | null;
   imagen_comprobante: string | null;
   cuenta_codigo: string | null;
+  subcuenta_id: string | null;
 }
 
 export const useTransaccionesEgresos = (limit: number = 10) => {
