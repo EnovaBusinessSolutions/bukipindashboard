@@ -29,9 +29,12 @@ const AnalyticaEgresos = () => {
   // Usar el nuevo hook para datos de la gráfica
   const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(periodFilter, tipoEgreso);
 
-  // Filtrar solo costos y gastos
+  // Filtrar SOLO gastos operativos (51XX, 52XX) - EXCLUIR costos 5001
   const transaccionesFiltradas = transacciones.filter(
-    (t) => t.tipo_egreso === 'costo' || t.tipo_egreso === 'gasto'
+    (t) => t.cuenta_codigo && (
+      t.cuenta_codigo.startsWith('51') || 
+      t.cuenta_codigo.startsWith('52')
+    )
   );
 
   // Función para filtrar transacciones según el período
@@ -129,24 +132,21 @@ const AnalyticaEgresos = () => {
 
   // Egresos por tipo
   const egresosPorTipo = () => {
-    const grouped = filteredTransactions.reduce((acc, t) => {
-      const tipo = t.tipo_egreso;
-      if (!acc[tipo]) {
-        acc[tipo] = 0;
-      }
-      acc[tipo] += t.monto_total;
-      return acc;
-    }, {} as Record<string, number>);
-
-    // Agregar costos de inventario
-    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
-    if (totalCostosInventario > 0) {
-      grouped['Costo Venta Inventario'] = totalCostosInventario;
+    const data: { tipo: string; monto: number }[] = [];
+    
+    // SOLO costos de inventario (50XX) - fuente única
+    const totalCostos = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostos > 0) {
+      data.push({ tipo: 'Costos de Venta', monto: totalCostos });
     }
-
-    return Object.entries(grouped)
-      .map(([tipo, monto]) => ({ tipo, monto }))
-      .filter(item => item.monto > 0);
+    
+    // SOLO gastos operativos (51XX, 52XX)
+    const totalGastos = filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0);
+    if (totalGastos > 0) {
+      data.push({ tipo: 'Gastos', monto: totalGastos });
+    }
+    
+    return data;
   };
 
   // Estado de pagos
@@ -162,7 +162,7 @@ const AnalyticaEgresos = () => {
     ].filter(item => item.monto > 0);
   };
 
-  // Todos los proveedores
+  // Todos los proveedores (SOLO gastos operativos)
   const topProveedores = () => {
     const grouped = filteredTransactions.reduce((acc, t) => {
       const proveedor = t.proveedor_nombre || 'Sin proveedor';
@@ -173,11 +173,7 @@ const AnalyticaEgresos = () => {
       return acc;
     }, {} as Record<string, number>);
 
-    // Agregar costos de inventario
-    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
-    if (totalCostosInventario > 0) {
-      grouped['Costo Venta Inventario'] = totalCostosInventario;
-    }
+    // Los costos de inventario NO se suman aquí porque no tienen proveedor asociado
 
     return Object.entries(grouped)
       .map(([proveedor, monto]) => ({ proveedor, monto }))
@@ -188,8 +184,8 @@ const AnalyticaEgresos = () => {
   const egresosPorSubcuenta = () => {
     const grouped: Record<string, number> = {};
 
+    // Procesar SOLO gastos operativos (51XX, 52XX)
     filteredTransactions.forEach(t => {
-      // TransaccionEgreso no tiene subcuenta_id, usar descripción o agrupar todo
       const subcuentaNombre = 'Sin subcuenta asignada';
       
       if (!grouped[subcuentaNombre]) {
@@ -198,13 +194,13 @@ const AnalyticaEgresos = () => {
       grouped[subcuentaNombre] += t.monto_total;
     });
 
-    // Agregar costos de inventario
+    // Agregar costos de inventario (50XX) por separado
     const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
-      if (!grouped['Sin subcuenta asignada']) {
-        grouped['Sin subcuenta asignada'] = 0;
+      if (!grouped['Costos de Venta']) {
+        grouped['Costos de Venta'] = 0;
       }
-      grouped['Sin subcuenta asignada'] += totalCostosInventario;
+      grouped['Costos de Venta'] += totalCostosInventario;
     }
 
     return Object.entries(grouped)
@@ -239,7 +235,7 @@ const AnalyticaEgresos = () => {
       tieneAsignacion: boolean;
     }> = {};
 
-    // Agrupar por descripción como proxy de producto
+    // Procesar SOLO gastos operativos (51XX, 52XX)
     filteredTransactions.forEach(t => {
       const key = t.descripcion || 'Sin descripción';
       if (!grouped[key]) {
@@ -255,21 +251,21 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
-    // Agregar costos de inventario
-    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
-    if (totalCostosInventario > 0) {
-      if (!grouped['Costo Venta Inventario']) {
-        grouped['Costo Venta Inventario'] = {
-          nombre: 'Costo Venta Inventario',
-          imagen: null,
+    // Procesar costos de inventario (50XX) - POR PRODUCTO
+    filteredCostosInventario.forEach(c => {
+      const key = c.producto_nombre || 'Sin asignación';
+      if (!grouped[key]) {
+        grouped[key] = {
+          nombre: key,
+          imagen: c.producto_imagen || null,
           monto: 0,
           transacciones: 0,
-          tieneAsignacion: false
+          tieneAsignacion: !!c.producto_nombre
         };
       }
-      grouped['Costo Venta Inventario'].monto += totalCostosInventario;
-      grouped['Costo Venta Inventario'].transacciones += filteredCostosInventario.length;
-    }
+      grouped[key].monto += c.monto;
+      grouped[key].transacciones += 1;
+    });
 
     const productosArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
     const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
@@ -286,6 +282,7 @@ const AnalyticaEgresos = () => {
       tieneAsignacion: boolean;
     }> = {};
 
+    // Procesar SOLO gastos operativos (51XX, 52XX)
     filteredTransactions.forEach(t => {
       const proveedorNombre = t.proveedor_nombre || 'Sin proveedor asignado';
       const tieneAsignacion = !!t.proveedor_nombre;
@@ -302,7 +299,7 @@ const AnalyticaEgresos = () => {
       grouped[proveedorNombre].transacciones += 1;
     });
 
-    // Agregar costos de inventario
+    // Agregar costos de inventario sin proveedor
     const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
       if (!grouped['Sin proveedor asignado']) {
