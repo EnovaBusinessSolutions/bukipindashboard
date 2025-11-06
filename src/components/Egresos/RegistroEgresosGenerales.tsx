@@ -126,10 +126,9 @@ const RegistroEgresosGenerales = () => {
     const montoPendiente = montoTotal - montoPagado;
     const tipoEgreso = cuentaSeleccionada.startsWith('5') ? 'costo' : 'gasto';
 
-    const { error } = await supabase
-      .from('transacciones_egresos')
-      .insert({
-        user_id: user.id,
+    // Llamar al edge function registrar-egreso
+    const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
+      body: {
         tipo_egreso: tipoEgreso,
         subtipo_egreso: 'general',
         descripcion: concept,
@@ -137,32 +136,29 @@ const RegistroEgresosGenerales = () => {
         cuenta_codigo: cuentaSeleccionada,
         subcuenta_id: subcuentaSeleccionada || null,
         monto_total: montoTotal,
-        monto_pagado: montoPagado,
-        monto_pendiente: montoPendiente,
         tipo_pago: paymentType,
         metodo_pago: paymentMethod || null,
+        monto_pagado: montoPagado,
+        monto_pendiente: montoPendiente,
         fecha_vencimiento: dueDate || null,
         proveedor_nombre: supplierName || null,
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
         comentarios: description || null
-      });
+      }
+    });
 
-    if (error) throw error;
-
-    const tarjetaId = extraerIdTarjetaCredito(paymentMethod);
-    if (tarjetaId && montoPagado > 0) {
-      await actualizarSaldoTarjetaCredito(
-        tarjetaId, 
-        montoPagado,
-        `Egreso general: ${concept}`
-      );
+    if (error) {
+      console.error('Error en edge function:', error);
+      throw error;
     }
+
+    console.log('Egreso registrado con asiento:', result);
 
     toast({
       title: "✅ Egreso registrado",
-      description: "El costo/gasto general se ha registrado correctamente"
+      description: `Egreso registrado correctamente con asiento contable ${result?.numero_asiento || ''}`
     });
 
     // Reset form

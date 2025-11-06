@@ -120,41 +120,46 @@ const RegistroOtrosGastos = () => {
 
     const montoPendiente = montoTotal - montoPagado;
 
-    const { error } = await supabase
-      .from('transacciones_egresos')
-      .insert({
-        user_id: user.id,
+    // Determinar cuenta según categoría
+    const cuentaPorCategoria: Record<string, string> = {
+      'gastos_financieros': '5005',
+      'perdida_activos': '5004',
+      'otros_gastos': '6007'
+    };
+    const cuentaCodigo = cuentaPorCategoria[category] || '6007';
+
+    // Llamar al edge function registrar-egreso
+    const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
+      body: {
         tipo_egreso: 'otro',
         subtipo_egreso: category,
         descripcion: concept,
         concepto: concept,
+        cuenta_codigo: cuentaCodigo,
         monto_total: montoTotal,
-        monto_pagado: montoPagado,
-        monto_pendiente: montoPendiente,
         tipo_pago: paymentType,
         metodo_pago: paymentMethod || null,
+        monto_pagado: montoPagado,
+        monto_pendiente: montoPendiente,
         fecha_vencimiento: dueDate || null,
         proveedor_nombre: supplierName || null,
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
         comentarios: description || null
-      });
+      }
+    });
 
-    if (error) throw error;
-
-    const tarjetaId = extraerIdTarjetaCredito(paymentMethod);
-    if (tarjetaId && montoPagado > 0) {
-      await actualizarSaldoTarjetaCredito(
-        tarjetaId,
-        montoPagado,
-        `Gasto: ${concept}`
-      );
+    if (error) {
+      console.error('Error en edge function:', error);
+      throw error;
     }
+
+    console.log('Gasto registrado con asiento:', result);
 
     toast({
       title: "✅ Gasto registrado",
-      description: "El gasto fuera de operación se ha registrado correctamente"
+      description: `Gasto registrado correctamente con asiento contable ${result?.numero_asiento || ''}`
     });
 
     // Reset form

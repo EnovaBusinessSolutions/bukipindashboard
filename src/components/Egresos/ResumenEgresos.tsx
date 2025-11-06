@@ -582,6 +582,7 @@ const ResumenEgresos = () => {
                         <TableHead>Tipo</TableHead>
                         <TableHead>Descripción</TableHead>
                         <TableHead>Proveedor</TableHead>
+                        <TableHead>Asiento</TableHead>
                         <TableHead>Monto Total</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Acciones</TableHead>
@@ -626,6 +627,12 @@ const ResumenEgresos = () => {
                           </TableCell>
                           <TableCell className="max-w-xs truncate">
                             {transaccion.proveedor_nombre || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono text-xs">
+                              <BookOpen className="h-3 w-3 mr-1" />
+                              EGR-{transaccion.id.substring(0, 8)}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <span className="font-semibold">

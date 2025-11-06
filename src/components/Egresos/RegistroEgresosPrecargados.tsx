@@ -234,28 +234,40 @@ const RegistroEgresosPrecargados = () => {
         }
       }
       
-      const { data: transaccionData, error } = await supabase.from('transacciones_egresos').insert({
-        user_id: user.id,
-        tipo_egreso: selectedType,
-        subtipo_egreso: 'precargado',
-        descripcion: selectedProduct?.nombre || '',
-        producto_egreso_id: selectedProductId,
-        cantidad: parseFloat(quantity),
-        precio_unitario: parseFloat(unitPrice),
-        monto_total: montoTotal,
-        monto_pagado: montoPagado,
-        monto_pendiente: montoPendiente,
-        tipo_pago: paymentType,
-        metodo_pago: paymentMethod || null,
-        fecha_vencimiento: dueDate || null,
-        proveedor_id: proveedorId,
-        proveedor_nombre: supplierName || null,
-        proveedor_telefono: supplierPhone || null,
-        proveedor_email: supplierEmail || null,
-        proveedor_rfc: supplierRFC || null,
-        comentarios: description || null
-      }).select();
-      if (error) throw error;
+      // Llamar al edge function registrar-egreso
+      const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
+        body: {
+          tipo_egreso: selectedType,
+          subtipo_egreso: selectedType === 'costo' && selectedProduct?.nombre.toLowerCase().includes('inventario') 
+            ? 'compra_inventario' 
+            : 'precargado',
+          descripcion: selectedProduct?.nombre || '',
+          cuenta_codigo: selectedProduct?.cuenta_contable || (selectedType === 'costo' ? '5001' : '6001'),
+          subcuenta_id: null,
+          monto_total: montoTotal,
+          cantidad: parseFloat(quantity),
+          precio_unitario: parseFloat(unitPrice),
+          tipo_pago: paymentType,
+          metodo_pago: paymentMethod || null,
+          monto_pagado: montoPagado,
+          monto_pendiente: montoPendiente,
+          fecha_vencimiento: dueDate || null,
+          proveedor_id: proveedorId,
+          proveedor_nombre: supplierName || null,
+          proveedor_telefono: supplierPhone || null,
+          proveedor_email: supplierEmail || null,
+          proveedor_rfc: supplierRFC || null,
+          producto_egreso_id: selectedProductId,
+          comentarios: description || null
+        }
+      });
+
+      if (error) {
+        console.error('Error en edge function:', error);
+        throw error;
+      }
+
+      console.log('Egreso registrado con asiento:', result);
 
       // Si el producto tiene cuenta contable de inventario (1005 o 1006), crear movimiento
       // El asiento contable será generado automáticamente por el trigger generar_asiento_compra_inventario
@@ -293,19 +305,12 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // Actualizar saldo de tarjeta de crédito si se usó
-      const tarjetaId = extraerIdTarjetaCredito(paymentMethod);
-      if (tarjetaId && montoPagado > 0) {
-        await actualizarSaldoTarjetaCredito(
-          tarjetaId, 
-          montoPagado,
-          `Egreso precargado: ${selectedProduct?.nombre}`
-        );
-      }
+      // Actualizar saldo de tarjeta de crédito si se usó (ya no es necesario, lo hace el edge function)
+      // El edge function ya maneja la actualización de tarjetas de crédito
 
       toast({
         title: "✅ Egreso registrado",
-        description: "El costo/gasto precargado se ha registrado correctamente"
+        description: `Egreso registrado correctamente con asiento contable ${result?.numero_asiento || ''}`
       });
 
       // Limpiar formulario

@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.cancelar-compra-inventario]
 verify_jwt = false
+
+[functions.registrar-egreso]
+verify_jwt = false
+
+[functions.cancelar-egreso]
+verify_jwt = false
