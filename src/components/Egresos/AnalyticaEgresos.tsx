@@ -8,6 +8,7 @@ import { TrendingDown, Calendar, DollarSign, Package, AlertCircle } from "lucide
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
+import { useEgresosPorPeriodo, DatosEvolucionSimple, DatosEvolucionCombinada } from "@/hooks/useEgresosPorPeriodo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,6 +21,9 @@ const AnalyticaEgresos = () => {
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "combinada">("total");
+  
+  // Usar el nuevo hook para datos de la gráfica
+  const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(periodFilter, tipoEgreso);
 
   // Filtrar solo costos y gastos
   const transaccionesFiltradas = transacciones.filter(
@@ -100,203 +104,24 @@ const AnalyticaEgresos = () => {
     return "";
   };
 
-  // Generar datos para gráfica de evolución según período
-  const generarDatosEvolucion = () => {
-    // Modo combinada: mostrar costos, gastos y costos de inventario por separado
+  // Formatear datos de la gráfica según el formato de montos seleccionado
+  const datosGraficaFormateados = useMemo(() => {
+    if (!datosGrafica) return [];
+    
     if (tipoEgreso === "combinada") {
-      const costos = filteredTransactions.filter(t => t.tipo_egreso === 'costo');
-      const gastos = filteredTransactions.filter(t => t.tipo_egreso === 'gasto');
-
-      if (periodFilter === "diario") {
-        const totalCostos = costos.reduce((sum, t) => sum + t.monto_total, 0);
-        const totalGastos = gastos.reduce((sum, t) => sum + t.monto_total, 0);
-        const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
-        
-        return [{
-          periodo: 'Hoy',
-          costos: formatearMonto(totalCostos),
-          gastos: formatearMonto(totalGastos),
-          costosInventario: formatearMonto(totalCostosInventario)
-        }];
-      } else if (periodFilter === "mensual") {
-        const today = new Date();
-        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-        const costosByDay: Record<number, number> = {};
-        const gastosByDay: Record<number, number> = {};
-        const costosInventarioByDay: Record<number, number> = {};
-
-        costos.forEach(t => {
-          const day = new Date(t.created_at).getDate();
-          if (!costosByDay[day]) costosByDay[day] = 0;
-          costosByDay[day] += t.monto_total;
-        });
-
-        gastos.forEach(t => {
-          const day = new Date(t.created_at).getDate();
-          if (!gastosByDay[day]) gastosByDay[day] = 0;
-          gastosByDay[day] += t.monto_total;
-        });
-
-        filteredCostosInventario.forEach(c => {
-          const day = new Date(c.fecha).getDate();
-          if (!costosInventarioByDay[day]) costosInventarioByDay[day] = 0;
-          costosInventarioByDay[day] += c.monto;
-        });
-
-        return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => {
-          const day = i + 1;
-          return {
-            periodo: `Día ${day}`,
-            costos: formatearMonto(costosByDay[day] || 0),
-            gastos: formatearMonto(gastosByDay[day] || 0),
-            costosInventario: formatearMonto(costosInventarioByDay[day] || 0)
-          };
-        });
-      } else {
-        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-        const costosByMonth: Record<number, number> = {};
-        const gastosByMonth: Record<number, number> = {};
-        const costosInventarioByMonth: Record<number, number> = {};
-
-        costos.forEach(t => {
-          const month = new Date(t.created_at).getMonth();
-          if (!costosByMonth[month]) costosByMonth[month] = 0;
-          costosByMonth[month] += t.monto_total;
-        });
-
-        gastos.forEach(t => {
-          const month = new Date(t.created_at).getMonth();
-          if (!gastosByMonth[month]) gastosByMonth[month] = 0;
-          gastosByMonth[month] += t.monto_total;
-        });
-
-        filteredCostosInventario.forEach(c => {
-          const month = new Date(c.fecha).getMonth();
-          if (!costosInventarioByMonth[month]) costosInventarioByMonth[month] = 0;
-          costosInventarioByMonth[month] += c.monto;
-        });
-
-        return meses.map((mes, index) => ({
-          periodo: mes,
-          costos: formatearMonto(costosByMonth[index] || 0),
-          gastos: formatearMonto(gastosByMonth[index] || 0),
-          costosInventario: formatearMonto(costosInventarioByMonth[index] || 0)
-        }));
-      }
-    }
-
-    // Modo normal: una sola línea
-    let datosParaGrafica: any[] = [];
-    
-    if (tipoEgreso === "costo_inventario") {
-      // Solo mostrar costos de inventario
-      if (periodFilter === "diario") {
-        const total = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
-        return [{ periodo: 'Hoy', monto: formatearMonto(total) }];
-      } else if (periodFilter === "mensual") {
-        const today = new Date();
-        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-        const dataByDay: Record<number, number> = {};
-        
-        filteredCostosInventario.forEach(c => {
-          const day = new Date(c.fecha).getDate();
-          if (!dataByDay[day]) dataByDay[day] = 0;
-          dataByDay[day] += c.monto;
-        });
-        
-        return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => ({
-          periodo: `Día ${i + 1}`,
-          monto: formatearMonto(dataByDay[i + 1] || 0)
-        }));
-      } else {
-        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-        const dataByMonth: Record<number, number> = {};
-        
-        filteredCostosInventario.forEach(c => {
-          const month = new Date(c.fecha).getMonth();
-          if (!dataByMonth[month]) dataByMonth[month] = 0;
-          dataByMonth[month] += c.monto;
-        });
-        
-        return meses.map((mes, index) => ({
-          periodo: mes,
-          monto: formatearMonto(dataByMonth[index] || 0)
-        }));
-      }
-    }
-    
-    const transaccionesFiltradas = tipoEgreso === "total" 
-      ? filteredTransactions 
-      : filteredTransactions.filter(t => t.tipo_egreso === tipoEgreso);
-
-    if (periodFilter === "diario") {
-      const totalEgresos = transaccionesFiltradas.reduce((sum, t) => sum + t.monto_total, 0);
-      const totalCostosInventario = tipoEgreso === "total" 
-        ? filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0)
-        : 0;
-      
-      return [{
-        periodo: 'Hoy',
-        monto: formatearMonto(totalEgresos + totalCostosInventario)
-      }];
-    } else if (periodFilter === "mensual") {
-      // Agrupar por día del mes
-      const today = new Date();
-      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const dataByDay: Record<number, number> = {};
-
-      transaccionesFiltradas.forEach(t => {
-        const day = new Date(t.created_at).getDate();
-        if (!dataByDay[day]) {
-          dataByDay[day] = 0;
-        }
-        dataByDay[day] += t.monto_total;
-      });
-
-      // Agregar costos de inventario si es "total"
-      if (tipoEgreso === "total") {
-        filteredCostosInventario.forEach(c => {
-          const day = new Date(c.fecha).getDate();
-          if (!dataByDay[day]) dataByDay[day] = 0;
-          dataByDay[day] += c.monto;
-        });
-      }
-
-      return Array.from({ length: Math.min(30, daysInMonth) }, (_, i) => {
-        const day = i + 1;
-        return {
-          periodo: `Día ${day}`,
-          monto: formatearMonto(dataByDay[day] || 0)
-        };
-      });
+      return (datosGrafica as DatosEvolucionCombinada[]).map(item => ({
+        periodo: item.periodo,
+        costos: formatearMonto(item.costos),
+        gastos: formatearMonto(item.gastos),
+        costosInventario: formatearMonto(item.costosInventario)
+      }));
     } else {
-      // Agrupar por mes
-      const dataByMonth: Record<number, number> = {};
-      const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-      transaccionesFiltradas.forEach(t => {
-        const month = new Date(t.created_at).getMonth();
-        if (!dataByMonth[month]) {
-          dataByMonth[month] = 0;
-        }
-        dataByMonth[month] += t.monto_total;
-      });
-
-      // Agregar costos de inventario si es "total"
-      if (tipoEgreso === "total") {
-        filteredCostosInventario.forEach(c => {
-          const month = new Date(c.fecha).getMonth();
-          if (!dataByMonth[month]) dataByMonth[month] = 0;
-          dataByMonth[month] += c.monto;
-        });
-      }
-
-      return meses.map((mes, index) => ({
-        periodo: mes,
-        monto: formatearMonto(dataByMonth[index] || 0)
+      return (datosGrafica as DatosEvolucionSimple[]).map(item => ({
+        periodo: item.periodo,
+        monto: formatearMonto(item.monto)
       }));
     }
-  };
+  }, [datosGrafica, tipoEgreso, formatoMontos]);
 
   // Egresos por tipo
   const egresosPorTipo = () => {
@@ -382,7 +207,7 @@ const AnalyticaEgresos = () => {
       .sort((a, b) => b.monto_total - a.monto_total);
   };
 
-  if (loading || loadingCostosVenta || loadingResumen || !resumenes) {
+  if (loading || loadingCostosVenta || loadingResumen || loadingGrafica || !resumenes) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -693,7 +518,7 @@ const AnalyticaEgresos = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={generarDatosEvolucion()}>
+              <LineChart data={datosGraficaFormateados}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="periodo" />
                 <YAxis />
