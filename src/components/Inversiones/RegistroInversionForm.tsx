@@ -69,6 +69,22 @@ const RegistroInversionForm = () => {
     if (rec) {
       setAnosDepreciacion(rec.anos_recomendados);
     }
+    
+    // Mapear categoría a código de cuenta contable
+    const cuentaMap: { [key: string]: string } = {
+      'equipo_computo': '1206',
+      'maquinaria': '1203',
+      'vehiculos': '1205',
+      'mobiliario': '1204',
+      'edificios': '1202',
+      'equipo_oficina': '1204',
+      'otro': '1212'
+    };
+    
+    setFormData({ 
+      ...formData, 
+      cuenta_codigo: cuentaMap[value] || '1212' 
+    });
   };
 
   const handleValorTotalChange = (value: string) => {
@@ -150,8 +166,18 @@ const RegistroInversionForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validar que se haya seleccionado cuenta contable
+    if (!formData.cuenta_codigo) {
+      toast({
+        title: "Error de validación",
+        description: "No se pudo determinar la cuenta contable. Por favor selecciona nuevamente la categoría.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const valorTotal = parseFloat(formData.valor_total);
-    const montoPagado = formData.tipo_pago === "total" 
+    const montoPagado = formData.tipo_pago === "total"
       ? valorTotal 
       : formData.tipo_pago === "credito" 
         ? 0 
