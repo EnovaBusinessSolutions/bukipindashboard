@@ -1,11 +1,16 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useInversiones } from "@/hooks/useInversiones";
-import { Loader2, TrendingDown, Calendar, DollarSign } from "lucide-react";
+import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
+import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText } from "lucide-react";
 import { format, lastDayOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
+import { useState } from "react";
 
 const ResumenDepreciaciones = () => {
   const { inversiones, isLoading } = useInversiones();
+  const [expandedInversiones, setExpandedInversiones] = useState<string[]>([]);
 
   if (isLoading) {
     return (
@@ -51,6 +56,104 @@ const ResumenDepreciaciones = () => {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value);
+  };
+
+  const toggleExpanded = (inversionId: string) => {
+    setExpandedInversiones(prev => 
+      prev.includes(inversionId) 
+        ? prev.filter(id => id !== inversionId)
+        : [...prev, inversionId]
+    );
+  };
+
+  const AsientosDepreciacionSection = ({ inversionId }: { inversionId: string }) => {
+    const { data: asientos, isLoading } = useAsientosDepreciacion(inversionId);
+    const isExpanded = expandedInversiones.includes(inversionId);
+
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      );
+    }
+
+    if (!asientos || asientos.length === 0) {
+      return (
+        <div className="text-xs text-muted-foreground text-center py-2">
+          No hay asientos de depreciación generados aún
+        </div>
+      );
+    }
+
+    return (
+      <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(inversionId)}>
+        <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-950/30 transition-colors">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-purple-600" />
+            <span className="text-sm font-medium">Asientos de Depreciación Generados ({asientos.length})</span>
+          </div>
+          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent className="pt-3 space-y-2">
+          {asientos.map((asiento) => {
+            // Extraer mes y año del número de asiento (formato: DEP-{id}-YYYYMM)
+            const match = asiento.numero_asiento.match(/DEP-.+-(\d{4})(\d{2})/);
+            const año = match ? match[1] : "";
+            const mes = match ? match[2] : "";
+            const fecha = match ? new Date(parseInt(año), parseInt(mes) - 1) : new Date(asiento.fecha);
+
+            return (
+              <div key={asiento.id} className="p-3 border border-purple-200 dark:border-purple-900 rounded-lg bg-background">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-xs font-semibold">
+                      {format(fecha, "MMMM yyyy", { locale: es })}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-mono">{asiento.numero_asiento}</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {format(new Date(asiento.fecha), "dd/MM/yyyy")}
+                  </Badge>
+                </div>
+
+                <div className="space-y-2 mt-3">
+                  {asiento.detalle_asientos?.map((detalle) => (
+                    <div key={detalle.id} className="flex items-start justify-between text-xs">
+                      <div className="flex-1">
+                        <p className="font-medium">
+                          {detalle.cuenta_codigo} - {detalle.cuenta?.nombre}
+                        </p>
+                        <p className="text-muted-foreground">{detalle.descripcion}</p>
+                      </div>
+                      <div className="text-right ml-2">
+                        {detalle.debe > 0 && (
+                          <div className="space-y-0">
+                            <p className="text-green-600 font-semibold">
+                              {formatCurrency(detalle.debe)}
+                            </p>
+                            <Badge variant="outline" className="text-[10px] h-4">DEBE</Badge>
+                          </div>
+                        )}
+                        {detalle.haber > 0 && (
+                          <div className="space-y-0">
+                            <p className="text-blue-600 font-semibold">
+                              {formatCurrency(detalle.haber)}
+                            </p>
+                            <Badge variant="outline" className="text-[10px] h-4">HABER</Badge>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </CollapsibleContent>
+      </Collapsible>
+    );
   };
 
   return (
@@ -192,6 +295,11 @@ const ResumenDepreciaciones = () => {
                           <p className="text-xs text-muted-foreground">Depreciación Mensual</p>
                           <p className="font-semibold text-purple-600">{formatCurrency(inversion.valor_depreciacion_mensual || 0)}</p>
                         </div>
+                      </div>
+
+                      {/* Asientos de Depreciación */}
+                      <div className="pt-4 border-t">
+                        <AsientosDepreciacionSection inversionId={inversion.id} />
                       </div>
                     </div>
                   </CardContent>

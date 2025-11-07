@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import PreviewCuentasContables from "./PreviewCuentasContables";
 
 const RegistroInversionForm = () => {
   const { crearInversion, recomendaciones } = useInversiones();
@@ -263,6 +264,14 @@ const RegistroInversionForm = () => {
     };
     return labels[categoria] || categoria;
   };
+
+  const valorTotalNum = parseFloat(formData.valor_total) || 0;
+  const montoPagadoNum = formData.tipo_pago === "total" 
+    ? valorTotalNum 
+    : formData.tipo_pago === "credito" 
+      ? 0 
+      : parseFloat(formData.monto_pagado) || 0;
+  const montoPendienteNum = valorTotalNum - montoPagadoNum;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -659,17 +668,33 @@ const RegistroInversionForm = () => {
         </CardContent>
       </Card>
 
-      {/* Recomendaciones - 1/3 del ancho */}
-      <Card className="border-0 shadow-none">
-        <CardHeader>
-          <CardTitle className="text-lg">Recomendaciones de Depreciación</CardTitle>
-          <CardDescription className="text-xs">
-            Años recomendados según normativas fiscales mexicanas
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-4">
-          <div className="overflow-auto max-h-[calc(100vh-16rem)]">
-            <Table>
+      {/* Preview y Recomendaciones - 1/3 del ancho */}
+      <div className="space-y-6">
+        {/* Preview de Cuentas Contables */}
+        {categoriaActivo && formData.valor_total && formData.tipo_pago && (
+          <PreviewCuentasContables
+            categoriaActivo={categoriaActivo}
+            valorTotal={valorTotalNum}
+            tipoPago={formData.tipo_pago}
+            metodoPago={formData.metodo_pago}
+            montoPagado={montoPagadoNum}
+            montoPendiente={montoPendienteNum}
+            anosDepreciacion={anosDepreciacion}
+            fechaAdquisicion={fecha}
+          />
+        )}
+
+        {/* Recomendaciones */}
+        <Card className="border-0 shadow-none">
+          <CardHeader>
+            <CardTitle className="text-lg">Recomendaciones de Depreciación</CardTitle>
+            <CardDescription className="text-xs">
+              Años recomendados según normativas fiscales mexicanas
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-4">
+            <div className="overflow-auto max-h-[calc(100vh-40rem)]">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">Categoría</TableHead>
@@ -707,9 +732,10 @@ const RegistroInversionForm = () => {
                 </p>
               )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
