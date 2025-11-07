@@ -16,6 +16,58 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+// Componente personalizado para el contenido del Treemap
+const CustomTreemapContent = (props: any) => {
+  const { x, y, width, height, name, value, fill, dataTotal } = props;
+  if (!name || !value || !dataTotal) return null;
+  
+  const porcentaje = ((value / dataTotal) * 100).toFixed(1);
+  const montoFormateado = `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+  const fontSize = Math.min(width / 8, height / 6, 14);
+  
+  if (fontSize < 10) return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill={fill} />
+    </g>
+  );
+  
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill={fill} />
+      <text
+        x={x + width / 2}
+        y={y + height / 2 - fontSize}
+        textAnchor="middle"
+        fill="#fff"
+        fontSize={fontSize}
+        fontWeight="bold"
+      >
+        {name}
+      </text>
+      <text
+        x={x + width / 2}
+        y={y + height / 2 + fontSize / 2}
+        textAnchor="middle"
+        fill="#fff"
+        fontSize={fontSize * 0.85}
+        fontWeight="semibold"
+      >
+        {montoFormateado}
+      </text>
+      <text
+        x={x + width / 2}
+        y={y + height / 2 + fontSize * 2}
+        textAnchor="middle"
+        fill="#fff"
+        fontSize={fontSize * 0.85}
+      >
+        {porcentaje}%
+      </text>
+    </g>
+  );
+};
+
+
 const AnalyticaEgresos = () => {
   const { transacciones, loading } = useTransaccionesEgresos(1000);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
@@ -753,13 +805,14 @@ const AnalyticaEgresos = () => {
                     data={egresosPorTipo()}
                     cx="50%"
                     cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
+                    innerRadius={60}
+                    outerRadius={90}
                     paddingAngle={3}
-                    labelLine={false}
-                    label={({ tipo, monto, percent }) => 
-                      `${tipo}\n${(percent * 100).toFixed(1)}%\n$${monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
-                    }
+                    labelLine={true}
+                    label={({ tipo, percent }) => {
+                      const porcentaje = (percent * 100).toFixed(1);
+                      return `${tipo} ${porcentaje}%`;
+                    }}
                     fill="#8884d8"
                     dataKey="monto"
                   >
@@ -807,13 +860,14 @@ const AnalyticaEgresos = () => {
                     data={estadoPagos()}
                     cx="50%"
                     cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
+                    innerRadius={60}
+                    outerRadius={90}
                     paddingAngle={3}
-                    labelLine={false}
-                    label={({ estado, monto, percent }) => 
-                      `${estado}\n${(percent * 100).toFixed(1)}%\n$${monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
-                    }
+                    labelLine={true}
+                    label={({ estado, percent }) => {
+                      const porcentaje = (percent * 100).toFixed(1);
+                      return `${estado} ${porcentaje}%`;
+                    }}
                     fill="#8884d8"
                     dataKey="monto"
                   >
@@ -855,7 +909,11 @@ const AnalyticaEgresos = () => {
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={egresosPorSubcuenta()} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={(value) => `$${value.toLocaleString('es-MX')}`} />
+                  <XAxis 
+                    type="number" 
+                    tickFormatter={(value) => `$${value.toLocaleString('es-MX')}`}
+                    domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.20)]}
+                  />
                   <YAxis dataKey="subcuenta" type="category" width={150} />
                   <Tooltip 
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
@@ -896,6 +954,7 @@ const AnalyticaEgresos = () => {
                   dataKey="value"
                   aspectRatio={4 / 3}
                   stroke="#fff"
+                  content={<CustomTreemapContent dataTotal={egresosPorMetodoPago().reduce((sum, item) => sum + item.value, 0)} />}
                 >
                   <Tooltip 
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Pagado']}
