@@ -11,6 +11,35 @@ const COLORS = ["#10b981", "#059669", "#047857", "#065f46", "#064e3b", "#34d399"
 const AnalyticaInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
   const [periodoDepreciacion, setPeriodoDepreciacion] = useState<"mensual" | "anual">("mensual");
+  const [formatoCifras, setFormatoCifras] = useState<"completo" | "miles" | "millones">("completo");
+
+  // Función helper para formatear números según el formato seleccionado
+  const formatearCifra = (valor: number, incluirSimbolo: boolean = true): string => {
+    let valorFormateado: number;
+    let sufijo: string = "";
+    
+    switch (formatoCifras) {
+      case "miles":
+        valorFormateado = valor / 1000;
+        sufijo = "K";
+        break;
+      case "millones":
+        valorFormateado = valor / 1000000;
+        sufijo = "M";
+        break;
+      default:
+        valorFormateado = valor;
+        sufijo = "";
+    }
+    
+    const decimales = formatoCifras === "completo" ? 2 : 2;
+    const numeroFormateado = valorFormateado.toLocaleString("es-MX", { 
+      minimumFractionDigits: decimales,
+      maximumFractionDigits: decimales 
+    });
+    
+    return incluirSimbolo ? `$${numeroFormateado}${sufijo}` : `${numeroFormateado}${sufijo}`;
+  };
 
   if (isLoading) {
     return (
@@ -145,7 +174,7 @@ const AnalyticaInversiones = () => {
               fill="#fff"
               fontSize={12}
             >
-              ${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              {formatearCifra(value)}
             </text>
           </>
         )}
@@ -245,6 +274,23 @@ const AnalyticaInversiones = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">Resumen de Activos Fijos</h2>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="formato">Formato:</Label>
+          <Select value={formatoCifras} onValueChange={(value: "completo" | "miles" | "millones") => setFormatoCifras(value)}>
+            <SelectTrigger id="formato" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="completo">Completo</SelectItem>
+              <SelectItem value="miles">Miles (K)</SelectItem>
+              <SelectItem value="millones">Millones (M)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -252,7 +298,7 @@ const AnalyticaInversiones = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${totalInvertido.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              {formatearCifra(totalInvertido)}
             </div>
           </CardContent>
         </Card>
@@ -263,7 +309,7 @@ const AnalyticaInversiones = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              ${totalDepreciacionAcumulada.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              {formatearCifra(totalDepreciacionAcumulada)}
             </div>
           </CardContent>
         </Card>
@@ -274,7 +320,7 @@ const AnalyticaInversiones = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              ${totalActivosNetos.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              {formatearCifra(totalActivosNetos)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Valor en libros</p>
           </CardContent>
@@ -397,7 +443,7 @@ const AnalyticaInversiones = () => {
               <XAxis dataKey="periodo" />
               <YAxis />
               <Tooltip 
-                formatter={(value: number) => `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
+                formatter={(value: number) => formatearCifra(value)}
               />
               <Legend />
               {categorias.map((categoria: string, index: number) => (
@@ -413,7 +459,19 @@ const AnalyticaInversiones = () => {
                     fill="#fff"
                     fontSize={11}
                     fontWeight="bold"
-                    formatter={(value: number) => value > 1000 ? `$${(value / 1000).toFixed(0)}k` : value > 0 ? `$${value.toFixed(0)}` : ''}
+                    formatter={(value: number) => {
+                      if (value <= 0) return '';
+                      
+                      // Para valores en la gráfica, usar formato más compacto
+                      switch (formatoCifras) {
+                        case "miles":
+                          return value > 1000 ? `$${(value / 1000).toFixed(0)}K` : `$${value.toFixed(0)}`;
+                        case "millones":
+                          return `$${(value / 1000000).toFixed(2)}M`;
+                        default:
+                          return value > 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value.toFixed(0)}`;
+                      }
+                    }}
                   />
                 </Bar>
               ))}
