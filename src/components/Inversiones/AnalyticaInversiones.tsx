@@ -441,7 +441,9 @@ const AnalyticaInversiones = () => {
             <BarChart data={dataDepreciacionesFuturas}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="periodo" />
-              <YAxis />
+              <YAxis 
+                tickFormatter={(value: number) => formatearCifra(value, false)}
+              />
               <Tooltip 
                 formatter={(value: number) => formatearCifra(value)}
               />
@@ -459,19 +461,31 @@ const AnalyticaInversiones = () => {
                     fill="#fff"
                     fontSize={11}
                     fontWeight="bold"
-                    formatter={(value: number) => {
-                      if (value <= 0) return '';
-                      
-                      // Para valores en la gráfica, usar formato más compacto
-                      switch (formatoCifras) {
-                        case "miles":
-                          return value > 1000 ? `$${(value / 1000).toFixed(0)}K` : `$${value.toFixed(0)}`;
-                        case "millones":
-                          return `$${(value / 1000000).toFixed(2)}M`;
-                        default:
-                          return value > 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value.toFixed(0)}`;
-                      }
-                    }}
+                  formatter={(value: number) => {
+                    if (value <= 0) return '';
+                    
+                    // Aplicar el formato seleccionado consistentemente
+                    let valorFormateado: number;
+                    let sufijo: string = "";
+                    
+                    switch (formatoCifras) {
+                      case "miles":
+                        valorFormateado = value / 1000;
+                        sufijo = "K";
+                        break;
+                      case "millones":
+                        valorFormateado = value / 1000000;
+                        sufijo = "M";
+                        break;
+                      default:
+                        valorFormateado = value;
+                        sufijo = "";
+                    }
+                    
+                    // Para labels en la gráfica, usar formato compacto (menos decimales)
+                    const decimales = formatoCifras === "completo" ? 0 : 1;
+                    return `$${valorFormateado.toFixed(decimales)}${sufijo}`;
+                  }}
                   />
                 </Bar>
               ))}
