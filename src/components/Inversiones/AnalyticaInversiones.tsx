@@ -513,7 +513,8 @@ const AnalyticaInversiones = () => {
               <Bar dataKey="total" stackId="a" fill="transparent">
             <LabelList 
               dataKey="total" 
-              position="insideTop"
+              position="top"
+              offset={-5}
                   fill="#000"
                   fontSize={14}
                   fontWeight="bold"
