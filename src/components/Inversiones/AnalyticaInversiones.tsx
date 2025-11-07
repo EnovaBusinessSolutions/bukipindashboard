@@ -70,8 +70,12 @@ const AnalyticaInversiones = () => {
   );
 
   const totalInvertido = inversiones.reduce((acc, inv) => acc + Number(inv.valor_total), 0);
-  const totalPagado = inversiones.reduce((acc, inv) => acc + Number(inv.monto_pagado), 0);
-  const totalPendiente = inversiones.reduce((acc, inv) => acc + Number(inv.monto_pendiente), 0);
+  const totalDepreciacionAcumulada = Number(Object.values(inversionPorCategoria).reduce(
+    (acc: number, cat: any) => acc + cat.depreciacionAcumulada, 
+    0
+  ));
+  const totalActivosNetos = totalInvertido - totalDepreciacionAcumulada;
+  const numeroTotalActivos = inversiones.length;
 
   // Data para TreeMap de inversiones por categoría
   const treeMapInversionData = dataPorCategoria
@@ -167,8 +171,18 @@ const AnalyticaInversiones = () => {
         const anoOffset = Math.floor((mesActual + i) / 12);
         nombrePeriodo = `${mesesNombres[mesIndex]} ${anoActual + anoOffset}`;
       } else {
-        // Años reales
-        nombrePeriodo = `${hoy.getFullYear() + i}`;
+        // Para años, considerar que el primer año puede ser parcial
+        const anoActual = hoy.getFullYear();
+        const mesActual = hoy.getMonth(); // 0-11
+        const mesesRestantesAnoActual = 12 - mesActual; // meses que quedan en el año actual
+        
+        if (i === 0) {
+          // Primer año: mostrar meses restantes
+          nombrePeriodo = `${anoActual} (${mesesRestantesAnoActual} meses)`;
+        } else {
+          // Años futuros completos
+          nombrePeriodo = `${anoActual + i}`;
+        }
       }
 
       const periodo: any = {
@@ -202,12 +216,21 @@ const AnalyticaInversiones = () => {
         const anosRestantes = Math.ceil(mesesRestantes / 12);
         const anosAMostrar = Math.min(20, anosRestantes);
         
+        // Calcular cuántos meses quedan en el año actual
+        const mesActual = hoy.getMonth(); // 0-11 (0=enero, 11=diciembre)
+        const mesesRestantesAnoActual = 12 - mesActual;
+        
         for (let i = 0; i < anosAMostrar; i++) {
-          // Si es el último año, puede ser parcial
-          if (i === anosRestantes - 1) {
+          if (i === 0) {
+            // PRIMER AÑO: Usar solo los meses restantes del año actual
+            const mesesAProcesar = Math.min(mesesRestantesAnoActual, mesesRestantes);
+            data[i][categoria] += (inv.valor_depreciacion_mensual || 0) * mesesAProcesar;
+          } else if (i === anosRestantes - 1) {
+            // ÚLTIMO AÑO: Puede ser parcial
             const mesesEnUltimoAno = mesesRestantes % 12 || 12;
             data[i][categoria] += (inv.valor_depreciacion_mensual || 0) * mesesEnUltimoAno;
           } else {
+            // AÑOS INTERMEDIOS: Completos (12 meses)
             data[i][categoria] += inv.valor_depreciacion_anual || 0;
           }
         }
@@ -225,7 +248,7 @@ const AnalyticaInversiones = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Invertido</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Activos Fijos Brutos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -236,34 +259,36 @@ const AnalyticaInversiones = () => {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Pagado</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Depreciación Acumulada</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              ${totalPagado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            <div className="text-2xl font-bold text-orange-600">
+              ${totalDepreciacionAcumulada.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Activos Netos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              ${totalPendiente.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            <div className="text-2xl font-bold text-blue-600">
+              ${totalActivosNetos.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Valor en libros</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Depreciación Anual</CardTitle>
+            <CardTitle className="text-sm font-medium">Número de Activos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${depreciacionAnualTotal.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              {numeroTotalActivos}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">activos registrados</p>
           </CardContent>
         </Card>
       </div>
@@ -346,9 +371,9 @@ const AnalyticaInversiones = () => {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Depreciaciones Futuras por Categoría</CardTitle>
+              <CardTitle>Proyección de Depreciaciones</CardTitle>
               <CardDescription>
-                Proyección de depreciaciones pendientes {periodoDepreciacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 20 años"}
+                Distribución de depreciaciones {periodoDepreciacion === "mensual" ? "en los próximos 12 meses" : "por año"}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
