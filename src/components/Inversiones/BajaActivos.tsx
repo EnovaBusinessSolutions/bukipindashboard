@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { format } from "date-fns";
-import { TrendingDown, Trash2 } from "lucide-react";
+import { TrendingDown, Trash2, Info } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const BajaActivos = () => {
   const { inversiones, isLoading, darDeBajaActivo } = useInversiones();
@@ -178,12 +179,12 @@ const BajaActivos = () => {
                               }}
                             >
                               <TrendingDown className="h-4 w-4 mr-2" />
-                              Dar de Baja
+                              Venta/Baja de Activo
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-md">
                             <DialogHeader>
-                              <DialogTitle>Dar de Baja Activo</DialogTitle>
+                              <DialogTitle>Venta o Baja de Activo</DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4">
                               <div>
@@ -217,11 +218,38 @@ const BajaActivos = () => {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="dado_de_baja">Dado de Baja</SelectItem>
-                                    <SelectItem value="vendido">Vendido</SelectItem>
+                                    <SelectItem value="dado_de_baja">Baja de Activo (Sin Venta)</SelectItem>
+                                    <SelectItem value="vendido">Venta de Activo (Con Ingreso)</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
+
+                              {tipoBaja === 'vendido' && (
+                                <Alert>
+                                  <Info className="h-4 w-4" />
+                                  <AlertDescription>
+                                    Se generará un asiento contable registrando:
+                                    <ul className="mt-1 ml-4 list-disc text-xs">
+                                      <li>Ingreso por venta en Caja</li>
+                                      <li>Eliminación del activo y su depreciación acumulada</li>
+                                      <li>Ganancia o pérdida en venta de activo</li>
+                                    </ul>
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+
+                              {tipoBaja === 'dado_de_baja' && (
+                                <Alert>
+                                  <Info className="h-4 w-4" />
+                                  <AlertDescription>
+                                    Se generará un asiento contable registrando:
+                                    <ul className="mt-1 ml-4 list-disc text-xs">
+                                      <li>Eliminación del activo y su depreciación acumulada</li>
+                                      <li>Pérdida por baja de activo (valor en libros)</li>
+                                    </ul>
+                                  </AlertDescription>
+                                </Alert>
+                              )}
 
                               <div className="space-y-2">
                                 <Label>Fecha de Baja *</Label>
@@ -251,7 +279,7 @@ const BajaActivos = () => {
 
                               {tipoBaja === 'vendido' && (
                                 <div className="space-y-2">
-                                  <Label>Valor de Venta</Label>
+                                  <Label>Valor de Venta *</Label>
                                   <Input
                                     type="number"
                                     step="0.01"
@@ -259,6 +287,9 @@ const BajaActivos = () => {
                                     onChange={(e) => setValorVenta(e.target.value)}
                                     placeholder="0.00"
                                   />
+                                  <p className="text-xs text-muted-foreground">
+                                    Este será el monto de ingreso registrado en Caja
+                                  </p>
                                 </div>
                               )}
 
@@ -285,9 +316,13 @@ const BajaActivos = () => {
                               <Button
                                 variant="destructive"
                                 onClick={handleSubmit}
-                                disabled={!motivo || darDeBajaActivo.isPending}
+                                disabled={
+                                  !motivo || 
+                                  (tipoBaja === 'vendido' && (!valorVenta || parseFloat(valorVenta) <= 0)) ||
+                                  darDeBajaActivo.isPending
+                                }
                               >
-                                Confirmar Baja
+                                Confirmar {tipoBaja === 'vendido' ? 'Venta' : 'Baja'}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
