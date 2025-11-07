@@ -652,7 +652,10 @@ const AnalyticaEgresos = () => {
               <LineChart data={datosGraficaFormateados}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="periodo" />
-                <YAxis />
+                <YAxis 
+                  domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
+                  padding={{ top: 20, bottom: 0 }}
+                />
                 <Tooltip 
                   formatter={(value) => {
                     const formattedValue = Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 });
