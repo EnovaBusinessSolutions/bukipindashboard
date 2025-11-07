@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosInversion } from "@/hooks/useAsientosInversion";
+import { useAsientosInversionBulk } from "@/hooks/useAsientosInversionBulk";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ const ResumenInversiones = () => {
   const { inversiones, isLoading, eliminarInversion } = useInversiones();
   const [selectedInversion, setSelectedInversion] = useState<any>(null);
   const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(selectedInversion?.id);
+  const { data: inversionesConAsientos, isLoading: loadingAsientos } = useAsientosInversionBulk();
 
   const handleEliminar = (id: string) => {
     eliminarInversion.mutate(id);
@@ -78,17 +80,16 @@ const ResumenInversiones = () => {
   const activosBaja = inversiones.filter(inv => inv.estado === 'dado_de_baja').length;
 
   const inversionesSinAsientos = inversiones.filter(inv => {
-    const numeroAsiento = `INV-${inv.id}`;
-    return !numeroAsiento;
+    return !inversionesConAsientos?.has(inv.id);
   });
 
   return (
     <div className="space-y-6">
-      {inversiones.length > 0 && (
+      {!loadingAsientos && inversionesSinAsientos.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Hay {inversiones.length} inversión(es) registrada(s) antes de la implementación de asientos automáticos. 
+            Hay {inversionesSinAsientos.length} inversión(es) registrada(s) antes de la implementación de asientos automáticos. 
             Estas inversiones NO afectan la balanza de comprobación. Se recomienda eliminarlas y registrarlas nuevamente.
           </AlertDescription>
         </Alert>
