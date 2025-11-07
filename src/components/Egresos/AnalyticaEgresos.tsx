@@ -23,9 +23,9 @@ const CustomTreemapContent = (props: any) => {
   
   const porcentaje = ((value / dataTotal) * 100).toFixed(1);
   const montoFormateado = `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
-  const fontSize = Math.min(width / 8, height / 6, 14);
+  const fontSize = Math.min(width / 7, height / 5, 16);
   
-  if (fontSize < 10) return (
+  if (fontSize < 11) return (
     <g>
       <rect x={x} y={y} width={width} height={height} fill={fill} />
     </g>
@@ -732,7 +732,7 @@ const AnalyticaEgresos = () => {
                       label={{ 
                         position: 'top', 
                         fill: 'hsl(var(--foreground))',
-                        fontSize: 10,
+                        fontSize: 12,
                         formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
                       }}
                     />
@@ -746,7 +746,7 @@ const AnalyticaEgresos = () => {
                       label={{ 
                         position: 'top', 
                         fill: 'hsl(var(--foreground))',
-                        fontSize: 10,
+                        fontSize: 12,
                         formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
                       }}
                     />
@@ -760,7 +760,7 @@ const AnalyticaEgresos = () => {
                       label={{ 
                         position: 'bottom', 
                         fill: 'hsl(var(--foreground))',
-                        fontSize: 10,
+                        fontSize: 12,
                         formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
                       }}
                     />
@@ -776,7 +776,7 @@ const AnalyticaEgresos = () => {
                     label={{ 
                       position: 'top', 
                       fill: 'hsl(var(--foreground))',
-                      fontSize: 12,
+                      fontSize: 14,
                       formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
                     }}
                   />
@@ -809,9 +809,21 @@ const AnalyticaEgresos = () => {
                     outerRadius={90}
                     paddingAngle={3}
                     labelLine={true}
-                    label={({ tipo, percent }) => {
+                    label={(props: any) => {
+                      const { x, y, tipo, percent } = props;
                       const porcentaje = (percent * 100).toFixed(1);
-                      return `${tipo} ${porcentaje}%`;
+                      return (
+                        <text
+                          x={x}
+                          y={y}
+                          fill="hsl(var(--foreground))"
+                          textAnchor={x > props.cx ? 'start' : 'end'}
+                          dominantBaseline="central"
+                          fontSize={14}
+                        >
+                          {`${tipo} ${porcentaje}%`}
+                        </text>
+                      );
                     }}
                     fill="#8884d8"
                     dataKey="monto"
@@ -864,9 +876,21 @@ const AnalyticaEgresos = () => {
                     outerRadius={90}
                     paddingAngle={3}
                     labelLine={true}
-                    label={({ estado, percent }) => {
+                    label={(props: any) => {
+                      const { x, y, estado, percent } = props;
                       const porcentaje = (percent * 100).toFixed(1);
-                      return `${estado} ${porcentaje}%`;
+                      return (
+                        <text
+                          x={x}
+                          y={y}
+                          fill="hsl(var(--foreground))"
+                          textAnchor={x > props.cx ? 'start' : 'end'}
+                          dominantBaseline="central"
+                          fontSize={14}
+                        >
+                          {`${estado} ${porcentaje}%`}
+                        </text>
+                      );
                     }}
                     fill="#8884d8"
                     dataKey="monto"
@@ -925,7 +949,7 @@ const AnalyticaEgresos = () => {
                     label={{
                       position: 'right',
                       fill: 'hsl(var(--foreground))',
-                      fontSize: 11,
+                      fontSize: 13,
                       formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
                     }}
                   />
