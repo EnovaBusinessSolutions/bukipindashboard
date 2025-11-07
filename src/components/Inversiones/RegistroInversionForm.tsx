@@ -226,6 +226,28 @@ const RegistroInversionForm = () => {
             `Pago de inversión: ${formData.producto_nombre}`
           );
         }
+      },
+      onError: (error: any) => {
+        console.error("Error al registrar inversión:", error);
+        
+        let errorMessage = "Error al registrar la inversión";
+        
+        // Intentar extraer el mensaje de error específico
+        if (error?.message) {
+          if (error.message.includes("Para pago total")) {
+            errorMessage = error.message;
+          } else if (error.message.includes("asiento")) {
+            errorMessage = "Error al generar el asiento contable: " + error.message;
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        
+        toast({
+          title: "❌ Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
       }
     });
 
