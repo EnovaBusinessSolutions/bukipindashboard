@@ -133,53 +133,15 @@ const AnalyticaInversiones = () => {
       value: item.montoTotal - item.depreciacionAcumulada,
     }));
 
-  // Custom content para el Treemap
-  const CustomTreemapContent = (props: any) => {
-    const { x, y, width, height, index, name, value } = props;
-    
-    // Validar que value exista y sea un número válido
-    if (!value || typeof value !== 'number') {
-      return null;
-    }
-    
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          style={{
-            fill: COLORS[index % COLORS.length],
-            stroke: "#fff",
-            strokeWidth: 2,
-          }}
-        />
-        {width > 80 && height > 40 && (
-          <>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 - 10}
-              textAnchor="middle"
-              fill="#fff"
-              fontSize={14}
-              fontWeight="bold"
-            >
-              {name || 'Sin nombre'}
-            </text>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 + 10}
-              textAnchor="middle"
-              fill="#fff"
-              fontSize={12}
-            >
-              {formatearCifra(value)}
-            </text>
-          </>
-        )}
-      </g>
-    );
+  // Calcular totales para TreeMaps (para porcentajes)
+  const totalInversionesTreemap = treeMapInversionData.reduce((acc, item) => acc + item.value, 0);
+  const totalDepreciacionTreemap = treeMapDepreciacionData.reduce((acc, item) => acc + item.value, 0);
+  const totalActivoNetoTreemap = treeMapActivoNetoData.reduce((acc, item) => acc + item.value, 0);
+
+  // Función para calcular porcentaje
+  const calcularPorcentaje = (valor: number, total: number) => {
+    if (total === 0) return "0.0";
+    return ((valor / total) * 100).toFixed(1);
   };
 
   // Calcular depreciaciones futuras
@@ -272,6 +234,16 @@ const AnalyticaInversiones = () => {
   const dataDepreciacionesFuturas = calcularDepreciacionesFuturas();
   const categorias = dataPorCategoria.map((cat: any) => cat.name);
 
+  // Calcular totales por periodo para la gráfica
+  const calcularTotalPorPeriodo = (data: any[], categorias: string[]) => {
+    return data.map(periodo => {
+      const total = categorias.reduce((sum, cat) => sum + (periodo[cat] || 0), 0);
+      return { ...periodo, total };
+    });
+  };
+
+  const dataConTotales = calcularTotalPorPeriodo(dataDepreciacionesFuturas, categorias);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
@@ -353,7 +325,22 @@ const AnalyticaInversiones = () => {
                   dataKey="size"
                   aspectRatio={4 / 3}
                   stroke="#fff"
-                  content={<CustomTreemapContent />}
+                  content={((props: any) => {
+                    const { x, y, width, height, index, name, value } = props;
+                    if (!value || typeof value !== 'number') return null;
+                    return (
+                      <g>
+                        <rect x={x} y={y} width={width} height={height} style={{ fill: COLORS[index % COLORS.length], stroke: "#fff", strokeWidth: 2 }} />
+                        {width > 80 && height > 60 && (
+                          <>
+                            <text x={x + width / 2} y={y + height / 2 - 18} textAnchor="middle" fill="#000" fontSize={16} fontWeight="bold">{name || 'Sin nombre'}</text>
+                            <text x={x + width / 2} y={y + height / 2 + 2} textAnchor="middle" fill="#000" fontSize={14}>{formatearCifra(value)}</text>
+                            <text x={x + width / 2} y={y + height / 2 + 20} textAnchor="middle" fill="#000" fontSize={13} fontWeight="normal">{`(${calcularPorcentaje(value, totalInversionesTreemap)}%)`}</text>
+                          </>
+                        )}
+                      </g>
+                    );
+                  }) as any}
                 />
               </ResponsiveContainer>
             ) : (
@@ -377,7 +364,22 @@ const AnalyticaInversiones = () => {
                   dataKey="size"
                   aspectRatio={4 / 3}
                   stroke="#fff"
-                  content={<CustomTreemapContent />}
+                  content={((props: any) => {
+                    const { x, y, width, height, index, name, value } = props;
+                    if (!value || typeof value !== 'number') return null;
+                    return (
+                      <g>
+                        <rect x={x} y={y} width={width} height={height} style={{ fill: COLORS[index % COLORS.length], stroke: "#fff", strokeWidth: 2 }} />
+                        {width > 80 && height > 60 && (
+                          <>
+                            <text x={x + width / 2} y={y + height / 2 - 18} textAnchor="middle" fill="#000" fontSize={16} fontWeight="bold">{name || 'Sin nombre'}</text>
+                            <text x={x + width / 2} y={y + height / 2 + 2} textAnchor="middle" fill="#000" fontSize={14}>{formatearCifra(value)}</text>
+                            <text x={x + width / 2} y={y + height / 2 + 20} textAnchor="middle" fill="#000" fontSize={13} fontWeight="normal">{`(${calcularPorcentaje(value, totalDepreciacionTreemap)}%)`}</text>
+                          </>
+                        )}
+                      </g>
+                    );
+                  }) as any}
                 />
               </ResponsiveContainer>
             ) : (
@@ -401,7 +403,22 @@ const AnalyticaInversiones = () => {
                   dataKey="size"
                   aspectRatio={4 / 3}
                   stroke="#fff"
-                  content={<CustomTreemapContent />}
+                  content={((props: any) => {
+                    const { x, y, width, height, index, name, value } = props;
+                    if (!value || typeof value !== 'number') return null;
+                    return (
+                      <g>
+                        <rect x={x} y={y} width={width} height={height} style={{ fill: COLORS[index % COLORS.length], stroke: "#fff", strokeWidth: 2 }} />
+                        {width > 80 && height > 60 && (
+                          <>
+                            <text x={x + width / 2} y={y + height / 2 - 18} textAnchor="middle" fill="#000" fontSize={16} fontWeight="bold">{name || 'Sin nombre'}</text>
+                            <text x={x + width / 2} y={y + height / 2 + 2} textAnchor="middle" fill="#000" fontSize={14}>{formatearCifra(value)}</text>
+                            <text x={x + width / 2} y={y + height / 2 + 20} textAnchor="middle" fill="#000" fontSize={13} fontWeight="normal">{`(${calcularPorcentaje(value, totalActivoNetoTreemap)}%)`}</text>
+                          </>
+                        )}
+                      </g>
+                    );
+                  }) as any}
                 />
               </ResponsiveContainer>
             ) : (
@@ -438,11 +455,12 @@ const AnalyticaInversiones = () => {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={dataDepreciacionesFuturas}>
+            <BarChart data={dataConTotales}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="periodo" />
               <YAxis 
                 tickFormatter={(value: number) => formatearCifra(value, false)}
+                domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
               />
               <Tooltip 
                 formatter={(value: number) => formatearCifra(value)}
@@ -458,37 +476,53 @@ const AnalyticaInversiones = () => {
                   <LabelList 
                     dataKey={categoria} 
                     position="center" 
-                    fill="#fff"
-                    fontSize={11}
+                    fill="#000"
+                    stroke="#fff"
+                    strokeWidth={0.5}
+                    fontSize={13}
                     fontWeight="bold"
-                  formatter={(value: number) => {
-                    if (value <= 0) return '';
-                    
-                    // Aplicar el formato seleccionado consistentemente
-                    let valorFormateado: number;
-                    let sufijo: string = "";
-                    
-                    switch (formatoCifras) {
-                      case "miles":
-                        valorFormateado = value / 1000;
-                        sufijo = "K";
-                        break;
-                      case "millones":
-                        valorFormateado = value / 1000000;
-                        sufijo = "M";
-                        break;
-                      default:
-                        valorFormateado = value;
-                        sufijo = "";
-                    }
-                    
-                    // Para labels en la gráfica, usar formato compacto (menos decimales)
-                    const decimales = formatoCifras === "completo" ? 0 : 1;
-                    return `$${valorFormateado.toFixed(decimales)}${sufijo}`;
-                  }}
+                    formatter={(value: number) => {
+                      if (value <= 0) return '';
+                      
+                      // Aplicar el formato seleccionado consistentemente
+                      let valorFormateado: number;
+                      let sufijo: string = "";
+                      
+                      switch (formatoCifras) {
+                        case "miles":
+                          valorFormateado = value / 1000;
+                          sufijo = "K";
+                          break;
+                        case "millones":
+                          valorFormateado = value / 1000000;
+                          sufijo = "M";
+                          break;
+                        default:
+                          valorFormateado = value;
+                          sufijo = "";
+                      }
+                      
+                      // Para labels en la gráfica, usar formato compacto (menos decimales)
+                      const decimales = formatoCifras === "completo" ? 0 : 1;
+                      return `$${valorFormateado.toFixed(decimales)}${sufijo}`;
+                    }}
                   />
                 </Bar>
               ))}
+              {/* Barra transparente para mostrar el total en la parte superior */}
+              <Bar dataKey="total" stackId="a" fill="transparent">
+                <LabelList 
+                  dataKey="total" 
+                  position="top" 
+                  fill="#000"
+                  fontSize={14}
+                  fontWeight="bold"
+                  formatter={(value: number) => {
+                    if (value <= 0) return '';
+                    return formatearCifra(value);
+                  }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
