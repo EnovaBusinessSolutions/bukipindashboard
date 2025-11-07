@@ -458,10 +458,10 @@ const AnalyticaInversiones = () => {
             <BarChart data={dataConTotales}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="periodo" />
-              <YAxis 
-                tickFormatter={(value: number) => formatearCifra(value, false)}
-                domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
-              />
+          <YAxis 
+            tickFormatter={(value: number) => formatearCifra(value, false)}
+            domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.08)]}
+          />
               <Tooltip 
                 formatter={(value: number) => formatearCifra(value)}
               />
@@ -473,12 +473,12 @@ const AnalyticaInversiones = () => {
                   stackId="a" 
                   fill={COLORS[index % COLORS.length]}
                 >
-                  <LabelList 
-                    dataKey={categoria} 
-                    position="center" 
-                    fill="#000"
-                    stroke="#fff"
-                    strokeWidth={0.5}
+              <LabelList 
+                dataKey={categoria} 
+                position="center" 
+                fill="#fff"
+                stroke="#000"
+                strokeWidth={0.5}
                     fontSize={13}
                     fontWeight="bold"
                     formatter={(value: number) => {
@@ -511,9 +511,9 @@ const AnalyticaInversiones = () => {
               ))}
               {/* Barra transparente para mostrar el total en la parte superior */}
               <Bar dataKey="total" stackId="a" fill="transparent">
-                <LabelList 
-                  dataKey="total" 
-                  position="top" 
+            <LabelList 
+              dataKey="total" 
+              position="insideTop"
                   fill="#000"
                   fontSize={14}
                   fontWeight="bold"
