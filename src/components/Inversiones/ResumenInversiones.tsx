@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useInversiones } from "@/hooks/useInversiones";
+import { useTransaccionesInversionesDetalladas } from "@/hooks/useTransaccionesInversionesDetalladas";
 import { useAsientosInversion } from "@/hooks/useAsientosInversion";
 import { useAsientosInversionBulk } from "@/hooks/useAsientosInversionBulk";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,19 +11,51 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
-import { Eye, ImageIcon, Trash2, AlertTriangle } from "lucide-react";
+import { Eye, ImageIcon, Trash2, AlertTriangle, TrendingUp, TrendingDown, ShoppingCart } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ResumenInversiones = () => {
-  const { inversiones, isLoading, eliminarInversion } = useInversiones();
-  const [selectedInversion, setSelectedInversion] = useState<any>(null);
-  const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(selectedInversion?.id);
+  const { inversiones, isLoading: loadingInversiones, eliminarInversion } = useInversiones();
+  const { transacciones, isLoading: loadingTransacciones } = useTransaccionesInversionesDetalladas();
+  const [selectedTransaccion, setSelectedTransaccion] = useState<any>(null);
+  const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(selectedTransaccion?.inversion_id);
   const { data: inversionesConAsientos, isLoading: loadingAsientos } = useAsientosInversionBulk();
 
   const handleEliminar = (id: string) => {
     eliminarInversion.mutate(id);
+  };
+
+  const getTipoTransaccionIcon = (tipo: string) => {
+    switch (tipo) {
+      case 'alta':
+        return <TrendingUp className="h-4 w-4" />;
+      case 'baja':
+        return <TrendingDown className="h-4 w-4" />;
+      case 'venta':
+        return <ShoppingCart className="h-4 w-4" />;
+      default:
+        return null;
+    }
+  };
+
+  const getTipoTransaccionLabel = (tipo: string) => {
+    const labels: Record<string, string> = {
+      alta: "Alta",
+      baja: "Baja",
+      venta: "Venta",
+    };
+    return labels[tipo] || tipo;
+  };
+
+  const getTipoTransaccionVariant = (tipo: string) => {
+    const variants: Record<string, "default" | "secondary" | "destructive"> = {
+      alta: "default",
+      baja: "destructive",
+      venta: "secondary",
+    };
+    return variants[tipo] || "default";
   };
 
   const getCategoriaLabel = (categoria: string) => {
@@ -56,6 +89,8 @@ const ResumenInversiones = () => {
     return variants[tipo] || "default";
   };
 
+  const isLoading = loadingInversiones || loadingTransacciones;
+
   if (isLoading) {
     return (
       <Card>
@@ -70,14 +105,14 @@ const ResumenInversiones = () => {
   }
 
   const totalInvertido = inversiones.reduce((acc, inv) => acc + Number(inv.valor_total), 0);
-  const totalDepreciacionAnual = inversiones.reduce(
-    (acc, inv) => acc + Number(inv.valor_depreciacion_anual || 0),
-    0
-  );
+  const valorActivosActivos = inversiones
+    .filter(inv => inv.estado === 'activo')
+    .reduce((acc, inv) => acc + Number(inv.valor_total), 0);
   
-  const activosActivos = inversiones.filter(inv => inv.estado === 'activo').length;
-  const activosVendidos = inversiones.filter(inv => inv.estado === 'vendido').length;
-  const activosBaja = inversiones.filter(inv => inv.estado === 'dado_de_baja').length;
+  const totalTransacciones = transacciones.length;
+  const transaccionesAlta = transacciones.filter(t => t.tipo === 'alta').length;
+  const transaccionesBaja = transacciones.filter(t => t.tipo === 'baja').length;
+  const transaccionesVenta = transacciones.filter(t => t.tipo === 'venta').length;
 
   const inversionesSinAsientos = inversiones.filter(inv => {
     return !inversionesConAsientos?.has(inv.id);
@@ -109,25 +144,25 @@ const ResumenInversiones = () => {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Activos Registrados</CardTitle>
+            <CardTitle className="text-sm font-medium">Valor Activos Activos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
-              <div className="text-2xl font-bold">{inversiones.length}</div>
-              <div className="text-xs text-muted-foreground">
-                {activosActivos} activos • {activosVendidos} vendidos • {activosBaja} baja
-              </div>
+            <div className="text-2xl font-bold">
+              ${valorActivosActivos.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Depreciación Anual Total</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Transacciones</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${totalDepreciacionAnual.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+            <div className="space-y-1">
+              <div className="text-2xl font-bold">{totalTransacciones}</div>
+              <div className="text-xs text-muted-foreground">
+                {transaccionesAlta} altas • {transaccionesBaja} bajas • {transaccionesVenta} ventas
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -135,75 +170,70 @@ const ResumenInversiones = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Inversiones CAPEX Registradas</CardTitle>
+          <CardTitle>Historial de Transacciones CAPEX</CardTitle>
           <CardDescription>
-            Listado completo de activos fijos y su información de depreciación
+            Registro cronológico de todas las transacciones de inversiones
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead>Activo</TableHead>
                 <TableHead>Categoría</TableHead>
-                <TableHead>Valor Total</TableHead>
-                <TableHead>Depreciación</TableHead>
-                <TableHead>Estado Pago</TableHead>
-                <TableHead>Estado Activo</TableHead>
-                <TableHead>Fecha Adquisición</TableHead>
+                <TableHead>Monto</TableHead>
+                <TableHead>Descripción</TableHead>
                 <TableHead>Detalle</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {inversiones.map((inversion) => (
-                <TableRow key={inversion.id}>
+              {transacciones.map((transaccion) => (
+                <TableRow key={transaccion.id}>
+                  <TableCell>
+                    {format(new Date(transaccion.fecha), "dd/MM/yyyy")}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getTipoTransaccionVariant(transaccion.tipo)}>
+                      <div className="flex items-center gap-1">
+                        {getTipoTransaccionIcon(transaccion.tipo)}
+                        {getTipoTransaccionLabel(transaccion.tipo)}
+                      </div>
+                    </Badge>
+                  </TableCell>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={inversion.imagen_url || ""} alt={inversion.producto_nombre} />
+                        <AvatarImage src={transaccion.inversion.imagen_url || ""} alt={transaccion.activo} />
                         <AvatarFallback>
                           <ImageIcon className="h-5 w-5 text-muted-foreground" />
                         </AvatarFallback>
                       </Avatar>
-                      <span>{inversion.producto_nombre}</span>
+                      <span>{transaccion.activo}</span>
                     </div>
                   </TableCell>
-                  <TableCell>{getCategoriaLabel(inversion.categoria_activo)}</TableCell>
+                  <TableCell>{getCategoriaLabel(transaccion.categoria)}</TableCell>
                   <TableCell>
-                    ${Number(inversion.valor_total).toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
+                    {transaccion.tipo === 'alta' && transaccion.monto && (
+                      <span className="font-medium text-green-600">
+                        ${Number(transaccion.monto).toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    )}
+                    {transaccion.tipo === 'venta' && transaccion.valor_venta && (
+                      <span className="font-medium text-blue-600">
+                        ${Number(transaccion.valor_venta).toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    )}
+                    {transaccion.tipo === 'baja' && <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{inversion.anos_depreciacion} años</div>
-                      <div className="text-muted-foreground">
-                        ${Number(inversion.valor_depreciacion_anual || 0).toLocaleString(
-                          "es-MX",
-                          { minimumFractionDigits: 2 }
-                        )}
-                        /año
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getTipoPagoVariant(inversion.tipo_pago)}>
-                      {getTipoPagoLabel(inversion.tipo_pago)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      inversion.estado === 'activo' ? 'default' : 
-                      inversion.estado === 'vendido' ? 'secondary' : 
-                      'destructive'
-                    }>
-                      {inversion.estado === 'activo' ? 'Activo' : 
-                       inversion.estado === 'vendido' ? 'Vendido' : 
-                       'Dado de Baja'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {format(new Date(inversion.fecha_adquisicion), "dd/MM/yyyy")}
+                  <TableCell className="max-w-xs truncate">
+                    {transaccion.tipo === 'alta' && transaccion.descripcion}
+                    {(transaccion.tipo === 'baja' || transaccion.tipo === 'venta') && transaccion.motivo}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -212,120 +242,163 @@ const ResumenInversiones = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setSelectedInversion(inversion)}
+                            onClick={() => setSelectedTransaccion(transaccion)}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>
                       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                          <DialogTitle>Detalle de Inversión</DialogTitle>
+                          <DialogTitle>
+                            Detalle de Transacción - {selectedTransaccion && getTipoTransaccionLabel(selectedTransaccion.tipo)}
+                          </DialogTitle>
                         </DialogHeader>
-                        {selectedInversion && (
+                        {selectedTransaccion && (
                           <div className="space-y-4">
-                            {selectedInversion.imagen_url && (
+                            {selectedTransaccion.inversion.imagen_url && (
                               <img
-                                src={selectedInversion.imagen_url}
-                                alt={selectedInversion.producto_nombre}
+                                src={selectedTransaccion.inversion.imagen_url}
+                                alt={selectedTransaccion.activo}
                                 className="w-full h-64 object-cover rounded-lg"
                               />
                             )}
+                            
                             <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  Tipo de Transacción
+                                </p>
+                                <Badge variant={getTipoTransaccionVariant(selectedTransaccion.tipo)}>
+                                  <div className="flex items-center gap-1">
+                                    {getTipoTransaccionIcon(selectedTransaccion.tipo)}
+                                    {getTipoTransaccionLabel(selectedTransaccion.tipo)}
+                                  </div>
+                                </Badge>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  Fecha
+                                </p>
+                                <p className="text-base">
+                                  {format(new Date(selectedTransaccion.fecha), "dd/MM/yyyy")}
+                                </p>
+                              </div>
                               <div>
                                 <p className="text-sm font-medium text-muted-foreground">
                                   Activo
                                 </p>
-                                <p className="text-base">{selectedInversion.producto_nombre}</p>
+                                <p className="text-base">{selectedTransaccion.activo}</p>
                               </div>
                               <div>
                                 <p className="text-sm font-medium text-muted-foreground">
                                   Categoría
                                 </p>
                                 <p className="text-base">
-                                  {getCategoriaLabel(selectedInversion.categoria_activo)}
+                                  {getCategoriaLabel(selectedTransaccion.categoria)}
                                 </p>
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                  Valor Total
-                                </p>
-                                <p className="text-base">
-                                  $
-                                  {Number(selectedInversion.valor_total).toLocaleString("es-MX", {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                  Monto Pagado
-                                </p>
-                                <p className="text-base">
-                                  $
-                                  {Number(selectedInversion.monto_pagado).toLocaleString("es-MX", {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                  Depreciación Anual
-                                </p>
-                                <p className="text-base">
-                                  $
-                                  {Number(
-                                    selectedInversion.valor_depreciacion_anual || 0
-                                  ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                  Depreciación Mensual
-                                </p>
-                                <p className="text-base">
-                                  $
-                                  {Number(
-                                    selectedInversion.valor_depreciacion_mensual || 0
-                                  ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                              {selectedInversion.proveedor_nombre && (
+                              
+                              {selectedTransaccion.tipo === 'alta' && (
                                 <>
                                   <div>
                                     <p className="text-sm font-medium text-muted-foreground">
-                                      Proveedor
+                                      Valor Total
                                     </p>
-                                    <p className="text-base">
-                                      {selectedInversion.proveedor_nombre}
+                                    <p className="text-base font-semibold text-green-600">
+                                      ${Number(selectedTransaccion.monto).toLocaleString("es-MX", {
+                                        minimumFractionDigits: 2,
+                                      })}
                                     </p>
                                   </div>
                                   <div>
                                     <p className="text-sm font-medium text-muted-foreground">
-                                      RFC
+                                      Depreciación Anual
                                     </p>
                                     <p className="text-base">
-                                      {selectedInversion.proveedor_rfc || "N/A"}
+                                      $
+                                      {Number(
+                                        selectedTransaccion.inversion.valor_depreciacion_anual || 0
+                                      ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                                    </p>
+                                  </div>
+                                  {selectedTransaccion.inversion.proveedor_nombre && (
+                                    <>
+                                      <div>
+                                        <p className="text-sm font-medium text-muted-foreground">
+                                          Proveedor
+                                        </p>
+                                        <p className="text-base">
+                                          {selectedTransaccion.inversion.proveedor_nombre}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium text-muted-foreground">
+                                          RFC
+                                        </p>
+                                        <p className="text-base">
+                                          {selectedTransaccion.inversion.proveedor_rfc || "N/A"}
+                                        </p>
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                              
+                              {selectedTransaccion.tipo === 'venta' && (
+                                <>
+                                  <div>
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                      Valor de Venta
+                                    </p>
+                                    <p className="text-base font-semibold text-blue-600">
+                                      ${Number(selectedTransaccion.valor_venta || 0).toLocaleString("es-MX", {
+                                        minimumFractionDigits: 2,
+                                      })}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                      Valor Original
+                                    </p>
+                                    <p className="text-base">
+                                      ${Number(selectedTransaccion.inversion.valor_total).toLocaleString("es-MX", {
+                                        minimumFractionDigits: 2,
+                                      })}
                                     </p>
                                   </div>
                                 </>
                               )}
                             </div>
-                            {selectedInversion.descripcion && (
+                            
+                            {selectedTransaccion.tipo === 'alta' && selectedTransaccion.descripcion && (
                               <div>
                                 <p className="text-sm font-medium text-muted-foreground">
                                   Descripción
                                 </p>
-                                <p className="text-base">{selectedInversion.descripcion}</p>
+                                <p className="text-base">{selectedTransaccion.descripcion}</p>
+                              </div>
+                            )}
+                            
+                            {(selectedTransaccion.tipo === 'baja' || selectedTransaccion.tipo === 'venta') && selectedTransaccion.motivo && (
+                              <div>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  Motivo
+                                </p>
+                                <p className="text-base">{selectedTransaccion.motivo}</p>
                               </div>
                             )}
                             
                             <Separator className="my-4" />
                             
                             <div>
-                              <h3 className="text-lg font-semibold mb-3">Asiento Contable Generado</h3>
-                              {loadingAsiento ? (
-                                <Skeleton className="h-32 w-full" />
-                              ) : asientoInversion ? (
+                              <h3 className="text-lg font-semibold mb-3">
+                                {selectedTransaccion.tipo === 'alta' ? 'Asiento Contable Generado' : 'Asiento Contable'}
+                              </h3>
+                              {selectedTransaccion.tipo === 'alta' && (
+                                <>
+                                  {loadingAsiento ? (
+                                    <Skeleton className="h-32 w-full" />
+                                  ) : asientoInversion ? (
                                 <div className="space-y-3">
                                   <div className="grid grid-cols-2 gap-2 text-sm">
                                     <div>
@@ -390,56 +463,61 @@ const ResumenInversiones = () => {
                                     </Table>
                                   </div>
                                   
-                                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                                    <p className="text-muted-foreground">
-                                      Este asiento se generó automáticamente al registrar la inversión y se 
-                                      refleja en la Balanza de Comprobación.
+                                   <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                                     <p className="text-muted-foreground">
+                                       Este asiento se generó automáticamente al registrar la inversión y se 
+                                       refleja en la Balanza de Comprobación.
+                                     </p>
+                                   </div>
+                                 </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                      No se encontró asiento contable para esta inversión
                                     </p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-center py-8 text-muted-foreground">
-                                  <p>No se encontró asiento contable para esta inversión.</p>
-                                  <p className="text-sm mt-2">
-                                    Las inversiones antiguas deben ser eliminadas y registradas nuevamente.
-                                  </p>
-                                </div>
+                                  )}
+                                </>
+                              )}
+                              
+                              {(selectedTransaccion.tipo === 'baja' || selectedTransaccion.tipo === 'venta') && (
+                                <Alert>
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <AlertDescription>
+                                    Actualmente las transacciones de baja y venta no generan asientos contables automáticos.
+                                  </AlertDescription>
+                                </Alert>
                               )}
                             </div>
                           </div>
                         )}
                       </DialogContent>
                     </Dialog>
-                    
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Eliminar inversión?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta acción eliminará permanentemente la inversión "{inversion.producto_nombre}".
-                            {!asientoInversion && (
-                              <span className="block mt-2 text-destructive font-medium">
-                                Esta inversión no tiene asientos contables asociados y no afecta la balanza.
-                              </span>
-                            )}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleEliminar(inversion.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Eliminar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                      {transaccion.tipo === 'alta' && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar inversión?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Se eliminará permanentemente la inversión
+                                "{transaccion.activo}" y todas sus transacciones asociadas.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleEliminar(transaccion.inversion_id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
