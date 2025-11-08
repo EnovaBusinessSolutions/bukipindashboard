@@ -11,44 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Eye, Trash2, TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { Eye, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import SimuladorDepreciaciones from "./SimuladorDepreciaciones";
 
 const TimelineTransacciones = () => {
   const { data: transacciones, isLoading } = useTransaccionesInversiones();
   const [selectedAsientoId, setSelectedAsientoId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const queryClient = useQueryClient();
-
-  const handleLimpiarSimulaciones = async () => {
-    setIsDeleting(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session");
-
-      const { data, error } = await supabase.functions.invoke(
-        'limpiar-depreciaciones-simuladas',
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (error) throw error;
-
-      toast.success(`Se eliminaron ${data.asientosEliminados} depreciaciones simuladas`);
-      queryClient.invalidateQueries({ queryKey: ["transacciones-inversiones"] });
-    } catch (error: any) {
-      console.error('Error limpiando simulaciones:', error);
-      toast.error(`Error: ${error.message}`);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -63,15 +32,13 @@ const TimelineTransacciones = () => {
     );
   }
 
-  const transaccionesSimuladas = transacciones?.filter(t => t.tipo === 'depreciacion_simulada') || [];
   const totalInvertido = transacciones?.filter(t => t.tipo === 'inversion').reduce((sum, t) => sum + t.monto, 0) || 0;
-  const totalDepreciado = transacciones?.filter(t => t.tipo === 'depreciacion' || t.tipo === 'depreciacion_simulada').reduce((sum, t) => sum + t.monto, 0) || 0;
+  const totalDepreciado = transacciones?.filter(t => t.tipo === 'depreciacion').reduce((sum, t) => sum + t.monto, 0) || 0;
 
   const getTipoBadge = (tipo: TipoTransaccion) => {
     const configs = {
       inversion: { icon: TrendingUp, label: "Inversión", variant: "default" as const },
       depreciacion: { icon: Activity, label: "Depreciación", variant: "secondary" as const },
-      depreciacion_simulada: { icon: Activity, label: "Depreciación (Simulada)", variant: "outline" as const },
       baja: { icon: TrendingDown, label: "Baja de Activo", variant: "destructive" as const },
       venta: { icon: TrendingDown, label: "Venta de Activo", variant: "secondary" as const },
     };
@@ -95,11 +62,8 @@ const TimelineTransacciones = () => {
 
   return (
     <div className="space-y-6">
-      {/* Simulador */}
-      <SimuladorDepreciaciones />
-
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total Invertido</CardTitle>
@@ -130,46 +94,6 @@ const TimelineTransacciones = () => {
             <div className="text-2xl font-bold">{transacciones?.length || 0}</div>
           </CardContent>
         </Card>
-
-        {transaccionesSimuladas.length > 0 && (
-          <Card className="border-orange-200 bg-orange-50/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Simulaciones</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{transaccionesSimuladas.length}</div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    className="mt-2 w-full"
-                    disabled={isDeleting}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Limpiar Simuladas
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>¿Eliminar depreciaciones simuladas?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Se eliminarán {transaccionesSimuladas.length} depreciaciones simuladas.
-                      <br /><br />
-                      <strong>Las inversiones y depreciaciones reales NO se afectarán.</strong>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleLimpiarSimulaciones} disabled={isDeleting}>
-                      Eliminar Simulaciones
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       {/* Timeline */}
@@ -187,7 +111,7 @@ const TimelineTransacciones = () => {
                 <h3 className="text-lg font-semibold mb-3 capitalize">{mes}</h3>
                 <div className="space-y-3">
                   {transaccionesMes.map((transaccion) => (
-                    <Card key={transaccion.id} className={transaccion.tipo === 'depreciacion_simulada' ? 'border-orange-200 bg-orange-50/30' : ''}>
+                    <Card key={transaccion.id}>
                       <CardContent className="pt-4">
                         <div className="flex justify-between items-start">
                           <div className="space-y-2 flex-1">

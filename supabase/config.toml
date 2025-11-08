@@ -14,9 +14,3 @@ verify_jwt = false
 
 [functions.cancelar-egreso]
 verify_jwt = false
-
-[functions.simular-depreciaciones-historicas]
-verify_jwt = false
-
-[functions.limpiar-depreciaciones-simuladas]
-verify_jwt = false

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type TipoTransaccion = 'inversion' | 'depreciacion' | 'depreciacion_simulada' | 'baja' | 'venta';
+export type TipoTransaccion = 'inversion' | 'depreciacion' | 'baja' | 'venta';
 
 export interface TransaccionInversion {
   id: string;
@@ -58,7 +58,7 @@ export const useTransaccionesInversiones = () => {
         }
       }
 
-      // 3. Obtener todos los asientos de depreciación (reales y simulados)
+      // 3. Obtener todos los asientos de depreciación
       const { data: asientosDepreciacion, error: depError } = await supabase
         .from("asientos_contables")
         .select(`
@@ -73,24 +73,15 @@ export const useTransaccionesInversiones = () => {
           )
         `)
         .eq("user_id", user.id)
-        .or("numero_asiento.like.DEP-%,numero_asiento.like.SIM-DEP-%")
+        .like("numero_asiento", "DEP-%")
         .order("fecha", { ascending: false });
 
       if (depError) throw depError;
 
       for (const asiento of asientosDepreciacion || []) {
         // Extraer ID de inversión del número de asiento
-        // Formato: DEP-{uuid}-YYYYMM o SIM-DEP-{uuid}-YYYYMM
-        const partes = asiento.numero_asiento.split('-');
-        let inversionId: string;
-        let esSimulada = false;
-
-        if (partes[0] === 'SIM') {
-          esSimulada = true;
-          inversionId = partes[2]; // SIM-DEP-{uuid}-YYYYMM
-        } else {
-          inversionId = partes[1]; // DEP-{uuid}-YYYYMM
-        }
+        // Formato: DEP-{uuid}-YYYYMM
+        const inversionId = asiento.numero_asiento.split('-')[1];
 
         const inversion = inversiones?.find(i => i.id === inversionId);
         if (!inversion) continue;
@@ -103,7 +94,7 @@ export const useTransaccionesInversiones = () => {
 
         transacciones.push({
           id: `dep-${asiento.id}`,
-          tipo: esSimulada ? 'depreciacion_simulada' : 'depreciacion',
+          tipo: 'depreciacion',
           fecha: asiento.fecha,
           activoNombre: inversion.producto_nombre,
           activoId: inversion.id,
