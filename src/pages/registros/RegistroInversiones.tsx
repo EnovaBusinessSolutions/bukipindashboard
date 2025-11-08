@@ -1,11 +1,11 @@
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RegistroInversionForm from "@/components/Inversiones/RegistroInversionForm";
-import TablaRecomendaciones from "@/components/Inversiones/TablaRecomendaciones";
+import TimelineTransacciones from "@/components/Inversiones/TimelineTransacciones";
 import ResumenInversiones from "@/components/Inversiones/ResumenInversiones";
-import AnalyticaInversiones from "@/components/Inversiones/AnalyticaInversiones";
 import ResumenDepreciaciones from "@/components/Inversiones/ResumenDepreciaciones";
 import BajaActivos from "@/components/Inversiones/BajaActivos";
+import AnalyticaInversiones from "@/components/Inversiones/AnalyticaInversiones";
 
 const RegistroInversiones = () => {
   return (
@@ -19,16 +19,21 @@ const RegistroInversiones = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="registro">Registro de Inversiones</TabsTrigger>
-            <TabsTrigger value="resumen">Resumen de Transacciones de Inversión</TabsTrigger>
-            <TabsTrigger value="depreciaciones">Resumen de Depreciaciones</TabsTrigger>
-            <TabsTrigger value="baja">Baja de Activos</TabsTrigger>
-            <TabsTrigger value="analitica">Analítica de Inversiones</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="registro">Registro</TabsTrigger>
+            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="resumen">Resumen</TabsTrigger>
+            <TabsTrigger value="depreciaciones">Depreciaciones</TabsTrigger>
+            <TabsTrigger value="baja">Baja</TabsTrigger>
+            <TabsTrigger value="analitica">Analítica</TabsTrigger>
           </TabsList>
 
           <TabsContent value="registro" className="space-y-6">
             <RegistroInversionForm />
+          </TabsContent>
+
+          <TabsContent value="timeline">
+            <TimelineTransacciones />
           </TabsContent>
 
           <TabsContent value="resumen">
