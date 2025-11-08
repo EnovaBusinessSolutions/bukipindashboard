@@ -473,12 +473,12 @@ const AnalyticaInversiones = () => {
                   stackId="a" 
                   fill={COLORS[index % COLORS.length]}
                 >
-              <LabelList 
-                dataKey={categoria} 
-                position="center" 
-                fill="#fff"
-                stroke="#000"
-                strokeWidth={0.5}
+            <LabelList 
+              dataKey={categoria} 
+              position="center" 
+              fill="#fff"
+              stroke="#fff"
+              strokeWidth={0.5}
                     fontSize={13}
                     fontWeight="bold"
                     formatter={(value: number) => {
@@ -514,7 +514,7 @@ const AnalyticaInversiones = () => {
             <LabelList 
               dataKey="total" 
               position="top"
-              offset={-30}
+              offset={-40}
                   fill="#000"
                   fontSize={14}
                   fontWeight="bold"
