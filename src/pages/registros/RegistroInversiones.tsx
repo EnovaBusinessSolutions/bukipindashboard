@@ -21,7 +21,7 @@ const RegistroInversiones = () => {
         <Tabs defaultValue="registro" className="w-full">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="registro">Registro de Inversiones</TabsTrigger>
-            <TabsTrigger value="resumen">Resumen de Inversiones</TabsTrigger>
+            <TabsTrigger value="resumen">Resumen de Transacciones de Inversión</TabsTrigger>
             <TabsTrigger value="depreciaciones">Resumen de Depreciaciones</TabsTrigger>
             <TabsTrigger value="baja">Baja de Activos</TabsTrigger>
             <TabsTrigger value="analitica">Analítica de Inversiones</TabsTrigger>
