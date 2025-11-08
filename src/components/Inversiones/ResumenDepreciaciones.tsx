@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
 import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText } from "lucide-react";
-import { format, lastDayOfMonth } from "date-fns";
+import { format, lastDayOfMonth, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { useState } from "react";
 
@@ -38,6 +38,7 @@ const ResumenDepreciaciones = () => {
     
     // Calcular próxima fecha de depreciación (último día del mes actual)
     const proximaFechaDepreciacion = lastDayOfMonth(hoy);
+    const diasFaltantes = differenceInDays(proximaFechaDepreciacion, hoy);
 
     return {
       ...inv,
@@ -45,7 +46,8 @@ const ResumenDepreciaciones = () => {
       depreciacionAcumulada,
       valorLibros,
       porcentajeDepreciado: inv.valor_total > 0 ? (depreciacionAcumulada / inv.valor_total) * 100 : 0,
-      proximaFechaDepreciacion
+      proximaFechaDepreciacion,
+      diasFaltantes
     };
   });
 
@@ -260,6 +262,11 @@ const ResumenDepreciaciones = () => {
                         <div>
                           <p className="text-xs text-muted-foreground">Próxima Depreciación</p>
                           <p className="font-semibold text-blue-600">{format(inversion.proximaFechaDepreciacion, "dd MMM yyyy", { locale: es })}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {inversion.diasFaltantes === 0 ? "Hoy" : 
+                             inversion.diasFaltantes === 1 ? "Mañana" : 
+                             `Faltan ${inversion.diasFaltantes} días`}
+                          </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Depreciación Acumulada</p>
