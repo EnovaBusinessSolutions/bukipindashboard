@@ -514,7 +514,7 @@ const AnalyticaInversiones = () => {
             <LabelList 
               dataKey="total" 
               position="top"
-              offset={-15}
+              offset={-30}
                   fill="#000"
                   fontSize={14}
                   fontWeight="bold"
