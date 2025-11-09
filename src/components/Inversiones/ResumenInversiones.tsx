@@ -11,13 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
-import { Eye, ImageIcon, Trash2, AlertTriangle, TrendingUp, TrendingDown, ShoppingCart } from "lucide-react";
+import { Eye, ImageIcon, Trash2, AlertTriangle, TrendingUp, TrendingDown, ShoppingCart, RotateCcw } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ResumenInversiones = () => {
-  const { inversiones, isLoading: loadingInversiones, eliminarInversion } = useInversiones();
+  const { inversiones, isLoading: loadingInversiones, eliminarInversion, actualizarInversion } = useInversiones();
   const { transacciones, isLoading: loadingTransacciones } = useTransaccionesInversionesDetalladas();
   const [selectedTransaccion, setSelectedTransaccion] = useState<any>(null);
   const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(selectedTransaccion?.inversion_id);
@@ -25,6 +25,18 @@ const ResumenInversiones = () => {
 
   const handleEliminar = (id: string) => {
     eliminarInversion.mutate(id);
+  };
+
+  const handleReactivar = (inversionId: string) => {
+    actualizarInversion.mutate({
+      id: inversionId,
+      actualizacion: {
+        estado: 'activo',
+        fecha_baja: null,
+        motivo_baja: null,
+        valor_venta: null,
+      }
+    });
   };
 
   const getTipoTransaccionIcon = (tipo: string) => {
@@ -513,6 +525,33 @@ const ResumenInversiones = () => {
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                      {(transaccion.tipo === 'baja' || transaccion.tipo === 'venta') && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <RotateCcw className="h-4 w-4 text-primary" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Reactivar activo?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción revertirá la {transaccion.tipo === 'venta' ? 'venta' : 'baja'} del activo
+                                "{transaccion.activo}". El activo volverá a estado activo y podrás darlo de baja
+                                nuevamente para generar los asientos contables correctos.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleReactivar(transaccion.inversion_id)}
+                              >
+                                Reactivar
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
