@@ -20,13 +20,15 @@ interface AsientoInversion {
   detalle_asientos: DetalleAsiento[];
 }
 
-export const useAsientosInversion = (inversionId?: string) => {
+export const useAsientosInversion = (inversionId?: string, tipoTransaccion?: string) => {
   return useQuery({
-    queryKey: ["asientos-inversion", inversionId],
+    queryKey: ["asientos-inversion", inversionId, tipoTransaccion],
     queryFn: async () => {
       if (!inversionId) return null;
 
-      const numeroAsiento = `INV-${inversionId}`;
+      // Determinar el prefijo según el tipo de transacción
+      const prefijo = (tipoTransaccion === 'baja' || tipoTransaccion === 'venta') ? 'BAJA' : 'INV';
+      const numeroAsiento = `${prefijo}-${inversionId}`;
 
       const { data, error } = await supabase
         .from("asientos_contables")
@@ -44,7 +46,7 @@ export const useAsientosInversion = (inversionId?: string) => {
           )
         `)
         .eq("numero_asiento", numeroAsiento)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching asiento:", error);
