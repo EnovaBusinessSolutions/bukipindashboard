@@ -174,7 +174,7 @@ const ResumenDepreciaciones = () => {
       if (!asientos) return 0;
       return asientos.reduce((total, asiento) => {
         const gastoDepreciacion = asiento.detalle_asientos
-          ?.filter(d => d.cuenta_codigo.startsWith('550')) // Gasto Depreciación
+          ?.filter(d => d.cuenta_codigo === '5109') // Gasto Depreciación
           .reduce((sum, d) => sum + d.debe, 0) || 0;
         return total + gastoDepreciacion;
       }, 0);
