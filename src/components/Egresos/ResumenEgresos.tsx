@@ -320,13 +320,13 @@ const ResumenEgresos = () => {
     setCurrentAsientos(null);
     try {
       // Buscar el asiento contable relacionado con esta transacción de egreso
-      // Buscaremos por descripción que contenga el ID de la transacción
+      // El número de asiento sigue el patrón EGR-{transaccionId}
+      const numeroAsientoBuscado = `EGR-${transaccionId}`;
+      
       const { data: asientos, error: asientosError } = await supabase
         .from('asientos_contables')
         .select('*')
-        .ilike('descripcion', `%${transaccionId}%`)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('numero_asiento', numeroAsientoBuscado)
         .maybeSingle();
 
       if (asientosError) {
