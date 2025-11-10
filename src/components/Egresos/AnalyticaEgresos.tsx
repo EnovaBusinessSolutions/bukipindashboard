@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Treemap
 } from "recharts";
-import { TrendingDown, Calendar, DollarSign, Package, AlertCircle } from "lucide-react";
+import { TrendingDown, DollarSign, Package, AlertCircle, CalendarIcon } from "lucide-react";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
@@ -15,6 +15,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // Componente personalizado para el contenido del Treemap
 const CustomTreemapContent = (props: any) => {
@@ -78,9 +86,16 @@ const AnalyticaEgresos = () => {
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada">("total");
   const [vistaTotal, setVistaTotal] = useState<"unica" | "desglosada">("unica");
+  const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
+  const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
   
   // Usar el nuevo hook para datos de la gráfica
-  const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(periodFilter, tipoEgreso);
+  const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(
+    periodFilter, 
+    tipoEgreso,
+    fechaAnalisisDiario,
+    fechaAnalisisMensual
+  );
 
   // Filtrar SOLO gastos operativos (51XX, 52XX) - EXCLUIR costos 5001
   const transaccionesFiltradas = transacciones.filter(
@@ -660,51 +675,163 @@ const AnalyticaEgresos = () => {
           </p>
         </div>
 
-        {/* Panel de Controles Globales */}
-        <Card className="bg-muted/30">
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Control 1: Periodo */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Periodo</label>
-                <Tabs value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="diario">Día</TabsTrigger>
-                    <TabsTrigger value="mensual">Mes</TabsTrigger>
-                    <TabsTrigger value="anual">Año</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+      {/* Panel de Controles Globales - Formato Ingresos */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Card 1: Período de Análisis */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Período de Análisis</CardTitle>
+            <CardDescription>Selecciona el período</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <RadioGroup 
+              value={periodFilter} 
+              onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} 
+              className="flex flex-col gap-3"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="diario" id="period-daily" />
+                <Label htmlFor="period-daily" className="cursor-pointer">Diario</Label>
               </div>
-
-              {/* Control 2: Tipo de Egreso */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Tipo de Egreso</label>
-                <Tabs value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="costo">Costo Venta</TabsTrigger>
-                    <TabsTrigger value="costo_inventario">Inventario</TabsTrigger>
-                    <TabsTrigger value="gasto">Gastos</TabsTrigger>
-                    <TabsTrigger value="otros_gastos">Otros</TabsTrigger>
-                    <TabsTrigger value="total">Total</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="mensual" id="period-monthly" />
+                <Label htmlFor="period-monthly" className="cursor-pointer">Mensual</Label>
               </div>
-
-              {/* Control 3: Vista de Cifras */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Vista de Cifras</label>
-                <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="normal">Normal</TabsTrigger>
-                    <TabsTrigger value="miles">Miles</TabsTrigger>
-                    <TabsTrigger value="millones">Millones</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="anual" id="period-annual" />
+                <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
               </div>
-            </div>
+            </RadioGroup>
+            
+            {/* Selector de fecha para análisis diario */}
+            {periodFilter === "diario" && (
+              <div className="pt-2 border-t">
+                <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !fechaAnalisisDiario && "text-muted-foreground"
+                      )}
+                      size="sm"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {format(fechaAnalisisDiario, "PPP", { locale: es })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={fechaAnalisisDiario}
+                      onSelect={(date) => date && setFechaAnalisisDiario(date)}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+            
+            {/* Selector de mes para análisis mensual */}
+            {periodFilter === "mensual" && (
+              <div className="pt-2 border-t">
+                <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !fechaAnalisisMensual && "text-muted-foreground"
+                      )}
+                      size="sm"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={fechaAnalisisMensual}
+                      onSelect={(date) => date && setFechaAnalisisMensual(date)}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Card 2: Tipo de Egreso */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Tipo de Egreso</CardTitle>
+            <CardDescription>Selecciona qué analizar</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup 
+              value={tipoEgreso} 
+              onValueChange={(v) => setTipoEgreso(v as any)} 
+              className="flex flex-col gap-3"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="costo" id="tipo-costo" />
+                <Label htmlFor="tipo-costo" className="cursor-pointer">Costo de Venta</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="costo_inventario" id="tipo-inventario" />
+                <Label htmlFor="tipo-inventario" className="cursor-pointer">Costo Inventario</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="gasto" id="tipo-gasto" />
+                <Label htmlFor="tipo-gasto" className="cursor-pointer">Gastos</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="otros_gastos" id="tipo-otros" />
+                <Label htmlFor="tipo-otros" className="cursor-pointer">Otros Gastos</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="total" id="tipo-total" />
+                <Label htmlFor="tipo-total" className="cursor-pointer">Total</Label>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
+        
+        {/* Card 3: Vista de Cifras */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Formato de Cifras</CardTitle>
+            <CardDescription>Visualización de montos</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup 
+              value={formatoMontos} 
+              onValueChange={(v) => setFormatoMontos(v as "normal" | "miles" | "millones")} 
+              className="flex flex-col gap-3"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="normal" id="formato-normal" />
+                <Label htmlFor="formato-normal" className="cursor-pointer">Normal</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="miles" id="formato-miles" />
+                <Label htmlFor="formato-miles" className="cursor-pointer">Miles (K)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="millones" id="formato-millones" />
+                <Label htmlFor="formato-millones" className="cursor-pointer">Millones (M)</Label>
+              </div>
+            </RadioGroup>
           </CardContent>
         </Card>
       </div>
+    </div>
 
       {/* Gráficas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

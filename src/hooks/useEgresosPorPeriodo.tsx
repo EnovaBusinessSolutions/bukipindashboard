@@ -16,14 +16,19 @@ export interface DatosEvolucionCombinada {
 
 export const useEgresosPorPeriodo = (
   periodFilter: "diario" | "mensual" | "anual",
-  tipoEgreso: "total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada"
+  tipoEgreso: "total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada",
+  fechaEspecificaDiaria?: Date,
+  fechaEspecificaMensual?: Date
 ) => {
   return useQuery({
-    queryKey: ['egresos-por-periodo', periodFilter, tipoEgreso],
+    queryKey: ['egresos-por-periodo', periodFilter, tipoEgreso, fechaEspecificaDiaria, fechaEspecificaMensual],
     queryFn: async (): Promise<DatosEvolucionSimple[] | DatosEvolucionCombinada[]> => {
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth();
+      const fechaBase = fechaEspecificaDiaria || new Date();
+      const fechaMensual = fechaEspecificaMensual || new Date();
+      const currentYear = periodFilter === "diario" ? fechaBase.getFullYear() :
+                          periodFilter === "mensual" ? fechaMensual.getFullYear() :
+                          new Date().getFullYear();
+      const currentMonth = periodFilter === "mensual" ? fechaMensual.getMonth() : new Date().getMonth();
 
       // Consultar asientos contables del año actual
       const { data: detalles } = await supabase
@@ -35,7 +40,7 @@ export const useEgresosPorPeriodo = (
       // Modo combinada: retornar costos, gastos y costos inventario por separado
       if (tipoEgreso === "combinada") {
         if (periodFilter === "diario") {
-          const todayStr = today.toISOString().split('T')[0];
+          const todayStr = fechaBase.toISOString().split('T')[0];
           let costos5001 = 0;
           let gastos = 0;
           let costosInventario5002 = 0;
@@ -137,7 +142,7 @@ export const useEgresosPorPeriodo = (
       // Modo "total": retornar datos combinados para permitir vista única Y desglosada
       if (tipoEgreso === "total") {
         if (periodFilter === "diario") {
-          const todayStr = today.toISOString().split('T')[0];
+          const todayStr = fechaBase.toISOString().split('T')[0];
           let costos5001 = 0;
           let gastos = 0;
           let costosInventario5002 = 0;
@@ -265,7 +270,7 @@ export const useEgresosPorPeriodo = (
       };
 
       if (periodFilter === "diario") {
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = fechaBase.toISOString().split('T')[0];
         let total = 0;
 
         detalles?.forEach(detalle => {
