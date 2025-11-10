@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInversiones } from "@/hooks/useInversiones";
+import { useProveedores } from "@/hooks/useProveedores";
 import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -23,6 +25,7 @@ import PreviewCuentasContables from "./PreviewCuentasContables";
 
 const RegistroInversionForm = () => {
   const { crearInversion, recomendaciones } = useInversiones();
+  const { proveedores } = useProveedores();
   const { data: tarjetasCredito } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
   const [fecha, setFecha] = useState<Date>(new Date());
@@ -34,6 +37,8 @@ const RegistroInversionForm = () => {
   const [imagenUrl, setImagenUrl] = useState<string>("");
   const [valorTotalDisplay, setValorTotalDisplay] = useState<string>("");
   const [montoPagadoDisplay, setMontoPagadoDisplay] = useState<string>("");
+  const [tipoProveedor, setTipoProveedor] = useState<string>("");
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("");
 
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>();
   const [formData, setFormData] = useState({
@@ -298,6 +303,8 @@ const RegistroInversionForm = () => {
     setFechaVencimiento(undefined);
     setValorTotalDisplay("");
     setMontoPagadoDisplay("");
+    setTipoProveedor("");
+    setProveedorSeleccionado("");
   };
 
   const getCategoriaLabel = (categoria: string) => {
@@ -639,56 +646,160 @@ const RegistroInversionForm = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Información del Proveedor</h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor_nombre">Nombre del Proveedor</Label>
-                    <Input
-                      id="proveedor_nombre"
-                      value={formData.proveedor_nombre}
-                      onChange={(e) =>
-                        setFormData({ ...formData, proveedor_nombre: e.target.value })
-                      }
-                      placeholder="Nombre del proveedor"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor_telefono">Teléfono</Label>
-                    <Input
-                      id="proveedor_telefono"
-                      value={formData.proveedor_telefono}
-                      onChange={(e) =>
-                        setFormData({ ...formData, proveedor_telefono: e.target.value })
-                      }
-                      placeholder="Teléfono de contacto"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor_email">Email</Label>
-                    <Input
-                      id="proveedor_email"
-                      type="email"
-                      value={formData.proveedor_email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, proveedor_email: e.target.value })
-                      }
-                      placeholder="email@proveedor.com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor_rfc">RFC</Label>
-                    <Input
-                      id="proveedor_rfc"
-                      value={formData.proveedor_rfc}
-                      onChange={(e) =>
-                        setFormData({ ...formData, proveedor_rfc: e.target.value })
-                      }
-                      placeholder="RFC del proveedor"
-                    />
-                  </div>
+                {/* Selección de tipo de proveedor */}
+                <div className="space-y-2">
+                  <Label>Tipo de Proveedor</Label>
+                  <RadioGroup value={tipoProveedor} onValueChange={(val) => {
+                    setTipoProveedor(val);
+                    if (val === "nuevo") {
+                      setProveedorSeleccionado("");
+                      setFormData({
+                        ...formData,
+                        proveedor_nombre: "",
+                        proveedor_telefono: "",
+                        proveedor_email: "",
+                        proveedor_rfc: ""
+                      });
+                    } else if (val === "existente") {
+                      setFormData({
+                        ...formData,
+                        proveedor_nombre: "",
+                        proveedor_telefono: "",
+                        proveedor_email: "",
+                        proveedor_rfc: ""
+                      });
+                    }
+                  }}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="nuevo" id="proveedor-nuevo-inv" />
+                      <Label htmlFor="proveedor-nuevo-inv">Nuevo Proveedor</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="existente" id="proveedor-existente-inv" />
+                      <Label htmlFor="proveedor-existente-inv">Proveedor Existente</Label>
+                    </div>
+                  </RadioGroup>
                 </div>
+
+                {/* Seleccionar proveedor existente */}
+                {tipoProveedor === "existente" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-select-inv">Seleccionar Proveedor *</Label>
+                    <Select value={proveedorSeleccionado} onValueChange={(val) => {
+                      setProveedorSeleccionado(val);
+                      const proveedor = proveedores.find(p => p.id === val);
+                      if (proveedor) {
+                        setFormData({
+                          ...formData,
+                          proveedor_nombre: proveedor.nombre,
+                          proveedor_telefono: proveedor.telefono || "",
+                          proveedor_email: proveedor.email || "",
+                          proveedor_rfc: proveedor.rfc || ""
+                        });
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar proveedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {proveedores && proveedores.length > 0 ? (
+                          proveedores.map(proveedor => (
+                            <SelectItem key={proveedor.id} value={proveedor.id}>
+                              {proveedor.nombre}
+                              {proveedor.rfc && ` - ${proveedor.rfc}`}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-proveedores" disabled>
+                            No hay proveedores registrados
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Mostrar datos del proveedor seleccionado (read-only) */}
+                {tipoProveedor === "existente" && proveedorSeleccionado && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Nombre</Label>
+                      <p className="text-sm font-medium">{formData.proveedor_nombre}</p>
+                    </div>
+                    {formData.proveedor_telefono && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Teléfono</Label>
+                        <p className="text-sm font-medium">{formData.proveedor_telefono}</p>
+                      </div>
+                    )}
+                    {formData.proveedor_email && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Email</Label>
+                        <p className="text-sm font-medium">{formData.proveedor_email}</p>
+                      </div>
+                    )}
+                    {formData.proveedor_rfc && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">RFC</Label>
+                        <p className="text-sm font-medium">{formData.proveedor_rfc}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Formulario para nuevo proveedor */}
+                {tipoProveedor === "nuevo" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="proveedor_nombre">Nombre del Proveedor</Label>
+                      <Input
+                        id="proveedor_nombre"
+                        value={formData.proveedor_nombre}
+                        onChange={(e) =>
+                          setFormData({ ...formData, proveedor_nombre: e.target.value })
+                        }
+                        placeholder="Nombre del proveedor"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="proveedor_telefono">Teléfono</Label>
+                      <Input
+                        id="proveedor_telefono"
+                        value={formData.proveedor_telefono}
+                        onChange={(e) =>
+                          setFormData({ ...formData, proveedor_telefono: e.target.value })
+                        }
+                        placeholder="Teléfono de contacto"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="proveedor_email">Email</Label>
+                      <Input
+                        id="proveedor_email"
+                        type="email"
+                        value={formData.proveedor_email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, proveedor_email: e.target.value })
+                        }
+                        placeholder="email@proveedor.com"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="proveedor_rfc">RFC</Label>
+                      <Input
+                        id="proveedor_rfc"
+                        value={formData.proveedor_rfc}
+                        onChange={(e) =>
+                          setFormData({ ...formData, proveedor_rfc: e.target.value })
+                        }
+                        placeholder="RFC del proveedor"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <Separator />
