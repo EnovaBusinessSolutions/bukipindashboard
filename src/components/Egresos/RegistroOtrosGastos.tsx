@@ -17,7 +17,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const RegistroOtrosGastos = () => {
   const [concept, setConcept] = useState("");
-  const [category, setCategory] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [paymentType, setPaymentType] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -38,7 +37,7 @@ const RegistroOtrosGastos = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!concept || !category || !totalAmount || !paymentType) {
+    if (!concept || !totalAmount || !paymentType) {
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa todos los campos obligatorios",
@@ -138,7 +137,7 @@ const RegistroOtrosGastos = () => {
     const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
       body: {
         tipo_egreso: 'otro',
-        subtipo_egreso: category,
+        subtipo_egreso: 'otros_gastos',
         descripcion: concept,
         concepto: concept,
         cuenta_codigo: cuentaCodigo,
@@ -171,7 +170,6 @@ const RegistroOtrosGastos = () => {
 
     // Reset form
     setConcept("");
-    setCategory("");
     setTotalAmount("");
     setPaymentType("");
     setPaymentMethod("");
@@ -215,27 +213,6 @@ const RegistroOtrosGastos = () => {
                     placeholder="Ej: Donaciones, multas, gastos personales"
                     required
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="categoria">Categoría *</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="donaciones">Donaciones</SelectItem>
-                      <SelectItem value="multas-sanciones">Multas y Sanciones</SelectItem>
-                      <SelectItem value="gastos-personales">Gastos Personales</SelectItem>
-                      <SelectItem value="eventos-especiales">Eventos Especiales</SelectItem>
-                      <SelectItem value="regalos-cortesias">Regalos y Cortesías</SelectItem>
-                      <SelectItem value="perdidas-extraordinarias">Pérdidas Extraordinarias</SelectItem>
-                      <SelectItem value="gastos-legales">Gastos Legales</SelectItem>
-                      <SelectItem value="entretenimiento">Entretenimiento</SelectItem>
-                      <SelectItem value="viajes-personales">Viajes Personales</SelectItem>
-                      <SelectItem value="otros-no-operativos">Otros No Operativos</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="space-y-2">
