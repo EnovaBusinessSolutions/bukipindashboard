@@ -208,12 +208,21 @@ const ResumenInversiones = () => {
                     {format(new Date(transaccion.fecha), "dd/MM/yyyy")}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getTipoTransaccionVariant(transaccion.tipo)}>
-                      <div className="flex items-center gap-1">
-                        {getTipoTransaccionIcon(transaccion.tipo)}
-                        {getTipoTransaccionLabel(transaccion.tipo)}
-                      </div>
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getTipoTransaccionVariant(transaccion.tipo)}>
+                        <div className="flex items-center gap-1">
+                          {getTipoTransaccionIcon(transaccion.tipo)}
+                          {getTipoTransaccionLabel(transaccion.tipo)}
+                        </div>
+                      </Badge>
+                      {transaccion.inversion.estado === 'activo' && 
+                       (transaccion.tipo === 'baja' || transaccion.tipo === 'venta') && (
+                        <Badge variant="outline" className="text-xs">
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          Reactivado
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
