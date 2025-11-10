@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { format } from "date-fns";
 import { TrendingDown, FileText, RotateCcw } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -840,81 +841,90 @@ const BajaActivos = () => {
 
       {/* Dialog para ver asiento contable */}
       <Dialog open={asientoDialogOpen} onOpenChange={setAsientoDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Asiento Contable de Baja</DialogTitle>
+            <DialogTitle>Historial de Asientos Contables de Baja</DialogTitle>
           </DialogHeader>
-          {asientoData ? (
+          {asientoData && asientoData.length > 0 ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Número de Asiento:</p>
-                  <p className="font-medium">{asientoData.numero_asiento}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Fecha:</p>
-                  <p className="font-medium">{format(new Date(asientoData.fecha), "dd/MM/yyyy")}</p>
-                </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">
+                  {asientoData.length} {asientoData.length === 1 ? 'asiento' : 'asientos'}
+                </Badge>
               </div>
               
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Descripción:</p>
-                <p className="text-sm">{asientoData.descripcion}</p>
-              </div>
-
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cuenta</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead className="text-right">Debe</TableHead>
-                      <TableHead className="text-right">Haber</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {asientoData.detalle_asientos.map((detalle: any) => (
-                      <TableRow key={detalle.id}>
-                        <TableCell className="font-mono text-sm">
-                          {detalle.cuenta_codigo}
-                          <br />
+              <Accordion type="single" collapsible defaultValue="item-0" className="space-y-2">
+                {asientoData.map((asiento, index) => (
+                  <AccordionItem value={`item-${index}`} key={asiento.id} className="border rounded-lg">
+                    <AccordionTrigger className="px-4 hover:no-underline">
+                      <div className="flex flex-col items-start gap-2 text-left w-full">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline">{asiento.numero_asiento}</Badge>
                           <span className="text-xs text-muted-foreground">
-                            {detalle.cuenta?.nombre}
+                            {format(new Date(asiento.created_at), "dd/MM/yyyy HH:mm")}
                           </span>
-                        </TableCell>
-                        <TableCell className="text-sm">{detalle.descripcion}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {detalle.debe > 0 
-                            ? `$${Number(detalle.debe).toLocaleString("es-MX", {
-                                minimumFractionDigits: 2,
-                              })}`
-                            : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {detalle.haber > 0 
-                            ? `$${Number(detalle.haber).toLocaleString("es-MX", {
-                                minimumFractionDigits: 2,
-                              })}`
-                            : '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="font-semibold bg-muted/50">
-                      <TableCell colSpan={2}>Total</TableCell>
-                      <TableCell className="text-right">
-                        ${asientoData.detalle_asientos
-                          .reduce((sum: number, d: any) => sum + Number(d.debe), 0)
-                          .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ${asientoData.detalle_asientos
-                          .reduce((sum: number, d: any) => sum + Number(d.haber), 0)
-                          .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
+                        </div>
+                        <span className="text-sm font-normal">{asiento.descripcion}</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Cuenta</TableHead>
+                              <TableHead>Descripción</TableHead>
+                              <TableHead className="text-right">Debe</TableHead>
+                              <TableHead className="text-right">Haber</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {asiento.detalle_asientos.map((detalle: any) => (
+                              <TableRow key={detalle.id}>
+                                <TableCell className="font-mono text-sm">
+                                  {detalle.cuenta_codigo}
+                                  <br />
+                                  <span className="text-xs text-muted-foreground">
+                                    {detalle.cuenta?.nombre}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-sm">{detalle.descripcion}</TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {detalle.debe > 0 
+                                    ? `$${Number(detalle.debe).toLocaleString("es-MX", {
+                                        minimumFractionDigits: 2,
+                                      })}`
+                                    : '-'}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {detalle.haber > 0 
+                                    ? `$${Number(detalle.haber).toLocaleString("es-MX", {
+                                        minimumFractionDigits: 2,
+                                      })}`
+                                    : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="font-semibold bg-muted/50">
+                              <TableCell colSpan={2}>Total</TableCell>
+                              <TableCell className="text-right">
+                                ${asiento.detalle_asientos
+                                  .reduce((sum: number, d: any) => sum + Number(d.debe), 0)
+                                  .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                ${asiento.detalle_asientos
+                                  .reduce((sum: number, d: any) => sum + Number(d.haber), 0)
+                                  .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
             </div>
           ) : (
             <div className="py-8 text-center text-muted-foreground">

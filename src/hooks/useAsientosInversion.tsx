@@ -17,6 +17,7 @@ interface AsientoInversion {
   numero_asiento: string;
   descripcion: string;
   fecha: string;
+  created_at: string;
   detalle_asientos: DetalleAsiento[];
 }
 
@@ -28,8 +29,8 @@ export const useAsientosInversion = (inversionId?: string, tipoTransaccion?: str
 
       // Determinar el prefijo según el tipo de transacción
       const prefijo = (tipoTransaccion === 'baja' || tipoTransaccion === 'venta') ? 'BAJA' : 'INV';
-      const numeroAsiento = `${prefijo}-${inversionId}`;
 
+      // Buscar TODOS los asientos que empiecen con el prefijo
       const { data, error } = await supabase
         .from("asientos_contables")
         .select(`
@@ -37,6 +38,7 @@ export const useAsientosInversion = (inversionId?: string, tipoTransaccion?: str
           numero_asiento,
           descripcion,
           fecha,
+          created_at,
           detalle_asientos (
             id,
             cuenta_codigo,
@@ -45,33 +47,41 @@ export const useAsientosInversion = (inversionId?: string, tipoTransaccion?: str
             descripcion
           )
         `)
-        .eq("numero_asiento", numeroAsiento)
-        .maybeSingle();
+        .like("numero_asiento", `${prefijo}-${inversionId}%`)
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("Error fetching asiento:", error);
+        console.error("Error fetching asientos:", error);
         return null;
       }
 
-      // Obtener nombres de cuentas
-      if (data?.detalle_asientos) {
-        const cuentasCodigos = data.detalle_asientos.map((d: any) => d.cuenta_codigo);
-        const { data: cuentas } = await supabase
-          .from("cuentas")
-          .select("codigo, nombre")
-          .in("codigo", cuentasCodigos);
+      if (!data || data.length === 0) {
+        return null;
+      }
 
-        const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
-        
-        data.detalle_asientos = data.detalle_asientos.map((d: any) => ({
+      // Obtener nombres de cuentas para todos los asientos
+      const todosLosDetalles = data.flatMap((asiento: any) => asiento.detalle_asientos || []);
+      const cuentasCodigos = [...new Set(todosLosDetalles.map((d: any) => d.cuenta_codigo))];
+      
+      const { data: cuentas } = await supabase
+        .from("cuentas")
+        .select("codigo, nombre")
+        .in("codigo", cuentasCodigos);
+
+      const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
+      
+      // Agregar nombres de cuentas a todos los asientos
+      const asientosConCuentas = data.map((asiento: any) => ({
+        ...asiento,
+        detalle_asientos: asiento.detalle_asientos?.map((d: any) => ({
           ...d,
           cuenta: {
             nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
           }
-        }));
-      }
+        })) || []
+      }));
 
-      return data as AsientoInversion;
+      return asientosConCuentas as AsientoInversion[];
     },
     enabled: !!inversionId,
   });
