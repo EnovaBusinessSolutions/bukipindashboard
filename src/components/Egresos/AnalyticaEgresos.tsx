@@ -77,6 +77,7 @@ const AnalyticaEgresos = () => {
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada">("total");
+  const [vistaTotal, setVistaTotal] = useState<"unica" | "desglosada">("unica");
   
   // Usar el nuevo hook para datos de la gráfica
   const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(periodFilter, tipoEgreso);
@@ -172,13 +173,15 @@ const AnalyticaEgresos = () => {
   const datosGraficaFormateados = useMemo(() => {
     if (!datosGrafica) return [];
     
-    if (tipoEgreso === "combinada") {
-      return (datosGrafica as DatosEvolucionCombinada[]).map(item => ({
+    // Para "total" o "combinada", trabajar con formato combinado
+    if (tipoEgreso === "total" || tipoEgreso === "combinada") {
+      return (datosGrafica as any[]).map(item => ({
         periodo: item.periodo,
-        costos: formatearMonto(item.costos),
-        gastos: formatearMonto(item.gastos),
-        costosInventario: formatearMonto(item.costosInventario),
-        otrosGastos: formatearMonto(item.otrosGastos)
+        monto: formatearMonto(item.monto || 0), // Para vista única
+        costos: formatearMonto(item.costos || 0),
+        gastos: formatearMonto(item.gastos || 0),
+        costosInventario: formatearMonto(item.costosInventario || 0),
+        otrosGastos: formatearMonto(item.otrosGastos || 0)
       }));
     } else {
       return (datosGrafica as DatosEvolucionSimple[]).map(item => ({
@@ -418,11 +421,11 @@ const AnalyticaEgresos = () => {
 
   return (
     <div className="space-y-6">
-      {/* Título */}
+      {/* Título Highlights de Egresos */}
       <div>
-        <h3 className="text-lg font-semibold">Analítica de Egresos</h3>
+        <h2 className="text-2xl font-bold text-primary">Highlights de Egresos</h2>
         <p className="text-sm text-muted-foreground">
-          Análisis detallado de costos y gastos
+          Resumen de costos y gastos por período
         </p>
       </div>
 
@@ -648,15 +651,59 @@ const AnalyticaEgresos = () => {
         </Card>
       </div>
 
-      {/* Selector de Período */}
-      <div className="flex justify-center">
-        <Tabs value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)}>
-          <TabsList>
-            <TabsTrigger value="diario">Día</TabsTrigger>
-            <TabsTrigger value="mensual">Mes</TabsTrigger>
-            <TabsTrigger value="anual">Año</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Título y Controles Globales */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold text-primary">Analítica de Egresos</h2>
+          <p className="text-sm text-muted-foreground">
+            Análisis detallado con controles personalizables
+          </p>
+        </div>
+
+        {/* Panel de Controles Globales */}
+        <Card className="bg-muted/30">
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Control 1: Periodo */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Periodo</label>
+                <Tabs value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="diario">Día</TabsTrigger>
+                    <TabsTrigger value="mensual">Mes</TabsTrigger>
+                    <TabsTrigger value="anual">Año</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Control 2: Tipo de Egreso */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tipo de Egreso</label>
+                <Tabs value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="costo">Costo Venta</TabsTrigger>
+                    <TabsTrigger value="costo_inventario">Inventario</TabsTrigger>
+                    <TabsTrigger value="gasto">Gastos</TabsTrigger>
+                    <TabsTrigger value="otros_gastos">Otros</TabsTrigger>
+                    <TabsTrigger value="total">Total</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Control 3: Vista de Cifras */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Vista de Cifras</label>
+                <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="normal">Normal</TabsTrigger>
+                    <TabsTrigger value="miles">Miles</TabsTrigger>
+                    <TabsTrigger value="millones">Millones</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Gráficas */}
@@ -672,33 +719,18 @@ const AnalyticaEgresos = () => {
                 </CardDescription>
               </div>
               
-              {/* Filtros */}
-              <div className="flex flex-wrap gap-4">
+              {/* Toggle especial: Solo visible cuando tipoEgreso === "total" */}
+              {tipoEgreso === "total" && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Formato:</span>
-                  <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)}>
+                  <span className="text-sm font-medium">Vista del Total:</span>
+                  <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
                     <TabsList>
-                      <TabsTrigger value="normal">Normal</TabsTrigger>
-                      <TabsTrigger value="miles">Miles</TabsTrigger>
-                      <TabsTrigger value="millones">Millones</TabsTrigger>
+                      <TabsTrigger value="unica">Línea Única</TabsTrigger>
+                      <TabsTrigger value="desglosada">Desglosada</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Tipo:</span>
-                  <Tabs value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)}>
-                    <TabsList>
-                      <TabsTrigger value="costo">Costo de Venta</TabsTrigger>
-                      <TabsTrigger value="costo_inventario">Costo Inventario</TabsTrigger>
-                      <TabsTrigger value="gasto">Gastos</TabsTrigger>
-                      <TabsTrigger value="otros_gastos">Otros Gastos</TabsTrigger>
-                      <TabsTrigger value="total">Total</TabsTrigger>
-                      <TabsTrigger value="combinada">Desglosada</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </div>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -722,7 +754,45 @@ const AnalyticaEgresos = () => {
                   }}
                   labelStyle={{ color: 'hsl(var(--foreground))' }}
                 />
-                {tipoEgreso === "combinada" ? (
+                
+                {/* Lógica condicional: Si es "total" y vistaTotal === "desglosada", mostrar 4 líneas */}
+                {tipoEgreso === "total" && vistaTotal === "desglosada" ? (
+                  <>
+                    <Line 
+                      type="monotone" 
+                      dataKey="costos" 
+                      name="Costos Manuales"
+                      stroke="hsl(180, 25%, 50%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(180, 25%, 50%)' }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="gastos" 
+                      name="Gastos"
+                      stroke="hsl(0, 70%, 55%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(0, 70%, 55%)' }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="costosInventario" 
+                      name="Costo Venta Inventario"
+                      stroke="hsl(280, 60%, 55%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(280, 60%, 55%)' }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="otrosGastos" 
+                      name="Otros Gastos"
+                      stroke="hsl(210, 15%, 55%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(210, 15%, 55%)' }}
+                    />
+                    <Legend />
+                  </>
+                ) : tipoEgreso === "combinada" ? (
                   <>
                     <Line 
                       type="monotone" 
