@@ -106,17 +106,24 @@ const ResumenEgresos = () => {
     });
   }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado, filterMes, filterAno, filterFechaInicio, filterFechaFin]);
 
-  // Filtrar solo gastos operativos (EXCLUIR cuentas 6XXX)
+  // Filtrar solo gastos operativos (EXCLUIR cuenta 5204 - Otros Gastos)
   const transaccionesGastos = useMemo(() => {
     return transaccionesFiltradas.filter(t => 
       t.cuenta_codigo && (
         t.cuenta_codigo.startsWith('51') || 
-        t.cuenta_codigo.startsWith('52')
+        (t.cuenta_codigo.startsWith('52') && t.cuenta_codigo !== '5204')
       )
     );
   }, [transaccionesFiltradas]);
 
-  // Unificar TODAS las transacciones de egresos (50XX + 51XX + 52XX)
+  // Filtrar solo otros gastos (cuenta 5204)
+  const transaccionesOtrosGastos = useMemo(() => {
+    return transaccionesFiltradas.filter(t => 
+      t.cuenta_codigo === '5204'
+    );
+  }, [transaccionesFiltradas]);
+
+  // Unificar TODAS las transacciones de egresos (50XX + 51XX + 52XX EXCEPTO 5204 + 5204 separado)
   const transaccionesEgresosUnificadas = useMemo(() => {
     // Combinar datos del hook (50XX con foto, cantidad, etc.) con transacciones manuales
     const costosConDetalle = costosVentaInventario?.map(c => ({
@@ -155,11 +162,30 @@ const ResumenEgresos = () => {
       monto_pendiente: g.monto_pendiente,
     }));
 
+    // NUEVO: Agregar otros gastos
+    const otrosGastosConDetalle = transaccionesOtrosGastos.map(og => ({
+      id: og.id,
+      created_at: og.created_at,
+      tipo_egreso: og.tipo_egreso,
+      descripcion: og.descripcion,
+      cuenta_codigo: og.cuenta_codigo,
+      monto_total: og.monto_total,
+      proveedor_nombre: og.proveedor_nombre,
+      imagen_url: og.imagen_comprobante,
+      cantidad: og.cantidad,
+      costo_unitario: og.precio_unitario,
+      numero_asiento: null,
+      detalles_asiento: [],
+      tipo_pago: og.tipo_pago,
+      monto_pagado: og.monto_pagado,
+      monto_pendiente: og.monto_pendiente,
+    }));
+
     // Combinar y ordenar por fecha
-    return [...costosConDetalle, ...gastosConDetalle].sort(
+    return [...costosConDetalle, ...gastosConDetalle, ...otrosGastosConDetalle].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [costosVentaInventario, transaccionesGastos]);
+  }, [costosVentaInventario, transaccionesGastos, transaccionesOtrosGastos]);
 
   // Logs de depuración para verificar datos
   React.useEffect(() => {
@@ -175,8 +201,12 @@ const ResumenEgresos = () => {
     }
     if (filterCategoriaContable === "gastos") {
       return transaccionesEgresosUnificadas.filter(t => 
-        t.cuenta_codigo?.startsWith('51') || t.cuenta_codigo?.startsWith('52')
+        t.cuenta_codigo?.startsWith('51') || 
+        (t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204')
       );
+    }
+    if (filterCategoriaContable === "otros_gastos") {
+      return transaccionesEgresosUnificadas.filter(t => t.cuenta_codigo === '5204');
     }
     return transaccionesEgresosUnificadas;
   }, [transaccionesEgresosUnificadas, filterCategoriaContable]);
@@ -188,7 +218,14 @@ const ResumenEgresos = () => {
       .reduce((sum, t) => sum + t.monto_total, 0);
     
     const totalGastos = transaccionesEgresosUnificadas
-      .filter(t => t.cuenta_codigo?.startsWith('51') || t.cuenta_codigo?.startsWith('52'))
+      .filter(t => 
+        t.cuenta_codigo?.startsWith('51') || 
+        (t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204')
+      )
+      .reduce((sum, t) => sum + t.monto_total, 0);
+    
+    const totalOtrosGastos = transaccionesEgresosUnificadas
+      .filter(t => t.cuenta_codigo === '5204')
       .reduce((sum, t) => sum + t.monto_total, 0);
     
     return {
@@ -198,7 +235,8 @@ const ResumenEgresos = () => {
       montoPendiente: transaccionesEgresosUnificadas.reduce((sum, t) => sum + t.monto_pendiente, 0),
       totalCostos,
       totalGastos,
-      totalGlobalEgresos: totalCostos + totalGastos,
+      totalOtrosGastos,
+      totalGlobalEgresos: totalCostos + totalGastos + totalOtrosGastos,
     };
   }, [transaccionesEgresosUnificadas]);
 
@@ -250,17 +288,18 @@ const ResumenEgresos = () => {
       };
     }
     
-    if (codigo?.startsWith('51') || codigo?.startsWith('52')) {
-      return {
-        label: 'Gastos',
-        className: 'bg-orange-100 text-orange-700 border-orange-300'
-      };
-    }
-    
-    if (codigo?.startsWith('6')) {
+    // NUEVO: Cuenta 5204 - Otros Gastos
+    if (codigo === '5204') {
       return {
         label: 'Otros Gastos',
         className: 'bg-gray-100 text-gray-700 border-gray-300'
+      };
+    }
+    
+    if (codigo?.startsWith('51') || codigo?.startsWith('52')) {
+      return {
+        label: 'Gastos Operativos',
+        className: 'bg-orange-100 text-orange-700 border-orange-300'
       };
     }
     
@@ -608,6 +647,7 @@ const ResumenEgresos = () => {
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="costos">Costos de Venta (50XX)</SelectItem>
                       <SelectItem value="gastos">Gastos Operativos (51XX-52XX)</SelectItem>
+                      <SelectItem value="otros_gastos">Otros Gastos (5204)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -732,6 +772,12 @@ const ResumenEgresos = () => {
                   <div className="text-xs text-muted-foreground">Gastos Operativos (51XX-52XX)</div>
                   <div className="text-lg font-semibold text-orange-600">
                     ${formatMonto(resumenFiltrado.totalGastos)}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Otros Gastos (5204)</div>
+                  <div className="text-lg font-semibold text-gray-600">
+                    ${formatMonto(resumenFiltrado.totalOtrosGastos)}
                   </div>
                 </div>
                 <div className="space-y-1">
