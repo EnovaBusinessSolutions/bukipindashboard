@@ -6,8 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { TrendingDown, Trash2, Info } from "lucide-react";
+import { TrendingDown, FileText } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,17 +19,26 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAsientosInversion } from "@/hooks/useAsientosInversion";
 
 const BajaActivos = () => {
   const { inversiones, isLoading, darDeBajaActivo } = useInversiones();
   const [selectedInversion, setSelectedInversion] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [asientoDialogOpen, setAsientoDialogOpen] = useState(false);
+  const [selectedAsientoInversion, setSelectedAsientoInversion] = useState<any>(null);
   const [tipoBaja, setTipoBaja] = useState<'vendido' | 'dado_de_baja'>('dado_de_baja');
   const [fechaBaja, setFechaBaja] = useState<Date>(new Date());
   const [motivo, setMotivo] = useState("");
   const [valorVenta, setValorVenta] = useState("");
 
   const inversionesActivas = inversiones.filter(inv => inv.estado === 'activo');
+  const inversionesBaja = inversiones.filter(inv => inv.estado === 'dado_de_baja' || inv.estado === 'vendido');
+
+  const { data: asientoData } = useAsientosInversion(
+    selectedAsientoInversion?.id,
+    selectedAsientoInversion?.estado === 'vendido' ? 'venta' : 'baja'
+  );
 
   const handleSubmit = () => {
     if (!selectedInversion || !motivo) return;
@@ -64,11 +74,11 @@ const BajaActivos = () => {
     return labels[categoria] || categoria;
   };
 
-  const calcularDepreciacionAcumulada = (inversion: any) => {
+  const calcularDepreciacionAcumulada = (inversion: any, fechaHasta?: Date) => {
     const fechaAdquisicion = new Date(inversion.fecha_adquisicion);
-    const hoy = new Date();
+    const fechaCalculo = fechaHasta || new Date();
     const mesesTranscurridos = Math.floor(
-      (hoy.getTime() - fechaAdquisicion.getTime()) / (1000 * 60 * 60 * 24 * 30)
+      (fechaCalculo.getTime() - fechaAdquisicion.getTime()) / (1000 * 60 * 60 * 24 * 30)
     );
     return Math.min(
       mesesTranscurridos * (inversion.valor_depreciacion_mensual || 0),
@@ -76,8 +86,15 @@ const BajaActivos = () => {
     );
   };
 
-  const calcularValorLibros = (inversion: any) => {
-    return inversion.valor_total - calcularDepreciacionAcumulada(inversion);
+  const calcularValorLibros = (inversion: any, fechaHasta?: Date) => {
+    return inversion.valor_total - calcularDepreciacionAcumulada(inversion, fechaHasta);
+  };
+
+  const calcularGananciaPerdida = (inversion: any) => {
+    if (inversion.estado !== 'vendido' || !inversion.valor_venta) return null;
+    const fechaBaja = inversion.fecha_baja ? new Date(inversion.fecha_baja) : new Date();
+    const valorLibros = calcularValorLibros(inversion, fechaBaja);
+    return inversion.valor_venta - valorLibros;
   };
 
   if (isLoading) {
@@ -95,247 +112,442 @@ const BajaActivos = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión de Bajas de Activos</CardTitle>
-          <CardDescription>
-            Registra la venta o baja de activos fijos. Solo se muestran los activos activos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Activo</TableHead>
-                <TableHead>Categoría</TableHead>
-                <TableHead>Valor Original</TableHead>
-                <TableHead>Valor en Libros</TableHead>
-                <TableHead>Depreciación Acumulada</TableHead>
-                <TableHead>Fecha Adquisición</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {inversionesActivas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No hay activos activos para dar de baja
-                  </TableCell>
-                </TableRow>
-              ) : (
-                inversionesActivas.map((inversion) => {
-                  const valorLibros = calcularValorLibros(inversion);
-                  const depreciacionAcumulada = calcularDepreciacionAcumulada(inversion);
-                  
-                  return (
-                    <TableRow key={inversion.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={inversion.imagen_url || ""} alt={inversion.producto_nombre} />
-                            <AvatarFallback>
-                              {inversion.producto_nombre.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{inversion.producto_nombre}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getCategoriaLabel(inversion.categoria_activo)}</TableCell>
-                      <TableCell>
-                        ${Number(inversion.valor_total).toLocaleString("es-MX", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        ${valorLibros.toLocaleString("es-MX", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        ${depreciacionAcumulada.toLocaleString("es-MX", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(inversion.fecha_adquisicion), "dd/MM/yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        <Dialog open={dialogOpen && selectedInversion?.id === inversion.id} onOpenChange={(open) => {
-                          setDialogOpen(open);
-                          if (!open) {
-                            setSelectedInversion(null);
-                            setMotivo("");
-                            setValorVenta("");
-                            setTipoBaja('dado_de_baja');
-                          }
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedInversion(inversion);
-                                setDialogOpen(true);
-                              }}
-                            >
-                              <TrendingDown className="h-4 w-4 mr-2" />
-                              Venta/Baja de Activo
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-md">
-                            <DialogHeader>
-                              <DialogTitle>Venta o Baja de Activo</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <p className="text-sm font-medium mb-2">Activo:</p>
-                                <p className="text-base">{inversion.producto_nombre}</p>
-                              </div>
+      <Tabs defaultValue="disponibles" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="disponibles">
+            Activos Disponibles ({inversionesActivas.length})
+          </TabsTrigger>
+          <TabsTrigger value="historial">
+            Historial de Bajas ({inversionesBaja.length})
+          </TabsTrigger>
+        </TabsList>
 
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <p className="text-muted-foreground">Valor Original:</p>
-                                  <p className="font-medium">
-                                    ${Number(inversion.valor_total).toLocaleString("es-MX", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground">Valor en Libros:</p>
-                                  <p className="font-medium">
-                                    ${valorLibros.toLocaleString("es-MX", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label>Tipo de Baja *</Label>
-                                <Select value={tipoBaja} onValueChange={(value: any) => setTipoBaja(value)}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="dado_de_baja">Baja de Activo (Sin Venta)</SelectItem>
-                                    <SelectItem value="vendido">Venta de Activo (Con Ingreso)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              {tipoBaja === 'vendido' && (
-                                <Alert>
-                                  <Info className="h-4 w-4" />
-                                  <AlertDescription>
-                                    Se generará un asiento contable registrando:
-                                    <ul className="mt-1 ml-4 list-disc text-xs">
-                                      <li>Ingreso por venta en Caja</li>
-                                      <li>Eliminación del activo y su depreciación acumulada</li>
-                                      <li>Ganancia o pérdida en venta de activo</li>
-                                    </ul>
-                                  </AlertDescription>
-                                </Alert>
-                              )}
-
-                              {tipoBaja === 'dado_de_baja' && (
-                                <Alert>
-                                  <Info className="h-4 w-4" />
-                                  <AlertDescription>
-                                    Se generará un asiento contable registrando:
-                                    <ul className="mt-1 ml-4 list-disc text-xs">
-                                      <li>Eliminación del activo y su depreciación acumulada</li>
-                                      <li>Pérdida por baja de activo (valor en libros)</li>
-                                    </ul>
-                                  </AlertDescription>
-                                </Alert>
-                              )}
-
-                              <div className="space-y-2">
-                                <Label>Fecha de Baja *</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !fechaBaja && "text-muted-foreground"
-                                      )}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {fechaBaja ? format(fechaBaja, "PPP") : <span>Selecciona fecha</span>}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                      mode="single"
-                                      selected={fechaBaja}
-                                      onSelect={(date) => date && setFechaBaja(date)}
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-
-                              {tipoBaja === 'vendido' && (
-                                <div className="space-y-2">
-                                  <Label>Valor de Venta *</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={valorVenta}
-                                    onChange={(e) => setValorVenta(e.target.value)}
-                                    placeholder="0.00"
-                                  />
-                                  <p className="text-xs text-muted-foreground">
-                                    Este será el monto de ingreso registrado en Caja
-                                  </p>
-                                </div>
-                              )}
-
-                              <div className="space-y-2">
-                                <Label>Motivo / Observaciones *</Label>
-                                <Textarea
-                                  value={motivo}
-                                  onChange={(e) => setMotivo(e.target.value)}
-                                  placeholder="Describe el motivo de la baja..."
-                                  rows={3}
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button
-                                variant="outline"
-                                onClick={() => {
-                                  setDialogOpen(false);
-                                  setSelectedInversion(null);
-                                }}
-                              >
-                                Cancelar
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                onClick={handleSubmit}
-                                disabled={
-                                  !motivo || 
-                                  (tipoBaja === 'vendido' && (!valorVenta || parseFloat(valorVenta) <= 0)) ||
-                                  darDeBajaActivo.isPending
-                                }
-                              >
-                                Confirmar {tipoBaja === 'vendido' ? 'Venta' : 'Baja'}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
+        <TabsContent value="disponibles">
+          <Card>
+            <CardHeader>
+              <CardTitle>Activos Disponibles para Baja</CardTitle>
+              <CardDescription>
+                Registra la venta o baja de activos fijos. Solo se muestran los activos activos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Activo</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead>Valor Original</TableHead>
+                    <TableHead>Valor en Libros</TableHead>
+                    <TableHead>Depreciación Acumulada</TableHead>
+                    <TableHead>Fecha Adquisición</TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inversionesActivas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                        No hay activos activos para dar de baja
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  ) : (
+                    inversionesActivas.map((inversion) => {
+                      const valorLibros = calcularValorLibros(inversion);
+                      const depreciacionAcumulada = calcularDepreciacionAcumulada(inversion);
+                      
+                      return (
+                        <TableRow key={inversion.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={inversion.imagen_url || ""} alt={inversion.producto_nombre} />
+                                <AvatarFallback>
+                                  {inversion.producto_nombre.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span>{inversion.producto_nombre}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{getCategoriaLabel(inversion.categoria_activo)}</TableCell>
+                          <TableCell>
+                            ${Number(inversion.valor_total).toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            ${valorLibros.toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            ${depreciacionAcumulada.toLocaleString("es-MX", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(inversion.fecha_adquisicion), "dd/MM/yyyy")}
+                          </TableCell>
+                          <TableCell>
+                            <Dialog open={dialogOpen && selectedInversion?.id === inversion.id} onOpenChange={(open) => {
+                              setDialogOpen(open);
+                              if (!open) {
+                                setSelectedInversion(null);
+                                setMotivo("");
+                                setValorVenta("");
+                                setTipoBaja('dado_de_baja');
+                              }
+                            }}>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedInversion(inversion);
+                                    setDialogOpen(true);
+                                  }}
+                                >
+                                  <TrendingDown className="h-4 w-4 mr-2" />
+                                  Venta/Baja de Activo
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Venta o Baja de Activo</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <p className="text-sm font-medium mb-2">Activo:</p>
+                                    <p className="text-base">{inversion.producto_nombre}</p>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="text-muted-foreground">Valor Original:</p>
+                                      <p className="font-medium">
+                                        ${Number(inversion.valor_total).toLocaleString("es-MX", {
+                                          minimumFractionDigits: 2,
+                                        })}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Valor en Libros:</p>
+                                      <p className="font-medium">
+                                        ${valorLibros.toLocaleString("es-MX", {
+                                          minimumFractionDigits: 2,
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Tipo de Baja *</Label>
+                                    <Select value={tipoBaja} onValueChange={(value: any) => setTipoBaja(value)}>
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="dado_de_baja">Baja de Activo (Sin Venta)</SelectItem>
+                                        <SelectItem value="vendido">Venta de Activo (Con Ingreso)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Fecha de Baja *</Label>
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          className={cn(
+                                            "w-full justify-start text-left font-normal",
+                                            !fechaBaja && "text-muted-foreground"
+                                          )}
+                                        >
+                                          <CalendarIcon className="mr-2 h-4 w-4" />
+                                          {fechaBaja ? format(fechaBaja, "dd/MM/yyyy") : <span>Selecciona fecha</span>}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                          mode="single"
+                                          selected={fechaBaja}
+                                          onSelect={(date) => date && setFechaBaja(date)}
+                                          initialFocus
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+
+                                  {tipoBaja === 'vendido' && (
+                                    <div className="space-y-2">
+                                      <Label>Valor de Venta *</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={valorVenta}
+                                        onChange={(e) => setValorVenta(e.target.value)}
+                                        placeholder="0.00"
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-2">
+                                    <Label>Motivo / Observaciones *</Label>
+                                    <Textarea
+                                      value={motivo}
+                                      onChange={(e) => setMotivo(e.target.value)}
+                                      placeholder="Describe el motivo de la baja..."
+                                      rows={3}
+                                    />
+                                  </div>
+                                </div>
+                                <DialogFooter>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                      setDialogOpen(false);
+                                      setSelectedInversion(null);
+                                    }}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    onClick={handleSubmit}
+                                    disabled={
+                                      !motivo || 
+                                      (tipoBaja === 'vendido' && (!valorVenta || parseFloat(valorVenta) <= 0)) ||
+                                      darDeBajaActivo.isPending
+                                    }
+                                  >
+                                    Confirmar {tipoBaja === 'vendido' ? 'Venta' : 'Baja'}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="historial">
+          <Card>
+            <CardHeader>
+              <CardTitle>Historial de Bajas</CardTitle>
+              <CardDescription>
+                Consulta el historial completo de activos dados de baja o vendidos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Activo</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Fecha Baja</TableHead>
+                    <TableHead>Valor Original</TableHead>
+                    <TableHead>Valor en Libros</TableHead>
+                    <TableHead>Valor Venta</TableHead>
+                    <TableHead>Ganancia/Pérdida</TableHead>
+                    <TableHead>Motivo</TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inversionesBaja.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center text-muted-foreground">
+                        No hay activos dados de baja en el historial
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    inversionesBaja
+                      .sort((a, b) => {
+                        const fechaA = a.fecha_baja ? new Date(a.fecha_baja).getTime() : 0;
+                        const fechaB = b.fecha_baja ? new Date(b.fecha_baja).getTime() : 0;
+                        return fechaB - fechaA;
+                      })
+                      .map((inversion) => {
+                        const fechaBaja = inversion.fecha_baja ? new Date(inversion.fecha_baja) : new Date();
+                        const valorLibros = calcularValorLibros(inversion, fechaBaja);
+                        const gananciaPerdida = calcularGananciaPerdida(inversion);
+                        
+                        return (
+                          <TableRow key={inversion.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarImage src={inversion.imagen_url || ""} alt={inversion.producto_nombre} />
+                                  <AvatarFallback>
+                                    {inversion.producto_nombre.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span>{inversion.producto_nombre}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getCategoriaLabel(inversion.categoria_activo)}</TableCell>
+                            <TableCell>
+                              <Badge variant={inversion.estado === 'vendido' ? 'default' : 'secondary'}>
+                                {inversion.estado === 'vendido' ? 'Vendido' : 'Dado de Baja'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {inversion.fecha_baja 
+                                ? format(new Date(inversion.fecha_baja), "dd/MM/yyyy")
+                                : '-'}
+                            </TableCell>
+                            <TableCell>
+                              ${Number(inversion.valor_total).toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell>
+                              ${valorLibros.toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell>
+                              {inversion.valor_venta 
+                                ? `$${Number(inversion.valor_venta).toLocaleString("es-MX", {
+                                    minimumFractionDigits: 2,
+                                  })}`
+                                : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {gananciaPerdida !== null ? (
+                                <span className={gananciaPerdida >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                  ${Math.abs(gananciaPerdida).toLocaleString("es-MX", {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                  {gananciaPerdida >= 0 ? ' ↑' : ' ↓'}
+                                </span>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {inversion.motivo_baja || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedAsientoInversion(inversion);
+                                  setAsientoDialogOpen(true);
+                                }}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Ver Asiento
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Dialog para ver asiento contable */}
+      <Dialog open={asientoDialogOpen} onOpenChange={setAsientoDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Asiento Contable de Baja</DialogTitle>
+          </DialogHeader>
+          {asientoData ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Número de Asiento:</p>
+                  <p className="font-medium">{asientoData.numero_asiento}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Fecha:</p>
+                  <p className="font-medium">{format(new Date(asientoData.fecha), "dd/MM/yyyy")}</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Descripción:</p>
+                <p className="text-sm">{asientoData.descripcion}</p>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cuenta</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right">Debe</TableHead>
+                      <TableHead className="text-right">Haber</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {asientoData.detalle_asientos.map((detalle: any) => (
+                      <TableRow key={detalle.id}>
+                        <TableCell className="font-mono text-sm">
+                          {detalle.cuenta_codigo}
+                          <br />
+                          <span className="text-xs text-muted-foreground">
+                            {detalle.cuenta?.nombre}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm">{detalle.descripcion}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {detalle.debe > 0 
+                            ? `$${Number(detalle.debe).toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}`
+                            : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {detalle.haber > 0 
+                            ? `$${Number(detalle.haber).toLocaleString("es-MX", {
+                                minimumFractionDigits: 2,
+                              })}`
+                            : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-semibold bg-muted/50">
+                      <TableCell colSpan={2}>Total</TableCell>
+                      <TableCell className="text-right">
+                        ${asientoData.detalle_asientos
+                          .reduce((sum: number, d: any) => sum + Number(d.debe), 0)
+                          .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ${asientoData.detalle_asientos
+                          .reduce((sum: number, d: any) => sum + Number(d.haber), 0)
+                          .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">
+              <p>No se encontró el asiento contable para esta baja.</p>
+              <p className="text-sm mt-2">Es posible que aún no se haya generado.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAsientoDialogOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
