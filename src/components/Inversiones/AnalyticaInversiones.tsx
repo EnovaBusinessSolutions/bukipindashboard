@@ -11,7 +11,9 @@ const COLORS = ["#10b981", "#059669", "#047857", "#065f46", "#064e3b", "#34d399"
 
 const AnalyticaInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
-  const { data: depreciacionesReales, isLoading: loadingDepreciaciones } = useDepreciacionesReales();
+  const { data, isLoading: loadingDepreciaciones } = useDepreciacionesReales();
+  const depreciacionesReales = data?.depreciacionesPorInversion || {};
+  const periodosRegistrados = data?.periodosRegistrados || {};
   const [periodoDepreciacion, setPeriodoDepreciacion] = useState<"mensual" | "anual">("mensual");
   const [formatoCifras, setFormatoCifras] = useState<"completo" | "miles" | "millones">("completo");
 
@@ -196,7 +198,16 @@ const AnalyticaInversiones = () => {
         // Distribuir en los próximos 12 meses
         const mesesAMostrar = Math.min(12, mesesRestantes);
         for (let i = 0; i < mesesAMostrar; i++) {
-          data[i][categoria] += inv.valor_depreciacion_mensual || 0;
+          // Calcular el período YYYYMM del mes i
+          const fechaProyectada = new Date(hoy);
+          fechaProyectada.setMonth(fechaProyectada.getMonth() + i);
+          const periodoYYYYMM = `${fechaProyectada.getFullYear()}${String(fechaProyectada.getMonth() + 1).padStart(2, '0')}`;
+          
+          // ✅ SOLO proyectar si NO existe asiento para ese período
+          const yaRegistrado = periodosRegistrados?.[inv.id]?.has(periodoYYYYMM);
+          if (!yaRegistrado) {
+            data[i][categoria] += inv.valor_depreciacion_mensual || 0;
+          }
         }
       } else {
         // Distribuir en los próximos años
@@ -208,17 +219,36 @@ const AnalyticaInversiones = () => {
         const mesesRestantesAnoActual = 12 - mesActual;
         
         for (let i = 0; i < anosAMostrar; i++) {
+          const anoProyectado = hoy.getFullYear() + i;
+          let mesesAProcesar = 0;
+          
           if (i === 0) {
-            // PRIMER AÑO: Usar solo los meses restantes del año actual
-            const mesesAProcesar = Math.min(mesesRestantesAnoActual, mesesRestantes);
-            data[i][categoria] += (inv.valor_depreciacion_mensual || 0) * mesesAProcesar;
+            // PRIMER AÑO: meses restantes del año actual
+            mesesAProcesar = Math.min(mesesRestantesAnoActual, mesesRestantes);
           } else if (i === anosRestantes - 1) {
-            // ÚLTIMO AÑO: Puede ser parcial
-            const mesesEnUltimoAno = mesesRestantes % 12 || 12;
-            data[i][categoria] += (inv.valor_depreciacion_mensual || 0) * mesesEnUltimoAno;
+            // ÚLTIMO AÑO: puede ser parcial
+            mesesAProcesar = mesesRestantes % 12 || 12;
           } else {
-            // AÑOS INTERMEDIOS: Completos (12 meses)
-            data[i][categoria] += inv.valor_depreciacion_anual || 0;
+            // AÑOS INTERMEDIOS: completos (12 meses)
+            mesesAProcesar = 12;
+          }
+          
+          // Calcular cuántos meses de este año YA tienen asiento
+          let mesesYaRegistrados = 0;
+          const mesInicio = i === 0 ? mesActual : 0;
+          const mesFin = i === 0 ? 12 : 12;
+          
+          for (let mes = mesInicio; mes < mesFin; mes++) {
+            const periodoYYYYMM = `${anoProyectado}${String(mes + 1).padStart(2, '0')}`;
+            if (periodosRegistrados?.[inv.id]?.has(periodoYYYYMM)) {
+              mesesYaRegistrados++;
+            }
+          }
+          
+          // ✅ Restar meses ya registrados
+          const mesesPendientes = mesesAProcesar - mesesYaRegistrados;
+          if (mesesPendientes > 0) {
+            data[i][categoria] += (inv.valor_depreciacion_mensual || 0) * mesesPendientes;
           }
         }
       }

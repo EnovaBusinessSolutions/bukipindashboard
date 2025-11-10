@@ -32,15 +32,17 @@ export const useDepreciacionesReales = () => {
         return {};
       }
 
-      // Agrupar depreciaciones por inversión ID
+      // Agrupar depreciaciones por inversión ID y períodos registrados
       const depreciacionesPorInversion: Record<string, number> = {};
+      const periodosRegistrados: Record<string, Set<string>> = {};
 
       asientos?.forEach((asiento: any) => {
-        // Extraer ID de inversión del numero_asiento: DEP-{inversionId}-YYYYMM
-        const match = asiento.numero_asiento.match(/DEP-([a-f0-9-]+)-\d{6}/);
+        // Extraer ID de inversión y período del numero_asiento: DEP-{inversionId}-YYYYMM
+        const match = asiento.numero_asiento.match(/DEP-([a-f0-9-]+)-(\d{6})/);
         if (!match) return;
 
         const inversionId = match[1];
+        const periodoYYYYMM = match[2]; // YYYYMM
         
         // Sumar depreciación de cuenta 5109
         const montoDepreciacion = asiento.detalle_asientos
@@ -51,9 +53,15 @@ export const useDepreciacionesReales = () => {
           depreciacionesPorInversion[inversionId] = 0;
         }
         depreciacionesPorInversion[inversionId] += montoDepreciacion;
+
+        // Registrar el período como depreciado
+        if (!periodosRegistrados[inversionId]) {
+          periodosRegistrados[inversionId] = new Set();
+        }
+        periodosRegistrados[inversionId].add(periodoYYYYMM);
       });
 
-      return depreciacionesPorInversion;
+      return { depreciacionesPorInversion, periodosRegistrados };
     },
     enabled: !!user?.id,
   });
