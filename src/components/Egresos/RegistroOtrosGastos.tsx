@@ -30,6 +30,7 @@ const RegistroOtrosGastos = () => {
   const [description, setDescription] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState<any>(null);
+  const [esProveedorRecurrente, setEsProveedorRecurrente] = useState(false);
 
   const { data: tarjetasCredito } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
@@ -41,6 +42,16 @@ const RegistroOtrosGastos = () => {
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa todos los campos obligatorios",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar proveedor si hay monto pendiente
+    if ((paymentType === "credito" || paymentType === "parcial") && !supplierName.trim()) {
+      toast({
+        title: "⚠️ Proveedor requerido",
+        description: "Debes proporcionar el nombre del proveedor para pagos a crédito o parciales",
         variant: "destructive"
       });
       return;
@@ -120,13 +131,8 @@ const RegistroOtrosGastos = () => {
 
     const montoPendiente = montoTotal - montoPagado;
 
-    // Determinar cuenta según categoría
-    const cuentaPorCategoria: Record<string, string> = {
-      'gastos_financieros': '5005',
-      'perdida_activos': '5004',
-      'otros_gastos': '6007'
-    };
-    const cuentaCodigo = cuentaPorCategoria[category] || '6007';
+    // TODOS los otros gastos van a la cuenta 5204
+    const cuentaCodigo = '5204';
 
     // Llamar al edge function registrar-egreso
     const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
@@ -146,6 +152,7 @@ const RegistroOtrosGastos = () => {
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
+        es_proveedor_recurrente: esProveedorRecurrente,
         comentarios: description || null
       }
     });
@@ -177,6 +184,7 @@ const RegistroOtrosGastos = () => {
     setDescription("");
     setShowConfirmDialog(false);
     setPendingSubmit(null);
+    setEsProveedorRecurrente(false);
   };
 
   return (
@@ -326,59 +334,87 @@ const RegistroOtrosGastos = () => {
 
             <Separator />
 
-            {/* Información del Proveedor */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Información del Proveedor/Beneficiario</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="proveedor-nombre">Nombre del Proveedor/Beneficiario</Label>
-                  <Input
-                    id="proveedor-nombre"
-                    value={supplierName}
-                    onChange={(e) => setSupplierName(e.target.value)}
-                    placeholder="Nombre completo o razón social"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                  <Input
-                    id="proveedor-telefono"
-                    value={supplierPhone}
-                    onChange={(e) => setSupplierPhone(e.target.value)}
-                    placeholder="Número de teléfono"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="proveedor-email">Email</Label>
-                  <Input
-                    id="proveedor-email"
-                    type="email"
-                    value={supplierEmail}
-                    onChange={(e) => setSupplierEmail(e.target.value)}
-                    placeholder="correo@ejemplo.com"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="proveedor-rfc">RFC</Label>
-                  <Input
-                    id="proveedor-rfc"
-                    value={supplierRFC}
-                    onChange={(e) => setSupplierRFC(e.target.value)}
-                    placeholder="RFC del proveedor/beneficiario"
-                  />
-                </div>
-              </div>
-              
-              <div className="bg-muted/50 p-3 rounded-lg">
+            {/* Información del Proveedor - SOLO cuando hay monto pendiente */}
+            {(paymentType === "credito" || paymentType === "parcial") && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Información del Proveedor/Beneficiario *</h3>
                 <p className="text-sm text-muted-foreground">
-                  <strong>Nota:</strong> Estos gastos se registran separadamente para identificar egresos que no forman parte de la operación normal del negocio.
+                  Requerido para pagos a crédito o parciales para gestionar cuentas por pagar
                 </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
+                    <Input
+                      id="proveedor-nombre"
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
+                      placeholder="Nombre completo o razón social"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-telefono">Teléfono</Label>
+                    <Input
+                      id="proveedor-telefono"
+                      value={supplierPhone}
+                      onChange={(e) => setSupplierPhone(e.target.value)}
+                      placeholder="Número de teléfono"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-email">Email</Label>
+                    <Input
+                      id="proveedor-email"
+                      type="email"
+                      value={supplierEmail}
+                      onChange={(e) => setSupplierEmail(e.target.value)}
+                      placeholder="correo@ejemplo.com"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-rfc">RFC</Label>
+                    <Input
+                      id="proveedor-rfc"
+                      value={supplierRFC}
+                      onChange={(e) => setSupplierRFC(e.target.value)}
+                      placeholder="RFC del proveedor/beneficiario"
+                    />
+                  </div>
+                </div>
+
+                {/* Pregunta sobre recurrencia */}
+                <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      id="es-recurrente"
+                      checked={esProveedorRecurrente}
+                      onChange={(e) => setEsProveedorRecurrente(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-gray-300"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="es-recurrente" className="font-semibold cursor-pointer">
+                        ¿Es un proveedor recurrente?
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Si marcas esta opción, guardaremos este proveedor en tu catálogo para futuras transacciones. 
+                        Útil para proveedores con los que trabajas regularmente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Nota:</strong> Esta información es necesaria para gestionar correctamente las cuentas por pagar.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="descripcion">Descripción Adicional</Label>

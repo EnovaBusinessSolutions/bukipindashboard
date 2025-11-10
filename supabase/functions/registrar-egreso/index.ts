@@ -53,6 +53,7 @@ serve(async (req) => {
       proveedor_rfc,
       producto_egreso_id,
       proveedor_id,
+      es_proveedor_recurrente,
       comentarios
     } = payload;
 
@@ -107,7 +108,50 @@ serve(async (req) => {
 
     console.log('Transacción creada:', transaccion.id);
 
-    // 2. Generar asiento contable
+    // 2. Si es proveedor recurrente Y hay información de proveedor, guardarlo en la tabla proveedores
+    let proveedorIdGuardado = proveedor_id || null;
+
+    if (es_proveedor_recurrente && proveedor_nombre) {
+      console.log('Guardando proveedor recurrente:', proveedor_nombre);
+      
+      // Verificar si ya existe el proveedor por nombre o RFC
+      const { data: proveedorExistente, error: errorBusqueda } = await supabase
+        .from('proveedores')
+        .select('id')
+        .eq('user_id', user.id)
+        .or(`nombre.ilike.${proveedor_nombre},rfc.eq.${proveedor_rfc || ''}`)
+        .single();
+
+      if (proveedorExistente) {
+        // Ya existe, usar ese ID
+        proveedorIdGuardado = proveedorExistente.id;
+        console.log('Proveedor ya existía:', proveedorIdGuardado);
+      } else {
+        // No existe, crear nuevo
+        const { data: nuevoProveedor, error: errorProveedor } = await supabase
+          .from('proveedores')
+          .insert({
+            user_id: user.id,
+            nombre: proveedor_nombre,
+            telefono: proveedor_telefono || null,
+            email: proveedor_email || null,
+            rfc: proveedor_rfc || null,
+            activo: true
+          })
+          .select()
+          .single();
+
+        if (errorProveedor) {
+          console.error('Error guardando proveedor:', errorProveedor);
+          // No lanzar error, solo loggear - el gasto debe registrarse de todas formas
+        } else {
+          proveedorIdGuardado = nuevoProveedor.id;
+          console.log('Proveedor creado:', proveedorIdGuardado);
+        }
+      }
+    }
+
+    // 3. Generar asiento contable
     const numeroAsiento = `EGR-${transaccion.id}`;
     
     const { data: asiento, error: asientoError } = await supabase
