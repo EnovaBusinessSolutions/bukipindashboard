@@ -100,20 +100,6 @@ const CuentasPorCobrar = () => {
   const [historialPagosOpen, setHistorialPagosOpen] = useState(false);
   const [selectedFacturaId, setSelectedFacturaId] = useState<string | null>(null);
 
-  const { data: cuentasPorCobrar, isLoading } = useQuery({
-    queryKey: ["cuentas-por-cobrar"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transacciones_ingresos")
-        .select("*")
-        .gt("monto_pendiente", 0)
-        .eq("estado", "activo")
-        .order("fecha_vencimiento", { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
 
   // Query para todas las transacciones (incluyendo pagadas) para ver trazabilidad
   const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
@@ -133,8 +119,8 @@ const CuentasPorCobrar = () => {
 
   // Real-time updates for accounts receivable
   useEffect(() => {
-    const channel = supabase
-      .channel('cuentas-por-cobrar-changes')
+    const channelIngresos = supabase
+      .channel('cuentas-por-cobrar-ingresos')
       .on(
         'postgres_changes',
         {
@@ -142,23 +128,39 @@ const CuentasPorCobrar = () => {
           schema: 'public',
           table: 'transacciones_ingresos'
         },
-        (payload) => {
-          console.log('Real-time update received:', payload);
-          queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar"] });
-          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
+        () => {
           queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
+        }
+      )
+      .subscribe();
+
+    const channelInversiones = supabase
+      .channel('cuentas-por-cobrar-inversiones')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inversiones_capex',
+          filter: 'estado=eq.vendido'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelIngresos);
+      supabase.removeChannel(channelInversiones);
     };
   }, [queryClient]);
 
   // Hooks para analíticas
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC);
-  const { data: detalles, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
+  const { data: cuentasPorCobrar, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
 
   // Query para obtener asientos contables de una transacción
   const { data: asientosContables, isLoading: loadingAsientos } = useQuery({
@@ -222,28 +224,50 @@ const CuentasPorCobrar = () => {
 
   // Mutación para registrar pago
   const registrarPagoMutation = useMutation({
-    mutationFn: async ({ cuentaId, monto, metodo }: { cuentaId: string; monto: number; metodo: string }) => {
+    mutationFn: async ({ cuentaId, monto, metodo, tipoRegistro }: { 
+      cuentaId: string; 
+      monto: number; 
+      metodo: string;
+      tipoRegistro: 'ingreso' | 'venta_activo';
+    }) => {
       const cuenta = cuentasPorCobrar?.find(c => c.id === cuentaId);
       if (!cuenta) throw new Error("Cuenta no encontrada");
 
       const nuevoMontoPendiente = (cuenta.monto_pendiente || 0) - monto;
       const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
 
-      // Actualizar la transacción de ingreso
-      const { error: updateError } = await supabase
-        .from('transacciones_ingresos')
-        .update({
-          monto_pendiente: Math.max(0, nuevoMontoPendiente),
-          monto_pagado: nuevoMontoPagado,
-          tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
-        })
-        .eq('id', cuentaId);
+      // Actualizar según el tipo de registro
+      if (tipoRegistro === 'venta_activo') {
+        // Actualizar inversión vendida
+        const { error: updateError } = await supabase
+          .from('inversiones_capex')
+          .update({
+            monto_pendiente_venta: Math.max(0, nuevoMontoPendiente),
+            monto_pagado_venta: nuevoMontoPagado,
+            tipo_pago_venta: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
+          })
+          .eq('id', cuentaId);
 
-      if (updateError) throw updateError;
+        if (updateError) throw updateError;
+      } else {
+        // Actualizar transacción de ingreso normal
+        const { error: updateError } = await supabase
+          .from('transacciones_ingresos')
+          .update({
+            monto_pendiente: Math.max(0, nuevoMontoPendiente),
+            monto_pagado: nuevoMontoPagado,
+            tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
+          })
+          .eq('id', cuentaId);
+
+        if (updateError) throw updateError;
+      }
 
       // Registrar el cobro en la tabla de cobros/pagos
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
+
+      const referencia_tabla = tipoRegistro === 'venta_activo' ? 'inversiones_capex' : 'transacciones_ingresos';
 
       const { error: insertError } = await supabase
         .from('transacciones_cobros_pagos')
@@ -251,7 +275,7 @@ const CuentasPorCobrar = () => {
           user_id: user.id,
           tipo_transaccion: 'cobro',
           referencia_id: cuentaId,
-          referencia_tabla: 'transacciones_ingresos',
+          referencia_tabla: referencia_tabla,
           monto: monto,
           metodo_pago: metodo,
           fecha: new Date().toISOString().split('T')[0],
@@ -263,9 +287,8 @@ const CuentasPorCobrar = () => {
       return { cuentaId, monto, metodo };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar"] });
-      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();
@@ -355,10 +378,14 @@ const CuentasPorCobrar = () => {
       return;
     }
 
+    // Detectar si es venta de activo
+    const tipoRegistro = selectedCuenta.tipo_ingreso === 'venta_activo' ? 'venta_activo' : 'ingreso';
+
     registrarPagoMutation.mutate({
       cuentaId: selectedCuenta.id,
       monto: monto,
-      metodo: metodoPago
+      metodo: metodoPago,
+      tipoRegistro: tipoRegistro
     });
   };
 
@@ -439,7 +466,7 @@ const CuentasPorCobrar = () => {
     setHistorialPagosOpen(true);
   };
 
-  if (isLoading) {
+  if (loadingDetalles) {
     return (
       <div className="flex-1 overflow-auto p-6">
         <div className="flex items-center justify-center h-64">
