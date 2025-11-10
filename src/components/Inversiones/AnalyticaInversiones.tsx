@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
+import { useDepreciacionesReales } from "@/hooks/useDepreciacionesReales";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap, Sankey, Rectangle, LabelList } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +11,7 @@ const COLORS = ["#10b981", "#059669", "#047857", "#065f46", "#064e3b", "#34d399"
 
 const AnalyticaInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
+  const { data: depreciacionesReales, isLoading: loadingDepreciaciones } = useDepreciacionesReales();
   const [periodoDepreciacion, setPeriodoDepreciacion] = useState<"mensual" | "anual">("mensual");
   const [formatoCifras, setFormatoCifras] = useState<"completo" | "miles" | "millones">("completo");
 
@@ -41,7 +43,7 @@ const AnalyticaInversiones = () => {
     return incluirSimbolo ? `$${numeroFormateado}${sufijo}` : `${numeroFormateado}${sufijo}`;
   };
 
-  if (isLoading) {
+  if (isLoading || loadingDepreciaciones) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-64 w-full" />
@@ -63,18 +65,17 @@ const AnalyticaInversiones = () => {
     return labels[categoria] || categoria;
   };
 
-  // Análisis por categoría con depreciación acumulada
+  // Filtrar activos activos vs dados de baja
+  const inversionesActivas = inversiones.filter(inv => inv.estado === 'activo' && !inv.fecha_baja);
+  const inversionesBaja = inversiones.filter(inv => inv.estado !== 'activo' || inv.fecha_baja);
+
+  // Análisis por categoría con depreciación acumulada REAL (solo activos activos)
   const hoy = new Date();
-  const inversionPorCategoria = inversiones.reduce((acc: any, inv) => {
+  const inversionPorCategoria = inversionesActivas.reduce((acc: any, inv) => {
     const categoria = getCategoriaLabel(inv.categoria_activo);
     
-    // Calcular depreciación acumulada para esta inversión
-    let depreciacionAcumulada = 0;
-    if (inv.fecha_inicio_depreciacion) {
-      const fechaInicio = new Date(inv.fecha_inicio_depreciacion);
-      const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
-      depreciacionAcumulada = (inv.valor_depreciacion_mensual || 0) * mesesTranscurridos;
-    }
+    // Usar depreciación REAL de asientos contables
+    const depreciacionAcumulada = depreciacionesReales?.[inv.id] || 0;
     
     if (!acc[categoria]) {
       acc[categoria] = {
@@ -92,19 +93,14 @@ const AnalyticaInversiones = () => {
 
   const dataPorCategoria = Object.values(inversionPorCategoria);
 
-  // Depreciación anual total
-  const depreciacionAnualTotal = inversiones.reduce(
-    (acc, inv) => acc + Number(inv.valor_depreciacion_anual || 0),
+  // Métricas principales (solo activos activos)
+  const totalInvertido = inversionesActivas.reduce((acc, inv) => acc + Number(inv.valor_total), 0);
+  const totalDepreciacionAcumulada = Object.values(depreciacionesReales || {}).reduce(
+    (acc: number, val) => acc + (val as number), 
     0
   );
-
-  const totalInvertido = inversiones.reduce((acc, inv) => acc + Number(inv.valor_total), 0);
-  const totalDepreciacionAcumulada = Number(Object.values(inversionPorCategoria).reduce(
-    (acc: number, cat: any) => acc + cat.depreciacionAcumulada, 
-    0
-  ));
   const totalActivosNetos = totalInvertido - totalDepreciacionAcumulada;
-  const numeroTotalActivos = inversiones.length;
+  const numeroTotalActivos = inversionesActivas.length;
 
   // Data para TreeMap de inversiones por categoría
   const treeMapInversionData = dataPorCategoria
@@ -188,8 +184,8 @@ const AnalyticaInversiones = () => {
       data.push(periodo);
     }
 
-    // Calcular depreciaciones por inversión
-    inversiones.forEach((inv) => {
+    // Calcular depreciaciones por inversión (solo activos activos)
+    inversionesActivas.forEach((inv) => {
       const categoria = getCategoriaLabel(inv.categoria_activo);
       const fechaInicio = inv.fecha_inicio_depreciacion ? new Date(inv.fecha_inicio_depreciacion) : new Date(inv.fecha_adquisicion);
       const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
@@ -263,32 +259,80 @@ const AnalyticaInversiones = () => {
         </div>
       </div>
 
+      {/* Tarjetas de Estado de Activos */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Activos Activos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">
+              {inversionesActivas.length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {formatearCifra(inversionesActivas.reduce((acc, inv) => acc + inv.valor_total, 0))}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-red-500">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Activos Dados de Baja</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-red-600">
+              {inversionesBaja.length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {formatearCifra(inversionesBaja.reduce((acc, inv) => acc + inv.valor_total, 0))}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-purple-500">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Depreciación Real Acumulada</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-purple-600">
+              {formatearCifra(totalDepreciacionAcumulada)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Basado en asientos contables
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tarjetas de Métricas Principales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Activos Fijos Brutos</CardTitle>
+            <CardTitle className="text-sm font-medium">Activos Fijos Brutos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatearCifra(totalInvertido)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Solo activos activos</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Depreciación Acumulada</CardTitle>
+            <CardTitle className="text-sm font-medium">Depreciación Acumulada</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
               {formatearCifra(totalDepreciacionAcumulada)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">Real de asientos contables</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Activos Netos</CardTitle>
+            <CardTitle className="text-sm font-medium">Activos Netos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
@@ -306,7 +350,7 @@ const AnalyticaInversiones = () => {
             <div className="text-2xl font-bold">
               {numeroTotalActivos}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">activos registrados</p>
+            <p className="text-xs text-muted-foreground mt-1">Activos activos</p>
           </CardContent>
         </Card>
       </div>
