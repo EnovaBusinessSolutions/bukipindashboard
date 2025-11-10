@@ -75,8 +75,12 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   };
 
   // Filtrar y calcular totales
-  const cuentasIngresos = cuentasFlat.filter(cuenta => 
-    cuenta.codigo.startsWith("4") && cuenta.estado_financiero === "Estado de Resultados"
+  const cuentasVentas = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Ingresos por Ventas" && cuenta.estado_financiero === "Estado de Resultados"
+  );
+  
+  const cuentasOtrosIngresos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Otros Ingresos" && cuenta.estado_financiero === "Estado de Resultados"
   );
   
   const cuentasCostos = cuentasFlat.filter(cuenta => {
@@ -106,11 +110,13 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     return cuenta.codigo.startsWith("6") && cuenta.estado_financiero === "Estado de Resultados";
   });
 
-  const ventas = cuentasIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalVentas = cuentasVentas.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalOtrosIngresos = cuentasOtrosIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalIngresos = totalVentas + totalOtrosIngresos;
   const costoVentas = cuentasCostos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const gastosOperativos = cuentasGastosOperativos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const otrosGastos = cuentasOtrosGastos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const utilidadBruta = ventas - costoVentas;
+  const utilidadBruta = totalIngresos - costoVentas;
   const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
   const depreciaciones = cuentasDepreciaciones.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const ebit = ebitda - depreciaciones;
@@ -154,7 +160,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       return "";
     };
 
-    const percentage = ventas > 0 ? ((value / ventas) * 100).toFixed(2) : '0.00';
+    const percentage = totalVentas > 0 ? ((value / totalVentas) * 100).toFixed(2) : '0.00';
 
     return (
       <div 
@@ -199,7 +205,13 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
             </div>
 
             {/* Ventas */}
-            <LineItem label="Ventas" value={ventas} isHeader />
+            <LineItem label="Ventas" value={totalVentas} isHeader />
+
+            {/* Otros Ingresos */}
+            <LineItem label="(+) Otros Ingresos" value={totalOtrosIngresos} isHeader />
+
+            {/* Total Ingresos */}
+            <LineItem label="Total Ingresos" value={totalIngresos} isSubtotal />
 
             {/* Costo de Ventas */}
             <LineItem label="(-) Costo de Ventas" value={costoVentas} isNegative />

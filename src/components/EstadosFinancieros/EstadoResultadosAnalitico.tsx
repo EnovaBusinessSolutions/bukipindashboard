@@ -71,8 +71,12 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   };
 
   // Calcular métricas
-  const cuentasIngresos = cuentasFlat.filter(cuenta => 
-    cuenta.codigo.startsWith("4") && cuenta.estado_financiero === "Estado de Resultados"
+  const cuentasVentas = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Ingresos por Ventas" && cuenta.estado_financiero === "Estado de Resultados"
+  );
+  
+  const cuentasOtrosIngresos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Otros Ingresos" && cuenta.estado_financiero === "Estado de Resultados"
   );
   
   const cuentasCostos = cuentasFlat.filter(cuenta => {
@@ -102,7 +106,9 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     return cuenta.codigo.startsWith("6") && cuenta.estado_financiero === "Estado de Resultados";
   });
 
-  const ventas = cuentasIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalVentas = cuentasVentas.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalOtrosIngresos = cuentasOtrosIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalIngresos = totalVentas + totalOtrosIngresos;
   const costoVentas = cuentasCostos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const gastosOperativos = cuentasGastosOperativos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const otrosGastos = cuentasOtrosGastos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
@@ -110,7 +116,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const costoFinanciero = cuentasCostoFinanciero.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const impuestos = cuentasImpuestos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
 
-  const utilidadBruta = ventas - costoVentas;
+  const utilidadBruta = totalIngresos - costoVentas;
   const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
   const ebit = ebitda - depreciaciones;
   const utilidadAntesImpuestos = ebit - costoFinanciero;
@@ -123,13 +129,31 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   waterfallData.push({
     name: "Ventas",
     value: 0, // Transparente (posiciona)
-    start: ventas, // Con color (visible)
+    start: totalVentas, // Con color (visible)
     fill: "#10b981", // green-500
     isTotal: false
   });
 
+  // Otros Ingresos (verde más claro)
+  waterfallData.push({
+    name: "(+) Otros Ingr.",
+    value: totalVentas, // Transparente (posiciona desde ventas)
+    start: totalOtrosIngresos, // Con color (visible)
+    fill: "#34d399", // green-400
+    isTotal: false
+  });
+
+  // Total Ingresos (subtotal - azul)
+  waterfallData.push({
+    name: "= Total Ingresos",
+    value: 0, // Transparente (posiciona)
+    start: totalIngresos, // Con color (visible)
+    fill: "#3b82f6", // blue-500
+    isTotal: true
+  });
+
   // Costo de Ventas (negativo - rojo) - start tiene color, value transparente
-  const despuesCostos = ventas - costoVentas;
+  const despuesCostos = totalIngresos - costoVentas;
   waterfallData.push({
     name: "(-) Costo Ventas",
     value: despuesCostos, // Transparente (posiciona)
@@ -338,7 +362,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div className="space-y-1">
               <p className="text-muted-foreground">Ventas</p>
-              <p className="font-semibold text-lg">{formatCurrency(ventas)}</p>
+              <p className="font-semibold text-lg">{formatCurrency(totalVentas)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Otros Ingresos</p>
+              <p className="font-semibold text-lg">{formatCurrency(totalOtrosIngresos)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Total Ingresos</p>
+              <p className="font-semibold text-lg">{formatCurrency(totalIngresos)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-muted-foreground">Utilidad Bruta</p>
