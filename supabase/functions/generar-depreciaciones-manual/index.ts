@@ -76,12 +76,19 @@ Deno.serve(async (req) => {
     for (const activo of activos || []) {
       try {
         // Verificar si la fecha de inicio de depreciación es anterior o igual al mes que estamos procesando
-        const fechaInicio = activo.fecha_inicio_depreciacion 
+        const fechaInicioDate = activo.fecha_inicio_depreciacion 
           ? new Date(activo.fecha_inicio_depreciacion)
           : new Date(activo.fecha_adquisicion);
 
-        // Solo generar si el mes procesado es posterior a la fecha de inicio
-        if (fechaProceso >= fechaInicio) {
+        const mesInicio = fechaInicioDate.getMonth() + 1;
+        const anoInicio = fechaInicioDate.getFullYear();
+
+        // Comparar mes/año, no días exactos - si el año es mayor O (mismo año Y mes mayor o igual)
+        const debeGenerarDepreciacion = (anoFormateado > anoInicio) || 
+          (anoFormateado === anoInicio && mesFormateado >= mesInicio);
+
+        // Solo generar si el mes procesado es posterior o igual al mes de inicio
+        if (debeGenerarDepreciacion) {
           const numeroAsiento = `DEP-${activo.id}-${anoFormateado}${mesFormateado.toString().padStart(2, '0')}`;
 
           // Verificar si ya existe el asiento

@@ -39,40 +39,46 @@ export const useGenerarDepreciaciones = () => {
       return data as GenerarDepreciacionesResponse;
     },
     onSuccess: (data) => {
-      // Invalidar queries relacionadas para refrescar la UI
       queryClient.invalidateQueries({ queryKey: ['asientos-depreciacion'] });
       queryClient.invalidateQueries({ queryKey: ['asientos-contables'] });
 
-      // Mostrar resumen en toast
-      const mesNombre = new Date(data.ano, data.mes - 1).toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+      const mesNombre = new Date(data.ano, data.mes - 1).toLocaleString('es-MX', { 
+        month: 'long', 
+        year: 'numeric' 
+      });
       
-      if (data.asientos_creados > 0) {
+      // Mensajes según resultado
+      if (data.asientos_creados > 0 && data.asientos_existentes === 0) {
+        // Todos nuevos - éxito total
         toast({
           title: "✅ Depreciaciones generadas",
-          description: `Se crearon ${data.asientos_creados} asiento(s) para ${mesNombre}. ${
-            data.asientos_existentes > 0 ? `${data.asientos_existentes} ya existían.` : ''
-          }`,
-          variant: "default",
+          description: `Se crearon ${data.asientos_creados} asiento(s) para ${mesNombre}.`,
         });
-      } else if (data.asientos_existentes > 0) {
+      } else if (data.asientos_creados === 0 && data.asientos_existentes > 0) {
+        // Todos ya existen
         toast({
           title: "ℹ️ Sin cambios",
-          description: `Todos los asientos de ${mesNombre} ya estaban generados (${data.asientos_existentes}).`,
-          variant: "default",
+          description: `Las depreciaciones de ${mesNombre} ya fueron generadas anteriormente (${data.asientos_existentes} asiento(s)).`,
+        });
+      } else if (data.asientos_creados > 0 && data.asientos_existentes > 0) {
+        // Mixto
+        toast({
+          title: "⚠️ Parcialmente generado",
+          description: `${data.asientos_creados} nuevo(s), ${data.asientos_existentes} ya existían para ${mesNombre}.`,
         });
       } else {
+        // Sin activos
         toast({
           title: "⚠️ Sin asientos",
-          description: `No se encontraron activos para depreciar en ${mesNombre}.`,
-          variant: "default",
+          description: `No se encontraron activos que requieran depreciación en ${mesNombre}.`,
         });
       }
 
-      // Si hubo errores, mostrarlos
+      // Mostrar errores si hubo
       if (data.errores && data.errores.length > 0) {
         toast({
           title: "⚠️ Algunos errores",
-          description: `${data.errores.length} error(es) al procesar. Revisa la consola.`,
+          description: `${data.errores.length} error(es). Revisa la consola para detalles.`,
           variant: "destructive",
         });
         console.error("Errores al generar depreciaciones:", data.errores);

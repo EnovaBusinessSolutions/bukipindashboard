@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
 import { useGenerarDepreciaciones } from "@/hooks/useGenerarDepreciaciones";
@@ -84,14 +85,21 @@ const ResumenDepreciaciones = () => {
     });
   };
 
+  // Validar si el mes seleccionado es pasado
+  const mesSeleccionadoNum = parseInt(mesSeleccionado);
+  const anoSeleccionadoNum = parseInt(anoSeleccionado);
+  const fechaSeleccionada = new Date(anoSeleccionadoNum, mesSeleccionadoNum - 1, 1);
+  const primerDiaMesActual = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
+  const esMesPasado = fechaSeleccionada < primerDiaMesActual;
+
   // Generar opciones de meses y años
   const meses = Array.from({ length: 12 }, (_, i) => ({
     value: (i + 1).toString(),
     label: new Date(2000, i).toLocaleString('es-MX', { month: 'long' }),
   }));
 
-  const anos = Array.from({ length: 5 }, (_, i) => {
-    const ano = fechaActual.getFullYear() - i;
+  const anos = Array.from({ length: 3 }, (_, i) => {
+    const ano = fechaActual.getFullYear() + i;
     return { value: ano.toString(), label: ano.toString() };
   });
 
@@ -209,11 +217,21 @@ const ResumenDepreciaciones = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {meses.map((mes) => (
-                      <SelectItem key={mes.value} value={mes.value}>
-                        {mes.label}
-                      </SelectItem>
-                    ))}
+                    {meses.map((mes) => {
+                      const esMesActual = mes.value === (fechaActual.getMonth() + 1).toString() 
+                        && anoSeleccionado === fechaActual.getFullYear().toString();
+                      
+                      return (
+                        <SelectItem key={mes.value} value={mes.value}>
+                          <div className="flex items-center gap-2">
+                            {mes.label}
+                            {esMesActual && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0">Actual</Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -235,7 +253,7 @@ const ResumenDepreciaciones = () => {
             </div>
             <Button 
               onClick={handleGenerarDepreciaciones}
-              disabled={isPending || inversionesActivas.length === 0}
+              disabled={isPending || inversionesActivas.length === 0 || esMesPasado}
               size="lg"
               className="w-full sm:w-auto"
             >
@@ -252,6 +270,15 @@ const ResumenDepreciaciones = () => {
               )}
             </Button>
           </div>
+          
+          {esMesPasado && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>
+                ⚠️ No puedes generar depreciaciones de meses pasados. Solo puedes generar desde el mes actual en adelante.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {inversionesActivas.length === 0 && (
             <p className="text-sm text-muted-foreground mt-4">
               No hay activos activos para depreciar.
