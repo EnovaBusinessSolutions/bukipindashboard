@@ -11,11 +11,12 @@ export interface DatosEvolucionCombinada {
   costos: number;
   gastos: number;
   costosInventario: number;
+  otrosGastos: number;
 }
 
 export const useEgresosPorPeriodo = (
   periodFilter: "diario" | "mensual" | "anual",
-  tipoEgreso: "total" | "costo" | "gasto" | "costo_inventario" | "combinada"
+  tipoEgreso: "total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada"
 ) => {
   return useQuery({
     queryKey: ['egresos-por-periodo', periodFilter, tipoEgreso],
@@ -38,6 +39,7 @@ export const useEgresosPorPeriodo = (
           let costos5001 = 0;
           let gastos = 0;
           let costosInventario5002 = 0;
+          let otrosGastos5204 = 0;
 
           detalles?.forEach(detalle => {
             if (detalle.asientos_contables.fecha !== todayStr) return;
@@ -46,6 +48,7 @@ export const useEgresosPorPeriodo = (
 
             if (codigo === '5001') costos5001 += monto;
             else if (codigo === '5002') costosInventario5002 += monto;
+            else if (codigo === '5204') otrosGastos5204 += monto;
             else if (codigo.startsWith('51') || codigo === '5202' || codigo === '5203' || codigo.startsWith('6')) {
               gastos += monto;
             }
@@ -55,13 +58,15 @@ export const useEgresosPorPeriodo = (
             periodo: 'Hoy',
             costos: Math.max(0, costos5001),
             gastos: Math.max(0, gastos),
-            costosInventario: Math.max(0, costosInventario5002)
+            costosInventario: Math.max(0, costosInventario5002),
+            otrosGastos: Math.max(0, otrosGastos5204)
           }];
         } else if (periodFilter === "mensual") {
           const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
           const costosByDay: Record<number, number> = {};
           const gastosByDay: Record<number, number> = {};
           const costosInventarioByDay: Record<number, number> = {};
+          const otrosGastosByDay: Record<number, number> = {};
 
           detalles?.forEach(detalle => {
             const fecha = new Date(detalle.asientos_contables.fecha);
@@ -75,6 +80,8 @@ export const useEgresosPorPeriodo = (
               costosByDay[day] = (costosByDay[day] || 0) + monto;
             } else if (codigo === '5002') {
               costosInventarioByDay[day] = (costosInventarioByDay[day] || 0) + monto;
+            } else if (codigo === '5204') {
+              otrosGastosByDay[day] = (otrosGastosByDay[day] || 0) + monto;
             } else if (codigo.startsWith('51') || codigo === '5202' || codigo === '5203' || codigo.startsWith('6')) {
               gastosByDay[day] = (gastosByDay[day] || 0) + monto;
             }
@@ -86,7 +93,8 @@ export const useEgresosPorPeriodo = (
               periodo: `Día ${day}`,
               costos: Math.max(0, costosByDay[day] || 0),
               gastos: Math.max(0, gastosByDay[day] || 0),
-              costosInventario: Math.max(0, costosInventarioByDay[day] || 0)
+              costosInventario: Math.max(0, costosInventarioByDay[day] || 0),
+              otrosGastos: Math.max(0, otrosGastosByDay[day] || 0)
             };
           });
         } else {
@@ -95,6 +103,7 @@ export const useEgresosPorPeriodo = (
           const costosByMonth: Record<number, number> = {};
           const gastosByMonth: Record<number, number> = {};
           const costosInventarioByMonth: Record<number, number> = {};
+          const otrosGastosByMonth: Record<number, number> = {};
 
           detalles?.forEach(detalle => {
             const fecha = new Date(detalle.asientos_contables.fecha);
@@ -108,6 +117,8 @@ export const useEgresosPorPeriodo = (
               costosByMonth[month] = (costosByMonth[month] || 0) + monto;
             } else if (codigo === '5002') {
               costosInventarioByMonth[month] = (costosInventarioByMonth[month] || 0) + monto;
+            } else if (codigo === '5204') {
+              otrosGastosByMonth[month] = (otrosGastosByMonth[month] || 0) + monto;
             } else if (codigo.startsWith('51') || codigo === '5202' || codigo === '5203' || codigo.startsWith('6')) {
               gastosByMonth[month] = (gastosByMonth[month] || 0) + monto;
             }
@@ -117,7 +128,8 @@ export const useEgresosPorPeriodo = (
             periodo: mes,
             costos: Math.max(0, costosByMonth[index] || 0),
             gastos: Math.max(0, gastosByMonth[index] || 0),
-            costosInventario: Math.max(0, costosInventarioByMonth[index] || 0)
+            costosInventario: Math.max(0, costosInventarioByMonth[index] || 0),
+            otrosGastos: Math.max(0, otrosGastosByMonth[index] || 0)
           }));
         }
       }
@@ -126,9 +138,10 @@ export const useEgresosPorPeriodo = (
       const filtrarPorCodigo = (codigo: string): boolean => {
         if (tipoEgreso === "costo") return codigo === '5001';
         if (tipoEgreso === "costo_inventario") return codigo === '5002';
+        if (tipoEgreso === "otros_gastos") return codigo === '5204';
         if (tipoEgreso === "gasto") return codigo.startsWith('51') || codigo === '5202' || codigo === '5203' || codigo.startsWith('6');
         // tipoEgreso === "total"
-        return codigo === '5001' || codigo === '5002' || codigo.startsWith('51') || codigo === '5202' || codigo === '5203' || codigo.startsWith('6');
+        return codigo === '5001' || codigo === '5002' || codigo === '5204' || codigo.startsWith('51') || codigo === '5202' || codigo === '5203' || codigo.startsWith('6');
       };
 
       if (periodFilter === "diario") {

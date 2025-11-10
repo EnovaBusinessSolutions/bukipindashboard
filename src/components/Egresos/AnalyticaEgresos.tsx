@@ -76,7 +76,7 @@ const AnalyticaEgresos = () => {
   const { data: productosEgresos } = useProductosEgresos();
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
-  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "combinada">("total");
+  const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada">("total");
   
   // Usar el nuevo hook para datos de la gráfica
   const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(periodFilter, tipoEgreso);
@@ -177,7 +177,8 @@ const AnalyticaEgresos = () => {
         periodo: item.periodo,
         costos: formatearMonto(item.costos),
         gastos: formatearMonto(item.gastos),
-        costosInventario: formatearMonto(item.costosInventario)
+        costosInventario: formatearMonto(item.costosInventario),
+        otrosGastos: formatearMonto(item.otrosGastos)
       }));
     } else {
       return (datosGrafica as DatosEvolucionSimple[]).map(item => ({
@@ -688,10 +689,11 @@ const AnalyticaEgresos = () => {
                   <span className="text-sm font-medium">Tipo:</span>
                   <Tabs value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)}>
                     <TabsList>
-                      <TabsTrigger value="total">Total</TabsTrigger>
-                      <TabsTrigger value="costo">Costos</TabsTrigger>
-                      <TabsTrigger value="gasto">Gastos</TabsTrigger>
+                      <TabsTrigger value="costo">Costo de Venta</TabsTrigger>
                       <TabsTrigger value="costo_inventario">Costo Inventario</TabsTrigger>
+                      <TabsTrigger value="gasto">Gastos</TabsTrigger>
+                      <TabsTrigger value="otros_gastos">Otros Gastos</TabsTrigger>
+                      <TabsTrigger value="total">Total</TabsTrigger>
                       <TabsTrigger value="combinada">Desglosada</TabsTrigger>
                     </TabsList>
                   </Tabs>
@@ -757,6 +759,20 @@ const AnalyticaEgresos = () => {
                       stroke="hsl(280, 60%, 55%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(280, 60%, 55%)' }}
+                      label={{ 
+                        position: 'bottom', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="otrosGastos" 
+                      name="Otros Gastos"
+                      stroke="hsl(210, 15%, 55%)" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(210, 15%, 55%)' }}
                       label={{ 
                         position: 'bottom', 
                         fill: 'hsl(var(--foreground))',
