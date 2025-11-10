@@ -83,6 +83,12 @@ export const useTransaccionesInversionesConDepreciaciones = () => {
           const match = asiento.numero_asiento.match(/DEP-.+-(\d{4})(\d{2})/);
           const año = match ? match[1] : "";
           const mes = match ? match[2] : "";
+          
+          // Calcular fecha: Último día del mes del periodo
+          const fechaDepreciacion = match 
+            ? new Date(parseInt(año), parseInt(mes), 0) // Último día del mes
+            : new Date(asiento.fecha);
+          
           const mesAno = match 
             ? new Date(parseInt(año), parseInt(mes) - 1).toLocaleString('es-MX', { 
                 month: 'long', 
@@ -90,15 +96,15 @@ export const useTransaccionesInversionesConDepreciaciones = () => {
               })
             : "";
           
-          // Calcular monto de depreciación sumando DEBE de cuentas 550x
+          // Calcular monto de depreciación sumando DEBE de cuenta 5109
           const montoDepreciacion = asiento.detalle_asientos
-            ?.filter((d: any) => d.cuenta_codigo.startsWith('550'))
+            ?.filter((d: any) => d.cuenta_codigo === '5109')
             .reduce((sum: number, d: any) => sum + d.debe, 0) || 0;
           
           resultado.push({
             id: `dep-${asiento.id}`,
             tipo: 'depreciacion',
-            fecha: asiento.fecha,
+            fecha: fechaDepreciacion.toISOString().split('T')[0],
             activo: inversion.producto_nombre,
             categoria: inversion.categoria_activo,
             monto: montoDepreciacion,

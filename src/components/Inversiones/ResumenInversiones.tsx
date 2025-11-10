@@ -529,21 +529,41 @@ const ResumenInversiones = () => {
                                      </p>
                                    </div>
                                 </div>
+                              ) : selectedTransaccion.tipo === 'depreciacion' && !asientosDepreciacion ? (
+                                <div className="space-y-2">
+                                  <Skeleton className="h-12 w-full" />
+                                  <Skeleton className="h-32 w-full" />
+                                </div>
                               ) : selectedTransaccion.tipo === 'depreciacion' && selectedTransaccion.numero_asiento ? (
                                 <div className="space-y-4">
                                   <div className="flex items-center gap-2">
-                                    <Badge variant="secondary" className="bg-purple-50 text-purple-700">
+                                    <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
                                       Asiento de Depreciación
                                     </Badge>
                                     <Badge variant="outline">{selectedTransaccion.numero_asiento}</Badge>
+                                    {selectedTransaccion.mes_ano && (
+                                      <Badge variant="secondary">{selectedTransaccion.mes_ano}</Badge>
+                                    )}
                                   </div>
                                   
-                                  <div className="border rounded-lg p-4 bg-muted/50">
-                                    <p className="text-sm font-medium mb-2">
-                                      {selectedTransaccion.descripcion}
-                                    </p>
-                                    <div className="text-xs text-muted-foreground">
-                                      Periodo: {selectedTransaccion.mes_ano}
+                                  <div className="border rounded-lg p-4 bg-purple-50/30">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="text-sm font-medium mb-1">
+                                          {selectedTransaccion.descripcion}
+                                        </p>
+                                        <div className="text-xs text-muted-foreground">
+                                          Periodo: {selectedTransaccion.mes_ano}
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-xs text-muted-foreground mb-1">Monto de Depreciación</p>
+                                        <p className="text-lg font-bold text-purple-700">
+                                          ${Number(selectedTransaccion.monto || 0).toLocaleString("es-MX", {
+                                            minimumFractionDigits: 2,
+                                          })}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
                                   
@@ -574,24 +594,24 @@ const ResumenInversiones = () => {
                                               </TableCell>
                                               <TableCell className="text-right font-mono">
                                                 {detalle.debe > 0 ? (
-                                                  <span className="text-green-600">
+                                                  <span className="text-red-600 font-medium">
                                                     ${Number(detalle.debe).toLocaleString("es-MX", {
                                                       minimumFractionDigits: 2,
                                                     })}
                                                   </span>
                                                 ) : (
-                                                  "-"
+                                                  <span className="text-muted-foreground">-</span>
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-right font-mono">
                                                 {detalle.haber > 0 ? (
-                                                  <span className="text-blue-600">
+                                                  <span className="text-green-600 font-medium">
                                                     ${Number(detalle.haber).toLocaleString("es-MX", {
                                                       minimumFractionDigits: 2,
                                                     })}
                                                   </span>
                                                 ) : (
-                                                  "-"
+                                                  <span className="text-muted-foreground">-</span>
                                                 )}
                                               </TableCell>
                                             </TableRow>
@@ -600,6 +620,12 @@ const ResumenInversiones = () => {
                                       </Table>
                                     </div>
                                   )}
+                                  
+                                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                                    <p className="text-muted-foreground">
+                                      Los asientos de depreciación se generan mensualmente y se reflejan automáticamente en la Balanza de Comprobación.
+                                    </p>
+                                  </div>
                                 </div>
                               ) : (
                                 <Alert>
