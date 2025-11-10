@@ -1,9 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
-import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText } from "lucide-react";
+import { useGenerarDepreciaciones } from "@/hooks/useGenerarDepreciaciones";
+import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText, Play } from "lucide-react";
 import { format, lastDayOfMonth, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { useState } from "react";
@@ -11,6 +14,12 @@ import { useState } from "react";
 const ResumenDepreciaciones = () => {
   const { inversiones, isLoading } = useInversiones();
   const [expandedInversiones, setExpandedInversiones] = useState<string[]>([]);
+  const { mutate: generarDepreciaciones, isPending } = useGenerarDepreciaciones();
+  
+  // Estado para selector de mes/año
+  const fechaActual = new Date();
+  const [mesSeleccionado, setMesSeleccionado] = useState<string>((fechaActual.getMonth() + 1).toString());
+  const [anoSeleccionado, setAnoSeleccionado] = useState<string>(fechaActual.getFullYear().toString());
 
   if (isLoading) {
     return (
@@ -67,6 +76,24 @@ const ResumenDepreciaciones = () => {
         : [...prev, inversionId]
     );
   };
+
+  const handleGenerarDepreciaciones = () => {
+    generarDepreciaciones({
+      mes: parseInt(mesSeleccionado),
+      ano: parseInt(anoSeleccionado),
+    });
+  };
+
+  // Generar opciones de meses y años
+  const meses = Array.from({ length: 12 }, (_, i) => ({
+    value: (i + 1).toString(),
+    label: new Date(2000, i).toLocaleString('es-MX', { month: 'long' }),
+  }));
+
+  const anos = Array.from({ length: 5 }, (_, i) => {
+    const ano = fechaActual.getFullYear() - i;
+    return { value: ano.toString(), label: ano.toString() };
+  });
 
   const AsientosDepreciacionSection = ({ inversionId }: { inversionId: string }) => {
     const { data: asientos, isLoading } = useAsientosDepreciacion(inversionId);
@@ -160,6 +187,79 @@ const ResumenDepreciaciones = () => {
 
   return (
     <div className="space-y-6">
+      {/* Botón de Generar Depreciaciones */}
+      <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-purple-500/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Play className="h-5 w-5" />
+            Generar Depreciaciones Manualmente
+          </CardTitle>
+          <CardDescription>
+            Genera los asientos contables de depreciación para el mes seleccionado. 
+            Útil para probar el sistema o generar depreciaciones de meses anteriores.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1 grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mes</label>
+                <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {meses.map((mes) => (
+                      <SelectItem key={mes.value} value={mes.value}>
+                        {mes.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Año</label>
+                <Select value={anoSeleccionado} onValueChange={setAnoSeleccionado}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {anos.map((ano) => (
+                      <SelectItem key={ano.value} value={ano.value}>
+                        {ano.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button 
+              onClick={handleGenerarDepreciaciones}
+              disabled={isPending || inversionesActivas.length === 0}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Generar Depreciaciones
+                </>
+              )}
+            </Button>
+          </div>
+          {inversionesActivas.length === 0 && (
+            <p className="text-sm text-muted-foreground mt-4">
+              No hay activos activos para depreciar.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Resumen General */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
