@@ -84,10 +84,13 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return ((codigo >= 5100 && codigo <= 5108) || codigo === 5202 || codigo === 5203) && cuenta.estado_financiero === "Estado de Resultados";
-  });
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Gastos de Operación" && cuenta.estado_financiero === "Estado de Resultados"
+  );
+  
+  const cuentasOtrosGastos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Otros Gastos" && cuenta.estado_financiero === "Estado de Resultados"
+  );
   
   const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
     const codigo = parseInt(cuenta.codigo);
@@ -106,8 +109,9 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   const ventas = cuentasIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const costoVentas = cuentasCostos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const gastosOperativos = cuentasGastosOperativos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const otrosGastos = cuentasOtrosGastos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const utilidadBruta = ventas - costoVentas;
-  const ebitda = utilidadBruta - gastosOperativos;
+  const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
   const depreciaciones = cuentasDepreciaciones.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const ebit = ebitda - depreciaciones;
   const costoFinanciero = cuentasCostoFinanciero.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
@@ -206,8 +210,11 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
             {/* Gastos Operativos */}
             <LineItem label="(-) Gastos Operativos" value={gastosOperativos} isNegative />
 
+            {/* Otros Gastos */}
+            <LineItem label="(-) Otros Gastos" value={otrosGastos} isNegative />
+
             {/* EBITDA */}
-            <LineItem 
+            <LineItem
               label="EBITDA" 
               value={ebitda} 
               isSubtotal 

@@ -80,10 +80,13 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return ((codigo >= 5100 && codigo <= 5108) || codigo === 5202 || codigo === 5203) && cuenta.estado_financiero === "Estado de Resultados";
-  });
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Gastos de Operación" && cuenta.estado_financiero === "Estado de Resultados"
+  );
+  
+  const cuentasOtrosGastos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Otros Gastos" && cuenta.estado_financiero === "Estado de Resultados"
+  );
   
   const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
     const codigo = parseInt(cuenta.codigo);
@@ -102,12 +105,13 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   const ventas = cuentasIngresos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const costoVentas = cuentasCostos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const gastosOperativos = cuentasGastosOperativos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const otrosGastos = cuentasOtrosGastos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const depreciaciones = cuentasDepreciaciones.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const costoFinanciero = cuentasCostoFinanciero.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const impuestos = cuentasImpuestos.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
 
   const utilidadBruta = ventas - costoVentas;
-  const ebitda = utilidadBruta - gastosOperativos;
+  const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
   const ebit = ebitda - depreciaciones;
   const utilidadAntesImpuestos = ebit - costoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
@@ -153,6 +157,16 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
     isTotal: false
   });
 
+  // Otros Gastos (negativo - rojo)
+  const despuesOtrosGastos = despuesGastos - otrosGastos;
+  waterfallData.push({
+    name: "(-) Otros Gastos",
+    value: despuesOtrosGastos, // Transparente (posiciona)
+    start: otrosGastos, // Con color (visible)
+    fill: "#ef4444",
+    isTotal: false
+  });
+
   // EBITDA (subtotal - azul)
   waterfallData.push({
     name: "= EBITDA",
@@ -163,7 +177,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   });
 
   // Depreciaciones (negativo - rojo)
-  const despuesDepreciaciones = despuesGastos - depreciaciones;
+  const despuesDepreciaciones = despuesOtrosGastos - depreciaciones;
   waterfallData.push({
     name: "(-) Deprec.",
     value: despuesDepreciaciones, // Transparente (posiciona)

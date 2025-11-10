@@ -71,11 +71,15 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
     return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  // Filtrar cuentas de gastos operativos (5100-5108, 5202, 5203)
-  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return ((codigo >= 5100 && codigo <= 5108) || codigo === 5202 || codigo === 5203) && cuenta.estado_financiero === "Estado de Resultados";
-  });
+  // Filtrar cuentas de gastos operativos (dinámico por subgrupo)
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Gastos de Operación" && cuenta.estado_financiero === "Estado de Resultados"
+  );
+  
+  // Filtrar cuentas de otros gastos (nuevo)
+  const cuentasOtrosGastos = cuentasFlat.filter(cuenta => 
+    cuenta.subgrupo === "Otros Gastos" && cuenta.estado_financiero === "Estado de Resultados"
+  );
   
   // Filtrar cuentas de depreciaciones y amortizaciones (5109, 5110)
   const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
@@ -115,6 +119,13 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
     }, 0);
   };
 
+  const calcularTotalOtrosGastos = () => {
+    return cuentasOtrosGastos.reduce((total, cuenta) => {
+      const saldo = obtenerSaldo(cuenta.codigo);
+      return total + saldo;
+    }, 0);
+  };
+
   const calcularTotalDepreciaciones = () => {
     return cuentasDepreciaciones.reduce((total, cuenta) => {
       const saldo = obtenerSaldo(cuenta.codigo);
@@ -139,12 +150,13 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   const totalIngresos = calcularTotalIngresos();
   const totalCostos = calcularTotalCostos();
   const totalGastosOperativos = calcularTotalGastosOperativos();
+  const totalOtrosGastos = calcularTotalOtrosGastos();
   const totalDepreciaciones = calcularTotalDepreciaciones();
   const totalCostoFinanciero = calcularTotalCostoFinanciero();
   const totalImpuestos = calcularTotalImpuestos();
   
   const utilidadBruta = totalIngresos - totalCostos;
-  const ebitda = utilidadBruta - totalGastosOperativos;
+  const ebitda = utilidadBruta - totalGastosOperativos - totalOtrosGastos;
   const ebit = ebitda - totalDepreciaciones;
   const utilidadAntesImpuestos = ebit - totalCostoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - totalImpuestos;
@@ -315,6 +327,48 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
           </CardContent>
         </Card>
 
+        {/* Otros Gastos */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-red-600">Otros Gastos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
+                <span>Cuenta</span>
+                <span className="text-right">Monto</span>
+                <span className="text-right">% Ventas</span>
+              </div>
+              {cuentasOtrosGastos.map((cuenta) => {
+                const saldo = obtenerSaldo(cuenta.codigo);
+                return (
+                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
+                    <span className="text-sm">
+                      {cuenta.codigo} - {cuenta.nombre}
+                    </span>
+                    <span className="font-medium text-right">
+                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-right">
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
+                    </span>
+                  </div>
+                );
+              })}
+              {cuentasOtrosGastos.length === 0 && (
+                <div className="text-sm text-muted-foreground col-span-3">No hay otros gastos registrados</div>
+              )}
+              <div className="border-t pt-2 mt-4">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-red-600">
+                  <span>Total Otros Gastos</span>
+                  <span className="text-right">${totalOtrosGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* EBITDA */}
         <Card>
           <CardHeader>
@@ -338,6 +392,11 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <span>(-) Gastos Operativos</span>
                 <span className="text-right">(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
                 <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <span>(-) Otros Gastos</span>
+                <span className="text-right">(${totalOtrosGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
                 <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
