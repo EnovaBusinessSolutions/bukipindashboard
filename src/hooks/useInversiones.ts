@@ -31,6 +31,16 @@ export interface InversionCapex {
   fecha_baja?: string;
   valor_venta?: number;
   motivo_baja?: string;
+  // Nuevos campos para manejo de ventas
+  metodo_pago_venta?: string;
+  tipo_pago_venta?: string;
+  monto_pagado_venta?: number;
+  monto_pendiente_venta?: number;
+  fecha_vencimiento_venta?: string;
+  comprador_nombre?: string;
+  comprador_rfc?: string;
+  comprador_telefono?: string;
+  comprador_email?: string;
   created_at: string;
   updated_at: string;
 }
@@ -170,12 +180,30 @@ export const useInversiones = () => {
       motivo_baja,
       valor_venta,
       estado,
+      metodo_pago_venta,
+      tipo_pago_venta,
+      monto_pagado_venta,
+      monto_pendiente_venta,
+      fecha_vencimiento_venta,
+      comprador_nombre,
+      comprador_rfc,
+      comprador_telefono,
+      comprador_email,
     }: {
       id: string;
       fecha_baja: string;
       motivo_baja: string;
       valor_venta?: number;
       estado: 'vendido' | 'dado_de_baja';
+      metodo_pago_venta?: string;
+      tipo_pago_venta?: string;
+      monto_pagado_venta?: number;
+      monto_pendiente_venta?: number;
+      fecha_vencimiento_venta?: string;
+      comprador_nombre?: string;
+      comprador_rfc?: string;
+      comprador_telefono?: string;
+      comprador_email?: string;
     }) => {
       const { data, error } = await supabase
         .from("inversiones_capex")
@@ -184,6 +212,15 @@ export const useInversiones = () => {
           fecha_baja,
           motivo_baja,
           valor_venta,
+          metodo_pago_venta,
+          tipo_pago_venta,
+          monto_pagado_venta,
+          monto_pendiente_venta,
+          fecha_vencimiento_venta,
+          comprador_nombre,
+          comprador_rfc,
+          comprador_telefono,
+          comprador_email,
         })
         .eq("id", id)
         .select()

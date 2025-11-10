@@ -31,6 +31,17 @@ const BajaActivos = () => {
   const [fechaBaja, setFechaBaja] = useState<Date>(new Date());
   const [motivo, setMotivo] = useState("");
   const [valorVenta, setValorVenta] = useState("");
+  
+  // Nuevos campos para manejo de pagos
+  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia'>('efectivo');
+  const [tipoPago, setTipoPago] = useState<'contado' | 'credito' | 'parcial'>('contado');
+  const [montoPagado, setMontoPagado] = useState<string>('');
+  const [montoPendiente, setMontoPendiente] = useState<string>('0');
+  const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>(undefined);
+  const [compradorNombre, setCompradorNombre] = useState('');
+  const [compradorRfc, setCompradorRfc] = useState('');
+  const [compradorTelefono, setCompradorTelefono] = useState('');
+  const [compradorEmail, setCompradorEmail] = useState('');
 
   const inversionesActivas = inversiones.filter(inv => inv.estado === 'activo');
   const inversionesBaja = inversiones.filter(inv => inv.estado === 'dado_de_baja' || inv.estado === 'vendido');
@@ -43,12 +54,50 @@ const BajaActivos = () => {
   const handleSubmit = () => {
     if (!selectedInversion || !motivo) return;
 
+    // Validaciones
+    if (tipoBaja === 'vendido') {
+      const venta = parseFloat(valorVenta);
+      if (!venta || venta <= 0) {
+        return;
+      }
+
+      const pagado = parseFloat(montoPagado) || 0;
+      const pendiente = parseFloat(montoPendiente) || 0;
+
+      // Validar tipo de pago
+      if (tipoPago === 'contado' && Math.abs(pagado - venta) > 0.01) {
+        return;
+      }
+
+      if (tipoPago === 'credito' && pagado !== 0) {
+        return;
+      }
+
+      if (tipoPago === 'parcial' && Math.abs(pagado + pendiente - venta) > 0.01) {
+        return;
+      }
+
+      if (pendiente > 0 && !fechaVencimiento) {
+        return;
+      }
+    }
+
     darDeBajaActivo.mutate({
       id: selectedInversion.id,
       fecha_baja: format(fechaBaja, "yyyy-MM-dd"),
       motivo_baja: motivo,
       valor_venta: tipoBaja === 'vendido' && valorVenta ? parseFloat(valorVenta) : undefined,
       estado: tipoBaja,
+      // Campos de pago (solo para ventas)
+      metodo_pago_venta: tipoBaja === 'vendido' ? metodoPago : undefined,
+      tipo_pago_venta: tipoBaja === 'vendido' ? tipoPago : undefined,
+      monto_pagado_venta: tipoBaja === 'vendido' ? parseFloat(montoPagado) || 0 : undefined,
+      monto_pendiente_venta: tipoBaja === 'vendido' ? parseFloat(montoPendiente) || 0 : undefined,
+      fecha_vencimiento_venta: tipoBaja === 'vendido' && fechaVencimiento ? format(fechaVencimiento, "yyyy-MM-dd") : undefined,
+      comprador_nombre: tipoBaja === 'vendido' && compradorNombre ? compradorNombre : undefined,
+      comprador_rfc: tipoBaja === 'vendido' && compradorRfc ? compradorRfc : undefined,
+      comprador_telefono: tipoBaja === 'vendido' && compradorTelefono ? compradorTelefono : undefined,
+      comprador_email: tipoBaja === 'vendido' && compradorEmail ? compradorEmail : undefined,
     }, {
       onSuccess: () => {
         setDialogOpen(false);
@@ -57,6 +106,15 @@ const BajaActivos = () => {
         setValorVenta("");
         setTipoBaja('dado_de_baja');
         setFechaBaja(new Date());
+        setMontoPagado('');
+        setMontoPendiente('0');
+        setFechaVencimiento(undefined);
+        setCompradorNombre('');
+        setCompradorRfc('');
+        setCompradorTelefono('');
+        setCompradorEmail('');
+        setMetodoPago('efectivo');
+        setTipoPago('contado');
       }
     });
   };
@@ -279,16 +337,176 @@ const BajaActivos = () => {
                                   </div>
 
                                   {tipoBaja === 'vendido' && (
-                                    <div className="space-y-2">
-                                      <Label>Valor de Venta *</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={valorVenta}
-                                        onChange={(e) => setValorVenta(e.target.value)}
-                                        placeholder="0.00"
-                                      />
-                                    </div>
+                                    <>
+                                      <div className="space-y-2">
+                                        <Label>Valor de Venta *</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={valorVenta}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setValorVenta(val);
+                                            // Auto-calcular según tipo de pago
+                                            if (tipoPago === 'contado') {
+                                              setMontoPagado(val);
+                                              setMontoPendiente('0');
+                                            } else if (tipoPago === 'credito') {
+                                              setMontoPagado('0');
+                                              setMontoPendiente(val);
+                                            }
+                                          }}
+                                          placeholder="0.00"
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label>Método de Pago *</Label>
+                                        <Select value={metodoPago} onValueChange={(value: any) => setMetodoPago(value)}>
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="efectivo">Efectivo</SelectItem>
+                                            <SelectItem value="transferencia">Transferencia/Tarjeta</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label>Tipo de Pago *</Label>
+                                        <Select 
+                                          value={tipoPago} 
+                                          onValueChange={(value: any) => {
+                                            setTipoPago(value);
+                                            const venta = parseFloat(valorVenta) || 0;
+                                            if (value === 'contado') {
+                                              setMontoPagado(valorVenta);
+                                              setMontoPendiente('0');
+                                            } else if (value === 'credito') {
+                                              setMontoPagado('0');
+                                              setMontoPendiente(valorVenta);
+                                            } else {
+                                              setMontoPagado('');
+                                              setMontoPendiente('');
+                                            }
+                                          }}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="contado">Pago de Contado</SelectItem>
+                                            <SelectItem value="credito">Venta a Crédito</SelectItem>
+                                            <SelectItem value="parcial">Pago Parcial</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      {(tipoPago === 'parcial' || tipoPago === 'contado') && (
+                                        <div className="space-y-2">
+                                          <Label>Monto Pagado *</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={montoPagado}
+                                            onChange={(e) => {
+                                              setMontoPagado(e.target.value);
+                                              if (tipoPago === 'parcial') {
+                                                const venta = parseFloat(valorVenta) || 0;
+                                                const pagado = parseFloat(e.target.value) || 0;
+                                                setMontoPendiente((venta - pagado).toFixed(2));
+                                              }
+                                            }}
+                                            placeholder="0.00"
+                                            disabled={tipoPago === 'contado'}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {(tipoPago === 'parcial' || tipoPago === 'credito') && (
+                                        <>
+                                          <div className="space-y-2">
+                                            <Label>Monto Pendiente {tipoPago === 'parcial' && '(Calculado)'}</Label>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              value={montoPendiente}
+                                              disabled
+                                              placeholder="0.00"
+                                            />
+                                          </div>
+
+                                          <div className="space-y-2">
+                                            <Label>Fecha de Vencimiento *</Label>
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !fechaVencimiento && "text-muted-foreground"
+                                                  )}
+                                                >
+                                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                                  {fechaVencimiento ? format(fechaVencimiento, "dd/MM/yyyy") : <span>Selecciona fecha</span>}
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-auto p-0">
+                                                <Calendar
+                                                  mode="single"
+                                                  selected={fechaVencimiento}
+                                                  onSelect={(date) => setFechaVencimiento(date)}
+                                                  initialFocus
+                                                />
+                                              </PopoverContent>
+                                            </Popover>
+                                          </div>
+                                        </>
+                                      )}
+
+                                      <Alert>
+                                        <AlertDescription className="text-sm">
+                                          <strong>Datos del Comprador (Opcional)</strong>
+                                        </AlertDescription>
+                                      </Alert>
+
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                          <Label>Nombre</Label>
+                                          <Input
+                                            value={compradorNombre}
+                                            onChange={(e) => setCompradorNombre(e.target.value)}
+                                            placeholder="Nombre del comprador"
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>RFC</Label>
+                                          <Input
+                                            value={compradorRfc}
+                                            onChange={(e) => setCompradorRfc(e.target.value)}
+                                            placeholder="RFC"
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>Teléfono</Label>
+                                          <Input
+                                            value={compradorTelefono}
+                                            onChange={(e) => setCompradorTelefono(e.target.value)}
+                                            placeholder="Teléfono"
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>Email</Label>
+                                          <Input
+                                            type="email"
+                                            value={compradorEmail}
+                                            onChange={(e) => setCompradorEmail(e.target.value)}
+                                            placeholder="email@ejemplo.com"
+                                          />
+                                        </div>
+                                      </div>
+                                    </>
                                   )}
 
                                   <div className="space-y-2">
@@ -355,7 +573,11 @@ const BajaActivos = () => {
                     <TableHead>Valor Original</TableHead>
                     <TableHead>Valor en Libros</TableHead>
                     <TableHead>Valor Venta</TableHead>
+                    <TableHead>Método Pago</TableHead>
+                    <TableHead>Tipo Pago</TableHead>
+                    <TableHead>Monto Pagado/Pendiente</TableHead>
                     <TableHead>Ganancia/Pérdida</TableHead>
+                    <TableHead>Cliente</TableHead>
                     <TableHead>Motivo</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -363,7 +585,7 @@ const BajaActivos = () => {
                 <TableBody>
                   {inversionesBaja.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground">
+                      <TableCell colSpan={14} className="text-center text-muted-foreground">
                         No hay activos dados de baja en el historial
                       </TableCell>
                     </TableRow>
@@ -421,6 +643,45 @@ const BajaActivos = () => {
                                 : '-'}
                             </TableCell>
                             <TableCell>
+                              {inversion.metodo_pago_venta ? (
+                                <Badge variant="outline">
+                                  {inversion.metodo_pago_venta === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {inversion.tipo_pago_venta ? (
+                                <Badge variant="secondary">
+                                  {inversion.tipo_pago_venta === 'contado' ? 'Contado' : 
+                                   inversion.tipo_pago_venta === 'credito' ? 'Crédito' : 'Parcial'}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {inversion.monto_pagado_venta !== undefined || inversion.monto_pendiente_venta !== undefined ? (
+                                <div className="text-sm">
+                                  <div className="text-green-600">
+                                    Pagado: ${(inversion.monto_pagado_venta || 0).toLocaleString("es-MX", {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </div>
+                                  {(inversion.monto_pendiente_venta || 0) > 0 && (
+                                    <div className="text-orange-600">
+                                      Pendiente: ${inversion.monto_pendiente_venta.toLocaleString("es-MX", {
+                                        minimumFractionDigits: 2,
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
                               {gananciaPerdida !== null ? (
                                 <span className={gananciaPerdida >= 0 ? 'text-green-600' : 'text-red-600'}>
                                   ${Math.abs(gananciaPerdida).toLocaleString("es-MX", {
@@ -429,6 +690,18 @@ const BajaActivos = () => {
                                   {gananciaPerdida >= 0 ? ' ↑' : ' ↓'}
                                 </span>
                               ) : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {inversion.comprador_nombre ? (
+                                <div className="text-sm">
+                                  <div className="font-medium">{inversion.comprador_nombre}</div>
+                                  {inversion.comprador_telefono && (
+                                    <div className="text-muted-foreground">{inversion.comprador_telefono}</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
                             </TableCell>
                             <TableCell className="max-w-xs truncate">
                               {inversion.motivo_baja || '-'}

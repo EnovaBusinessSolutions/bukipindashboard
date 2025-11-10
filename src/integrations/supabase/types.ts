@@ -301,6 +301,10 @@ export type Database = {
           anos_depreciacion: number
           categoria_activo: string
           comentarios: string | null
+          comprador_email: string | null
+          comprador_nombre: string | null
+          comprador_rfc: string | null
+          comprador_telefono: string | null
           created_at: string
           cuenta_codigo: string | null
           descripcion: string | null
@@ -309,11 +313,15 @@ export type Database = {
           fecha_baja: string | null
           fecha_inicio_depreciacion: string | null
           fecha_vencimiento: string | null
+          fecha_vencimiento_venta: string | null
           id: string
           imagen_url: string | null
           metodo_pago: string | null
+          metodo_pago_venta: string | null
           monto_pagado: number
+          monto_pagado_venta: number | null
           monto_pendiente: number | null
+          monto_pendiente_venta: number | null
           motivo_baja: string | null
           producto_nombre: string
           proveedor_email: string | null
@@ -322,6 +330,7 @@ export type Database = {
           proveedor_telefono: string | null
           subcuenta_id: string | null
           tipo_pago: string
+          tipo_pago_venta: string | null
           updated_at: string
           user_id: string
           valor_depreciacion_anual: number | null
@@ -333,6 +342,10 @@ export type Database = {
           anos_depreciacion: number
           categoria_activo: string
           comentarios?: string | null
+          comprador_email?: string | null
+          comprador_nombre?: string | null
+          comprador_rfc?: string | null
+          comprador_telefono?: string | null
           created_at?: string
           cuenta_codigo?: string | null
           descripcion?: string | null
@@ -341,11 +354,15 @@ export type Database = {
           fecha_baja?: string | null
           fecha_inicio_depreciacion?: string | null
           fecha_vencimiento?: string | null
+          fecha_vencimiento_venta?: string | null
           id?: string
           imagen_url?: string | null
           metodo_pago?: string | null
+          metodo_pago_venta?: string | null
           monto_pagado?: number
+          monto_pagado_venta?: number | null
           monto_pendiente?: number | null
+          monto_pendiente_venta?: number | null
           motivo_baja?: string | null
           producto_nombre: string
           proveedor_email?: string | null
@@ -354,6 +371,7 @@ export type Database = {
           proveedor_telefono?: string | null
           subcuenta_id?: string | null
           tipo_pago: string
+          tipo_pago_venta?: string | null
           updated_at?: string
           user_id: string
           valor_depreciacion_anual?: number | null
@@ -365,6 +383,10 @@ export type Database = {
           anos_depreciacion?: number
           categoria_activo?: string
           comentarios?: string | null
+          comprador_email?: string | null
+          comprador_nombre?: string | null
+          comprador_rfc?: string | null
+          comprador_telefono?: string | null
           created_at?: string
           cuenta_codigo?: string | null
           descripcion?: string | null
@@ -373,11 +395,15 @@ export type Database = {
           fecha_baja?: string | null
           fecha_inicio_depreciacion?: string | null
           fecha_vencimiento?: string | null
+          fecha_vencimiento_venta?: string | null
           id?: string
           imagen_url?: string | null
           metodo_pago?: string | null
+          metodo_pago_venta?: string | null
           monto_pagado?: number
+          monto_pagado_venta?: number | null
           monto_pendiente?: number | null
+          monto_pendiente_venta?: number | null
           motivo_baja?: string | null
           producto_nombre?: string
           proveedor_email?: string | null
@@ -386,6 +412,7 @@ export type Database = {
           proveedor_telefono?: string | null
           subcuenta_id?: string | null
           tipo_pago?: string
+          tipo_pago_venta?: string | null
           updated_at?: string
           user_id?: string
           valor_depreciacion_anual?: number | null
