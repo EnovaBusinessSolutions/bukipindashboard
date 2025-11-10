@@ -20,9 +20,14 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAsientosInversion } from "@/hooks/useAsientosInversion";
+import { useClientes, useCreateCliente } from "@/hooks/useClientes";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const BajaActivos = () => {
   const { inversiones, isLoading, darDeBajaActivo } = useInversiones();
+  const { data: clientes } = useClientes();
+  const crearCliente = useCreateCliente();
   const [selectedInversion, setSelectedInversion] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [asientoDialogOpen, setAsientoDialogOpen] = useState(false);
@@ -32,12 +37,17 @@ const BajaActivos = () => {
   const [motivo, setMotivo] = useState("");
   const [valorVenta, setValorVenta] = useState("");
   
-  // Nuevos campos para manejo de pagos
-  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia'>('efectivo');
+  // Campos para manejo de pagos
   const [tipoPago, setTipoPago] = useState<'contado' | 'credito' | 'parcial'>('contado');
+  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia'>('efectivo');
   const [montoPagado, setMontoPagado] = useState<string>('');
   const [montoPendiente, setMontoPendiente] = useState<string>('0');
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>(undefined);
+  
+  // Campos para manejo de clientes
+  const [tipoComprador, setTipoComprador] = useState<'nuevo' | 'recurrente'>('nuevo');
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
+  const [guardarComoCliente, setGuardarComoCliente] = useState(false);
   const [compradorNombre, setCompradorNombre] = useState('');
   const [compradorRfc, setCompradorRfc] = useState('');
   const [compradorTelefono, setCompradorTelefono] = useState('');
@@ -51,7 +61,7 @@ const BajaActivos = () => {
     selectedAsientoInversion?.estado === 'vendido' ? 'venta' : 'baja'
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedInversion || !motivo) return;
 
     // Validaciones
@@ -80,6 +90,22 @@ const BajaActivos = () => {
       if (pendiente > 0 && !fechaVencimiento) {
         return;
       }
+
+      // Guardar cliente nuevo si se marcó la opción
+      if (tipoComprador === 'nuevo' && guardarComoCliente && compradorNombre) {
+        try {
+          await crearCliente.mutateAsync({
+            nombre: compradorNombre,
+            rfc: compradorRfc || undefined,
+            telefono: compradorTelefono || undefined,
+            email: compradorEmail || undefined,
+            activo: true,
+          });
+        } catch (error) {
+          console.error('Error al guardar cliente:', error);
+          // Continuar con la baja aunque falle guardar el cliente
+        }
+      }
     }
 
     darDeBajaActivo.mutate({
@@ -89,7 +115,7 @@ const BajaActivos = () => {
       valor_venta: tipoBaja === 'vendido' && valorVenta ? parseFloat(valorVenta) : undefined,
       estado: tipoBaja,
       // Campos de pago (solo para ventas)
-      metodo_pago_venta: tipoBaja === 'vendido' ? metodoPago : undefined,
+      metodo_pago_venta: tipoBaja === 'vendido' && (tipoPago === 'contado' || tipoPago === 'parcial') ? metodoPago : undefined,
       tipo_pago_venta: tipoBaja === 'vendido' ? tipoPago : undefined,
       monto_pagado_venta: tipoBaja === 'vendido' ? parseFloat(montoPagado) || 0 : undefined,
       monto_pendiente_venta: tipoBaja === 'vendido' ? parseFloat(montoPendiente) || 0 : undefined,
@@ -106,15 +132,18 @@ const BajaActivos = () => {
         setValorVenta("");
         setTipoBaja('dado_de_baja');
         setFechaBaja(new Date());
+        setTipoPago('contado');
+        setMetodoPago('efectivo');
         setMontoPagado('');
         setMontoPendiente('0');
         setFechaVencimiento(undefined);
+        setTipoComprador('nuevo');
+        setClienteSeleccionado('');
+        setGuardarComoCliente(false);
         setCompradorNombre('');
         setCompradorRfc('');
         setCompradorTelefono('');
         setCompradorEmail('');
-        setMetodoPago('efectivo');
-        setTipoPago('contado');
       }
     });
   };
@@ -361,19 +390,6 @@ const BajaActivos = () => {
                                       </div>
 
                                       <div className="space-y-2">
-                                        <Label>Método de Pago *</Label>
-                                        <Select value={metodoPago} onValueChange={(value: any) => setMetodoPago(value)}>
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="efectivo">Efectivo</SelectItem>
-                                            <SelectItem value="transferencia">Transferencia/Tarjeta</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-
-                                      <div className="space-y-2">
                                         <Label>Tipo de Pago *</Label>
                                         <Select 
                                           value={tipoPago} 
@@ -402,6 +418,21 @@ const BajaActivos = () => {
                                           </SelectContent>
                                         </Select>
                                       </div>
+
+                                      {(tipoPago === 'contado' || tipoPago === 'parcial') && (
+                                        <div className="space-y-2">
+                                          <Label>Método de Pago *</Label>
+                                          <Select value={metodoPago} onValueChange={(value: any) => setMetodoPago(value)}>
+                                            <SelectTrigger>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="efectivo">Efectivo</SelectItem>
+                                              <SelectItem value="transferencia">Transferencia/Tarjeta</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
 
                                       {(tipoPago === 'parcial' || tipoPago === 'contado') && (
                                         <div className="space-y-2">
@@ -465,47 +496,116 @@ const BajaActivos = () => {
                                         </>
                                       )}
 
-                                      <Alert>
-                                        <AlertDescription className="text-sm">
-                                          <strong>Datos del Comprador (Opcional)</strong>
-                                        </AlertDescription>
-                                      </Alert>
-
-                                      <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-2">
-                                          <Label>Nombre</Label>
-                                          <Input
-                                            value={compradorNombre}
-                                            onChange={(e) => setCompradorNombre(e.target.value)}
-                                            placeholder="Nombre del comprador"
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>RFC</Label>
-                                          <Input
-                                            value={compradorRfc}
-                                            onChange={(e) => setCompradorRfc(e.target.value)}
-                                            placeholder="RFC"
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>Teléfono</Label>
-                                          <Input
-                                            value={compradorTelefono}
-                                            onChange={(e) => setCompradorTelefono(e.target.value)}
-                                            placeholder="Teléfono"
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>Email</Label>
-                                          <Input
-                                            type="email"
-                                            value={compradorEmail}
-                                            onChange={(e) => setCompradorEmail(e.target.value)}
-                                            placeholder="email@ejemplo.com"
-                                          />
-                                        </div>
+                                      <div className="space-y-3">
+                                        <Label>Datos del Comprador (Opcional)</Label>
+                                        <RadioGroup value={tipoComprador} onValueChange={(value: any) => {
+                                          setTipoComprador(value);
+                                          if (value === 'recurrente') {
+                                            setClienteSeleccionado('');
+                                            setCompradorNombre('');
+                                            setCompradorRfc('');
+                                            setCompradorTelefono('');
+                                            setCompradorEmail('');
+                                          }
+                                        }}>
+                                          <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="nuevo" id="nuevo" />
+                                            <Label htmlFor="nuevo" className="font-normal cursor-pointer">
+                                              Cliente Nuevo
+                                            </Label>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="recurrente" id="recurrente" />
+                                            <Label htmlFor="recurrente" className="font-normal cursor-pointer">
+                                              Cliente Recurrente
+                                            </Label>
+                                          </div>
+                                        </RadioGroup>
                                       </div>
+
+                                      {tipoComprador === 'recurrente' ? (
+                                        <div className="space-y-2">
+                                          <Label>Seleccionar Cliente</Label>
+                                          <Select 
+                                            value={clienteSeleccionado} 
+                                            onValueChange={(value) => {
+                                              setClienteSeleccionado(value);
+                                              const cliente = clientes?.find(c => c.id === value);
+                                              if (cliente) {
+                                                setCompradorNombre(cliente.nombre || '');
+                                                setCompradorRfc(cliente.rfc || '');
+                                                setCompradorTelefono(cliente.telefono || '');
+                                                setCompradorEmail(cliente.email || '');
+                                              }
+                                            }}
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Selecciona un cliente" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {clientes?.map((cliente) => (
+                                                <SelectItem key={cliente.id} value={cliente.id}>
+                                                  {cliente.nombre} {cliente.rfc ? `- ${cliente.rfc}` : ''}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-2">
+                                              <Label>Nombre</Label>
+                                              <Input
+                                                value={compradorNombre}
+                                                onChange={(e) => setCompradorNombre(e.target.value)}
+                                                placeholder="Nombre del comprador"
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label>RFC</Label>
+                                              <Input
+                                                value={compradorRfc}
+                                                onChange={(e) => setCompradorRfc(e.target.value)}
+                                                placeholder="RFC"
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label>Teléfono</Label>
+                                              <Input
+                                                value={compradorTelefono}
+                                                onChange={(e) => setCompradorTelefono(e.target.value)}
+                                                placeholder="Teléfono"
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label>Email</Label>
+                                              <Input
+                                                type="email"
+                                                value={compradorEmail}
+                                                onChange={(e) => setCompradorEmail(e.target.value)}
+                                                placeholder="email@ejemplo.com"
+                                              />
+                                            </div>
+                                          </div>
+                                          
+                                          {compradorNombre && (
+                                            <div className="flex items-center space-x-2">
+                                              <Checkbox 
+                                                id="guardarCliente" 
+                                                checked={guardarComoCliente}
+                                                onCheckedChange={(checked) => setGuardarComoCliente(checked as boolean)}
+                                              />
+                                              <Label 
+                                                htmlFor="guardarCliente" 
+                                                className="text-sm font-normal cursor-pointer"
+                                              >
+                                                Guardar como cliente recurrente
+                                              </Label>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
                                     </>
                                   )}
 
