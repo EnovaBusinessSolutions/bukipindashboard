@@ -35,9 +35,7 @@ const ResumenInversiones = () => {
       id: inversionId,
       actualizacion: {
         estado: 'activo',
-        fecha_baja: null,
-        motivo_baja: null,
-        valor_venta: null,
+        // El trigger limpia automáticamente todos los campos de baja/venta
       }
     });
   };

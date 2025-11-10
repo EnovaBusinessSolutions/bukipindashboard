@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { TrendingDown, FileText } from "lucide-react";
+import { TrendingDown, FileText, RotateCcw } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -616,9 +616,17 @@ const BajaActivos = () => {
                             </TableCell>
                             <TableCell>{getCategoriaLabel(inversion.categoria_activo)}</TableCell>
                             <TableCell>
-                              <Badge variant={inversion.estado === 'vendido' ? 'default' : 'secondary'}>
-                                {inversion.estado === 'vendido' ? 'Vendido' : 'Dado de Baja'}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={inversion.estado === 'vendido' ? 'default' : 'secondary'}>
+                                  {inversion.estado === 'vendido' ? 'Vendido' : 'Dado de Baja'}
+                                </Badge>
+                                {new Date(inversion.updated_at) > new Date(inversion.fecha_baja || inversion.created_at) && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <RotateCcw className="h-3 w-3 mr-1" />
+                                    Reactivado
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               {inversion.fecha_baja 
