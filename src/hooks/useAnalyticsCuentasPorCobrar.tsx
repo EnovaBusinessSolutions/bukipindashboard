@@ -45,19 +45,49 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
   return useQuery({
     queryKey: ["analytics-cuentas-por-cobrar", periodo],
     queryFn: async (): Promise<AnalyticsCuentasPorCobrar> => {
-      const { data: cuentas, error } = await supabase
+      // Consultar transacciones de ingresos normales
+      const { data: cuentasIngresos, error: errorIngresos } = await supabase
         .from("transacciones_ingresos")
         .select("*")
         .gt("monto_pendiente", 0)
         .eq("estado", "activo")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (errorIngresos) throw errorIngresos;
+
+      // Consultar ventas de activos a crédito (inversiones vendidas con saldo pendiente)
+      const { data: ventasActivos, error: errorVentas } = await supabase
+        .from("inversiones_capex")
+        .select("*")
+        .gt("monto_pendiente_venta", 0)
+        .eq("estado", "vendido");
+
+      if (errorVentas) throw errorVentas;
+
+      // Transformar ventas de activos al formato CuentaPorCobrar
+      const cuentasDeVentas: CuentaPorCobrar[] = (ventasActivos || []).map(venta => ({
+        id: venta.id,
+        cliente_nombre: venta.comprador_nombre,
+        monto_pendiente: venta.monto_pendiente_venta || 0,
+        monto_neto: venta.valor_venta || 0,
+        monto_pagado: venta.monto_pagado_venta || 0,
+        fecha_vencimiento: venta.fecha_vencimiento_venta,
+        created_at: venta.fecha_baja || venta.created_at,
+        updated_at: venta.updated_at,
+        descripcion: `Venta de activo: ${venta.producto_nombre}`,
+        dias_vencimiento: null // se calculará después
+      }));
+
+      // Combinar ambas fuentes de cuentas por cobrar
+      const todasLasCuentas = [
+        ...(cuentasIngresos || []),
+        ...cuentasDeVentas
+      ];
 
       const today = new Date();
       
-      // Calcular días de vencimiento
-      const cuentasConDias: CuentaPorCobrar[] = (cuentas || []).map(cuenta => {
+      // Calcular días de vencimiento para todas las cuentas
+      const cuentasConDias: CuentaPorCobrar[] = todasLasCuentas.map(cuenta => {
         let diasVencimiento = null;
         if (cuenta.fecha_vencimiento) {
           const fechaVenc = new Date(cuenta.fecha_vencimiento);
@@ -146,7 +176,14 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
       const historicoCxC = [];
       const saldoActual = cuentasConDias.reduce((sum, c) => sum + c.monto_pendiente, 0);
       
-      // Obtener asientos contables de cuentas por cobrar (cuenta 1102)
+      // Obtener user_id de las cuentas disponibles
+      const userId = (cuentasIngresos && cuentasIngresos.length > 0) 
+        ? cuentasIngresos[0].user_id 
+        : (ventasActivos && ventasActivos.length > 0) 
+          ? ventasActivos[0].user_id 
+          : "";
+      
+      // Obtener asientos contables de cuentas por cobrar (cuenta 1003)
       const { data: detallesAsientos } = await supabase
         .from("detalle_asientos")
         .select(`
@@ -158,8 +195,8 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
             user_id
           )
         `)
-        .eq("asientos_contables.user_id", (cuentas && cuentas.length > 0) ? cuentas[0].user_id : "")
-        .eq("cuenta_codigo", "1102")
+        .eq("asientos_contables.user_id", userId)
+        .eq("cuenta_codigo", "1003")
         .order("asientos_contables(fecha)", { ascending: true });
       
       if (periodo === "diario") {
@@ -330,18 +367,63 @@ export const useCuentasPorCobrarDetalle = () => {
   return useQuery({
     queryKey: ["cuentas-por-cobrar-detalle"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Consultar transacciones de ingresos normales
+      const { data: dataIngresos, error: errorIngresos } = await supabase
         .from("transacciones_ingresos")
         .select("*")
         .gt("monto_pendiente", 0)
         .eq("estado", "activo")
         .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
 
-      if (error) throw error;
+      if (errorIngresos) throw errorIngresos;
+
+      // Consultar ventas de activos a crédito
+      const { data: ventasActivos, error: errorVentas } = await supabase
+        .from("inversiones_capex")
+        .select("*")
+        .gt("monto_pendiente_venta", 0)
+        .eq("estado", "vendido");
+
+      if (errorVentas) throw errorVentas;
+
+      // Transformar ventas de activos
+      const ventasTransformadas = (ventasActivos || []).map(venta => ({
+        id: venta.id,
+        cliente_nombre: venta.comprador_nombre,
+        monto_pendiente: venta.monto_pendiente_venta || 0,
+        monto_neto: venta.valor_venta || 0,
+        monto_pagado: venta.monto_pagado_venta || 0,
+        fecha_vencimiento: venta.fecha_vencimiento_venta,
+        created_at: venta.fecha_baja || venta.created_at,
+        updated_at: venta.updated_at,
+        descripcion: `Venta de activo: ${venta.producto_nombre}`,
+        tipo_ingreso: 'venta_activo' as const,
+        cuenta_principal_codigo: '4103',
+        metodo_pago: venta.metodo_pago_venta,
+        tipo_pago: venta.tipo_pago_venta,
+        cliente_telefono: venta.comprador_telefono,
+        cliente_email: venta.comprador_email,
+        cliente_rfc: venta.comprador_rfc,
+        comentarios: venta.motivo_baja,
+        estado: 'activo' as const,
+        motivo_cancelacion: null,
+        fecha_cancelacion: null,
+        transaccion_cancelacion_id: null,
+        subcuenta_id: null,
+        monto_total: venta.valor_venta || 0,
+        monto_descuento: 0,
+        user_id: venta.user_id
+      }));
+
+      // Combinar ambas fuentes
+      const todasLasCuentas = [
+        ...(dataIngresos || []),
+        ...ventasTransformadas
+      ];
 
       const today = new Date();
       
-      return (data || []).map(cuenta => {
+      return todasLasCuentas.map(cuenta => {
         let diasVencimiento = 0;
         let estado = 'Al día';
         
