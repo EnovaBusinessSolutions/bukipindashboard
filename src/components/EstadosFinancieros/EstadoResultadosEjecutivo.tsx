@@ -160,7 +160,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       return "";
     };
 
-    const percentage = totalVentas > 0 ? ((value / totalVentas) * 100).toFixed(2) : '0.00';
+    const percentage = totalIngresos > 0 ? ((value / totalIngresos) * 100).toFixed(2) : '0.00';
 
     return (
       <div 
@@ -201,7 +201,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
             <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
               <span>Concepto</span>
               <span className="text-right">Monto</span>
-              <span className="text-right">% Ventas</span>
+              <span className="text-right">% Ingresos</span>
             </div>
 
             {/* Ventas */}

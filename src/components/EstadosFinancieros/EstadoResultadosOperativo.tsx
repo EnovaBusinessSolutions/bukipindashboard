@@ -197,7 +197,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasVentas.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -210,7 +210,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -219,7 +219,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-green-600">
                   <span>Total Ventas</span>
                   <span className="text-right">${totalVentas.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">100.00%</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalVentas / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -236,7 +236,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasOtrosIngresos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -249,7 +249,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -261,7 +261,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-emerald-600">
                   <span>Total Otros Ingresos</span>
                   <span className="text-right">${totalOtrosIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalOtrosIngresos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalOtrosIngresos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -278,7 +278,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasCostos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -291,7 +291,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -300,7 +300,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-orange-600">
                   <span>Total Costos</span>
                   <span className="text-right">${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalCostos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalCostos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -319,7 +319,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Concepto</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Ingresos</span>
@@ -329,7 +329,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Costos de Ventas</span>
                 <span className="text-right">(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalVentas !== 0 ? `(${((totalCostos / totalVentas) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
                 <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
@@ -337,7 +337,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 }`}>
                   <span>Utilidad Bruta</span>
                   <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((utilidadBruta / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -354,7 +354,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasGastosOperativos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -367,7 +367,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -376,7 +376,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-red-600">
                   <span>Total Gastos Operativos</span>
                   <span className="text-right">${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalGastosOperativos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -393,7 +393,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasOtrosGastos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -406,7 +406,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -418,7 +418,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-red-600">
                   <span>Total Otros Gastos</span>
                   <span className="text-right">${totalOtrosGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalOtrosGastos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -437,22 +437,22 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Concepto</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Utilidad Bruta</span>
                 <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalVentas !== 0 ? `${((utilidadBruta / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Gastos Operativos</span>
                 <span className="text-right">(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalVentas !== 0 ? `(${((totalGastosOperativos / totalVentas) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Otros Gastos</span>
                 <span className="text-right">(${totalOtrosGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalVentas !== 0 ? `(${((totalOtrosGastos / totalVentas) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
                 <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
@@ -460,7 +460,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 }`}>
                   <span>EBITDA</span>
                   <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((ebitda / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -477,7 +477,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasDepreciaciones.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -490,7 +490,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -502,7 +502,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-purple-600">
                   <span>Total Depreciaciones</span>
                   <span className="text-right">${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalDepreciaciones / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -521,17 +521,17 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Concepto</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>EBITDA</span>
                 <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalVentas !== 0 ? `${((ebitda / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Depreciaciones</span>
                 <span className="text-right">(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalVentas !== 0 ? `(${((totalDepreciaciones / totalVentas) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
                 <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
@@ -539,7 +539,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 }`}>
                   <span>EBIT</span>
                   <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((ebit / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -556,7 +556,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasCostoFinanciero.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -569,7 +569,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -581,7 +581,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-amber-600">
                   <span>Total Costo Financiero</span>
                   <span className="text-right">${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalCostoFinanciero / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -600,17 +600,17 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Concepto</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>EBIT</span>
                 <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalVentas !== 0 ? `${((ebit / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Costo Financiero</span>
                 <span className="text-right">(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalVentas !== 0 ? `(${((totalCostoFinanciero / totalVentas) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               <div className="border-t pt-2 mt-4">
                 <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
@@ -618,7 +618,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 }`}>
                   <span>Utilidad Antes de Impuestos</span>
                   <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((utilidadAntesImpuestos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -635,7 +635,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Cuenta</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               {cuentasImpuestos.map((cuenta) => {
                 const saldo = obtenerSaldo(cuenta.codigo);
@@ -648,7 +648,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                       ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalVentas !== 0 ? `${((saldo / totalVentas) * 100).toFixed(2)}%` : '0.00%'}
+                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
                     </span>
                   </div>
                 );
@@ -660,7 +660,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-rose-600">
                   <span>Total Impuestos</span>
                   <span className="text-right">${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((totalImpuestos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
@@ -679,19 +679,19 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
               <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
                 <span>Concepto</span>
                 <span className="text-right">Monto</span>
-                <span className="text-right">% Ventas</span>
+                <span className="text-right">% Ingresos</span>
               </div>
               
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Utilidad Antes de Impuestos</span>
                 <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalVentas !== 0 ? `${((utilidadAntesImpuestos / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
               </div>
               
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Impuestos</span>
                 <span className="text-right">(${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalVentas !== 0 ? `(${((totalImpuestos / totalVentas) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
               </div>
               
               <div className="border-t-2 pt-3 mt-4">
@@ -700,7 +700,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                 }`}>
                   <span>{utilidadNeta >= 0 ? "Utilidad Neta" : "Pérdida Neta"}</span>
                   <span className="text-right">${utilidadNeta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalVentas !== 0 ? `${((utilidadNeta / totalVentas) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadNeta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
                 </div>
               </div>
             </div>
