@@ -445,90 +445,6 @@ const ResumenInversiones = () => {
                               </h3>
                               {loadingAsiento ? (
                                 <Skeleton className="h-32 w-full" />
-                              ) : asientoInversion && asientoInversion.length > 0 ? (
-                                <div className="space-y-4">
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="secondary">
-                                      {asientoInversion.length} {asientoInversion.length === 1 ? 'asiento' : 'asientos'}
-                                    </Badge>
-                                  </div>
-                                  
-                                  <Accordion type="single" collapsible defaultValue="item-0" className="space-y-2">
-                                    {asientoInversion.map((asiento, index) => (
-                                      <AccordionItem value={`item-${index}`} key={asiento.id} className="border rounded-lg">
-                                        <AccordionTrigger className="px-4 hover:no-underline">
-                                          <div className="flex flex-col items-start gap-2 text-left w-full">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                              <Badge variant="outline">{asiento.numero_asiento}</Badge>
-                                              <span className="text-xs text-muted-foreground">
-                                                {format(new Date(asiento.created_at), "dd/MM/yyyy HH:mm")}
-                                              </span>
-                                            </div>
-                                            <span className="text-sm font-normal">{asiento.descripcion}</span>
-                                          </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent className="px-4 pb-4">
-                                          <div className="border rounded-lg overflow-hidden">
-                                            <Table>
-                                              <TableHeader>
-                                                <TableRow>
-                                                  <TableHead>Cuenta</TableHead>
-                                                  <TableHead className="text-right">Debe</TableHead>
-                                                  <TableHead className="text-right">Haber</TableHead>
-                                                </TableRow>
-                                              </TableHeader>
-                                              <TableBody>
-                                                {asiento.detalle_asientos.map((detalle) => (
-                                                  <TableRow key={detalle.id}>
-                                                    <TableCell>
-                                                      <div>
-                                                        <div className="font-medium text-sm">
-                                                          {detalle.cuenta_codigo} - {detalle.cuenta?.nombre}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                          {detalle.descripcion}
-                                                        </div>
-                                                      </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-mono">
-                                                      {detalle.debe > 0 ? (
-                                                        <span className="text-green-600">
-                                                          ${Number(detalle.debe).toLocaleString("es-MX", {
-                                                            minimumFractionDigits: 2,
-                                                          })}
-                                                        </span>
-                                                      ) : (
-                                                        "-"
-                                                      )}
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-mono">
-                                                      {detalle.haber > 0 ? (
-                                                        <span className="text-red-600">
-                                                          ${Number(detalle.haber).toLocaleString("es-MX", {
-                                                            minimumFractionDigits: 2,
-                                                          })}
-                                                        </span>
-                                                      ) : (
-                                                        "-"
-                                                      )}
-                                                    </TableCell>
-                                                  </TableRow>
-                                                ))}
-                                              </TableBody>
-                                            </Table>
-                                          </div>
-                                        </AccordionContent>
-                                      </AccordionItem>
-                                    ))}
-                                   </Accordion>
-                                   
-                                   <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                                     <p className="text-muted-foreground">
-                                       Los asientos se generan automáticamente al {selectedTransaccion.tipo === 'alta' ? 'registrar la inversión' : selectedTransaccion.tipo === 'venta' ? 'vender el activo' : 'dar de baja el activo'} y se 
-                                       reflejan en la Balanza de Comprobación.
-                                     </p>
-                                   </div>
-                                </div>
                               ) : selectedTransaccion.tipo === 'depreciacion' && !asientosDepreciacion ? (
                                 <div className="space-y-2">
                                   <Skeleton className="h-12 w-full" />
@@ -536,7 +452,7 @@ const ResumenInversiones = () => {
                                 </div>
                               ) : selectedTransaccion.tipo === 'depreciacion' && selectedTransaccion.numero_asiento ? (
                                 <div className="space-y-4">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
                                       Asiento de Depreciación
                                     </Badge>
@@ -626,6 +542,90 @@ const ResumenInversiones = () => {
                                       Los asientos de depreciación se generan mensualmente y se reflejan automáticamente en la Balanza de Comprobación.
                                     </p>
                                   </div>
+                                </div>
+                              ) : asientoInversion && asientoInversion.length > 0 ? (
+                                <div className="space-y-4">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary">
+                                      {asientoInversion.length} {asientoInversion.length === 1 ? 'asiento' : 'asientos'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <Accordion type="single" collapsible defaultValue="item-0" className="space-y-2">
+                                    {asientoInversion.map((asiento, index) => (
+                                      <AccordionItem value={`item-${index}`} key={asiento.id} className="border rounded-lg">
+                                        <AccordionTrigger className="px-4 hover:no-underline">
+                                          <div className="flex flex-col items-start gap-2 text-left w-full">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <Badge variant="outline">{asiento.numero_asiento}</Badge>
+                                              <span className="text-xs text-muted-foreground">
+                                                {format(new Date(asiento.created_at), "dd/MM/yyyy HH:mm")}
+                                              </span>
+                                            </div>
+                                            <span className="text-sm font-normal">{asiento.descripcion}</span>
+                                          </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="px-4 pb-4">
+                                          <div className="border rounded-lg overflow-hidden">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead>Cuenta</TableHead>
+                                                  <TableHead className="text-right">Debe</TableHead>
+                                                  <TableHead className="text-right">Haber</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {asiento.detalle_asientos.map((detalle) => (
+                                                  <TableRow key={detalle.id}>
+                                                    <TableCell>
+                                                      <div>
+                                                        <div className="font-medium text-sm">
+                                                          {detalle.cuenta_codigo} - {detalle.cuenta?.nombre}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                          {detalle.descripcion}
+                                                        </div>
+                                                      </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-mono">
+                                                      {detalle.debe > 0 ? (
+                                                        <span className="text-green-600">
+                                                          ${Number(detalle.debe).toLocaleString("es-MX", {
+                                                            minimumFractionDigits: 2,
+                                                          })}
+                                                        </span>
+                                                      ) : (
+                                                        "-"
+                                                      )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-mono">
+                                                      {detalle.haber > 0 ? (
+                                                        <span className="text-red-600">
+                                                          ${Number(detalle.haber).toLocaleString("es-MX", {
+                                                            minimumFractionDigits: 2,
+                                                          })}
+                                                        </span>
+                                                      ) : (
+                                                        "-"
+                                                      )}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                ))}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                    ))}
+                                   </Accordion>
+                                   
+                                   <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                                     <p className="text-muted-foreground">
+                                       Los asientos se generan automáticamente al {selectedTransaccion.tipo === 'alta' ? 'registrar la inversión' : selectedTransaccion.tipo === 'venta' ? 'vender el activo' : 'dar de baja el activo'} y se 
+                                       reflejan en la Balanza de Comprobación.
+                                     </p>
+                                   </div>
                                 </div>
                               ) : (
                                 <Alert>
