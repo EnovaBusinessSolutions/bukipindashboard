@@ -39,8 +39,10 @@ export const useGenerarDepreciaciones = () => {
       return data as GenerarDepreciacionesResponse;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['asientos-depreciacion'] });
-      queryClient.invalidateQueries({ queryKey: ['asientos-contables'] });
+    queryClient.invalidateQueries({ queryKey: ['asientos-depreciacion'] });
+    queryClient.invalidateQueries({ queryKey: ['asientos-depreciacion-all'] });
+    queryClient.invalidateQueries({ queryKey: ['inversiones'] });
+    queryClient.invalidateQueries({ queryKey: ['asientos-contables'] });
 
       const mesNombre = new Date(data.ano, data.mes - 1).toLocaleString('es-MX', { 
         month: 'long', 

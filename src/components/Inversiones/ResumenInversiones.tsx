@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useInversiones } from "@/hooks/useInversiones";
-import { useTransaccionesInversionesDetalladas } from "@/hooks/useTransaccionesInversionesDetalladas";
+import { useTransaccionesInversionesConDepreciaciones } from "@/hooks/useTransaccionesInversionesConDepreciaciones";
 import { useAsientosInversion } from "@/hooks/useAsientosInversion";
 import { useAsientosInversionBulk } from "@/hooks/useAsientosInversionBulk";
+import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,18 +13,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { format } from "date-fns";
-import { Eye, ImageIcon, Trash2, AlertTriangle, TrendingUp, TrendingDown, ShoppingCart, RotateCcw } from "lucide-react";
+import { Eye, ImageIcon, Trash2, AlertTriangle, TrendingUp, TrendingDown, ShoppingCart, RotateCcw, Calendar } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ResumenInversiones = () => {
   const { inversiones, isLoading: loadingInversiones, eliminarInversion, actualizarInversion } = useInversiones();
-  const { transacciones, isLoading: loadingTransacciones } = useTransaccionesInversionesDetalladas();
+  const { transacciones, isLoading: loadingTransacciones } = useTransaccionesInversionesConDepreciaciones();
   const [selectedTransaccion, setSelectedTransaccion] = useState<any>(null);
   const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(
     selectedTransaccion?.inversion_id,
-    selectedTransaccion?.tipo
+    selectedTransaccion?.tipo === 'depreciacion' ? undefined : selectedTransaccion?.tipo
+  );
+  const { data: asientosDepreciacion } = useAsientosDepreciacion(
+    selectedTransaccion?.tipo === 'depreciacion' ? selectedTransaccion?.inversion_id : undefined
   );
   const { data: inversionesConAsientos, isLoading: loadingAsientos } = useAsientosInversionBulk();
 
@@ -49,6 +53,8 @@ const ResumenInversiones = () => {
         return <TrendingDown className="h-4 w-4" />;
       case 'venta':
         return <ShoppingCart className="h-4 w-4" />;
+      case 'depreciacion':
+        return <Calendar className="h-4 w-4" />;
       default:
         return null;
     }
@@ -59,15 +65,17 @@ const ResumenInversiones = () => {
       alta: "Alta",
       baja: "Baja",
       venta: "Venta",
+      depreciacion: "Depreciación",
     };
     return labels[tipo] || tipo;
   };
 
   const getTipoTransaccionVariant = (tipo: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive"> = {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       alta: "default",
       baja: "destructive",
       venta: "secondary",
+      depreciacion: "outline",
     };
     return variants[tipo] || "default";
   };
@@ -127,6 +135,7 @@ const ResumenInversiones = () => {
   const transaccionesAlta = transacciones.filter(t => t.tipo === 'alta').length;
   const transaccionesBaja = transacciones.filter(t => t.tipo === 'baja').length;
   const transaccionesVenta = transacciones.filter(t => t.tipo === 'venta').length;
+  const transaccionesDepreciacion = transacciones.filter(t => t.tipo === 'depreciacion').length;
 
   const inversionesSinAsientos = inversiones.filter(inv => {
     return !inversionesConAsientos?.has(inv.id);
@@ -175,7 +184,7 @@ const ResumenInversiones = () => {
             <div className="space-y-1">
               <div className="text-2xl font-bold">{totalTransacciones}</div>
               <div className="text-xs text-muted-foreground">
-                {transaccionesAlta} altas • {transaccionesBaja} bajas • {transaccionesVenta} ventas
+                {transaccionesAlta} altas • {transaccionesDepreciacion} depreciaciones • {transaccionesBaja} bajas • {transaccionesVenta} ventas
               </div>
             </div>
           </CardContent>
@@ -198,6 +207,7 @@ const ResumenInversiones = () => {
                 <TableHead>Activo</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Monto</TableHead>
+                <TableHead>Mes/Año</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead>Detalle</TableHead>
               </TableRow>
@@ -252,10 +262,26 @@ const ResumenInversiones = () => {
                         })}
                       </span>
                     )}
+                    {transaccion.tipo === 'depreciacion' && transaccion.monto && (
+                      <span className="font-medium text-purple-600">
+                        ${Number(transaccion.monto).toLocaleString("es-MX", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    )}
                     {transaccion.tipo === 'baja' && <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell>
+                    {transaccion.tipo === 'depreciacion' && transaccion.mes_ano && (
+                      <Badge variant="secondary" className="bg-purple-50 text-purple-700">
+                        {transaccion.mes_ano}
+                      </Badge>
+                    )}
+                    {transaccion.tipo !== 'depreciacion' && '-'}
                   </TableCell>
                   <TableCell className="max-w-xs truncate">
                     {transaccion.tipo === 'alta' && transaccion.descripcion}
+                    {transaccion.tipo === 'depreciacion' && transaccion.descripcion}
                     {(transaccion.tipo === 'baja' || transaccion.tipo === 'venta') && transaccion.motivo}
                   </TableCell>
                   <TableCell>
@@ -494,14 +520,86 @@ const ResumenInversiones = () => {
                                         </AccordionContent>
                                       </AccordionItem>
                                     ))}
-                                  </Accordion>
-                                  
-                                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                                    <p className="text-muted-foreground">
-                                      Los asientos se generan automáticamente al {selectedTransaccion.tipo === 'alta' ? 'registrar la inversión' : selectedTransaccion.tipo === 'venta' ? 'vender el activo' : 'dar de baja el activo'} y se 
-                                      reflejan en la Balanza de Comprobación.
-                                    </p>
+                                   </Accordion>
+                                   
+                                   <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                                     <p className="text-muted-foreground">
+                                       Los asientos se generan automáticamente al {selectedTransaccion.tipo === 'alta' ? 'registrar la inversión' : selectedTransaccion.tipo === 'venta' ? 'vender el activo' : 'dar de baja el activo'} y se 
+                                       reflejan en la Balanza de Comprobación.
+                                     </p>
+                                   </div>
+                                </div>
+                              ) : selectedTransaccion.tipo === 'depreciacion' && selectedTransaccion.numero_asiento ? (
+                                <div className="space-y-4">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="bg-purple-50 text-purple-700">
+                                      Asiento de Depreciación
+                                    </Badge>
+                                    <Badge variant="outline">{selectedTransaccion.numero_asiento}</Badge>
                                   </div>
+                                  
+                                  <div className="border rounded-lg p-4 bg-muted/50">
+                                    <p className="text-sm font-medium mb-2">
+                                      {selectedTransaccion.descripcion}
+                                    </p>
+                                    <div className="text-xs text-muted-foreground">
+                                      Periodo: {selectedTransaccion.mes_ano}
+                                    </div>
+                                  </div>
+                                  
+                                  {asientosDepreciacion && asientosDepreciacion.length > 0 && (
+                                    <div className="border rounded-lg overflow-hidden">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>Cuenta</TableHead>
+                                            <TableHead className="text-right">Debe</TableHead>
+                                            <TableHead className="text-right">Haber</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {asientosDepreciacion
+                                            .find(a => a.numero_asiento === selectedTransaccion.numero_asiento)
+                                            ?.detalle_asientos?.map((detalle) => (
+                                            <TableRow key={detalle.id}>
+                                              <TableCell>
+                                                <div>
+                                                  <div className="font-medium text-sm">
+                                                    {detalle.cuenta_codigo} - {detalle.cuenta?.nombre}
+                                                  </div>
+                                                  <div className="text-xs text-muted-foreground">
+                                                    {detalle.descripcion}
+                                                  </div>
+                                                </div>
+                                              </TableCell>
+                                              <TableCell className="text-right font-mono">
+                                                {detalle.debe > 0 ? (
+                                                  <span className="text-green-600">
+                                                    ${Number(detalle.debe).toLocaleString("es-MX", {
+                                                      minimumFractionDigits: 2,
+                                                    })}
+                                                  </span>
+                                                ) : (
+                                                  "-"
+                                                )}
+                                              </TableCell>
+                                              <TableCell className="text-right font-mono">
+                                                {detalle.haber > 0 ? (
+                                                  <span className="text-blue-600">
+                                                    ${Number(detalle.haber).toLocaleString("es-MX", {
+                                                      minimumFractionDigits: 2,
+                                                    })}
+                                                  </span>
+                                                ) : (
+                                                  "-"
+                                                )}
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <Alert>
