@@ -289,51 +289,6 @@ const AnalyticaInversiones = () => {
         </div>
       </div>
 
-      {/* Tarjetas de Estado de Activos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-l-4 border-l-green-500">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Activos Activos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              {inversionesActivas.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {formatearCifra(inversionesActivas.reduce((acc, inv) => acc + inv.valor_total, 0))}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-red-500">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Activos Dados de Baja</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">
-              {inversionesBaja.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {formatearCifra(inversionesBaja.reduce((acc, inv) => acc + inv.valor_total, 0))}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Depreciación Real Acumulada</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-600">
-              {formatearCifra(totalDepreciacionAcumulada)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Basado en asientos contables
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Tarjetas de Métricas Principales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
