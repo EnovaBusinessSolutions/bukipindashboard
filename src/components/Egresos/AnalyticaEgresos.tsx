@@ -197,7 +197,7 @@ const AnalyticaEgresos = () => {
         costoVenta: transaccionesCosto,
         gastos: [],
         otrosGastos: [],
-        costosInventario: costosVentaInventario,
+        costosInventario: [],
         sinImpuestosCostoVenta: transaccionesCostoSinImp,
         sinImpuestosGastos: [],
         sinImpuestosOtrosGastos: []
