@@ -107,10 +107,12 @@ const AnalyticaEgresos = () => {
     fechaAnalisisMensual
   );
 
-  // Filtrar SOLO gastos operativos (51XX, 52XX) - EXCLUIR costos 5001
+  // Filtrar transacciones operativas incluyendo costos 5001
   const filteredTransactions = useMemo(() => 
     transacciones.filter(
       (t) => t.cuenta_codigo && (
+        // Costos de Venta 5001
+        t.cuenta_codigo === '5001' ||
         // Gastos 51XX (excepto 5109, 5110)
         (t.cuenta_codigo.startsWith('51') && 
          t.cuenta_codigo !== '5109' && 
