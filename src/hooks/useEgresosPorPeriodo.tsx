@@ -21,7 +21,7 @@ export const useEgresosPorPeriodo = (
   fechaEspecificaMensual?: Date
 ) => {
   return useQuery({
-    queryKey: ['egresos-por-periodo', periodFilter, tipoEgreso, fechaEspecificaDiaria, fechaEspecificaMensual],
+    queryKey: ['egresos-por-periodo-v2', periodFilter, tipoEgreso, fechaEspecificaDiaria, fechaEspecificaMensual],
     queryFn: async (): Promise<DatosEvolucionSimple[] | DatosEvolucionCombinada[]> => {
       const fechaBase = fechaEspecificaDiaria || new Date();
       const fechaMensual = fechaEspecificaMensual || new Date();
@@ -186,6 +186,11 @@ export const useEgresosPorPeriodo = (
             const codigo = detalle.cuenta_codigo;
             const monto = (detalle.debe || 0) - (detalle.haber || 0);
 
+            // LOGGING TEMPORAL - Detectar transacciones grandes en día 9
+            if (day === 9 && Math.abs(monto) > 10000) {
+              console.log('[🔍 DEBUG] Día 9 detectado - Cuenta:', codigo, '| Monto:', monto, '| Fecha:', detalle.asientos_contables.fecha);
+            }
+
             if (codigo === '5001') {
               costosByDay[day] = (costosByDay[day] || 0) + monto;
             } else if (codigo === '5002') {
@@ -322,7 +327,7 @@ export const useEgresosPorPeriodo = (
         }));
       }
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0, // Temporalmente 0 para debugging
     gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });

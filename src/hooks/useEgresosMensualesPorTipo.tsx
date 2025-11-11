@@ -64,8 +64,8 @@ export const useEgresosMensualesPorTipo = (año?: number) => {
           else if (codigo === '5003' || codigo === '5004') {
             costos -= debe - haber;
           }
-          // Gastos Operativos (51XX, 5202, 5203) - Naturaleza deudora
-          else if ((codigo.startsWith('51') || codigo === '5202' || codigo === '5203')) {
+          // Gastos Operativos (51XX excepto depreciaciones) - Naturaleza deudora
+          else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
             gastos += debe - haber;
           }
         });

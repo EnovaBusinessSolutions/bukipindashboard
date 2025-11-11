@@ -48,9 +48,10 @@ export const useUtilidadAntesImpuestos = (mes: number, ano: number) => {
         else if (codigo === '5109' || codigo === '5110') {
           depreciacion += Math.abs(saldo);
         }
-        // Gastos (cuentas 5100-5108, 5202, 5203) - naturaleza deudora
-        else if ((codigo.startsWith('5') && parseInt(codigo) >= 5100 && parseInt(codigo) <= 5108) || 
-                 codigo === '5202' || codigo === '5203') {
+        // Gastos (cuentas 51XX excepto depreciaciones) - naturaleza deudora
+        else if (codigo.startsWith('51') && 
+                 codigo !== '5109' && 
+                 codigo !== '5110') {
           gastos += Math.abs(saldo);
         }
         // Intereses (cuentas 5111-5199, 5201)

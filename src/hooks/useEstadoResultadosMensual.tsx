@@ -99,9 +99,8 @@ export const useEstadoResultadosMensual = (año?: number) => {
           else if (codigo === '5109' || codigo === '5110') {
             depreciacion += debe - haber;
           }
-          // Gastos Operativos (5101-5108, 5202, 5203)
-          else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                   codigo === '5202' || codigo === '5203') {
+          // Gastos Operativos (51XX excepto depreciaciones)
+          else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
             gastos += debe - haber;
           }
           
