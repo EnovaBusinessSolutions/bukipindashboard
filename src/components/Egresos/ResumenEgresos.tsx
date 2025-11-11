@@ -110,8 +110,10 @@ const ResumenEgresos = () => {
   const transaccionesGastos = useMemo(() => {
     return transaccionesFiltradas.filter(t => 
       t.cuenta_codigo && (
-        t.cuenta_codigo.startsWith('51') || 
-        (t.cuenta_codigo.startsWith('52') && t.cuenta_codigo !== '5204')
+        (t.cuenta_codigo.startsWith('51') && 
+         t.cuenta_codigo !== '5109' && 
+         t.cuenta_codigo !== '5110') ||
+        t.cuenta_codigo === '5204' // Solo Otros Gastos
       )
     );
   }, [transaccionesFiltradas]);

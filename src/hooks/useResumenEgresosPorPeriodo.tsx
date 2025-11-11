@@ -52,7 +52,8 @@ export const useResumenEgresosPorPeriodo = () => {
             costosVenta5001 += monto;
           } else if (codigo === '5002') {
             costosVenta5002 += monto;
-          } else if (codigo.startsWith('51') || codigo === '5202' || codigo === '5203') {
+          } else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
+            // Solo gastos operativos 51XX, EXCLUYENDO depreciaciones (5109, 5110)
             gastos += monto;
           } else if (codigo.startsWith('6')) {
             otrosGastos += monto;

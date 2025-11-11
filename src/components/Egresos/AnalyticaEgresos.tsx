@@ -100,8 +100,10 @@ const AnalyticaEgresos = () => {
   // Filtrar SOLO gastos operativos (51XX, 52XX) - EXCLUIR costos 5001
   const transaccionesFiltradas = transacciones.filter(
     (t) => t.cuenta_codigo && (
-      t.cuenta_codigo.startsWith('51') || 
-      t.cuenta_codigo.startsWith('52')
+      (t.cuenta_codigo.startsWith('51') && 
+       t.cuenta_codigo !== '5109' && 
+       t.cuenta_codigo !== '5110') || 
+      t.cuenta_codigo === '5204' // Solo Otros Gastos, NO 5202/5203
     )
   );
 
