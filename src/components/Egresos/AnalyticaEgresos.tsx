@@ -10,6 +10,7 @@ import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
 import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
 import { useEgresosPorPeriodo, DatosEvolucionSimple, DatosEvolucionCombinada } from "@/hooks/useEgresosPorPeriodo";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
+import { useCuentas } from "@/hooks/useCuentas";
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -83,6 +84,7 @@ const AnalyticaEgresos = () => {
   const [vistaTotal, setVistaTotal] = useState<"unica" | "desglosada">("unica");
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
+  const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("subcuenta");
   
   const { data: transacciones = [], isLoading: loading } = useTransaccionesEgresos(
     1000, 
@@ -98,6 +100,8 @@ const AnalyticaEgresos = () => {
   const { data: resumenes, isLoading: loadingResumen } = useResumenEgresosPorPeriodo();
   const { data: subcuentas } = useSubcuentas();
   const { data: productosEgresos } = useProductosEgresos();
+  const { data: cuentasData } = useCuentas();
+  const cuentasFlat = cuentasData?.cuentasFlat || [];
   
   // Usar el nuevo hook para datos de la gráfica
   const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(
@@ -431,6 +435,58 @@ const AnalyticaEgresos = () => {
       .sort((a, b) => b.monto - a.monto)
       .slice(0, 10);
   };
+
+  // Egresos agrupados por Cuenta (código + nombre completo)
+  const egresosPorCuenta = () => {
+    const grouped: Record<string, { codigo: string; nombre: string; monto: number }> = {};
+
+    // Helper para agregar monto a una cuenta
+    const agregarACuenta = (codigoCuenta: string, monto: number) => {
+      if (!grouped[codigoCuenta]) {
+        const cuenta = cuentasFlat.find(c => c.codigo === codigoCuenta);
+        grouped[codigoCuenta] = {
+          codigo: codigoCuenta,
+          nombre: cuenta ? `${cuenta.codigo} - ${cuenta.nombre}` : codigoCuenta,
+          monto: 0
+        };
+      }
+      grouped[codigoCuenta].monto += monto;
+    };
+
+    // 1. Costos de Venta (52XX)
+    transaccionesPorTipo.costoVenta.forEach(t => {
+      agregarACuenta(t.cuenta_codigo || '5001', t.monto_total);
+    });
+
+    // 2. Gastos (51XX)
+    transaccionesPorTipo.gastos.forEach(t => {
+      agregarACuenta(t.cuenta_codigo || '5101', t.monto_total);
+    });
+
+    // 3. Otros Gastos (5204)
+    transaccionesPorTipo.otrosGastos.forEach(t => {
+      agregarACuenta(t.cuenta_codigo || '5204', t.monto_total);
+    });
+
+    // 4. Costos de inventario (50XX) - Obtener código de cuenta desde detalles_asiento
+    transaccionesPorTipo.costosInventario.forEach(c => {
+      // Buscar el detalle con debe > 0 para obtener el código de cuenta
+      const detalleCosto = c.detalles_asiento?.find(d => d.debe > 0);
+      const codigoCuenta = detalleCosto?.cuenta_codigo || '5002';
+      agregarACuenta(codigoCuenta, c.monto);
+    });
+
+    return Object.values(grouped)
+      .map(item => ({
+        subcuenta: item.nombre, // Usar mismo key para compatibilidad con gráfico
+        monto: formatearMonto(item.monto)
+      }))
+      .sort((a, b) => b.monto - a.monto)
+      .slice(0, 15); // Mostrar más registros ya que habrá menos cuentas
+  };
+
+  const datosEgresosPorCuenta = useMemo(() => egresosPorCuenta(), 
+    [transaccionesPorTipo, cuentasFlat, formatoMontos]);
 
   const datosEgresosPorSubcuenta = useMemo(() => egresosPorSubcuenta(), 
     [transaccionesPorTipo, subcuentas, formatoMontos]);
@@ -1371,42 +1427,76 @@ const AnalyticaEgresos = () => {
         {/* Egresos por Subcuenta */}
         <Card>
           <CardHeader>
-            <CardTitle>Egresos por Subcuenta</CardTitle>
-            <CardDescription>Desglose de egresos por clasificación detallada</CardDescription>
+            <div className="flex flex-col gap-3">
+              <div>
+                <CardTitle>
+                  {vistaAgrupacion === "cuenta" ? "Egresos por Cuenta" : "Egresos por Subcuenta"}
+                </CardTitle>
+                <CardDescription>
+                  {vistaAgrupacion === "cuenta" 
+                    ? "Agrupación por cuenta contable completa" 
+                    : "Desglose detallado por subcuentas"}
+                </CardDescription>
+              </div>
+              
+              {/* Filtro LOCAL solo para este gráfico */}
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <span className="text-sm font-medium text-muted-foreground">Agrupar por:</span>
+                <Tabs 
+                  value={vistaAgrupacion} 
+                  onValueChange={(v) => setVistaAgrupacion(v as "cuenta" | "subcuenta")}
+                >
+                  <TabsList className="h-9">
+                    <TabsTrigger value="cuenta" className="text-xs">Cuenta</TabsTrigger>
+                    <TabsTrigger value="subcuenta" className="text-xs">Subcuenta</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {datosEgresosPorSubcuenta.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay datos para mostrar</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={datosEgresosPorSubcuenta} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    type="number" 
-                    tickFormatter={(value) => `$${value.toLocaleString('es-MX')}`}
-                    domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.20)]}
-                  />
-                  <YAxis dataKey="subcuenta" type="category" width={150} />
-                  <Tooltip 
-                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
-                  />
-                  <Bar 
-                    dataKey="monto" 
-                    fill="hsl(180, 50%, 50%)"
-                    label={{
-                      position: 'right',
-                      fill: 'hsl(var(--foreground))',
-                      fontSize: 13,
-                      formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+            {(() => {
+              const datosActuales = vistaAgrupacion === "cuenta" 
+                ? datosEgresosPorCuenta 
+                : datosEgresosPorSubcuenta;
+              
+              return datosActuales.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                  <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
+                  <p>No hay datos para mostrar</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={datosActuales} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      type="number" 
+                      tickFormatter={(value) => `$${value.toLocaleString('es-MX')}`}
+                      domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.20)]}
+                    />
+                    <YAxis 
+                      dataKey="subcuenta" 
+                      type="category" 
+                      width={vistaAgrupacion === "cuenta" ? 220 : 150}
+                    />
+                    <Tooltip 
+                      formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                      contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                    />
+                    <Bar 
+                      dataKey="monto" 
+                      fill={vistaAgrupacion === "cuenta" ? "hsl(220, 60%, 55%)" : "hsl(180, 50%, 50%)"}
+                      label={{
+                        position: 'right',
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 13,
+                        formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              );
+            })()}
           </CardContent>
         </Card>
 
