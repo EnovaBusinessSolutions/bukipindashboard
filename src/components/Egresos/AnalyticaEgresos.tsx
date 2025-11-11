@@ -138,6 +138,32 @@ const AnalyticaEgresos = () => {
 
   const filteredTransactions = getFilteredTransactions();
 
+  // Función para filtrar transacciones SIN impuestos según el período
+  const getFilteredTransactionsSinImpuestos = () => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    if (periodFilter === "diario") {
+      const todayStr = today.toISOString().split('T')[0];
+      return transaccionesSinImpuestos.filter(t => 
+        new Date(t.created_at).toISOString().split('T')[0] === todayStr
+      );
+    } else if (periodFilter === "mensual") {
+      return transaccionesSinImpuestos.filter(t => {
+        const tDate = new Date(t.created_at);
+        return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+      });
+    } else {
+      return transaccionesSinImpuestos.filter(t => {
+        const tDate = new Date(t.created_at);
+        return tDate.getFullYear() === currentYear;
+      });
+    }
+  };
+
+  const filteredTransactionsSinImpuestos = getFilteredTransactionsSinImpuestos();
+
   // Filtrar costos de venta de inventario según período
   const getFilteredCostosInventario = () => {
     if (!costosVentaInventario) return [];
@@ -231,7 +257,7 @@ const AnalyticaEgresos = () => {
   const estadoPagos = () => {
     const grouped: Record<string, number> = {};
     
-    transaccionesSinImpuestos
+    filteredTransactionsSinImpuestos
       .filter(t => t.monto_pagado > 0) // Solo los que tienen pago
       .forEach(t => {
         const metodo = t.metodo_pago || 'Sin método especificado';
@@ -302,11 +328,11 @@ const AnalyticaEgresos = () => {
 
   // Egresos por Método de Pago
   const egresosPorMetodoPago = () => {
-    const efectivo = transaccionesSinImpuestos
+    const efectivo = filteredTransactionsSinImpuestos
       .filter(t => t.metodo_pago === 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
     
-    const bancosTarjeta = transaccionesSinImpuestos
+    const bancosTarjeta = filteredTransactionsSinImpuestos
       .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
 
@@ -1025,8 +1051,10 @@ const AnalyticaEgresos = () => {
                     paddingAngle={3}
                     labelLine={true}
                     label={(props: any) => {
-                      const { x, y, tipo, percent } = props;
+                      const { x, y, tipo, monto, percent } = props;
                       const porcentaje = (percent * 100).toFixed(1);
+                      const montoFormateado = `$${Number(monto).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+                      
                       return (
                         <text
                           x={x}
@@ -1034,9 +1062,12 @@ const AnalyticaEgresos = () => {
                           fill="hsl(var(--foreground))"
                           textAnchor={x > props.cx ? 'start' : 'end'}
                           dominantBaseline="central"
-                          fontSize={14}
+                          fontSize={13}
+                          fontWeight="500"
                         >
-                          {`${tipo} ${porcentaje}%`}
+                          <tspan x={x} dy="0">{tipo}</tspan>
+                          <tspan x={x} dy="16">{montoFormateado}</tspan>
+                          <tspan x={x} dy="16" fontWeight="600">{porcentaje}%</tspan>
                         </text>
                       );
                     }}
@@ -1092,8 +1123,10 @@ const AnalyticaEgresos = () => {
                     paddingAngle={3}
                     labelLine={true}
                     label={(props: any) => {
-                      const { x, y, estado, percent } = props;
+                      const { x, y, estado, monto, percent } = props;
                       const porcentaje = (percent * 100).toFixed(1);
+                      const montoFormateado = `$${Number(monto).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+                      
                       return (
                         <text
                           x={x}
@@ -1101,9 +1134,12 @@ const AnalyticaEgresos = () => {
                           fill="hsl(var(--foreground))"
                           textAnchor={x > props.cx ? 'start' : 'end'}
                           dominantBaseline="central"
-                          fontSize={14}
+                          fontSize={13}
+                          fontWeight="500"
                         >
-                          {`${estado} ${porcentaje}%`}
+                          <tspan x={x} dy="0">{estado}</tspan>
+                          <tspan x={x} dy="16">{montoFormateado}</tspan>
+                          <tspan x={x} dy="16" fontWeight="600">{porcentaje}%</tspan>
                         </text>
                       );
                     }}
