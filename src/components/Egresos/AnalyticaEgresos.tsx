@@ -135,7 +135,9 @@ const AnalyticaEgresos = () => {
     }
   };
 
-  const filteredTransactions = getFilteredTransactions();
+  const filteredTransactions = useMemo(() => {
+    return getFilteredTransactions();
+  }, [transaccionesFiltradas, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
 
   // Función para filtrar transacciones SIN impuestos según el período
   const getFilteredTransactionsSinImpuestos = () => {
@@ -160,7 +162,9 @@ const AnalyticaEgresos = () => {
     }
   };
 
-  const filteredTransactionsSinImpuestos = getFilteredTransactionsSinImpuestos();
+  const filteredTransactionsSinImpuestos = useMemo(() => {
+    return getFilteredTransactionsSinImpuestos();
+  }, [transaccionesSinImpuestos, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
 
   // Filtrar costos de venta de inventario según período
   const getFilteredCostosInventario = () => {
@@ -187,7 +191,9 @@ const AnalyticaEgresos = () => {
     }
   };
 
-  const filteredCostosInventario = getFilteredCostosInventario();
+  const filteredCostosInventario = useMemo(() => {
+    return getFilteredCostosInventario();
+  }, [costosVentaInventario, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
 
   // Función helper para calcular porcentajes de forma segura
   const calcularPorcentaje = (monto: number, total: number): string => {
