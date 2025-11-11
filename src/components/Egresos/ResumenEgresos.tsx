@@ -106,15 +106,22 @@ const ResumenEgresos = () => {
     });
   }, [transacciones, searchTerm, filterTipo, filterProveedor, filterPago, filterEstado, filterMes, filterAno, filterFechaInicio, filterFechaFin]);
 
-  // Filtrar solo gastos operativos (EXCLUIR cuenta 5204 - Otros Gastos)
+  // Filtrar costos de venta directos (5001, 5003, 5004)
+  const transaccionesCostosVenta = useMemo(() => {
+    return transaccionesFiltradas.filter(t => 
+      t.cuenta_codigo === '5001' || 
+      t.cuenta_codigo === '5003' || 
+      t.cuenta_codigo === '5004'
+    );
+  }, [transaccionesFiltradas]);
+
+  // Filtrar solo gastos operativos (5101-5108)
   const transaccionesGastos = useMemo(() => {
     return transaccionesFiltradas.filter(t => 
-      t.cuenta_codigo && (
-        (t.cuenta_codigo.startsWith('51') && 
-         t.cuenta_codigo !== '5109' && 
-         t.cuenta_codigo !== '5110') ||
-        t.cuenta_codigo === '5204' // Solo Otros Gastos
-      )
+      t.cuenta_codigo && 
+      t.cuenta_codigo.startsWith('51') && 
+      t.cuenta_codigo !== '5109' && 
+      t.cuenta_codigo !== '5110'
     );
   }, [transaccionesFiltradas]);
 
@@ -125,9 +132,9 @@ const ResumenEgresos = () => {
     );
   }, [transaccionesFiltradas]);
 
-  // Unificar TODAS las transacciones de egresos (50XX + 51XX + 52XX EXCEPTO 5204 + 5204 separado)
+  // Unificar TODAS las transacciones de egresos (5001-5004 + 5002 + 5101-5108 + 5204)
   const transaccionesEgresosUnificadas = useMemo(() => {
-    // Combinar datos del hook (50XX con foto, cantidad, etc.) con transacciones manuales
+    // 1. Costos de inventario (5002) del hook
     const costosConDetalle = costosVentaInventario?.map(c => ({
       id: c.id,
       created_at: c.fecha,
@@ -146,6 +153,26 @@ const ResumenEgresos = () => {
       monto_pendiente: 0,
     })) || [];
 
+    // 2. Costos de venta directos (5001, 5003, 5004)
+    const costosVentaDirectos = transaccionesCostosVenta.map(cv => ({
+      id: cv.id,
+      created_at: cv.created_at,
+      tipo_egreso: cv.tipo_egreso,
+      descripcion: cv.descripcion,
+      cuenta_codigo: cv.cuenta_codigo,
+      monto_total: cv.monto_total,
+      proveedor_nombre: cv.proveedor_nombre,
+      imagen_url: cv.imagen_comprobante,
+      cantidad: cv.cantidad,
+      costo_unitario: cv.precio_unitario,
+      numero_asiento: null,
+      detalles_asiento: [],
+      tipo_pago: cv.tipo_pago,
+      monto_pagado: cv.monto_pagado,
+      monto_pendiente: cv.monto_pendiente,
+    }));
+
+    // 3. Gastos operativos (5101-5108)
     const gastosConDetalle = transaccionesGastos.map(g => ({
       id: g.id,
       created_at: g.created_at,
@@ -164,7 +191,7 @@ const ResumenEgresos = () => {
       monto_pendiente: g.monto_pendiente,
     }));
 
-    // NUEVO: Agregar otros gastos
+    // 4. Otros gastos (5204)
     const otrosGastosConDetalle = transaccionesOtrosGastos.map(og => ({
       id: og.id,
       created_at: og.created_at,
@@ -184,10 +211,10 @@ const ResumenEgresos = () => {
     }));
 
     // Combinar y ordenar por fecha
-    return [...costosConDetalle, ...gastosConDetalle, ...otrosGastosConDetalle].sort(
+    return [...costosConDetalle, ...costosVentaDirectos, ...gastosConDetalle, ...otrosGastosConDetalle].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [costosVentaInventario, transaccionesGastos, transaccionesOtrosGastos]);
+  }, [costosVentaInventario, transaccionesCostosVenta, transaccionesGastos, transaccionesOtrosGastos]);
 
   // Logs de depuración para verificar datos
   React.useEffect(() => {
@@ -203,8 +230,7 @@ const ResumenEgresos = () => {
     }
     if (filterCategoriaContable === "gastos") {
       return transaccionesEgresosUnificadas.filter(t => 
-        t.cuenta_codigo?.startsWith('51') || 
-        (t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204')
+        t.cuenta_codigo?.startsWith('51')
       );
     }
     if (filterCategoriaContable === "otros_gastos") {
@@ -220,10 +246,7 @@ const ResumenEgresos = () => {
       .reduce((sum, t) => sum + t.monto_total, 0);
     
     const totalGastos = transaccionesEgresosUnificadas
-      .filter(t => 
-        t.cuenta_codigo?.startsWith('51') || 
-        (t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204')
-      )
+      .filter(t => t.cuenta_codigo?.startsWith('51'))
       .reduce((sum, t) => sum + t.monto_total, 0);
     
     const totalOtrosGastos = transaccionesEgresosUnificadas
@@ -267,14 +290,15 @@ const ResumenEgresos = () => {
   const getTipoEgresoDisplay = (transaccion: any) => {
     const codigo = transaccion.cuenta_codigo;
     
-    // Clasificación basada EXCLUSIVAMENTE en código de cuenta
-    if (codigo === '5001') {
+    // Costos de Venta: 5001, 5003, 5004
+    if (codigo === '5001' || codigo === '5003' || codigo === '5004') {
       return {
         label: 'Costos de Venta',
         className: 'bg-red-100 text-red-700 border-red-300'
       };
     }
     
+    // Costo de Venta Inventario: 5002
     if (codigo === '5002') {
       return {
         label: 'Costo de Venta Inventario',
@@ -282,15 +306,7 @@ const ResumenEgresos = () => {
       };
     }
     
-    // Para otros códigos 50XX genéricos
-    if (codigo?.startsWith('50')) {
-      return {
-        label: 'Costos de Venta',
-        className: 'bg-red-100 text-red-700 border-red-300'
-      };
-    }
-    
-    // NUEVO: Cuenta 5204 - Otros Gastos
+    // Otros Gastos: 5204
     if (codigo === '5204') {
       return {
         label: 'Otros Gastos',
@@ -298,7 +314,8 @@ const ResumenEgresos = () => {
       };
     }
     
-    if (codigo?.startsWith('51') || codigo?.startsWith('52')) {
+    // Gastos Operativos: 5101-5108
+    if (codigo?.startsWith('51')) {
       return {
         label: 'Gastos Operativos',
         className: 'bg-orange-100 text-orange-700 border-orange-300'
@@ -647,8 +664,8 @@ const ResumenEgresos = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="costos">Costos de Venta (50XX)</SelectItem>
-                      <SelectItem value="gastos">Gastos Operativos (51XX-52XX)</SelectItem>
+                      <SelectItem value="costos">Costos de Venta (5001-5004)</SelectItem>
+                      <SelectItem value="gastos">Gastos Operativos (5101-5108)</SelectItem>
                       <SelectItem value="otros_gastos">Otros Gastos (5204)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -765,13 +782,13 @@ const ResumenEgresos = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Costos de Venta (50XX)</div>
+                  <div className="text-xs text-muted-foreground">Costos de Venta (5001-5004)</div>
                   <div className="text-lg font-semibold text-purple-600">
                     ${formatMonto(resumenFiltrado.totalCostos)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Gastos Operativos (51XX-52XX)</div>
+                  <div className="text-xs text-muted-foreground">Gastos Operativos (5101-5108)</div>
                   <div className="text-lg font-semibold text-orange-600">
                     ${formatMonto(resumenFiltrado.totalGastos)}
                   </div>
@@ -797,7 +814,7 @@ const ResumenEgresos = () => {
             <div className="text-center py-12 text-muted-foreground">
               <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No hay egresos registrados</p>
-              <p className="text-sm mt-2">Los costos (50XX) y gastos (51XX-52XX) aparecerán aquí</p>
+              <p className="text-sm mt-2">Los costos (5001-5004) y gastos (5101-5108) aparecerán aquí</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1195,13 +1212,13 @@ const ResumenEgresos = () => {
               <div className="mt-4 p-4 bg-muted rounded-lg">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Costos de Venta (50XX)</div>
+                    <div className="text-xs text-muted-foreground mb-1">Costos de Venta (5001-5004)</div>
                     <div className="text-lg font-bold text-purple-600">
                       ${formatMonto(resumenFiltrado.totalCostos)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Gastos Operativos (51XX-52XX)</div>
+                    <div className="text-xs text-muted-foreground mb-1">Gastos Operativos (5101-5108)</div>
                     <div className="text-lg font-bold text-orange-600">
                       ${formatMonto(resumenFiltrado.totalGastos)}
                     </div>

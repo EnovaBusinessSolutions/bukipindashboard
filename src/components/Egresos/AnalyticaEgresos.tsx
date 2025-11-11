@@ -107,19 +107,20 @@ const AnalyticaEgresos = () => {
     fechaAnalisisMensual
   );
 
-  // Filtrar transacciones operativas incluyendo costos 5001
+  // Filtrar transacciones operativas: 5001, 5003, 5004 (Costo de Venta) + 5002 (Costo Inventario) + 51XX (Gastos) + 5204 (Otros Gastos)
   const filteredTransactions = useMemo(() => 
     transacciones.filter(
       (t) => t.cuenta_codigo && (
-        // Costos de Venta 5001
+        // Costos de Venta: 5001, 5003, 5004
         t.cuenta_codigo === '5001' ||
+        t.cuenta_codigo === '5003' ||
+        t.cuenta_codigo === '5004' ||
+        // Costo Venta Inventario: 5002
+        t.cuenta_codigo === '5002' ||
         // Gastos 51XX (excepto 5109, 5110)
         (t.cuenta_codigo.startsWith('51') && 
          t.cuenta_codigo !== '5109' && 
          t.cuenta_codigo !== '5110') ||
-        // Costos de Venta 52XX (excepto 5204)
-        (t.cuenta_codigo.startsWith('52') && 
-         t.cuenta_codigo !== '5204') ||
         // Otros Gastos 5204
         t.cuenta_codigo === '5204'
       )
@@ -135,9 +136,11 @@ const AnalyticaEgresos = () => {
 
   // Función para obtener transacciones según el tipo de egreso seleccionado
   const transaccionesPorTipo = useMemo(() => {
-    // Separar transacciones por tipo de cuenta (ya filtradas desde el backend)
-    const costoVenta52XX = filteredTransactions.filter(t => 
-      t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204'
+    // Separar transacciones por tipo de cuenta
+    const costoVenta = filteredTransactions.filter(t => 
+      t.cuenta_codigo === '5001' || 
+      t.cuenta_codigo === '5003' || 
+      t.cuenta_codigo === '5004'
     );
     const gastos51XX = filteredTransactions.filter(t => 
       t.cuenta_codigo?.startsWith('51') && 
@@ -149,8 +152,10 @@ const AnalyticaEgresos = () => {
     );
     
     // Lo mismo para sinImpuestos
-    const costoVenta52XXSinImp = filteredTransactionsSinImpuestos.filter(t => 
-      t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204'
+    const costoVentaSinImp = filteredTransactionsSinImpuestos.filter(t => 
+      t.cuenta_codigo === '5001' || 
+      t.cuenta_codigo === '5003' || 
+      t.cuenta_codigo === '5004'
     );
     const gastos51XXSinImp = filteredTransactionsSinImpuestos.filter(t => 
       t.cuenta_codigo?.startsWith('51') && 
@@ -207,11 +212,11 @@ const AnalyticaEgresos = () => {
     } else {
       // "total" o "combinada" - TODO separado en 4 categorías
       return { 
-        costoVenta: costoVenta52XX,
+        costoVenta: costoVenta,
         gastos: gastos51XX,
         otrosGastos: otrosGastos5204,
         costosInventario: costosVentaInventario,
-        sinImpuestosCostoVenta: costoVenta52XXSinImp,
+        sinImpuestosCostoVenta: costoVentaSinImp,
         sinImpuestosGastos: gastos51XXSinImp,
         sinImpuestosOtrosGastos: otrosGastos5204SinImp
       };
