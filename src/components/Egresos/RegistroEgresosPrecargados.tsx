@@ -558,8 +558,12 @@ const RegistroEgresosPrecargados = () => {
                             <SelectValue placeholder="Seleccionar método" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="efectivo">Efectivo (Caja - 1001)</SelectItem>
-                            <SelectItem value="tarjeta-transferencia">Tarjeta/Transferencia (Bancos - 1002)</SelectItem>
+                            <SelectItem value="efectivo">
+                              Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
+                            </SelectItem>
+                            <SelectItem value="tarjeta-transferencia">
+                              Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                            </SelectItem>
                             {tarjetasCredito?.map((tarjeta) => (
                               <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
                                 {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
