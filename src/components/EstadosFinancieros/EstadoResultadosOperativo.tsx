@@ -77,9 +77,12 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   });
   
   // Filtrar cuentas de gastos operativos (dinámico por subgrupo)
-  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => 
-    cuenta.subgrupo === "Gastos de Operación" && cuenta.estado_financiero === "Estado de Resultados"
-  );
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return cuenta.subgrupo === "Gastos de Operación" && 
+           cuenta.estado_financiero === "Estado de Resultados" &&
+           codigo !== 5109 && codigo !== 5110; // Excluir depreciaciones
+  });
   
   // Filtrar cuentas de otros gastos (nuevo)
   const cuentasOtrosGastos = cuentasFlat.filter(cuenta => 
