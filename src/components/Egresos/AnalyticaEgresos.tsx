@@ -190,12 +190,15 @@ const AnalyticaEgresos = () => {
         sinImpuestosOtrosGastos: otrosGastos5204SinImp
       };
     } else if (tipoEgreso === "costo") {
+      const transaccionesCosto = filteredTransactions.filter(t => t.tipo_egreso === 'costo');
+      const transaccionesCostoSinImp = filteredTransactionsSinImpuestos.filter(t => t.tipo_egreso === 'costo');
+      
       return { 
-        costoVenta: [],
+        costoVenta: transaccionesCosto,
         gastos: [],
         otrosGastos: [],
         costosInventario: costosVentaInventario,
-        sinImpuestosCostoVenta: [],
+        sinImpuestosCostoVenta: transaccionesCostoSinImp,
         sinImpuestosGastos: [],
         sinImpuestosOtrosGastos: []
       };
