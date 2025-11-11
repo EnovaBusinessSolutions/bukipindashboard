@@ -53,10 +53,9 @@ export const useEgresosPorPeriodo = (
 
             if (codigo === '5001') costos5001 += monto;
             else if (codigo === '5002') costosInventario5002 += monto;
-            else if (codigo === '5203' || codigo === '5204') otrosGastos5204 += monto;
-            else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                     codigo === '5202' || codigo.startsWith('6')) {
-              gastos += monto;
+            else if (codigo === '5204') otrosGastos5204 += monto; // Solo 5204
+            else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
+              gastos += monto; // Solo gastos operativos 51XX
             }
           });
 
@@ -86,10 +85,9 @@ export const useEgresosPorPeriodo = (
               costosByDay[day] = (costosByDay[day] || 0) + monto;
             } else if (codigo === '5002') {
               costosInventarioByDay[day] = (costosInventarioByDay[day] || 0) + monto;
-            } else if (codigo === '5203' || codigo === '5204') {
+            } else if (codigo === '5204') {
               otrosGastosByDay[day] = (otrosGastosByDay[day] || 0) + monto;
-            } else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                       codigo === '5202' || codigo.startsWith('6')) {
+            } else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
               gastosByDay[day] = (gastosByDay[day] || 0) + monto;
             }
           });
@@ -124,10 +122,9 @@ export const useEgresosPorPeriodo = (
               costosByMonth[month] = (costosByMonth[month] || 0) + monto;
             } else if (codigo === '5002') {
               costosInventarioByMonth[month] = (costosInventarioByMonth[month] || 0) + monto;
-            } else if (codigo === '5203' || codigo === '5204') {
+            } else if (codigo === '5204') {
               otrosGastosByMonth[month] = (otrosGastosByMonth[month] || 0) + monto;
-            } else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                       codigo === '5202' || codigo.startsWith('6')) {
+            } else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
               gastosByMonth[month] = (gastosByMonth[month] || 0) + monto;
             }
           });
@@ -158,9 +155,8 @@ export const useEgresosPorPeriodo = (
 
             if (codigo === '5001') costos5001 += monto;
             else if (codigo === '5002') costosInventario5002 += monto;
-            else if (codigo === '5203' || codigo === '5204') otrosGastos5204 += monto;
-            else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                     codigo === '5202' || codigo.startsWith('6')) {
+            else if (codigo === '5204') otrosGastos5204 += monto;
+            else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
               gastos += monto;
             }
           });
@@ -194,10 +190,9 @@ export const useEgresosPorPeriodo = (
               costosByDay[day] = (costosByDay[day] || 0) + monto;
             } else if (codigo === '5002') {
               costosInventarioByDay[day] = (costosInventarioByDay[day] || 0) + monto;
-            } else if (codigo === '5203' || codigo === '5204') {
+            } else if (codigo === '5204') {
               otrosGastosByDay[day] = (otrosGastosByDay[day] || 0) + monto;
-            } else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                       codigo === '5202' || codigo.startsWith('6')) {
+            } else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
               gastosByDay[day] = (gastosByDay[day] || 0) + monto;
             }
           });
@@ -239,10 +234,9 @@ export const useEgresosPorPeriodo = (
               costosByMonth[month] = (costosByMonth[month] || 0) + monto;
             } else if (codigo === '5002') {
               costosInventarioByMonth[month] = (costosInventarioByMonth[month] || 0) + monto;
-            } else if (codigo === '5203' || codigo === '5204') {
+            } else if (codigo === '5204') {
               otrosGastosByMonth[month] = (otrosGastosByMonth[month] || 0) + monto;
-            } else if ((codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                       codigo === '5202' || codigo.startsWith('6')) {
+            } else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
               gastosByMonth[month] = (gastosByMonth[month] || 0) + monto;
             }
           });
@@ -270,9 +264,10 @@ export const useEgresosPorPeriodo = (
       const filtrarPorCodigo = (codigo: string): boolean => {
         if (tipoEgreso === "costo") return codigo === '5001';
         if (tipoEgreso === "costo_inventario") return codigo === '5002';
-        if (tipoEgreso === "otros_gastos") return codigo === '5203' || codigo === '5204';
-        if (tipoEgreso === "gasto") return (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') || 
-                                             codigo === '5202' || codigo.startsWith('6');
+        if (tipoEgreso === "otros_gastos") return codigo === '5204'; // Solo 5204
+        if (tipoEgreso === "gasto") return codigo.startsWith('51') && 
+                                            codigo !== '5109' && 
+                                            codigo !== '5110'; // Solo 51XX operativos
         return false;
       };
 
