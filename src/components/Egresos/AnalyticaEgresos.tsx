@@ -440,12 +440,8 @@ const AnalyticaEgresos = () => {
   const egresosPorCuenta = () => {
     const grouped: Record<string, { codigo: string; nombre: string; monto: number }> = {};
 
-    // Procesar TODAS las transacciones de egresos que tienen cuenta_codigo válida
-    filteredTransactions.forEach(t => {
-      const codigoCuenta = t.cuenta_codigo;
-      
-      if (!codigoCuenta) return; // Skip si no hay código
-      
+    // Helper para agregar monto a una cuenta
+    const agregarACuenta = (codigoCuenta: string, monto: number) => {
       if (!grouped[codigoCuenta]) {
         const cuenta = cuentasFlat.find(c => c.codigo === codigoCuenta);
         grouped[codigoCuenta] = {
@@ -454,13 +450,25 @@ const AnalyticaEgresos = () => {
           monto: 0
         };
       }
-      
-      grouped[codigoCuenta].monto += t.monto_total;
+      grouped[codigoCuenta].monto += monto;
+    };
+
+    // 1. Procesar transacciones regulares (transacciones_egresos)
+    filteredTransactions.forEach(t => {
+      const codigoCuenta = t.cuenta_codigo;
+      if (codigoCuenta) {
+        agregarACuenta(codigoCuenta, t.monto_total);
+      }
+    });
+
+    // 2. Procesar costos de inventario (cuenta 5002)
+    transaccionesPorTipo.costosInventario.forEach(c => {
+      agregarACuenta('5002', c.monto);
     });
 
     return Object.values(grouped)
       .map(item => ({
-        subcuenta: item.nombre, // Usar mismo key para compatibilidad con gráfico
+        subcuenta: item.nombre,
         monto: formatearMonto(item.monto)
       }))
       .sort((a, b) => b.monto - a.monto)
