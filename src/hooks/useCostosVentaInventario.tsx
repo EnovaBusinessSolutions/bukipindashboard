@@ -85,9 +85,11 @@ export const useCostosVentaInventario = (
       const costosVenta: CostoVentaInventario[] = [];
 
       for (const asiento of asientos || []) {
-        // Buscar TODAS las cuentas de costos de venta (50XX)
+        // Buscar TODAS las cuentas de costos de venta (50XX) excepto 5001
         const detalleCosto = asiento.detalle_asientos?.find(
-          (detalle: any) => detalle.cuenta_codigo?.startsWith('50') && detalle.debe > 0
+          (detalle: any) => detalle.cuenta_codigo?.startsWith('50') && 
+                            detalle.cuenta_codigo !== '5001' &&
+                            detalle.debe > 0
         );
 
         if (!detalleCosto) continue;
