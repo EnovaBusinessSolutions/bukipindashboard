@@ -343,6 +343,15 @@ const AnalyticaEgresos = () => {
       return acc;
     }, {} as Record<string, number>);
 
+    // Agregar costos de inventario usando producto_nombre como "proveedor"
+    transaccionesPorTipo.costosInventario.forEach(c => {
+      const producto = c.producto_nombre || 'Sin producto';
+      if (!grouped[producto]) {
+        grouped[producto] = 0;
+      }
+      grouped[producto] += c.monto;
+    });
+
     return Object.entries(grouped)
       .map(([proveedor, monto]) => ({ proveedor, monto: formatearMonto(monto) }))
       .sort((a, b) => b.monto - a.monto);
