@@ -129,8 +129,19 @@ Deno.serve(async (req) => {
               user_id: user.id,
               numero_asiento: numeroAsiento,
               descripcion: `Depreciación mensual: ${activo.producto_nombre}`,
-              fecha: new Date(anoFormateado, mesFormateado - 1, 
-                new Date(anoFormateado, mesFormateado, 0).getDate()), // Último día del mes
+              fecha: (() => {
+                const hoy = new Date();
+                const mesActual = hoy.getMonth() + 1;
+                const anoActual = hoy.getFullYear();
+                
+                // Si es el mes ACTUAL, usar la fecha de HOY
+                if (mesFormateado === mesActual && anoFormateado === anoActual) {
+                  return hoy;
+                }
+                
+                // Si es un mes FUTURO o PASADO, usar el último día del mes
+                return new Date(anoFormateado, mesFormateado, 0); // Día 0 = último día del mes anterior
+              })(),
             })
             .select()
             .single();

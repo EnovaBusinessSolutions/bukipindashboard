@@ -97,6 +97,17 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
     cuenta.subgrupo === "Activo No Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
+  // Separar activos fijos brutos de depreciación acumulada
+  const activoFijoBruto = activoFijo.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return codigo >= 1201 && codigo <= 1206 || codigo === 1212; // Activos brutos
+  });
+
+  const depreciacionAcumulada = activoFijo.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return codigo >= 1207 && codigo <= 1213; // Depreciaciones acumuladas
+  });
+
   const activoDiferido = cuentasFlat.filter(cuenta => 
     cuenta.subgrupo === "Activo Diferido" && cuenta.estado_financiero === "Balance General"
   );
@@ -115,7 +126,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
 
   // Calcular subtotales para mostrar (solo para display, los totales ya los tenemos)
   const totalActivoCirculante = activoCirculante.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalActivoFijo = activoFijo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoFijoBruto = activoFijoBruto.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalDepreciacionAcumulada = depreciacionAcumulada.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoFijoNeto = totalActivoFijoBruto + totalDepreciacionAcumulada; // totalDepreciacionAcumulada es negativo
   const totalActivoDiferido = activoDiferido.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
 
   const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
@@ -188,24 +201,55 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
             </div>
 
             <div className="space-y-1">
-              {activoFijo.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                
-                const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
-                
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
-                    <span className="text-sm">{cuenta.codigo} - {cuenta.nombre}</span>
-                    <span className="text-right">${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                    <span className="text-right">{percentage}%</span>
-                  </div>
-                );
-              })}
+              {/* Activos Fijos Brutos */}
+              <div className="space-y-1 border-b border-slate-200 dark:border-slate-700 pb-2">
+                <div className="font-medium text-sm text-slate-600 dark:text-slate-400 py-2">Activo Fijo Bruto</div>
+                {activoFijoBruto.map((cuenta) => {
+                  const saldo = obtenerSaldo(cuenta.codigo);
+                  const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
+                  
+                  return (
+                    <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300 pl-4">
+                      <span className="text-sm">{cuenta.codigo} - {cuenta.nombre}</span>
+                      <span className="text-right">${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-right">{percentage}%</span>
+                    </div>
+                  );
+                })}
+                <div className="grid grid-cols-3 gap-4 items-center py-2 font-medium text-indigo-600 pl-4">
+                  <span className="text-sm">Subtotal Activo Fijo Bruto</span>
+                  <span className="text-right">${totalActivoFijoBruto.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-right">{totalActivos > 0 ? ((totalActivoFijoBruto / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
+                </div>
+              </div>
+
+              {/* Depreciación Acumulada */}
+              <div className="space-y-1 border-b border-slate-200 dark:border-slate-700 pb-2">
+                <div className="font-medium text-sm text-slate-600 dark:text-slate-400 py-2">Depreciación Acumulada</div>
+                {depreciacionAcumulada.map((cuenta) => {
+                  const saldo = obtenerSaldo(cuenta.codigo);
+                  const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : '0.00';
+                  
+                  return (
+                    <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300 pl-4">
+                      <span className="text-sm">{cuenta.codigo} - {cuenta.nombre}</span>
+                      <span className="text-right text-rose-600">({Math.abs(saldo).toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                      <span className="text-right text-rose-600">({Math.abs(parseFloat(percentage)).toFixed(2)}%)</span>
+                    </div>
+                  );
+                })}
+                <div className="grid grid-cols-3 gap-4 items-center py-2 font-medium text-rose-600 pl-4">
+                  <span className="text-sm">Subtotal Depreciación Acum.</span>
+                  <span className="text-right">({Math.abs(totalDepreciacionAcumulada).toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
+                  <span className="text-right">({Math.abs(totalActivos > 0 ? ((totalDepreciacionAcumulada / totalActivos) * 100) : 0).toFixed(2)}%)</span>
+                </div>
+              </div>
               
+              {/* Total Activo Fijo Neto */}
               <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold text-indigo-600 text-base">
-                <span>Total Activo Fijo</span>
-                <span className="text-right">${totalActivoFijo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalActivos > 0 ? ((totalActivoFijo / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
+                <span>= Activo Fijo Neto</span>
+                <span className="text-right">${totalActivoFijoNeto.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{totalActivos > 0 ? ((totalActivoFijoNeto / totalActivos) * 100).toFixed(2) : '0.00'}%</span>
               </div>
             </div>
           </CardContent>

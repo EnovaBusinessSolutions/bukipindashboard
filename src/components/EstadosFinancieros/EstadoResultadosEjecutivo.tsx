@@ -88,9 +88,12 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
   });
   
-  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => 
-    cuenta.subgrupo === "Gastos de Operación" && cuenta.estado_financiero === "Estado de Resultados"
-  );
+  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
+    const codigo = parseInt(cuenta.codigo);
+    return cuenta.subgrupo === "Gastos de Operación" && 
+           cuenta.estado_financiero === "Estado de Resultados" &&
+           codigo !== 5109 && codigo !== 5110; // Excluir depreciaciones
+  });
   
   const cuentasOtrosGastos = cuentasFlat.filter(cuenta => 
     cuenta.subgrupo === "Otros Gastos" && cuenta.estado_financiero === "Estado de Resultados"
