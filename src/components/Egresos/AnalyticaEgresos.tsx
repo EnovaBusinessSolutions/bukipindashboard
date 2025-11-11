@@ -453,15 +453,31 @@ const AnalyticaEgresos = () => {
       grouped[codigoCuenta].monto += monto;
     };
 
-    // 1. Procesar transacciones regulares (transacciones_egresos)
-    filteredTransactions.forEach(t => {
+    // 1. Costos de Venta (transacciones que ya están filtradas por tipoEgreso)
+    transaccionesPorTipo.costoVenta.forEach(t => {
       const codigoCuenta = t.cuenta_codigo;
       if (codigoCuenta) {
         agregarACuenta(codigoCuenta, t.monto_total);
       }
     });
 
-    // 2. Procesar costos de inventario (cuenta 5002)
+    // 2. Gastos (transacciones que ya están filtradas por tipoEgreso)
+    transaccionesPorTipo.gastos.forEach(t => {
+      const codigoCuenta = t.cuenta_codigo;
+      if (codigoCuenta) {
+        agregarACuenta(codigoCuenta, t.monto_total);
+      }
+    });
+
+    // 3. Otros Gastos (transacciones que ya están filtradas por tipoEgreso)
+    transaccionesPorTipo.otrosGastos.forEach(t => {
+      const codigoCuenta = t.cuenta_codigo;
+      if (codigoCuenta) {
+        agregarACuenta(codigoCuenta, t.monto_total);
+      }
+    });
+
+    // 4. Costos de inventario (cuenta 5002)
     transaccionesPorTipo.costosInventario.forEach(c => {
       agregarACuenta('5002', c.monto);
     });
@@ -682,6 +698,27 @@ const AnalyticaEgresos = () => {
 
   const datosEgresosPorProveedorMejorado = useMemo(() => egresosPorProveedorMejorado(), 
     [transaccionesPorTipo, formatoMontos]);
+
+  // Totales para mostrar en las gráficas
+  const totalEgresosPorTipo = useMemo(() => 
+    datosEgresosPorTipo.reduce((sum, item) => sum + item.monto, 0),
+    [datosEgresosPorTipo]
+  );
+
+  const totalMetodosPago = useMemo(() => 
+    datosEstadoPagos.reduce((sum, item) => sum + item.monto, 0),
+    [datosEstadoPagos]
+  );
+
+  const totalEgresosPorCuentaSubcuenta = useMemo(() => {
+    const datos = vistaAgrupacion === "cuenta" ? datosEgresosPorCuenta : datosEgresosPorSubcuenta;
+    return datos.reduce((sum, item) => sum + item.monto, 0);
+  }, [vistaAgrupacion, datosEgresosPorCuenta, datosEgresosPorSubcuenta]);
+
+  const totalEgresosPorMetodoPagoTreemap = useMemo(() => 
+    datosEgresosPorMetodoPago.reduce((sum, item) => sum + item.value, 0),
+    [datosEgresosPorMetodoPago]
+  );
 
   if (loading || loadingCostosVenta || loadingResumen || loadingGrafica || !resumenes) {
     return (
@@ -1276,8 +1313,15 @@ const AnalyticaEgresos = () => {
         {/* Egresos por Tipo */}
         <Card>
           <CardHeader>
-            <CardTitle>Egresos por Tipo</CardTitle>
-            <CardDescription>Distribución de costos y gastos</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Egresos por Tipo</CardTitle>
+                <CardDescription>Distribución de costos y gastos</CardDescription>
+              </div>
+              <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
+                Total: ${totalEgresosPorTipo.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {datosEgresosPorTipo.length === 0 ? (
@@ -1348,8 +1392,15 @@ const AnalyticaEgresos = () => {
         {/* Métodos de Pago Utilizados */}
         <Card>
           <CardHeader>
-            <CardTitle>Métodos de Pago Utilizados</CardTitle>
-            <CardDescription>Desglose de egresos por forma de pago</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Métodos de Pago Utilizados</CardTitle>
+                <CardDescription>Desglose de egresos por forma de pago</CardDescription>
+              </div>
+              <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
+                Total: ${totalMetodosPago.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {datosEstadoPagos.length === 0 ? (
@@ -1418,15 +1469,20 @@ const AnalyticaEgresos = () => {
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3">
-              <div>
-                <CardTitle>
-                  {vistaAgrupacion === "cuenta" ? "Egresos por Cuenta" : "Egresos por Subcuenta"}
-                </CardTitle>
-                <CardDescription>
-                  {vistaAgrupacion === "cuenta" 
-                    ? "Agrupación por cuenta contable completa" 
-                    : "Desglose detallado por subcuentas"}
-                </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>
+                    {vistaAgrupacion === "cuenta" ? "Egresos por Cuenta" : "Egresos por Subcuenta"}
+                  </CardTitle>
+                  <CardDescription>
+                    {vistaAgrupacion === "cuenta" 
+                      ? "Agrupación por cuenta contable completa" 
+                      : "Desglose detallado por subcuentas"}
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
+                  Total: ${totalEgresosPorCuentaSubcuenta.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                </Badge>
               </div>
               
               {/* Filtro LOCAL solo para este gráfico */}
@@ -1493,8 +1549,15 @@ const AnalyticaEgresos = () => {
         {/* Métodos de Pago */}
         <Card>
           <CardHeader>
-            <CardTitle>Métodos de Pago</CardTitle>
-            <CardDescription>Distribución de pagos realizados</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Métodos de Pago</CardTitle>
+                <CardDescription>Distribución de pagos realizados</CardDescription>
+              </div>
+              <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
+                Total: ${totalEgresosPorMetodoPagoTreemap.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {datosEgresosPorMetodoPago.length === 0 ? (
