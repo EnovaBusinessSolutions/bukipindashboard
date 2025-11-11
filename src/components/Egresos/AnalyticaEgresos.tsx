@@ -114,24 +114,23 @@ const AnalyticaEgresos = () => {
 
   // Función para filtrar transacciones según el período
   const getFilteredTransactions = () => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-
     if (periodFilter === "diario") {
-      const todayStr = today.toISOString().split('T')[0];
+      const fechaStr = fechaAnalisisDiario.toISOString().split('T')[0];
       return transaccionesFiltradas.filter(t => 
-        new Date(t.created_at).toISOString().split('T')[0] === todayStr
+        new Date(t.created_at).toISOString().split('T')[0] === fechaStr
       );
     } else if (periodFilter === "mensual") {
+      const mes = fechaAnalisisMensual.getMonth();
+      const ano = fechaAnalisisMensual.getFullYear();
       return transaccionesFiltradas.filter(t => {
         const tDate = new Date(t.created_at);
-        return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+        return tDate.getMonth() === mes && tDate.getFullYear() === ano;
       });
     } else {
+      const ano = new Date().getFullYear();
       return transaccionesFiltradas.filter(t => {
         const tDate = new Date(t.created_at);
-        return tDate.getFullYear() === currentYear;
+        return tDate.getFullYear() === ano;
       });
     }
   };
@@ -140,24 +139,23 @@ const AnalyticaEgresos = () => {
 
   // Función para filtrar transacciones SIN impuestos según el período
   const getFilteredTransactionsSinImpuestos = () => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-
     if (periodFilter === "diario") {
-      const todayStr = today.toISOString().split('T')[0];
+      const fechaStr = fechaAnalisisDiario.toISOString().split('T')[0];
       return transaccionesSinImpuestos.filter(t => 
-        new Date(t.created_at).toISOString().split('T')[0] === todayStr
+        new Date(t.created_at).toISOString().split('T')[0] === fechaStr
       );
     } else if (periodFilter === "mensual") {
+      const mes = fechaAnalisisMensual.getMonth();
+      const ano = fechaAnalisisMensual.getFullYear();
       return transaccionesSinImpuestos.filter(t => {
         const tDate = new Date(t.created_at);
-        return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+        return tDate.getMonth() === mes && tDate.getFullYear() === ano;
       });
     } else {
+      const ano = new Date().getFullYear();
       return transaccionesSinImpuestos.filter(t => {
         const tDate = new Date(t.created_at);
-        return tDate.getFullYear() === currentYear;
+        return tDate.getFullYear() === ano;
       });
     }
   };
@@ -168,24 +166,23 @@ const AnalyticaEgresos = () => {
   const getFilteredCostosInventario = () => {
     if (!costosVentaInventario) return [];
     
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-
     if (periodFilter === "diario") {
-      const todayStr = today.toISOString().split('T')[0];
+      const fechaStr = fechaAnalisisDiario.toISOString().split('T')[0];
       return costosVentaInventario.filter(c => 
-        new Date(c.fecha).toISOString().split('T')[0] === todayStr
+        new Date(c.fecha).toISOString().split('T')[0] === fechaStr
       );
     } else if (periodFilter === "mensual") {
+      const mes = fechaAnalisisMensual.getMonth();
+      const ano = fechaAnalisisMensual.getFullYear();
       return costosVentaInventario.filter(c => {
         const cDate = new Date(c.fecha);
-        return cDate.getMonth() === currentMonth && cDate.getFullYear() === currentYear;
+        return cDate.getMonth() === mes && cDate.getFullYear() === ano;
       });
     } else {
+      const ano = new Date().getFullYear();
       return costosVentaInventario.filter(c => {
         const cDate = new Date(c.fecha);
-        return cDate.getFullYear() === currentYear;
+        return cDate.getFullYear() === ano;
       });
     }
   };
