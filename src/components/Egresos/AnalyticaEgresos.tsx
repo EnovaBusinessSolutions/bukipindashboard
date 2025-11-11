@@ -197,60 +197,82 @@ const AnalyticaEgresos = () => {
 
   // Función para obtener transacciones según el tipo de egreso seleccionado
   const getTransactionsByTipo = () => {
+    // Separar transacciones por tipo de cuenta
+    const costoVenta52XX = filteredTransactions.filter(t => 
+      t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204'
+    );
+    const gastos51XX = filteredTransactions.filter(t => 
+      t.cuenta_codigo?.startsWith('51') && 
+      t.cuenta_codigo !== '5109' && 
+      t.cuenta_codigo !== '5110'
+    );
+    const otrosGastos5204 = filteredTransactions.filter(t => 
+      t.cuenta_codigo === '5204'
+    );
+    
+    // Lo mismo para sinImpuestos
+    const costoVenta52XXSinImp = filteredTransactionsSinImpuestos.filter(t => 
+      t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204'
+    );
+    const gastos51XXSinImp = filteredTransactionsSinImpuestos.filter(t => 
+      t.cuenta_codigo?.startsWith('51') && 
+      t.cuenta_codigo !== '5109' && 
+      t.cuenta_codigo !== '5110'
+    );
+    const otrosGastos5204SinImp = filteredTransactionsSinImpuestos.filter(t => 
+      t.cuenta_codigo === '5204'
+    );
+
     if (tipoEgreso === "costo_inventario") {
-      // Solo costos de inventario (50XX)
       return { 
-        gastosOperativos: [], 
+        costoVenta: [],
+        gastos: [],
+        otrosGastos: [],
         costosInventario: filteredCostosInventario,
-        sinImpuestos: []
+        sinImpuestosCostoVenta: [],
+        sinImpuestosGastos: [],
+        sinImpuestosOtrosGastos: []
       };
     } else if (tipoEgreso === "gasto") {
-      // Solo gastos operativos 51XX (excluir 5109, 5110)
-      const gastos = filteredTransactions.filter(t => 
-        t.cuenta_codigo?.startsWith('51') && 
-        t.cuenta_codigo !== '5109' && 
-        t.cuenta_codigo !== '5110'
-      );
-      const gastosSinImpuestos = filteredTransactionsSinImpuestos.filter(t => 
-        t.cuenta_codigo?.startsWith('51') && 
-        t.cuenta_codigo !== '5109' && 
-        t.cuenta_codigo !== '5110'
-      );
       return { 
-        gastosOperativos: gastos, 
-        costosInventario: [], 
-        sinImpuestos: gastosSinImpuestos 
+        costoVenta: [],
+        gastos: gastos51XX,
+        otrosGastos: [],
+        costosInventario: [],
+        sinImpuestosCostoVenta: [],
+        sinImpuestosGastos: gastos51XXSinImp,
+        sinImpuestosOtrosGastos: []
       };
     } else if (tipoEgreso === "otros_gastos") {
-      // Solo otros gastos (5204)
-      const otros = filteredTransactions.filter(t => t.cuenta_codigo === '5204');
-      const otrosSinImpuestos = filteredTransactionsSinImpuestos.filter(t => t.cuenta_codigo === '5204');
       return { 
-        gastosOperativos: otros, 
-        costosInventario: [], 
-        sinImpuestos: otrosSinImpuestos 
+        costoVenta: [],
+        gastos: [],
+        otrosGastos: otrosGastos5204,
+        costosInventario: [],
+        sinImpuestosCostoVenta: [],
+        sinImpuestosGastos: [],
+        sinImpuestosOtrosGastos: otrosGastos5204SinImp
       };
     } else if (tipoEgreso === "costo") {
-      // Solo costos operativos 52XX (excluir 5204)
-      const costos = filteredTransactions.filter(t => 
-        t.cuenta_codigo?.startsWith('52') && 
-        t.cuenta_codigo !== '5204'
-      );
-      const costosSinImpuestos = filteredTransactionsSinImpuestos.filter(t => 
-        t.cuenta_codigo?.startsWith('52') && 
-        t.cuenta_codigo !== '5204'
-      );
       return { 
-        gastosOperativos: costos, 
-        costosInventario: [], 
-        sinImpuestos: costosSinImpuestos 
+        costoVenta: costoVenta52XX,
+        gastos: [],
+        otrosGastos: [],
+        costosInventario: [],
+        sinImpuestosCostoVenta: costoVenta52XXSinImp,
+        sinImpuestosGastos: [],
+        sinImpuestosOtrosGastos: []
       };
     } else {
-      // "total" o "combinada" - TODO
+      // "total" o "combinada" - TODO separado en 4 categorías
       return { 
-        gastosOperativos: filteredTransactions, 
+        costoVenta: costoVenta52XX,
+        gastos: gastos51XX,
+        otrosGastos: otrosGastos5204,
         costosInventario: filteredCostosInventario,
-        sinImpuestos: filteredTransactionsSinImpuestos
+        sinImpuestosCostoVenta: costoVenta52XXSinImp,
+        sinImpuestosGastos: gastos51XXSinImp,
+        sinImpuestosOtrosGastos: otrosGastos5204SinImp
       };
     }
   };
@@ -305,16 +327,28 @@ const AnalyticaEgresos = () => {
   const egresosPorTipo = () => {
     const data: { tipo: string; monto: number }[] = [];
     
-    // Costos de inventario (50XX)
-    const totalCostos = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
-    if (totalCostos > 0) {
-      data.push({ tipo: 'Costos de Venta', monto: formatearMonto(totalCostos) });
+    // 1. Costos de Venta (52XX excepto 5204)
+    const totalCostoVenta = transaccionesPorTipo.costoVenta.reduce((sum, t) => sum + t.monto_total, 0);
+    if (totalCostoVenta > 0) {
+      data.push({ tipo: 'Costo de Venta', monto: formatearMonto(totalCostoVenta) });
     }
     
-    // Gastos operativos (51XX, 52XX)
-    const totalGastos = transaccionesPorTipo.gastosOperativos.reduce((sum, t) => sum + t.monto_total, 0);
+    // 2. Costos de inventario (50XX)
+    const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
+    if (totalCostosInventario > 0) {
+      data.push({ tipo: 'Costo Venta Inventario', monto: formatearMonto(totalCostosInventario) });
+    }
+    
+    // 3. Gastos (51XX excepto 5109, 5110)
+    const totalGastos = transaccionesPorTipo.gastos.reduce((sum, t) => sum + t.monto_total, 0);
     if (totalGastos > 0) {
       data.push({ tipo: 'Gastos', monto: formatearMonto(totalGastos) });
+    }
+    
+    // 4. Otros Gastos (5204)
+    const totalOtrosGastos = transaccionesPorTipo.otrosGastos.reduce((sum, t) => sum + t.monto_total, 0);
+    if (totalOtrosGastos > 0) {
+      data.push({ tipo: 'Otros Gastos', monto: formatearMonto(totalOtrosGastos) });
     }
     
     return data;
@@ -327,7 +361,14 @@ const AnalyticaEgresos = () => {
   const estadoPagos = () => {
     const grouped: Record<string, number> = {};
     
-    transaccionesPorTipo.sinImpuestos
+    // Combinar todos los arrays con montos pagados
+    const todasTransacciones = [
+      ...transaccionesPorTipo.sinImpuestosCostoVenta,
+      ...transaccionesPorTipo.sinImpuestosGastos,
+      ...transaccionesPorTipo.sinImpuestosOtrosGastos
+    ];
+    
+    todasTransacciones
       .filter(t => t.monto_pagado > 0)
       .forEach(t => {
         const metodo = t.metodo_pago || 'Sin método especificado';
@@ -349,7 +390,14 @@ const AnalyticaEgresos = () => {
 
   // Todos los proveedores (SOLO gastos operativos)
   const topProveedores = () => {
-    const grouped = transaccionesPorTipo.gastosOperativos.reduce((acc, t) => {
+    // Combinar costos de venta, gastos y otros gastos
+    const todasTransacciones = [
+      ...transaccionesPorTipo.costoVenta,
+      ...transaccionesPorTipo.gastos,
+      ...transaccionesPorTipo.otrosGastos
+    ];
+    
+    const grouped = todasTransacciones.reduce((acc, t) => {
       const proveedor = t.proveedor_nombre || 'Sin proveedor';
       if (!acc[proveedor]) {
         acc[proveedor] = 0;
@@ -370,14 +418,14 @@ const AnalyticaEgresos = () => {
   const egresosPorSubcuenta = () => {
     const grouped: Record<string, number> = {};
 
-    // Gastos operativos (51XX, 52XX)
-    transaccionesPorTipo.gastosOperativos.forEach(t => {
-      let subcuentaNombre = 'Sin subcuenta asignada';
+    // 1. Costos de Venta (52XX)
+    transaccionesPorTipo.costoVenta.forEach(t => {
+      let subcuentaNombre = 'Costos de Venta - Sin subcuenta';
       
       if (t.subcuenta_id) {
         const subcuenta = subcuentas?.find(s => s.id === t.subcuenta_id);
         if (subcuenta) {
-          subcuentaNombre = subcuenta.nombre;
+          subcuentaNombre = `Costo Venta - ${subcuenta.nombre}`;
         }
       }
       
@@ -387,10 +435,44 @@ const AnalyticaEgresos = () => {
       grouped[subcuentaNombre] += t.monto_total;
     });
 
-    // Costos de inventario (50XX)
+    // 2. Gastos (51XX)
+    transaccionesPorTipo.gastos.forEach(t => {
+      let subcuentaNombre = 'Gastos - Sin subcuenta';
+      
+      if (t.subcuenta_id) {
+        const subcuenta = subcuentas?.find(s => s.id === t.subcuenta_id);
+        if (subcuenta) {
+          subcuentaNombre = `Gastos - ${subcuenta.nombre}`;
+        }
+      }
+      
+      if (!grouped[subcuentaNombre]) {
+        grouped[subcuentaNombre] = 0;
+      }
+      grouped[subcuentaNombre] += t.monto_total;
+    });
+
+    // 3. Otros Gastos (5204)
+    transaccionesPorTipo.otrosGastos.forEach(t => {
+      let subcuentaNombre = 'Otros Gastos - Sin subcuenta';
+      
+      if (t.subcuenta_id) {
+        const subcuenta = subcuentas?.find(s => s.id === t.subcuenta_id);
+        if (subcuenta) {
+          subcuentaNombre = `Otros Gastos - ${subcuenta.nombre}`;
+        }
+      }
+      
+      if (!grouped[subcuentaNombre]) {
+        grouped[subcuentaNombre] = 0;
+      }
+      grouped[subcuentaNombre] += t.monto_total;
+    });
+
+    // 4. Costos de inventario (50XX)
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
-      grouped['Costos de Venta (Inventario)'] = totalCostosInventario;
+      grouped['Costo Venta Inventario'] = totalCostosInventario;
     }
 
     return Object.entries(grouped)
@@ -404,11 +486,18 @@ const AnalyticaEgresos = () => {
 
   // Egresos por Método de Pago
   const egresosPorMetodoPago = () => {
-    const efectivo = transaccionesPorTipo.sinImpuestos
+    // Combinar todos los arrays con montos pagados
+    const todasTransacciones = [
+      ...transaccionesPorTipo.sinImpuestosCostoVenta,
+      ...transaccionesPorTipo.sinImpuestosGastos,
+      ...transaccionesPorTipo.sinImpuestosOtrosGastos
+    ];
+    
+    const efectivo = todasTransacciones
       .filter(t => t.metodo_pago === 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
     
-    const bancosTarjeta = transaccionesPorTipo.sinImpuestos
+    const bancosTarjeta = todasTransacciones
       .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
 
@@ -429,34 +518,71 @@ const AnalyticaEgresos = () => {
       monto: number;
       transacciones: number;
       tieneAsignacion: boolean;
+      categoria: string;
     }> = {};
 
-    // Gastos operativos (51XX, 52XX)
-    transaccionesPorTipo.gastosOperativos.forEach(t => {
-      const key = t.descripcion || 'Sin descripción';
+    // 1. Costos de Venta (52XX)
+    transaccionesPorTipo.costoVenta.forEach(t => {
+      const key = `CV-${t.descripcion || 'Sin descripción'}`;
       if (!grouped[key]) {
         grouped[key] = {
-          nombre: key,
+          nombre: t.descripcion || 'Sin descripción',
           imagen: t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
-          tieneAsignacion: true
+          tieneAsignacion: true,
+          categoria: 'Costo Venta'
         };
       }
       grouped[key].monto += t.monto_total;
       grouped[key].transacciones += 1;
     });
 
-    // Costos de inventario (50XX)
-    transaccionesPorTipo.costosInventario.forEach(c => {
-      const key = c.producto_nombre || 'Sin asignación';
+    // 2. Gastos (51XX)
+    transaccionesPorTipo.gastos.forEach(t => {
+      const key = `G-${t.descripcion || 'Sin descripción'}`;
       if (!grouped[key]) {
         grouped[key] = {
-          nombre: key,
+          nombre: t.descripcion || 'Sin descripción',
+          imagen: t.imagen_comprobante || null,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion: true,
+          categoria: 'Gastos'
+        };
+      }
+      grouped[key].monto += t.monto_total;
+      grouped[key].transacciones += 1;
+    });
+
+    // 3. Otros Gastos (5204)
+    transaccionesPorTipo.otrosGastos.forEach(t => {
+      const key = `OG-${t.descripcion || 'Sin descripción'}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          nombre: t.descripcion || 'Sin descripción',
+          imagen: t.imagen_comprobante || null,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion: true,
+          categoria: 'Otros Gastos'
+        };
+      }
+      grouped[key].monto += t.monto_total;
+      grouped[key].transacciones += 1;
+    });
+
+    // 4. Costos de inventario (50XX)
+    transaccionesPorTipo.costosInventario.forEach(c => {
+      const key = `CI-${c.producto_nombre || 'Sin asignación'}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          nombre: c.producto_nombre || 'Sin asignación',
           imagen: c.producto_imagen || null,
           monto: 0,
           transacciones: 0,
-          tieneAsignacion: !!c.producto_nombre
+          tieneAsignacion: !!c.producto_nombre,
+          categoria: 'Costo Venta Inventario'
         };
       }
       grouped[key].monto += c.monto;
@@ -483,8 +609,8 @@ const AnalyticaEgresos = () => {
       tieneAsignacion: boolean;
     }> = {};
 
-    // Gastos operativos (51XX, 52XX)
-    transaccionesPorTipo.gastosOperativos.forEach(t => {
+    // 1. Costos de Venta (52XX)
+    transaccionesPorTipo.costoVenta.forEach(t => {
       const proveedorNombre = t.proveedor_nombre || 'Sin proveedor asignado';
       const tieneAsignacion = !!t.proveedor_nombre;
       
@@ -500,7 +626,41 @@ const AnalyticaEgresos = () => {
       grouped[proveedorNombre].transacciones += 1;
     });
 
-    // Costos de inventario sin proveedor
+    // 2. Gastos (51XX)
+    transaccionesPorTipo.gastos.forEach(t => {
+      const proveedorNombre = t.proveedor_nombre || 'Sin proveedor asignado';
+      const tieneAsignacion = !!t.proveedor_nombre;
+      
+      if (!grouped[proveedorNombre]) {
+        grouped[proveedorNombre] = {
+          nombre: proveedorNombre,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion
+        };
+      }
+      grouped[proveedorNombre].monto += t.monto_total;
+      grouped[proveedorNombre].transacciones += 1;
+    });
+
+    // 3. Otros Gastos (5204)
+    transaccionesPorTipo.otrosGastos.forEach(t => {
+      const proveedorNombre = t.proveedor_nombre || 'Sin proveedor asignado';
+      const tieneAsignacion = !!t.proveedor_nombre;
+      
+      if (!grouped[proveedorNombre]) {
+        grouped[proveedorNombre] = {
+          nombre: proveedorNombre,
+          monto: 0,
+          transacciones: 0,
+          tieneAsignacion
+        };
+      }
+      grouped[proveedorNombre].monto += t.monto_total;
+      grouped[proveedorNombre].transacciones += 1;
+    });
+
+    // 4. Costos de inventario sin proveedor
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
       if (!grouped['Sin proveedor asignado']) {
