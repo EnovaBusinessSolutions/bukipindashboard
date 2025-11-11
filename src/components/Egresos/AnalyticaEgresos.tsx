@@ -77,17 +77,27 @@ const CustomTreemapContent = (props: any) => {
 
 
 const AnalyticaEgresos = () => {
-  const { transacciones, loading } = useTransaccionesEgresos(1000);
-  const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
-  const { data: resumenes, isLoading: loadingResumen } = useResumenEgresosPorPeriodo();
-  const { data: subcuentas } = useSubcuentas();
-  const { data: productosEgresos } = useProductosEgresos();
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada">("total");
   const [vistaTotal, setVistaTotal] = useState<"unica" | "desglosada">("unica");
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
+  
+  const { data: transacciones = [], isLoading: loading } = useTransaccionesEgresos(
+    1000, 
+    periodFilter, 
+    fechaAnalisisDiario, 
+    fechaAnalisisMensual
+  );
+  const { data: costosVentaInventario = [], isLoading: loadingCostosVenta } = useCostosVentaInventario(
+    periodFilter,
+    fechaAnalisisDiario,
+    fechaAnalisisMensual
+  );
+  const { data: resumenes, isLoading: loadingResumen } = useResumenEgresosPorPeriodo();
+  const { data: subcuentas } = useSubcuentas();
+  const { data: productosEgresos } = useProductosEgresos();
   
   // Usar el nuevo hook para datos de la gráfica
   const { data: datosGrafica, isLoading: loadingGrafica } = useEgresosPorPeriodo(
@@ -98,106 +108,27 @@ const AnalyticaEgresos = () => {
   );
 
   // Filtrar SOLO gastos operativos (51XX, 52XX) - EXCLUIR costos 5001
-  const transaccionesFiltradas = transacciones.filter(
-    (t) => t.cuenta_codigo && (
-      (t.cuenta_codigo.startsWith('51') && 
-       t.cuenta_codigo !== '5109' && 
-       t.cuenta_codigo !== '5110') || 
-      t.cuenta_codigo === '5204' // Solo Otros Gastos, NO 5202/5203
-    )
+  const filteredTransactions = useMemo(() => 
+    transacciones.filter(
+      (t) => t.cuenta_codigo && (
+        (t.cuenta_codigo.startsWith('51') && 
+         t.cuenta_codigo !== '5109' && 
+         t.cuenta_codigo !== '5110') || 
+        t.cuenta_codigo === '5204' // Solo Otros Gastos, NO 5202/5203
+      )
+    ), [transacciones]
   );
 
   // Filtrar todas las transacciones EXCLUYENDO ISR/impuestos (cuenta 6001)
-  const transaccionesSinImpuestos = transacciones.filter(
-    (t) => t.cuenta_codigo !== '6001' && t.tipo_egreso !== 'impuesto'
+  const filteredTransactionsSinImpuestos = useMemo(() => 
+    transacciones.filter(
+      (t) => t.cuenta_codigo !== '6001' && t.tipo_egreso !== 'impuesto'
+    ), [transacciones]
   );
 
-  // Función para filtrar transacciones según el período
-  const getFilteredTransactions = () => {
-    if (periodFilter === "diario") {
-      const fechaStr = fechaAnalisisDiario.toISOString().split('T')[0];
-      return transaccionesFiltradas.filter(t => 
-        new Date(t.created_at).toISOString().split('T')[0] === fechaStr
-      );
-    } else if (periodFilter === "mensual") {
-      const mes = fechaAnalisisMensual.getMonth();
-      const ano = fechaAnalisisMensual.getFullYear();
-      return transaccionesFiltradas.filter(t => {
-        const tDate = new Date(t.created_at);
-        return tDate.getMonth() === mes && tDate.getFullYear() === ano;
-      });
-    } else {
-      const ano = new Date().getFullYear();
-      return transaccionesFiltradas.filter(t => {
-        const tDate = new Date(t.created_at);
-        return tDate.getFullYear() === ano;
-      });
-    }
-  };
-
-  const filteredTransactions = useMemo(() => {
-    return getFilteredTransactions();
-  }, [transaccionesFiltradas, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
-
-  // Función para filtrar transacciones SIN impuestos según el período
-  const getFilteredTransactionsSinImpuestos = () => {
-    if (periodFilter === "diario") {
-      const fechaStr = fechaAnalisisDiario.toISOString().split('T')[0];
-      return transaccionesSinImpuestos.filter(t => 
-        new Date(t.created_at).toISOString().split('T')[0] === fechaStr
-      );
-    } else if (periodFilter === "mensual") {
-      const mes = fechaAnalisisMensual.getMonth();
-      const ano = fechaAnalisisMensual.getFullYear();
-      return transaccionesSinImpuestos.filter(t => {
-        const tDate = new Date(t.created_at);
-        return tDate.getMonth() === mes && tDate.getFullYear() === ano;
-      });
-    } else {
-      const ano = new Date().getFullYear();
-      return transaccionesSinImpuestos.filter(t => {
-        const tDate = new Date(t.created_at);
-        return tDate.getFullYear() === ano;
-      });
-    }
-  };
-
-  const filteredTransactionsSinImpuestos = useMemo(() => {
-    return getFilteredTransactionsSinImpuestos();
-  }, [transaccionesSinImpuestos, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
-
-  // Filtrar costos de venta de inventario según período
-  const getFilteredCostosInventario = () => {
-    if (!costosVentaInventario) return [];
-    
-    if (periodFilter === "diario") {
-      const fechaStr = fechaAnalisisDiario.toISOString().split('T')[0];
-      return costosVentaInventario.filter(c => 
-        new Date(c.fecha).toISOString().split('T')[0] === fechaStr
-      );
-    } else if (periodFilter === "mensual") {
-      const mes = fechaAnalisisMensual.getMonth();
-      const ano = fechaAnalisisMensual.getFullYear();
-      return costosVentaInventario.filter(c => {
-        const cDate = new Date(c.fecha);
-        return cDate.getMonth() === mes && cDate.getFullYear() === ano;
-      });
-    } else {
-      const ano = new Date().getFullYear();
-      return costosVentaInventario.filter(c => {
-        const cDate = new Date(c.fecha);
-        return cDate.getFullYear() === ano;
-      });
-    }
-  };
-
-  const filteredCostosInventario = useMemo(() => {
-    return getFilteredCostosInventario();
-  }, [costosVentaInventario, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
-
   // Función para obtener transacciones según el tipo de egreso seleccionado
-  const getTransactionsByTipo = () => {
-    // Separar transacciones por tipo de cuenta
+  const transaccionesPorTipo = useMemo(() => {
+    // Separar transacciones por tipo de cuenta (ya filtradas desde el backend)
     const costoVenta52XX = filteredTransactions.filter(t => 
       t.cuenta_codigo?.startsWith('52') && t.cuenta_codigo !== '5204'
     );
@@ -228,7 +159,7 @@ const AnalyticaEgresos = () => {
         costoVenta: [],
         gastos: [],
         otrosGastos: [],
-        costosInventario: filteredCostosInventario,
+        costosInventario: costosVentaInventario,
         sinImpuestosCostoVenta: [],
         sinImpuestosGastos: [],
         sinImpuestosOtrosGastos: []
@@ -269,17 +200,13 @@ const AnalyticaEgresos = () => {
         costoVenta: costoVenta52XX,
         gastos: gastos51XX,
         otrosGastos: otrosGastos5204,
-        costosInventario: filteredCostosInventario,
+        costosInventario: costosVentaInventario,
         sinImpuestosCostoVenta: costoVenta52XXSinImp,
         sinImpuestosGastos: gastos51XXSinImp,
         sinImpuestosOtrosGastos: otrosGastos5204SinImp
       };
     }
-  };
-
-  const transaccionesPorTipo = useMemo(() => {
-    return getTransactionsByTipo();
-  }, [filteredTransactions, filteredTransactionsSinImpuestos, filteredCostosInventario, tipoEgreso]);
+  }, [filteredTransactions, filteredTransactionsSinImpuestos, costosVentaInventario, tipoEgreso]);
 
   // Función helper para calcular porcentajes de forma segura
   const calcularPorcentaje = (monto: number, total: number): string => {

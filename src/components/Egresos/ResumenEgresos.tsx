@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ResumenEgresos = () => {
-  const { transacciones, loading } = useTransaccionesEgresos(200);
+  const { data: transacciones = [], isLoading: loading } = useTransaccionesEgresos(200);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
   const { data: cuentasData } = useCuentas();
   const { toast } = useToast();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TransaccionEgreso {
@@ -23,56 +23,45 @@ interface TransaccionEgreso {
   subcuenta_id: string | null;
 }
 
-export const useTransaccionesEgresos = (limit: number = 10) => {
-  const [transacciones, setTransacciones] = useState<TransaccionEgreso[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchTransacciones = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabase
+export const useTransaccionesEgresos = (
+  limit: number = 1000,
+  periodFilter?: "diario" | "mensual" | "anual",
+  fechaDiaria?: Date,
+  fechaMensual?: Date
+) => {
+  return useQuery({
+    queryKey: ['transacciones-egresos', limit, periodFilter, fechaDiaria, fechaMensual],
+    queryFn: async () => {
+      let query = supabase
         .from('transacciones_egresos')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+        .order('created_at', { ascending: false });
 
-      if (fetchError) throw fetchError;
+      // Aplicar filtros de fecha según período
+      if (periodFilter === "diario" && fechaDiaria) {
+        const fechaStr = fechaDiaria.toISOString().split('T')[0];
+        query = query.gte('created_at', `${fechaStr}T00:00:00`)
+                     .lte('created_at', `${fechaStr}T23:59:59`);
+      } else if (periodFilter === "mensual" && fechaMensual) {
+        const year = fechaMensual.getFullYear();
+        const month = fechaMensual.getMonth();
+        const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+        const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        query = query.gte('created_at', `${firstDay}T00:00:00`)
+                     .lte('created_at', `${lastDay}T23:59:59`);
+      } else if (periodFilter === "anual") {
+        const year = new Date().getFullYear();
+        query = query.gte('created_at', `${year}-01-01T00:00:00`)
+                     .lte('created_at', `${year}-12-31T23:59:59`);
+      }
 
-      setTransacciones((data as any) || []);
-    } catch (err) {
-      console.error('Error fetching transacciones egresos:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
+      if (!periodFilter) {
+        query = query.limit(limit);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
     }
-  };
-
-  useEffect(() => {
-    fetchTransacciones();
-
-    // Configurar realtime para actualizaciones automáticas
-    const channel = supabase
-      .channel('transacciones-egresos-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transacciones_egresos'
-        },
-        () => {
-          fetchTransacciones();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [limit]);
-
-  return { transacciones, loading, error, refetch: fetchTransacciones };
+  });
 };

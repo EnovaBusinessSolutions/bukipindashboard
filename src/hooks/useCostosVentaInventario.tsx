@@ -25,12 +25,16 @@ interface CostoVentaInventario {
 // Función helper para redondear a 2 decimales
 const redondear = (num: number) => Math.round(num * 100) / 100;
 
-export const useCostosVentaInventario = () => {
+export const useCostosVentaInventario = (
+  periodFilter?: "diario" | "mensual" | "anual",
+  fechaDiaria?: Date,
+  fechaMensual?: Date
+) => {
   return useQuery({
-    queryKey: ["costos-venta-inventario"],
+    queryKey: ["costos-venta-inventario", periodFilter, fechaDiaria, fechaMensual],
     queryFn: async (): Promise<CostoVentaInventario[]> => {
       // Obtener todos los asientos que tienen movimientos en cuentas de costos (50XX)
-      const { data: asientos, error: asientosError } = await supabase
+      let query = supabase
         .from('asientos_contables')
         .select(`
           id,
@@ -47,6 +51,23 @@ export const useCostosVentaInventario = () => {
           )
         `)
         .order('fecha', { ascending: false });
+
+      // Aplicar filtros de fecha
+      if (periodFilter === "diario" && fechaDiaria) {
+        const fechaStr = fechaDiaria.toISOString().split('T')[0];
+        query = query.eq('fecha', fechaStr);
+      } else if (periodFilter === "mensual" && fechaMensual) {
+        const year = fechaMensual.getFullYear();
+        const month = fechaMensual.getMonth();
+        const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+        const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        query = query.gte('fecha', firstDay).lte('fecha', lastDay);
+      } else if (periodFilter === "anual") {
+        const year = new Date().getFullYear();
+        query = query.gte('fecha', `${year}-01-01`).lte('fecha', `${year}-12-31`);
+      }
+
+      const { data: asientos, error: asientosError } = await query;
 
       if (asientosError) {
         console.error('Error fetching costos venta:', asientosError);
