@@ -195,6 +195,70 @@ const AnalyticaEgresos = () => {
     return getFilteredCostosInventario();
   }, [costosVentaInventario, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
 
+  // Función para obtener transacciones según el tipo de egreso seleccionado
+  const getTransactionsByTipo = () => {
+    if (tipoEgreso === "costo_inventario") {
+      // Solo costos de inventario (50XX)
+      return { 
+        gastosOperativos: [], 
+        costosInventario: filteredCostosInventario,
+        sinImpuestos: []
+      };
+    } else if (tipoEgreso === "gasto") {
+      // Solo gastos operativos 51XX (excluir 5109, 5110)
+      const gastos = filteredTransactions.filter(t => 
+        t.cuenta_codigo?.startsWith('51') && 
+        t.cuenta_codigo !== '5109' && 
+        t.cuenta_codigo !== '5110'
+      );
+      const gastosSinImpuestos = filteredTransactionsSinImpuestos.filter(t => 
+        t.cuenta_codigo?.startsWith('51') && 
+        t.cuenta_codigo !== '5109' && 
+        t.cuenta_codigo !== '5110'
+      );
+      return { 
+        gastosOperativos: gastos, 
+        costosInventario: [], 
+        sinImpuestos: gastosSinImpuestos 
+      };
+    } else if (tipoEgreso === "otros_gastos") {
+      // Solo otros gastos (5204)
+      const otros = filteredTransactions.filter(t => t.cuenta_codigo === '5204');
+      const otrosSinImpuestos = filteredTransactionsSinImpuestos.filter(t => t.cuenta_codigo === '5204');
+      return { 
+        gastosOperativos: otros, 
+        costosInventario: [], 
+        sinImpuestos: otrosSinImpuestos 
+      };
+    } else if (tipoEgreso === "costo") {
+      // Solo costos operativos 52XX (excluir 5204)
+      const costos = filteredTransactions.filter(t => 
+        t.cuenta_codigo?.startsWith('52') && 
+        t.cuenta_codigo !== '5204'
+      );
+      const costosSinImpuestos = filteredTransactionsSinImpuestos.filter(t => 
+        t.cuenta_codigo?.startsWith('52') && 
+        t.cuenta_codigo !== '5204'
+      );
+      return { 
+        gastosOperativos: costos, 
+        costosInventario: [], 
+        sinImpuestos: costosSinImpuestos 
+      };
+    } else {
+      // "total" o "combinada" - TODO
+      return { 
+        gastosOperativos: filteredTransactions, 
+        costosInventario: filteredCostosInventario,
+        sinImpuestos: filteredTransactionsSinImpuestos
+      };
+    }
+  };
+
+  const transaccionesPorTipo = useMemo(() => {
+    return getTransactionsByTipo();
+  }, [filteredTransactions, filteredTransactionsSinImpuestos, filteredCostosInventario, tipoEgreso]);
+
   // Función helper para calcular porcentajes de forma segura
   const calcularPorcentaje = (monto: number, total: number): string => {
     if (total === 0) return '0.0';
@@ -241,27 +305,30 @@ const AnalyticaEgresos = () => {
   const egresosPorTipo = () => {
     const data: { tipo: string; monto: number }[] = [];
     
-    // SOLO costos de inventario (50XX) - fuente única
-    const totalCostos = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    // Costos de inventario (50XX)
+    const totalCostos = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostos > 0) {
-      data.push({ tipo: 'Costos de Venta', monto: totalCostos });
+      data.push({ tipo: 'Costos de Venta', monto: formatearMonto(totalCostos) });
     }
     
-    // SOLO gastos operativos (51XX, 52XX)
-    const totalGastos = filteredTransactions.reduce((sum, t) => sum + t.monto_total, 0);
+    // Gastos operativos (51XX, 52XX)
+    const totalGastos = transaccionesPorTipo.gastosOperativos.reduce((sum, t) => sum + t.monto_total, 0);
     if (totalGastos > 0) {
-      data.push({ tipo: 'Gastos', monto: totalGastos });
+      data.push({ tipo: 'Gastos', monto: formatearMonto(totalGastos) });
     }
     
     return data;
   };
 
+  const datosEgresosPorTipo = useMemo(() => egresosPorTipo(), 
+    [transaccionesPorTipo, formatoMontos]);
+
   // Métodos de pago utilizados
   const estadoPagos = () => {
     const grouped: Record<string, number> = {};
     
-    filteredTransactionsSinImpuestos
-      .filter(t => t.monto_pagado > 0) // Solo los que tienen pago
+    transaccionesPorTipo.sinImpuestos
+      .filter(t => t.monto_pagado > 0)
       .forEach(t => {
         const metodo = t.metodo_pago || 'Sin método especificado';
         const metodoCap = metodo.charAt(0).toUpperCase() + metodo.slice(1);
@@ -273,13 +340,16 @@ const AnalyticaEgresos = () => {
       });
 
     return Object.entries(grouped)
-      .map(([estado, monto]) => ({ estado, monto }))
+      .map(([estado, monto]) => ({ estado, monto: formatearMonto(monto) }))
       .sort((a, b) => b.monto - a.monto);
   };
 
+  const datosEstadoPagos = useMemo(() => estadoPagos(), 
+    [transaccionesPorTipo, formatoMontos]);
+
   // Todos los proveedores (SOLO gastos operativos)
   const topProveedores = () => {
-    const grouped = filteredTransactions.reduce((acc, t) => {
+    const grouped = transaccionesPorTipo.gastosOperativos.reduce((acc, t) => {
       const proveedor = t.proveedor_nombre || 'Sin proveedor';
       if (!acc[proveedor]) {
         acc[proveedor] = 0;
@@ -288,22 +358,22 @@ const AnalyticaEgresos = () => {
       return acc;
     }, {} as Record<string, number>);
 
-    // Los costos de inventario NO se suman aquí porque no tienen proveedor asociado
-
     return Object.entries(grouped)
-      .map(([proveedor, monto]) => ({ proveedor, monto }))
+      .map(([proveedor, monto]) => ({ proveedor, monto: formatearMonto(monto) }))
       .sort((a, b) => b.monto - a.monto);
   };
+
+  const datosTopProveedores = useMemo(() => topProveedores(), 
+    [transaccionesPorTipo, formatoMontos]);
 
   // Egresos por Subcuenta
   const egresosPorSubcuenta = () => {
     const grouped: Record<string, number> = {};
 
-    // Procesar SOLO gastos operativos (51XX, 52XX)
-    filteredTransactions.forEach(t => {
+    // Gastos operativos (51XX, 52XX)
+    transaccionesPorTipo.gastosOperativos.forEach(t => {
       let subcuentaNombre = 'Sin subcuenta asignada';
       
-      // Buscar nombre de subcuenta si existe
       if (t.subcuenta_id) {
         const subcuenta = subcuentas?.find(s => s.id === t.subcuenta_id);
         if (subcuenta) {
@@ -317,33 +387,39 @@ const AnalyticaEgresos = () => {
       grouped[subcuentaNombre] += t.monto_total;
     });
 
-    // Agregar costos de inventario (50XX) por separado
-    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    // Costos de inventario (50XX)
+    const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
       grouped['Costos de Venta (Inventario)'] = totalCostosInventario;
     }
 
     return Object.entries(grouped)
-      .map(([subcuenta, monto]) => ({ subcuenta, monto }))
+      .map(([subcuenta, monto]) => ({ subcuenta, monto: formatearMonto(monto) }))
       .sort((a, b) => b.monto - a.monto)
       .slice(0, 10);
   };
 
+  const datosEgresosPorSubcuenta = useMemo(() => egresosPorSubcuenta(), 
+    [transaccionesPorTipo, subcuentas, formatoMontos]);
+
   // Egresos por Método de Pago
   const egresosPorMetodoPago = () => {
-    const efectivo = filteredTransactionsSinImpuestos
+    const efectivo = transaccionesPorTipo.sinImpuestos
       .filter(t => t.metodo_pago === 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
     
-    const bancosTarjeta = filteredTransactionsSinImpuestos
+    const bancosTarjeta = transaccionesPorTipo.sinImpuestos
       .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
 
     return [
-      { name: 'Efectivo', value: efectivo, fill: 'hsl(160, 55%, 50%)' },
-      { name: 'Bancos/Tarjeta', value: bancosTarjeta, fill: 'hsl(200, 55%, 55%)' }
+      { name: 'Efectivo', value: formatearMonto(efectivo), fill: 'hsl(160, 55%, 50%)' },
+      { name: 'Bancos/Tarjeta', value: formatearMonto(bancosTarjeta), fill: 'hsl(200, 55%, 55%)' }
     ].filter(item => item.value > 0);
   };
+
+  const datosEgresosPorMetodoPago = useMemo(() => egresosPorMetodoPago(), 
+    [transaccionesPorTipo, formatoMontos]);
 
   // Egresos por Producto
   const egresosPorProducto = () => {
@@ -355,8 +431,8 @@ const AnalyticaEgresos = () => {
       tieneAsignacion: boolean;
     }> = {};
 
-    // Procesar SOLO gastos operativos (51XX, 52XX)
-    filteredTransactions.forEach(t => {
+    // Gastos operativos (51XX, 52XX)
+    transaccionesPorTipo.gastosOperativos.forEach(t => {
       const key = t.descripcion || 'Sin descripción';
       if (!grouped[key]) {
         grouped[key] = {
@@ -371,8 +447,8 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
-    // Procesar costos de inventario (50XX) - POR PRODUCTO
-    filteredCostosInventario.forEach(c => {
+    // Costos de inventario (50XX)
+    transaccionesPorTipo.costosInventario.forEach(c => {
       const key = c.producto_nombre || 'Sin asignación';
       if (!grouped[key]) {
         grouped[key] = {
@@ -387,11 +463,16 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
-    const productosArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
+    const productosArray = Object.values(grouped)
+      .map(p => ({ ...p, monto: formatearMonto(p.monto) }))
+      .sort((a, b) => b.monto - a.monto);
     const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
     
-    return { productos: productosArray.slice(0, 10), totalGeneral };
+    return { productos: productosArray.slice(0, 10), totalGeneral: formatearMonto(totalGeneral) };
   };
+
+  const datosEgresosPorProducto = useMemo(() => egresosPorProducto(), 
+    [transaccionesPorTipo, formatoMontos]);
 
   // Egresos por Proveedor mejorado
   const egresosPorProveedorMejorado = () => {
@@ -402,8 +483,8 @@ const AnalyticaEgresos = () => {
       tieneAsignacion: boolean;
     }> = {};
 
-    // Procesar SOLO gastos operativos (51XX, 52XX)
-    filteredTransactions.forEach(t => {
+    // Gastos operativos (51XX, 52XX)
+    transaccionesPorTipo.gastosOperativos.forEach(t => {
       const proveedorNombre = t.proveedor_nombre || 'Sin proveedor asignado';
       const tieneAsignacion = !!t.proveedor_nombre;
       
@@ -419,8 +500,8 @@ const AnalyticaEgresos = () => {
       grouped[proveedorNombre].transacciones += 1;
     });
 
-    // Agregar costos de inventario sin proveedor
-    const totalCostosInventario = filteredCostosInventario.reduce((sum, c) => sum + c.monto, 0);
+    // Costos de inventario sin proveedor
+    const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum, c) => sum + c.monto, 0);
     if (totalCostosInventario > 0) {
       if (!grouped['Sin proveedor asignado']) {
         grouped['Sin proveedor asignado'] = {
@@ -431,14 +512,19 @@ const AnalyticaEgresos = () => {
         };
       }
       grouped['Sin proveedor asignado'].monto += totalCostosInventario;
-      grouped['Sin proveedor asignado'].transacciones += filteredCostosInventario.length;
+      grouped['Sin proveedor asignado'].transacciones += transaccionesPorTipo.costosInventario.length;
     }
 
-    const proveedoresArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
+    const proveedoresArray = Object.values(grouped)
+      .map(p => ({ ...p, monto: formatearMonto(p.monto) }))
+      .sort((a, b) => b.monto - a.monto);
     const totalGeneral = proveedoresArray.reduce((sum, p) => sum + p.monto, 0);
     
-    return { proveedores: proveedoresArray.slice(0, 10), totalGeneral };
+    return { proveedores: proveedoresArray.slice(0, 10), totalGeneral: formatearMonto(totalGeneral) };
   };
+
+  const datosEgresosPorProveedorMejorado = useMemo(() => egresosPorProveedorMejorado(), 
+    [transaccionesPorTipo, formatoMontos]);
 
   if (loading || loadingCostosVenta || loadingResumen || loadingGrafica || !resumenes) {
     return (
@@ -1037,7 +1123,7 @@ const AnalyticaEgresos = () => {
             <CardDescription>Distribución de costos y gastos</CardDescription>
           </CardHeader>
           <CardContent>
-            {egresosPorTipo().length === 0 ? (
+            {datosEgresosPorTipo.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                 <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay datos para mostrar</p>
@@ -1046,7 +1132,7 @@ const AnalyticaEgresos = () => {
               <ResponsiveContainer width="100%" height={320}>
                 <PieChart>
                   <Pie
-                    data={egresosPorTipo()}
+                    data={datosEgresosPorTipo}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -1077,7 +1163,7 @@ const AnalyticaEgresos = () => {
                     fill="#8884d8"
                     dataKey="monto"
                   >
-                    {egresosPorTipo().map((entry, index) => {
+                    {datosEgresosPorTipo.map((entry, index) => {
                       const colors = [
                         "hsl(180, 50%, 55%)",
                         "hsl(200, 55%, 50%)",
@@ -1109,7 +1195,7 @@ const AnalyticaEgresos = () => {
             <CardDescription>Desglose de egresos por forma de pago</CardDescription>
           </CardHeader>
           <CardContent>
-            {estadoPagos().length === 0 ? (
+            {datosEstadoPagos.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                 <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay datos para mostrar</p>
@@ -1118,7 +1204,7 @@ const AnalyticaEgresos = () => {
               <ResponsiveContainer width="100%" height={320}>
                 <PieChart>
                   <Pie
-                    data={estadoPagos()}
+                    data={datosEstadoPagos}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -1178,14 +1264,14 @@ const AnalyticaEgresos = () => {
             <CardDescription>Desglose de egresos por clasificación detallada</CardDescription>
           </CardHeader>
           <CardContent>
-            {egresosPorSubcuenta().length === 0 ? (
+            {datosEgresosPorSubcuenta.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                 <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay datos para mostrar</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={egresosPorSubcuenta()} layout="vertical">
+                <BarChart data={datosEgresosPorSubcuenta} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
                     type="number" 
@@ -1220,7 +1306,7 @@ const AnalyticaEgresos = () => {
             <CardDescription>Distribución de pagos realizados</CardDescription>
           </CardHeader>
           <CardContent>
-            {egresosPorMetodoPago().length === 0 ? (
+            {datosEgresosPorMetodoPago.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                 <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay datos para mostrar</p>
@@ -1228,11 +1314,11 @@ const AnalyticaEgresos = () => {
             ) : (
               <ResponsiveContainer width="100%" height={350}>
                 <Treemap
-                  data={egresosPorMetodoPago()}
+                  data={datosEgresosPorMetodoPago}
                   dataKey="value"
                   aspectRatio={4 / 3}
                   stroke="#fff"
-                  content={<CustomTreemapContent dataTotal={egresosPorMetodoPago().reduce((sum, item) => sum + item.value, 0)} />}
+                  content={<CustomTreemapContent dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + item.value, 0)} />}
                 >
                   <Tooltip 
                     formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Pagado']}
@@ -1254,16 +1340,16 @@ const AnalyticaEgresos = () => {
             <CardDescription>Top 10 productos con mayor egreso</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {egresosPorProducto().productos.length === 0 ? (
+            {datosEgresosPorProducto.productos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <Package className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay productos para mostrar</p>
               </div>
             ) : (
               <>
-                {egresosPorProducto().productos.map((producto) => {
-                  const porcentaje = egresosPorProducto().totalGeneral > 0 
-                    ? ((producto.monto / egresosPorProducto().totalGeneral) * 100).toFixed(1) 
+                {datosEgresosPorProducto.productos.map((producto) => {
+                  const porcentaje = datosEgresosPorProducto.totalGeneral > 0 
+                    ? ((producto.monto / datosEgresosPorProducto.totalGeneral) * 100).toFixed(1) 
                     : '0.0';
                   
                   return (
@@ -1328,7 +1414,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total General</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${egresosPorProducto().totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${datosEgresosPorProducto.totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </>
@@ -1343,16 +1429,16 @@ const AnalyticaEgresos = () => {
             <CardDescription>Top 10 proveedores por monto de egresos</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {egresosPorProveedorMejorado().proveedores.length === 0 ? (
+            {datosEgresosPorProveedorMejorado.proveedores.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <Package className="h-12 w-12 mb-4 opacity-50" />
                 <p>No hay proveedores para mostrar</p>
               </div>
             ) : (
               <>
-                {egresosPorProveedorMejorado().proveedores.map((proveedor) => {
-                  const porcentaje = egresosPorProveedorMejorado().totalGeneral > 0 
-                    ? ((proveedor.monto / egresosPorProveedorMejorado().totalGeneral) * 100).toFixed(1) 
+                {datosEgresosPorProveedorMejorado.proveedores.map((proveedor) => {
+                  const porcentaje = datosEgresosPorProveedorMejorado.totalGeneral > 0 
+                    ? ((proveedor.monto / datosEgresosPorProveedorMejorado.totalGeneral) * 100).toFixed(1) 
                     : '0.0';
                   
                   return (
@@ -1397,7 +1483,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total General</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${egresosPorProveedorMejorado().totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${datosEgresosPorProveedorMejorado.totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </>
