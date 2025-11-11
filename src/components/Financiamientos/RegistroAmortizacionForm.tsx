@@ -13,6 +13,7 @@ import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { Textarea } from "@/components/ui/textarea";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 const RegistroAmortizacionForm = () => {
   const { financiamientos, crearTransaccion } = useFinanciamientos();
@@ -42,7 +43,7 @@ const RegistroAmortizacionForm = () => {
     if (metodoPago === "efectivo" && saldos && montoTotal > saldos.efectivo) {
       toast({
         title: "Fondos insuficientes",
-        description: `No tienes suficiente efectivo. Disponible: $${saldos.efectivo.toFixed(2)}`,
+        description: `No tienes suficiente efectivo. Disponible: $${formatCurrency(saldos.efectivo)}`,
         variant: "destructive",
       });
       return;
@@ -51,7 +52,7 @@ const RegistroAmortizacionForm = () => {
     if (metodoPago === "transferencia" && saldos && montoTotal > saldos.bancos) {
       toast({
         title: "Fondos insuficientes",
-        description: `No tienes suficiente saldo en bancos. Disponible: $${saldos.bancos.toFixed(2)}`,
+        description: `No tienes suficiente saldo en bancos. Disponible: $${formatCurrency(saldos.bancos)}`,
         variant: "destructive",
       });
       return;

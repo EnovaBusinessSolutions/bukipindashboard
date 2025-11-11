@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formatCurrency } from "@/lib/utils";
 
 type ProductoForm = {
   nombre: string;
@@ -215,7 +216,7 @@ const RegistroProductos = () => {
         if (montoPagoActual > efectivo) {
           toast({
             title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${efectivo.toFixed(2)} | Monto solicitado: $${montoPagoActual.toFixed(2)}`,
+            description: `Saldo disponible: $${formatCurrency(efectivo)} | Monto solicitado: $${formatCurrency(montoPagoActual)}`,
             variant: "destructive"
           });
           return;
@@ -247,7 +248,7 @@ const RegistroProductos = () => {
         if (montoPagoActual > bancos) {
           toast({
             title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${bancos.toFixed(2)} | Monto solicitado: $${montoPagoActual.toFixed(2)}`,
+            description: `Saldo disponible: $${formatCurrency(bancos)} | Monto solicitado: $${formatCurrency(montoPagoActual)}`,
             variant: "destructive"
           });
           return;

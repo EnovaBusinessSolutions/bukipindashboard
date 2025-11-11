@@ -11,6 +11,7 @@ import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 export const RegistroImpuestosForm = () => {
   const { user } = useAuth();
@@ -183,7 +184,7 @@ export const RegistroImpuestosForm = () => {
         if (montoPagadoFinal > efectivo) {
           toast({
             title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${efectivo.toFixed(2)} | Monto solicitado: $${montoPagadoFinal.toFixed(2)}`,
+            description: `Saldo disponible: $${formatCurrency(efectivo)} | Monto solicitado: $${formatCurrency(montoPagadoFinal)}`,
             variant: "destructive"
           });
           setIsSaving(false);
@@ -206,7 +207,7 @@ export const RegistroImpuestosForm = () => {
         if (montoPagadoFinal > bancos) {
           toast({
             title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${bancos.toFixed(2)} | Monto solicitado: $${montoPagadoFinal.toFixed(2)}`,
+            description: `Saldo disponible: $${formatCurrency(bancos)} | Monto solicitado: $${formatCurrency(montoPagadoFinal)}`,
             variant: "destructive"
           });
           setIsSaving(false);

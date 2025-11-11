@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
+import { formatCurrency } from "@/lib/utils";
+
 const RegistroEgresosPrecargados = () => {
   const { data: productos = [] } = useProductosEgresos();
   const { proveedores, createProveedor } = useProveedores();
@@ -559,14 +561,14 @@ const RegistroEgresosPrecargados = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="efectivo">
-                              Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
+                              Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo)}
                             </SelectItem>
                             <SelectItem value="tarjeta-transferencia">
-                              Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                              Bancos - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
                             </SelectItem>
                             {tarjetasCredito?.map((tarjeta) => (
                               <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                                {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                                {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible)}
                               </SelectItem>
                             ))}
                           </SelectContent>

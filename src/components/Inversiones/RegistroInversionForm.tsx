@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { CalendarIcon, Upload } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -193,7 +193,7 @@ const RegistroInversionForm = () => {
       if (montoPagado > saldosDisponibles.efectivo) {
         toast({
           title: "⚠️ Saldo insuficiente en efectivo",
-          description: `Saldo disponible: $${saldosDisponibles.efectivo.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+          description: `Saldo disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Monto solicitado: $${formatCurrency(montoPagado)}`,
           variant: "destructive"
         });
         return;
@@ -204,7 +204,7 @@ const RegistroInversionForm = () => {
       if (montoPagado > saldosDisponibles.bancos) {
         toast({
           title: "⚠️ Saldo insuficiente en bancos",
-          description: `Saldo disponible: $${saldosDisponibles.bancos.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+          description: `Saldo disponible: $${formatCurrency(saldosDisponibles.bancos)} | Monto solicitado: $${formatCurrency(montoPagado)}`,
           variant: "destructive"
         });
         return;

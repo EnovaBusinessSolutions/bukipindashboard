@@ -16,6 +16,7 @@ import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCre
 import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { formatCurrency } from "@/lib/utils";
 
 const RegistroEgresosGenerales = () => {
   const [concept, setConcept] = useState("");
@@ -71,7 +72,7 @@ const RegistroEgresosGenerales = () => {
         if (montoPagado > saldosDisponibles.efectivo) {
           toast({
             title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${saldosDisponibles.efectivo.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+            description: `Saldo disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Monto solicitado: $${formatCurrency(montoPagado)}`,
             variant: "destructive"
           });
           return;
@@ -82,7 +83,7 @@ const RegistroEgresosGenerales = () => {
         if (montoPagado > saldosDisponibles.bancos) {
           toast({
             title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${saldosDisponibles.bancos.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+            description: `Saldo disponible: $${formatCurrency(saldosDisponibles.bancos)} | Monto solicitado: $${formatCurrency(montoPagado)}`,
             variant: "destructive"
           });
           return;
@@ -301,15 +302,15 @@ const RegistroEgresosGenerales = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="efectivo">
-                          Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
+                          Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo)}
                         </SelectItem>
                         <SelectItem value="tarjeta-transferencia">
-                          Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                          Bancos - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
                         </SelectItem>
                         {tarjetasCredito && tarjetasCredito.length > 0 ? (
                           tarjetasCredito.map((tarjeta) => (
                             <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                              {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                              {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible)}
                             </SelectItem>
                           ))
                         ) : null}
