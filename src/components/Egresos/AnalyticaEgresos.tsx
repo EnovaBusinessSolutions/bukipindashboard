@@ -191,11 +191,11 @@ const AnalyticaEgresos = () => {
       };
     } else if (tipoEgreso === "costo") {
       return { 
-        costoVenta: costoVenta52XX,
+        costoVenta: [],
         gastos: [],
         otrosGastos: [],
-        costosInventario: [],
-        sinImpuestosCostoVenta: costoVenta52XXSinImp,
+        costosInventario: costosVentaInventario,
+        sinImpuestosCostoVenta: [],
         sinImpuestosGastos: [],
         sinImpuestosOtrosGastos: []
       };
