@@ -440,8 +440,12 @@ const AnalyticaEgresos = () => {
   const egresosPorCuenta = () => {
     const grouped: Record<string, { codigo: string; nombre: string; monto: number }> = {};
 
-    // Helper para agregar monto a una cuenta
-    const agregarACuenta = (codigoCuenta: string, monto: number) => {
+    // Procesar TODAS las transacciones de egresos que tienen cuenta_codigo válida
+    filteredTransactions.forEach(t => {
+      const codigoCuenta = t.cuenta_codigo;
+      
+      if (!codigoCuenta) return; // Skip si no hay código
+      
       if (!grouped[codigoCuenta]) {
         const cuenta = cuentasFlat.find(c => c.codigo === codigoCuenta);
         grouped[codigoCuenta] = {
@@ -450,30 +454,8 @@ const AnalyticaEgresos = () => {
           monto: 0
         };
       }
-      grouped[codigoCuenta].monto += monto;
-    };
-
-    // 1. Costos de Venta (52XX)
-    transaccionesPorTipo.costoVenta.forEach(t => {
-      agregarACuenta(t.cuenta_codigo || '5001', t.monto_total);
-    });
-
-    // 2. Gastos (51XX)
-    transaccionesPorTipo.gastos.forEach(t => {
-      agregarACuenta(t.cuenta_codigo || '5101', t.monto_total);
-    });
-
-    // 3. Otros Gastos (5204)
-    transaccionesPorTipo.otrosGastos.forEach(t => {
-      agregarACuenta(t.cuenta_codigo || '5204', t.monto_total);
-    });
-
-    // 4. Costos de inventario (50XX) - Obtener código de cuenta desde detalles_asiento
-    transaccionesPorTipo.costosInventario.forEach(c => {
-      // Buscar el detalle con debe > 0 para obtener el código de cuenta
-      const detalleCosto = c.detalles_asiento?.find(d => d.debe > 0);
-      const codigoCuenta = detalleCosto?.cuenta_codigo || '5002';
-      agregarACuenta(codigoCuenta, c.monto);
+      
+      grouped[codigoCuenta].monto += t.monto_total;
     });
 
     return Object.values(grouped)
@@ -482,7 +464,7 @@ const AnalyticaEgresos = () => {
         monto: formatearMonto(item.monto)
       }))
       .sort((a, b) => b.monto - a.monto)
-      .slice(0, 15); // Mostrar más registros ya que habrá menos cuentas
+      .slice(0, 15);
   };
 
   const datosEgresosPorCuenta = useMemo(() => egresosPorCuenta(), 
