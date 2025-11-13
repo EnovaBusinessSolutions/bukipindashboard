@@ -32,9 +32,13 @@ const CustomTreemapContent = (props: any) => {
   
   const porcentaje = ((value / dataTotal) * 100).toFixed(1);
   const montoFormateado = `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
-  const fontSize = Math.min(width / 7, height / 5, 16);
   
-  if (fontSize < 11) return (
+  // Tamaños de fuente más grandes y adaptables
+  const titleFontSize = Math.min(width / 8, height / 4, 20);
+  const subtitleFontSize = Math.min(width / 10, height / 6, 16);
+  
+  // No mostrar si es muy pequeño
+  if (titleFontSize < 12) return (
     <g>
       <rect x={x} y={y} width={width} height={height} fill={fill} />
     </g>
@@ -43,34 +47,30 @@ const CustomTreemapContent = (props: any) => {
   return (
     <g>
       <rect x={x} y={y} width={width} height={height} fill={fill} />
+      
+      {/* Título principal (nombre + porcentaje) - estilo más grande */}
       <text
         x={x + width / 2}
-        y={y + height / 2 - fontSize}
+        y={y + height / 2 - titleFontSize / 2}
         textAnchor="middle"
-        fill="#fff"
-        fontSize={fontSize}
+        fill="#ffffff"
+        fontSize={titleFontSize}
         fontWeight="bold"
       >
-        {name}
+        {name} ({porcentaje}%)
       </text>
+      
+      {/* Subtítulo (monto) - más prominente */}
       <text
         x={x + width / 2}
-        y={y + height / 2 + fontSize / 2}
+        y={y + height / 2 + titleFontSize}
         textAnchor="middle"
-        fill="#fff"
-        fontSize={fontSize * 0.85}
-        fontWeight="semibold"
+        fill="#ffffff"
+        fontSize={subtitleFontSize}
+        fontWeight="normal"
+        opacity="0.9"
       >
         {montoFormateado}
-      </text>
-      <text
-        x={x + width / 2}
-        y={y + height / 2 + fontSize * 2}
-        textAnchor="middle"
-        fill="#fff"
-        fontSize={fontSize * 0.85}
-      >
-        {porcentaje}%
       </text>
     </g>
   );
@@ -527,8 +527,8 @@ const AnalyticaEgresos = () => {
       .reduce((sum, c) => sum + c.monto, 0);
 
     const data = [
-      { name: 'Efectivo', value: formatearMonto(efectivo), fill: 'hsl(160, 55%, 50%)' },
-      { name: 'Bancos/Tarjeta', value: formatearMonto(bancosTarjeta), fill: 'hsl(200, 55%, 55%)' }
+      { name: 'Efectivo', value: formatearMonto(efectivo), fill: 'hsl(180, 50%, 55%)' },
+      { name: 'Bancos/Tarjeta', value: formatearMonto(bancosTarjeta), fill: 'hsl(180, 45%, 45%)' }
     ];
 
     // Agregar Adquisición de Inventario si existe
@@ -536,7 +536,7 @@ const AnalyticaEgresos = () => {
       data.push({ 
         name: 'Adquisición de Inventario', 
         value: formatearMonto(costosInventario), 
-        fill: 'hsl(280, 55%, 60%)' 
+        fill: 'hsl(180, 35%, 38%)' 
       });
     }
 
@@ -1589,7 +1589,7 @@ const AnalyticaEgresos = () => {
                 <p>No hay datos para mostrar</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={350}>
+              <ResponsiveContainer width="100%" height={400}>
                 <Treemap
                   data={datosEgresosPorMetodoPago}
                   dataKey="value"
