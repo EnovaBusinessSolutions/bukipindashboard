@@ -1846,7 +1846,7 @@ const AnalyticaEgresos = () => {
                       
                       <div className="text-right flex-shrink-0">
                         <p className="font-bold text-foreground">
-                          {formatearParaVisualizacion(formatearMonto(producto.monto))}
+                          {formatearParaVisualizacion(producto.monto)}
                         </p>
                       </div>
                       
@@ -1863,7 +1863,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total General</span>
                   <span className="text-lg font-bold text-foreground">
-                    {formatearParaVisualizacion(formatearMonto(datosEgresosPorProducto.totalGeneral), true)}
+                    {formatearParaVisualizacion(datosEgresosPorProducto.totalGeneral, true)}
                   </span>
                 </div>
               </>
@@ -1915,7 +1915,7 @@ const AnalyticaEgresos = () => {
                       
                       <div className="text-right flex-shrink-0">
                         <p className="font-bold text-foreground">
-                          {formatearParaVisualizacion(formatearMonto(proveedor.monto))}
+                          {formatearParaVisualizacion(proveedor.monto)}
                         </p>
                       </div>
                       
@@ -1932,7 +1932,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total General</span>
                   <span className="text-lg font-bold text-foreground">
-                    {formatearParaVisualizacion(formatearMonto(datosEgresosPorProveedorMejorado.totalGeneral), true)}
+                    {formatearParaVisualizacion(datosEgresosPorProveedorMejorado.totalGeneral, true)}
                   </span>
                 </div>
               </>
