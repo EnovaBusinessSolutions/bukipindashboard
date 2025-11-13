@@ -28,11 +28,14 @@ import { Separator } from "@/components/ui/separator";
 
 // Componente personalizado para el contenido del Treemap
 const CustomTreemapContent = (props: any) => {
-  const { x, y, width, height, name, value, fill, dataTotal } = props;
+  const { x, y, width, height, name, value, fill, dataTotal, decimales = 2 } = props;
   if (!name || !value || !dataTotal) return null;
   
   const porcentaje = ((value / dataTotal) * 100).toFixed(1);
-  const montoFormateado = `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+  const montoFormateado = `$${value.toLocaleString('es-MX', { 
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales 
+  })}`;
   
   // Tamaños de fuente más grandes y adaptables
   const titleFontSize = Math.min(width / 8, height / 4, 20);
@@ -804,7 +807,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Costos de Venta</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.dia.costosVenta5001.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.dia.costosVenta5001.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.dia.costosVenta5001, resumenes.dia.total)}%
@@ -817,7 +823,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.dia.costosVenta5002.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.dia.costosVenta5002.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.dia.costosVenta5002, resumenes.dia.total)}%
@@ -830,7 +839,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Gastos</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.dia.gastos.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.dia.gastos.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.dia.gastos, resumenes.dia.total)}%
@@ -843,7 +855,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Otros Gastos</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.dia.otrosGastos.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.dia.otrosGastos.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.dia.otrosGastos, resumenes.dia.total)}%
@@ -858,7 +873,10 @@ const AnalyticaEgresos = () => {
             <div className="flex items-center justify-between pt-2">
               <span className="text-sm font-semibold text-primary">Total Egresos</span>
               <span className="text-lg font-bold text-destructive">
-                ${resumenes.dia.total.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                ${resumenes.dia.total.toLocaleString('es-MX', { 
+                  minimumFractionDigits: decimales,
+                  maximumFractionDigits: decimales 
+                })}
               </span>
             </div>
           </CardContent>
@@ -877,7 +895,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Costos de Venta</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.mes.costosVenta5001.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.mes.costosVenta5001.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.mes.costosVenta5001, resumenes.mes.total)}%
@@ -890,7 +911,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.mes.costosVenta5002.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.mes.costosVenta5002.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.mes.costosVenta5002, resumenes.mes.total)}%
@@ -903,7 +927,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Gastos</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.mes.gastos.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.mes.gastos.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.mes.gastos, resumenes.mes.total)}%
@@ -916,7 +943,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Otros Gastos</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.mes.otrosGastos.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.mes.otrosGastos.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.mes.otrosGastos, resumenes.mes.total)}%
@@ -931,7 +961,10 @@ const AnalyticaEgresos = () => {
             <div className="flex items-center justify-between pt-2">
               <span className="text-sm font-semibold text-primary">Total Egresos</span>
               <span className="text-lg font-bold text-destructive">
-                ${resumenes.mes.total.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                ${resumenes.mes.total.toLocaleString('es-MX', { 
+                  minimumFractionDigits: decimales,
+                  maximumFractionDigits: decimales 
+                })}
               </span>
             </div>
           </CardContent>
@@ -950,7 +983,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Costos de Venta</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.anio.costosVenta5001.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.anio.costosVenta5001.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.anio.costosVenta5001, resumenes.anio.total)}%
@@ -963,7 +999,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.anio.costosVenta5002.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.anio.costosVenta5002.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.anio.costosVenta5002, resumenes.anio.total)}%
@@ -976,7 +1015,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Gastos</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.anio.gastos.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.anio.gastos.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.anio.gastos, resumenes.anio.total)}%
@@ -989,7 +1031,10 @@ const AnalyticaEgresos = () => {
               <span className="text-sm text-muted-foreground">Otros Gastos</span>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground">
-                  ${resumenes.anio.otrosGastos.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  ${resumenes.anio.otrosGastos.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </span>
                 <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
                   {calcularPorcentaje(resumenes.anio.otrosGastos, resumenes.anio.total)}%
@@ -1004,7 +1049,10 @@ const AnalyticaEgresos = () => {
             <div className="flex items-center justify-between pt-2">
               <span className="text-sm font-semibold text-primary">Total Egresos</span>
               <span className="text-lg font-bold text-destructive">
-                ${resumenes.anio.total.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                ${resumenes.anio.total.toLocaleString('es-MX', { 
+                  minimumFractionDigits: decimales,
+                  maximumFractionDigits: decimales 
+                })}
               </span>
             </div>
           </CardContent>
@@ -1342,7 +1390,10 @@ const AnalyticaEgresos = () => {
                         position: 'top', 
                         fill: 'hsl(var(--foreground))',
                         fontSize: 12,
-                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales 
+                        })}` : ''
                       }}
                     />
                     <Line 
@@ -1356,7 +1407,10 @@ const AnalyticaEgresos = () => {
                         position: 'top', 
                         fill: 'hsl(var(--foreground))',
                         fontSize: 12,
-                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales 
+                        })}` : ''
                       }}
                     />
                     <Line 
@@ -1370,7 +1424,10 @@ const AnalyticaEgresos = () => {
                         position: 'bottom', 
                         fill: 'hsl(var(--foreground))',
                         fontSize: 12,
-                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales 
+                        })}` : ''
                       }}
                     />
                     <Line 
@@ -1384,7 +1441,10 @@ const AnalyticaEgresos = () => {
                         position: 'bottom', 
                         fill: 'hsl(var(--foreground))',
                         fontSize: 12,
-                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales 
+                        })}` : ''
                       }}
                     />
                     <Legend />
@@ -1400,7 +1460,10 @@ const AnalyticaEgresos = () => {
                       position: 'top', 
                       fill: 'hsl(var(--foreground))',
                       fontSize: 14,
-                      formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}` : ''
+                      formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                        minimumFractionDigits: decimales,
+                        maximumFractionDigits: decimales 
+                      })}` : ''
                     }}
                   />
                 )}
@@ -1418,7 +1481,10 @@ const AnalyticaEgresos = () => {
                 <CardDescription>Distribución de costos y gastos</CardDescription>
               </div>
               <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                Total: ${totalEgresosPorTipo.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                Total: ${totalEgresosPorTipo.toLocaleString('es-MX', { 
+                  minimumFractionDigits: decimales,
+                  maximumFractionDigits: decimales 
+                })}
               </Badge>
             </div>
           </CardHeader>
@@ -1442,7 +1508,10 @@ const AnalyticaEgresos = () => {
                     label={(props: any) => {
                       const { x, y, tipo, monto, percent } = props;
                       const porcentaje = (percent * 100).toFixed(1);
-                      const montoFormateado = `$${Number(monto).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+                      const montoFormateado = `$${Number(monto).toLocaleString('es-MX', { 
+                        minimumFractionDigits: decimales,
+                        maximumFractionDigits: decimales 
+                      })}`;
                       
                       return (
                         <text
@@ -1474,7 +1543,10 @@ const AnalyticaEgresos = () => {
                     })}
                   </Pie>
                   <Tooltip 
-                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { 
+                      minimumFractionDigits: decimales,
+                      maximumFractionDigits: decimales 
+                    })}`, 'Monto']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                   />
                   <Legend 
@@ -1497,7 +1569,10 @@ const AnalyticaEgresos = () => {
                 <CardDescription>Desglose de egresos por forma de pago</CardDescription>
               </div>
               <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                Total: ${totalMetodosPago.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                Total: ${totalMetodosPago.toLocaleString('es-MX', { 
+                  minimumFractionDigits: decimales,
+                  maximumFractionDigits: decimales 
+                })}
               </Badge>
             </div>
           </CardHeader>
@@ -1521,7 +1596,10 @@ const AnalyticaEgresos = () => {
                     label={(props: any) => {
                       const { x, y, estado, monto, percent } = props;
                       const porcentaje = (percent * 100).toFixed(1);
-                      const montoFormateado = `$${Number(monto).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
+                      const montoFormateado = `$${Number(monto).toLocaleString('es-MX', { 
+                        minimumFractionDigits: decimales,
+                        maximumFractionDigits: decimales 
+                      })}`;
                       
                       return (
                         <text
@@ -1547,7 +1625,10 @@ const AnalyticaEgresos = () => {
                     <Cell fill="hsl(220, 45%, 50%)" />
                   </Pie>
                   <Tooltip 
-                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { 
+                      minimumFractionDigits: decimales,
+                      maximumFractionDigits: decimales 
+                    })}`, 'Monto']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                   />
                   <Legend 
@@ -1580,7 +1661,10 @@ const AnalyticaEgresos = () => {
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                  Total: ${totalEgresosPorCuentaSubcuenta.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  Total: ${totalEgresosPorCuentaSubcuenta.toLocaleString('es-MX', { 
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales 
+                  })}
                 </Badge>
               </div>
               
@@ -1625,7 +1709,10 @@ const AnalyticaEgresos = () => {
                       width={vistaAgrupacion === "cuenta" ? 220 : 150}
                     />
                     <Tooltip 
-                      formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Monto']}
+                      formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { 
+                        minimumFractionDigits: decimales,
+                        maximumFractionDigits: decimales 
+                      })}`, 'Monto']}
                       contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                     />
                     <Bar 
@@ -1635,7 +1722,10 @@ const AnalyticaEgresos = () => {
                         position: 'right',
                         fill: 'hsl(var(--foreground))',
                         fontSize: 13,
-                        formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                        formatter: (value: number) => `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales 
+                        })}`
                       }}
                     />
                   </BarChart>
@@ -1654,7 +1744,10 @@ const AnalyticaEgresos = () => {
                 <CardDescription>Distribución de pagos realizados</CardDescription>
               </div>
               <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                Total: ${totalEgresosPorMetodoPagoTreemap.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                Total: ${totalEgresosPorMetodoPagoTreemap.toLocaleString('es-MX', { 
+                  minimumFractionDigits: decimales,
+                  maximumFractionDigits: decimales 
+                })}
               </Badge>
             </div>
           </CardHeader>
@@ -1671,10 +1764,13 @@ const AnalyticaEgresos = () => {
                   dataKey="value"
                   aspectRatio={16 / 9}
                   stroke="#fff"
-                  content={<CustomTreemapContent dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + item.value, 0)} />}
+                  content={<CustomTreemapContent dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + item.value, 0)} decimales={decimales} />}
                 >
                   <Tooltip 
-                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, 'Pagado']}
+                    formatter={(value) => [`$${Number(value).toLocaleString('es-MX', { 
+                      minimumFractionDigits: decimales,
+                      maximumFractionDigits: decimales 
+                    })}`, 'Pagado']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                   />
                 </Treemap>
