@@ -326,6 +326,14 @@ const AnalyticaEgresos = () => {
         grouped[metodoCap] += t.monto_pagado;
       });
 
+    // Agregar Costos de Inventario como "Adquisición de Inventario"
+    const totalCostosInventario = transaccionesPorTipo.costosInventario
+      .reduce((sum, c) => sum + c.monto, 0);
+    
+    if (totalCostosInventario > 0) {
+      grouped['Adquisición de Inventario'] = totalCostosInventario;
+    }
+
     return Object.entries(grouped)
       .map(([estado, monto]) => ({ estado, monto: formatearMonto(monto) }))
       .sort((a, b) => b.monto - a.monto);
@@ -514,10 +522,25 @@ const AnalyticaEgresos = () => {
       .filter(t => t.metodo_pago && t.metodo_pago !== 'efectivo' && t.monto_pagado > 0)
       .reduce((sum, t) => sum + t.monto_pagado, 0);
 
-    return [
+    // Calcular Costos de Inventario
+    const costosInventario = transaccionesPorTipo.costosInventario
+      .reduce((sum, c) => sum + c.monto, 0);
+
+    const data = [
       { name: 'Efectivo', value: formatearMonto(efectivo), fill: 'hsl(160, 55%, 50%)' },
       { name: 'Bancos/Tarjeta', value: formatearMonto(bancosTarjeta), fill: 'hsl(200, 55%, 55%)' }
-    ].filter(item => item.value > 0);
+    ];
+
+    // Agregar Adquisición de Inventario si existe
+    if (costosInventario > 0) {
+      data.push({ 
+        name: 'Adquisición de Inventario', 
+        value: formatearMonto(costosInventario), 
+        fill: 'hsl(280, 55%, 60%)' 
+      });
+    }
+
+    return data.filter(item => item.value > 0);
   };
 
   const datosEgresosPorMetodoPago = useMemo(() => egresosPorMetodoPago(), 
