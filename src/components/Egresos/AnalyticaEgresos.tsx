@@ -24,6 +24,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 // Componente personalizado para el contenido del Treemap
 const CustomTreemapContent = (props: any) => {
@@ -1153,50 +1154,54 @@ const AnalyticaEgresos = () => {
             <CardTitle>Formato de Cifras</CardTitle>
             <CardDescription>Visualización de montos</CardDescription>
           </CardHeader>
-          <CardContent>
-            <RadioGroup 
-              value={formatoMontos} 
-              onValueChange={(v) => setFormatoMontos(v as "normal" | "miles" | "millones")} 
-              className="flex flex-col gap-3"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="normal" id="formato-normal" />
-                <Label htmlFor="formato-normal" className="cursor-pointer">Normal</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="miles" id="formato-miles" />
-                <Label htmlFor="formato-miles" className="cursor-pointer">Miles (K)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="millones" id="formato-millones" />
-                <Label htmlFor="formato-millones" className="cursor-pointer">Millones (M)</Label>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
+          <CardContent className="space-y-4">
+            {/* Sección: Escala */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Escala</Label>
+              <RadioGroup 
+                value={formatoMontos} 
+                onValueChange={(v) => setFormatoMontos(v as "normal" | "miles" | "millones")} 
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="normal" id="formato-normal" />
+                  <Label htmlFor="formato-normal" className="cursor-pointer">Normal</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="miles" id="formato-miles" />
+                  <Label htmlFor="formato-miles" className="cursor-pointer">Miles (K)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="millones" id="formato-millones" />
+                  <Label htmlFor="formato-millones" className="cursor-pointer">Millones (M)</Label>
+                </div>
+              </RadioGroup>
+            </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Decimales</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup
-              value={decimales.toString()}
-              onValueChange={(val) => setDecimales(Number(val) as 0 | 1 | 2)}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="0" id="decimales-0" />
-                <Label htmlFor="decimales-0" className="cursor-pointer">Sin decimales</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="1" id="decimales-1" />
-                <Label htmlFor="decimales-1" className="cursor-pointer">1 decimal</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="2" id="decimales-2" />
-                <Label htmlFor="decimales-2" className="cursor-pointer">2 decimales</Label>
-              </div>
-            </RadioGroup>
+            <Separator />
+
+            {/* Sección: Decimales */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Decimales</Label>
+              <RadioGroup
+                value={decimales.toString()}
+                onValueChange={(val) => setDecimales(Number(val) as 0 | 1 | 2)}
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="0" id="decimales-0" />
+                  <Label htmlFor="decimales-0" className="cursor-pointer">Sin decimales</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="1" id="decimales-1" />
+                  <Label htmlFor="decimales-1" className="cursor-pointer">1 decimal</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="2" id="decimales-2" />
+                  <Label htmlFor="decimales-2" className="cursor-pointer">2 decimales</Label>
+                </div>
+              </RadioGroup>
+            </div>
           </CardContent>
         </Card>
       </div>
