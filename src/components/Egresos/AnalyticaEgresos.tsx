@@ -639,12 +639,20 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
+    // Primero ordenamos SIN formatear
     const productosArray = Object.values(grouped)
-      .map(p => ({ ...p, monto: formatearMonto(p.monto) }))
       .sort((a, b) => b.monto - a.monto);
+
+    // Calculamos el total con los montos originales
     const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
-    
-    return { productos: productosArray.slice(0, 10), totalGeneral: formatearMonto(totalGeneral) };
+
+    // Ahora sí formateamos tanto productos como total
+    const productosFormateados = productosArray.map(p => ({ ...p, monto: formatearMonto(p.monto) }));
+
+    return { 
+      productos: productosFormateados.slice(0, 10), 
+      totalGeneral: formatearMonto(totalGeneral) 
+    };
   };
 
   const datosEgresosPorProducto = useMemo(() => egresosPorProducto(), 
@@ -725,12 +733,20 @@ const AnalyticaEgresos = () => {
       grouped['Sin proveedor asignado'].transacciones += transaccionesPorTipo.costosInventario.length;
     }
 
+    // Primero ordenamos SIN formatear
     const proveedoresArray = Object.values(grouped)
-      .map(p => ({ ...p, monto: formatearMonto(p.monto) }))
       .sort((a, b) => b.monto - a.monto);
+
+    // Calculamos el total con los montos originales
     const totalGeneral = proveedoresArray.reduce((sum, p) => sum + p.monto, 0);
-    
-    return { proveedores: proveedoresArray.slice(0, 10), totalGeneral: formatearMonto(totalGeneral) };
+
+    // Ahora sí formateamos tanto proveedores como total
+    const proveedoresFormateados = proveedoresArray.map(p => ({ ...p, monto: formatearMonto(p.monto) }));
+
+    return { 
+      proveedores: proveedoresFormateados.slice(0, 10), 
+      totalGeneral: formatearMonto(totalGeneral) 
+    };
   };
 
   const datosEgresosPorProveedorMejorado = useMemo(() => egresosPorProveedorMejorado(), 
