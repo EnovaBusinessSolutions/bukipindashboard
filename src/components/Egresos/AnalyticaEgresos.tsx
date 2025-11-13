@@ -1593,7 +1593,7 @@ const AnalyticaEgresos = () => {
                 <Treemap
                   data={datosEgresosPorMetodoPago}
                   dataKey="value"
-                  aspectRatio={4 / 3}
+                  aspectRatio={3 / 4}
                   stroke="#fff"
                   content={<CustomTreemapContent dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + item.value, 0)} />}
                 >
