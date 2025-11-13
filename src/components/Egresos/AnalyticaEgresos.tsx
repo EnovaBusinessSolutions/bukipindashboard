@@ -80,6 +80,7 @@ const CustomTreemapContent = (props: any) => {
 const AnalyticaEgresos = () => {
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
+  const [decimales, setDecimales] = useState<0 | 1 | 2>(2);
   const [tipoEgreso, setTipoEgreso] = useState<"total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada">("total");
   const [vistaTotal, setVistaTotal] = useState<"unica" | "desglosada">("unica");
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
@@ -235,9 +236,18 @@ const AnalyticaEgresos = () => {
 
   // Función para formatear montos según el filtro
   const formatearMonto = (monto: number) => {
-    if (formatoMontos === "miles") return monto / 1000;
-    if (formatoMontos === "millones") return monto / 1000000;
-    return monto;
+    let valor = monto;
+    if (formatoMontos === "miles") valor = monto / 1000;
+    if (formatoMontos === "millones") valor = monto / 1000000;
+    return Number(valor.toFixed(decimales));
+  };
+
+  const formatearParaVisualizacion = (monto: number, incluirSufijo: boolean = false) => {
+    const sufijo = incluirSufijo ? getSufijoFormato() : '';
+    return `$${monto.toLocaleString('es-MX', { 
+      minimumFractionDigits: decimales, 
+      maximumFractionDigits: decimales 
+    })}${sufijo}`;
   };
 
   // Función para obtener el sufijo del formato
@@ -1164,6 +1174,31 @@ const AnalyticaEgresos = () => {
             </RadioGroup>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Decimales</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup
+              value={decimales.toString()}
+              onValueChange={(val) => setDecimales(Number(val) as 0 | 1 | 2)}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="0" id="decimales-0" />
+                <Label htmlFor="decimales-0" className="cursor-pointer">Sin decimales</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="1" id="decimales-1" />
+                <Label htmlFor="decimales-1" className="cursor-pointer">1 decimal</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="2" id="decimales-2" />
+                <Label htmlFor="decimales-2" className="cursor-pointer">2 decimales</Label>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
       </div>
     </div>
 
@@ -1226,6 +1261,15 @@ const AnalyticaEgresos = () => {
                       stroke="hsl(180, 25%, 50%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(180, 25%, 50%)' }}
+                      label={{ 
+                        position: 'top', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales
+                        })}` : ''
+                      }}
                     />
                     <Line 
                       type="monotone" 
@@ -1234,6 +1278,15 @@ const AnalyticaEgresos = () => {
                       stroke="hsl(0, 70%, 55%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(0, 70%, 55%)' }}
+                      label={{ 
+                        position: 'top', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales
+                        })}` : ''
+                      }}
                     />
                     <Line 
                       type="monotone" 
@@ -1242,6 +1295,15 @@ const AnalyticaEgresos = () => {
                       stroke="hsl(280, 60%, 55%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(280, 60%, 55%)' }}
+                      label={{ 
+                        position: 'bottom', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales
+                        })}` : ''
+                      }}
                     />
                     <Line 
                       type="monotone" 
@@ -1250,6 +1312,15 @@ const AnalyticaEgresos = () => {
                       stroke="hsl(210, 15%, 55%)" 
                       strokeWidth={2}
                       dot={{ fill: 'hsl(210, 15%, 55%)' }}
+                      label={{ 
+                        position: 'bottom', 
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 12,
+                        formatter: (value: number) => value > 0 ? `$${value.toLocaleString('es-MX', { 
+                          minimumFractionDigits: decimales,
+                          maximumFractionDigits: decimales
+                        })}` : ''
+                      }}
                     />
                     <Legend />
                   </>
@@ -1674,7 +1745,7 @@ const AnalyticaEgresos = () => {
                       
                       <div className="text-right flex-shrink-0">
                         <p className="font-bold text-foreground">
-                          ${producto.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          {formatearParaVisualizacion(formatearMonto(producto.monto))}
                         </p>
                       </div>
                       
@@ -1691,7 +1762,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total General</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${datosEgresosPorProducto.totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    {formatearParaVisualizacion(formatearMonto(datosEgresosPorProducto.totalGeneral), true)}
                   </span>
                 </div>
               </>
@@ -1743,7 +1814,7 @@ const AnalyticaEgresos = () => {
                       
                       <div className="text-right flex-shrink-0">
                         <p className="font-bold text-foreground">
-                          ${proveedor.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          {formatearParaVisualizacion(formatearMonto(proveedor.monto))}
                         </p>
                       </div>
                       
@@ -1760,7 +1831,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total General</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${datosEgresosPorProveedorMejorado.totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    {formatearParaVisualizacion(formatearMonto(datosEgresosPorProveedorMejorado.totalGeneral), true)}
                   </span>
                 </div>
               </>
