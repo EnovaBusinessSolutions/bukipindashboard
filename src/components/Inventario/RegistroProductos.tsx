@@ -259,9 +259,19 @@ const RegistroProductos = () => {
     let proveedorId = null;
     let proveedorNombre = data.proveedor || "";
 
-    // Crear o seleccionar proveedor para pagos parciales o pendientes
-    if (tipoPago === "parcial" || tipoPago === "pendiente") {
+    // Crear o seleccionar proveedor (obligatorio para parcial/pendiente, opcional para contado)
+    if (tipoProveedor && tipoProveedor !== "ninguno") {
       if (tipoProveedor === "nuevo") {
+        // Validar que al menos tenga nombre
+        if (!data.proveedor || data.proveedor.trim() === "") {
+          toast({
+            title: "⚠️ Datos incompletos",
+            description: "Debes proporcionar al menos el nombre del proveedor",
+            variant: "destructive"
+          });
+          return;
+        }
+        
         const nuevoProveedor = {
           nombre: data.proveedor || "",
           telefono: proveedorTelefono || null,
@@ -286,10 +296,28 @@ const RegistroProductos = () => {
 
         proveedorId = proveedorData?.id;
       } else if (tipoProveedor === "existente") {
+        if (!proveedorSeleccionado) {
+          toast({
+            title: "⚠️ Proveedor no seleccionado",
+            description: "Debes seleccionar un proveedor de la lista",
+            variant: "destructive"
+          });
+          return;
+        }
         proveedorId = proveedorSeleccionado;
         const proveedor = proveedores?.find(p => p.id === proveedorSeleccionado);
         proveedorNombre = proveedor?.nombre || "";
       }
+    }
+
+    // Validación adicional para pagos parciales/pendientes
+    if ((tipoPago === "parcial" || tipoPago === "pendiente") && !proveedorId) {
+      toast({
+        title: "⚠️ Proveedor requerido",
+        description: "Debes seleccionar o crear un proveedor para pagos parciales o pendientes",
+        variant: "destructive"
+      });
+      return;
     }
 
     // Crear el producto
@@ -639,16 +667,6 @@ const RegistroProductos = () => {
                   </div>
                 )}
 
-                {tipoPago === "contado" && (
-                  <div>
-                    <Label htmlFor="proveedor">Proveedor (Opcional)</Label>
-                    <Input
-                      id="proveedor"
-                      {...register("proveedor")}
-                      placeholder="Nombre del proveedor (opcional para pago total)"
-                    />
-                  </div>
-                )}
 
                 <div>
                   <Label htmlFor="subcuenta">Subcuenta de Inventario (Opcional)</Label>
@@ -765,23 +783,36 @@ const RegistroProductos = () => {
                   )}
                 </div>
 
-                {(tipoPago === "parcial" || tipoPago === "pendiente") && (
-                  <div className="space-y-4 ml-6 p-4 border rounded-lg bg-muted/50">
+                {/* Sección de Proveedor - Siempre visible pero con diferentes requisitos */}
+                <div className="space-y-4 ml-6 p-4 border rounded-lg bg-muted/50">
+                  {/* Alert contextual según tipo de pago */}
+                  {(tipoPago === "parcial" || tipoPago === "pendiente") ? (
                     <Alert>
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
                         Se registrará como cuenta por pagar al proveedor (obligatorio)
                       </AlertDescription>
                     </Alert>
-                    
-                    {montoPendiente > 0 && (
-                      <div className="p-3 bg-muted border rounded-lg">
-                        <p className="text-sm font-medium">
-                          Monto Pendiente: {formatPrice(montoPendiente)}
-                        </p>
-                      </div>
-                    )}
-                    
+                  ) : (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Información del proveedor (opcional pero recomendado para seguimiento)
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Mostrar monto pendiente solo si aplica */}
+                  {(tipoPago === "parcial" || tipoPago === "pendiente") && montoPendiente > 0 && (
+                    <div className="p-3 bg-muted border rounded-lg">
+                      <p className="text-sm font-medium">
+                        Monto Pendiente: {formatPrice(montoPendiente)}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Fecha de vencimiento solo para parcial/pendiente */}
+                  {(tipoPago === "parcial" || tipoPago === "pendiente") && (
                     <div>
                       <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
                       <Input
@@ -790,113 +821,127 @@ const RegistroProductos = () => {
                         {...register("fechaVencimiento")}
                       />
                     </div>
+                  )}
 
-                    <Separator />
+                  {(tipoPago === "parcial" || tipoPago === "pendiente") && <Separator />}
 
-                    {/* Información del Proveedor (Obligatorio) */}
-                    <div className="space-y-4">
-                      <h4 className="text-sm font-semibold text-primary">Información del Proveedor *</h4>
-                      
-                      {/* Tipo de proveedor */}
-                      <div className="space-y-2">
-                        <Label>¿Es un proveedor nuevo o existente? *</Label>
-                        <RadioGroup value={tipoProveedor} onValueChange={(value) => {
-                          setTipoProveedor(value);
-                          if (value === "nuevo") {
-                            setProveedorSeleccionado("");
-                          } else {
-                            // Limpiar campos de proveedor nuevo
-                            setValue("proveedor", "");
-                            setProveedorTelefono("");
-                            setProveedorEmail("");
-                            setProveedorRFC("");
-                          }
-                        }}>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
-                            <Label htmlFor="proveedor-nuevo">Proveedor Nuevo</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="existente" id="proveedor-existente" />
-                            <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-
-                      {tipoProveedor === "nuevo" && (
-                        <div className="space-y-4 p-3 bg-background rounded-lg border">
-                          <h4 className="text-sm font-semibold">Datos del Nuevo Proveedor</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
-                              <Input
-                                id="proveedor-nombre"
-                                {...register("proveedor")}
-                                placeholder="Nombre completo o razón social"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                              <Input
-                                id="proveedor-telefono"
-                                value={proveedorTelefono}
-                                onChange={(e) => setProveedorTelefono(e.target.value)}
-                                placeholder="Número de teléfono"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="proveedor-email">Email</Label>
-                              <Input
-                                id="proveedor-email"
-                                type="email"
-                                value={proveedorEmail}
-                                onChange={(e) => setProveedorEmail(e.target.value)}
-                                placeholder="correo@ejemplo.com"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="proveedor-rfc">RFC</Label>
-                              <Input
-                                id="proveedor-rfc"
-                                value={proveedorRFC}
-                                onChange={(e) => setProveedorRFC(e.target.value)}
-                                placeholder="RFC del proveedor"
-                              />
-                            </div>
-                          </div>
+                  {/* Información del Proveedor - Ahora SIEMPRE visible */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-primary">
+                      Información del Proveedor {(tipoPago === "parcial" || tipoPago === "pendiente") ? "*" : "(Opcional)"}
+                    </h4>
+                    
+                    {/* Tipo de proveedor */}
+                    <div className="space-y-2">
+                      <Label>¿Es un proveedor nuevo o existente? {(tipoPago === "parcial" || tipoPago === "pendiente") ? "*" : ""}</Label>
+                      <RadioGroup value={tipoProveedor} onValueChange={(value) => {
+                        setTipoProveedor(value);
+                        if (value === "nuevo") {
+                          setProveedorSeleccionado("");
+                        } else if (value === "existente") {
+                          setValue("proveedor", "");
+                          setProveedorTelefono("");
+                          setProveedorEmail("");
+                          setProveedorRFC("");
+                        } else if (value === "ninguno") {
+                          setProveedorSeleccionado("");
+                          setValue("proveedor", "");
+                          setProveedorTelefono("");
+                          setProveedorEmail("");
+                          setProveedorRFC("");
+                        }
+                      }}>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
+                          <Label htmlFor="proveedor-nuevo">Proveedor Nuevo</Label>
                         </div>
-                      )}
-
-                      {tipoProveedor === "existente" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
-                          <Select value={proveedorSeleccionado} onValueChange={setProveedorSeleccionado}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar proveedor de la base de datos" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {proveedores && proveedores.length > 0 ? (
-                                proveedores.map((proveedor) => (
-                                  <SelectItem key={proveedor.id} value={proveedor.id}>
-                                    {proveedor.nombre}
-                                    {proveedor.telefono && ` - ${proveedor.telefono}`}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="no-proveedores" disabled>
-                                  No hay proveedores registrados
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Proveedores desde el menú de Cobros y Pagos
-                          </p>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="existente" id="proveedor-existente" />
+                          <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
                         </div>
-                      )}
+                        {/* Nueva opción: Sin proveedor (solo para contado) */}
+                        {tipoPago === "contado" && (
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="ninguno" id="proveedor-ninguno" />
+                            <Label htmlFor="proveedor-ninguno">Sin Proveedor</Label>
+                          </div>
+                        )}
+                      </RadioGroup>
                     </div>
+
+                    {tipoProveedor === "nuevo" && (
+                      <div className="space-y-4 p-3 bg-background rounded-lg border">
+                        <h4 className="text-sm font-semibold">Datos del Nuevo Proveedor</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
+                            <Input
+                              id="proveedor-nombre"
+                              {...register("proveedor")}
+                              placeholder="Nombre completo o razón social"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="proveedor-telefono">Teléfono</Label>
+                            <Input
+                              id="proveedor-telefono"
+                              value={proveedorTelefono}
+                              onChange={(e) => setProveedorTelefono(e.target.value)}
+                              placeholder="Número de teléfono"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="proveedor-email">Email</Label>
+                            <Input
+                              id="proveedor-email"
+                              type="email"
+                              value={proveedorEmail}
+                              onChange={(e) => setProveedorEmail(e.target.value)}
+                              placeholder="correo@ejemplo.com"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="proveedor-rfc">RFC</Label>
+                            <Input
+                              id="proveedor-rfc"
+                              value={proveedorRFC}
+                              onChange={(e) => setProveedorRFC(e.target.value)}
+                              placeholder="RFC del proveedor"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {tipoProveedor === "existente" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
+                        <Select value={proveedorSeleccionado} onValueChange={setProveedorSeleccionado}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar proveedor de la base de datos" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {proveedores && proveedores.length > 0 ? (
+                              proveedores.map((proveedor) => (
+                                <SelectItem key={proveedor.id} value={proveedor.id}>
+                                  {proveedor.nombre}
+                                  {proveedor.telefono && ` - ${proveedor.telefono}`}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-proveedores" disabled>
+                                No hay proveedores registrados
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Proveedores desde el menú de Cobros y Pagos
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
 
                 <Separator />
 
