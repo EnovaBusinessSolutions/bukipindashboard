@@ -53,6 +53,22 @@ const GraficaHistorialInventario = () => {
     };
   }) || [];
 
+  // Calcular el valor máximo de todos los datos para establecer el dominio del eje Y
+  const calcularMaximo = () => {
+    if (!datosFormateados || datosFormateados.length === 0) return 100;
+    
+    const maxStock = Math.max(...datosFormateados.map(d => d.stock || 0));
+    const maxCompras = Math.max(...datosFormateados.map(d => d.compras || 0));
+    const maxVentas = Math.max(...datosFormateados.map(d => d.ventas || 0));
+    
+    const valorMaximo = Math.max(maxStock, maxCompras, maxVentas);
+    
+    // Agregar 20% de margen arriba
+    return valorMaximo * 1.2;
+  };
+
+  const dominioMaximo = calcularMaximo();
+
   // Etiqueta de unidad para la gráfica
   const etiquetaUnidad = unidad === "dinero" ? "$" : "unidades";
   const sufijo = formato === "miles" ? "K" : formato === "millones" ? "M" : "";
@@ -152,6 +168,7 @@ const GraficaHistorialInventario = () => {
               />
               <YAxis 
                 className="text-xs"
+                domain={[0, dominioMaximo]}
                 tick={{ fill: "hsl(var(--muted-foreground))" }}
                 label={{ 
                   value: etiquetaCompleta, 
@@ -194,7 +211,7 @@ const GraficaHistorialInventario = () => {
                 label={{ 
                   position: 'top',
                   fill: 'hsl(var(--primary))',
-                  fontSize: 10,
+                  fontSize: periodo === "anual" ? 12 : 10,
                   formatter: (value: number) => value > 0 ? value.toFixed(0) : ''
                 }}
               />
@@ -208,7 +225,7 @@ const GraficaHistorialInventario = () => {
                 label={{ 
                   position: 'top',
                   fill: 'hsl(142, 76%, 36%)',
-                  fontSize: 10,
+                  fontSize: periodo === "anual" ? 12 : 10,
                   formatter: (value: number) => value > 0 ? value.toFixed(0) : ''
                 }}
               />
@@ -222,7 +239,7 @@ const GraficaHistorialInventario = () => {
                 label={{ 
                   position: 'bottom',
                   fill: 'hsl(346, 77%, 50%)',
-                  fontSize: 10,
+                  fontSize: periodo === "anual" ? 12 : 10,
                   formatter: (value: number) => value > 0 ? value.toFixed(0) : ''
                 }}
               />
