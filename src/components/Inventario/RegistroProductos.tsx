@@ -11,6 +11,7 @@ import { useProductos, useCreateProducto } from "@/hooks/useProductos";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
 import { useProveedores } from "@/hooks/useProveedores";
+import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -64,6 +65,7 @@ const RegistroProductos = () => {
   const { data: subcuentasInventario } = useSubcuentasInventario();
   const { proveedores, createProveedor } = useProveedores();
   const createProducto = useCreateProducto();
+  const { data: saldosDisponibles, isLoading: loadingSaldos } = useSaldosDisponibles();
 
   // Filtrar productos existentes con movimientos (compras o ventas)
   const productosExistentes = productosInventario?.filter(producto => 
@@ -662,8 +664,36 @@ const RegistroProductos = () => {
                 </div>
 
                 {montoTotal > 0 && (
-                  <div className="p-3 bg-muted rounded-lg">
+                  <div className="p-3 bg-muted rounded-lg space-y-2">
                     <p className="text-sm font-medium">Monto Total: {formatPrice(montoTotal)}</p>
+                    
+                    {(tipoPago === "contado" || tipoPago === "parcial") && !loadingSaldos && watch("metodoPago") && (
+                      <div className="pt-2 border-t">
+                        {watch("metodoPago") === "efectivo" ? (
+                          <Badge variant={
+                            (tipoPago === "contado" ? montoTotal : montoPagado) <= (saldosDisponibles?.efectivo || 0)
+                              ? "default"
+                              : "destructive"
+                          }>
+                            {(tipoPago === "contado" ? montoTotal : montoPagado) <= (saldosDisponibles?.efectivo || 0)
+                              ? "✓ Fondos suficientes en efectivo"
+                              : "✗ Fondos insuficientes en efectivo"
+                            }
+                          </Badge>
+                        ) : watch("metodoPago") === "bancos" ? (
+                          <Badge variant={
+                            (tipoPago === "contado" ? montoTotal : montoPagado) <= (saldosDisponibles?.bancos || 0)
+                              ? "default"
+                              : "destructive"
+                          }>
+                            {(tipoPago === "contado" ? montoTotal : montoPagado) <= (saldosDisponibles?.bancos || 0)
+                              ? "✓ Fondos suficientes en bancos"
+                              : "✗ Fondos insuficientes en bancos"
+                            }
+                          </Badge>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -731,21 +761,92 @@ const RegistroProductos = () => {
                         defaultValue="efectivo"
                       >
                         <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="efectivo" id="efectivo-inv" />
-                          <div className="flex items-center space-x-2">
-                            <Wallet className="h-4 w-4 text-primary" />
-                            <Label htmlFor="efectivo-inv" className="cursor-pointer">
-                              Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
-                            </Label>
+                          <RadioGroupItem 
+                            value="efectivo" 
+                            id="efectivo-inv"
+                            disabled={montoTotal > 0 && (saldosDisponibles?.efectivo || 0) < (tipoPago === "contado" ? montoTotal : montoPagado)}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <Wallet className="h-4 w-4 text-primary" />
+                                <Label htmlFor="efectivo-inv" className="cursor-pointer">
+                                  Efectivo <span className="text-sm text-muted-foreground">(se registra en Caja)</span>
+                                </Label>
+                              </div>
+                              {/* Mostrar saldo disponible */}
+                              <div className="text-sm">
+                                {loadingSaldos ? (
+                                  <span className="text-muted-foreground">Cargando...</span>
+                                ) : (
+                                  <span className={
+                                    (tipoPago === "contado" && montoTotal > (saldosDisponibles?.efectivo || 0)) ||
+                                    (tipoPago === "parcial" && montoPagado > (saldosDisponibles?.efectivo || 0))
+                                      ? "text-destructive font-medium"
+                                      : "text-green-600 font-medium"
+                                  }>
+                                    Disponible: {formatCurrency(saldosDisponibles?.efectivo || 0)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Alerta si no hay fondos suficientes */}
+                            {montoTotal > 0 && (
+                              (tipoPago === "contado" && montoTotal > (saldosDisponibles?.efectivo || 0)) ||
+                              (tipoPago === "parcial" && montoPagado > (saldosDisponibles?.efectivo || 0))
+                            ) && (
+                              <Alert className="mt-2 border-destructive/50 bg-destructive/5">
+                                <AlertCircle className="h-4 w-4 text-destructive" />
+                                <AlertDescription className="text-xs text-destructive">
+                                  Saldo insuficiente. Necesitas: {formatCurrency(tipoPago === "contado" ? montoTotal : montoPagado)}
+                                </AlertDescription>
+                              </Alert>
+                            )}
                           </div>
                         </div>
+
                         <div className="flex items-center space-x-3">
-                          <RadioGroupItem value="bancos" id="bancos-inv" />
-                          <div className="flex items-center space-x-2">
-                            <CreditCard className="h-4 w-4 text-primary" />
-                            <Label htmlFor="bancos-inv" className="cursor-pointer">
-                              Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
-                            </Label>
+                          <RadioGroupItem 
+                            value="bancos" 
+                            id="bancos-inv"
+                            disabled={montoTotal > 0 && (saldosDisponibles?.bancos || 0) < (tipoPago === "contado" ? montoTotal : montoPagado)}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <CreditCard className="h-4 w-4 text-primary" />
+                                <Label htmlFor="bancos-inv" className="cursor-pointer">
+                                  Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
+                                </Label>
+                              </div>
+                              {/* Mostrar saldo disponible */}
+                              <div className="text-sm">
+                                {loadingSaldos ? (
+                                  <span className="text-muted-foreground">Cargando...</span>
+                                ) : (
+                                  <span className={
+                                    (tipoPago === "contado" && montoTotal > (saldosDisponibles?.bancos || 0)) ||
+                                    (tipoPago === "parcial" && montoPagado > (saldosDisponibles?.bancos || 0))
+                                      ? "text-destructive font-medium"
+                                      : "text-green-600 font-medium"
+                                  }>
+                                    Disponible: {formatCurrency(saldosDisponibles?.bancos || 0)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Alerta si no hay fondos suficientes */}
+                            {montoTotal > 0 && (
+                              (tipoPago === "contado" && montoTotal > (saldosDisponibles?.bancos || 0)) ||
+                              (tipoPago === "parcial" && montoPagado > (saldosDisponibles?.bancos || 0))
+                            ) && (
+                              <Alert className="mt-2 border-destructive/50 bg-destructive/5">
+                                <AlertCircle className="h-4 w-4 text-destructive" />
+                                <AlertDescription className="text-xs text-destructive">
+                                  Saldo insuficiente. Necesitas: {formatCurrency(tipoPago === "contado" ? montoTotal : montoPagado)}
+                                </AlertDescription>
+                              </Alert>
+                            )}
                           </div>
                         </div>
                       </RadioGroup>
