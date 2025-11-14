@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
+import { useCuentas } from "@/hooks/useCuentas";
 
 interface BalanzaEntry {
   fecha: string;
@@ -45,6 +46,7 @@ const Balanza = () => {
 
   // Usar el hook simplificado que lee de detalle_asientos
   const { data: balanzaData, isLoading } = useAsientosBalanza(startDate, endDate);
+  const { data: cuentasData } = useCuentas();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -79,6 +81,17 @@ const Balanza = () => {
   }
 
   const { movimientos, saldosPorCuenta } = balanzaData;
+
+  // Crear Map con toda la información de las cuentas
+  const cuentasInfoMap = new Map(
+    cuentasData?.cuentasFlat?.map(cuenta => [
+      cuenta.codigo,
+      {
+        nombre: cuenta.nombre,
+        estado_financiero: cuenta.estado_financiero
+      }
+    ]) || []
+  );
 
   // Si no hay movimientos, mostrar mensaje
   if (!movimientos || movimientos.length === 0) {
@@ -595,34 +608,45 @@ const Balanza = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
-                <TableHead>Total Debe</TableHead>
-                <TableHead>Total Haber</TableHead>
+                <TableHead>Nombre de Cuenta</TableHead>
+                <TableHead>Estado Financiero</TableHead>
+                <TableHead className="text-right">Total Debe</TableHead>
+                <TableHead className="text-right">Total Haber</TableHead>
                 <TableHead className="text-right">Saldo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {Object.values(saldosPorCuenta)
                 .sort((a, b) => a.cuenta_codigo.localeCompare(b.cuenta_codigo))
-                .map((cuenta) => (
-                  <TableRow key={cuenta.cuenta_codigo}>
-                    <TableCell className="font-mono">{cuenta.cuenta_codigo}</TableCell>
-                    <TableCell className="text-green-600">
-                      {formatCurrency(cuenta.debe_total)}
-                    </TableCell>
-                    <TableCell className="text-red-600">
-                      {formatCurrency(cuenta.haber_total)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(cuenta.saldo)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                .map((cuenta) => {
+                  const infoCompleta = cuentasInfoMap.get(cuenta.cuenta_codigo);
+                  return (
+                    <TableRow key={cuenta.cuenta_codigo}>
+                      <TableCell className="font-mono text-xs">{cuenta.cuenta_codigo}</TableCell>
+                      <TableCell className="text-sm">
+                        {infoCompleta?.nombre || 'N/A'}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {infoCompleta?.estado_financiero || 'N/A'}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600">
+                        {formatCurrency(cuenta.debe_total)}
+                      </TableCell>
+                      <TableCell className="text-right text-red-600">
+                        {formatCurrency(cuenta.haber_total)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(cuenta.saldo)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               <TableRow className="font-bold bg-muted/50">
-                <TableCell>TOTALES</TableCell>
-                <TableCell className="text-green-600">
+                <TableCell colSpan={3}>TOTALES</TableCell>
+                <TableCell className="text-right text-green-600">
                   {formatCurrency(totalDebe)}
                 </TableCell>
-                <TableCell className="text-red-600">
+                <TableCell className="text-right text-red-600">
                   {formatCurrency(totalHaber)}
                 </TableCell>
                 <TableCell className="text-right">
