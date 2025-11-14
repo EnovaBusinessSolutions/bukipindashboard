@@ -24,10 +24,9 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
   return useQuery({
     queryKey: ["asientos-balanza", startDate, endDate],
     queryFn: async () => {
-      // Asegurar que endDate no sea una fecha futura
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      const maxDate = endDate > today ? today : endDate;
+      // Usar endDate directamente sin limitar a fecha actual
+      // La balanza debe mostrar TODOS los asientos que existen
+      const maxDate = endDate;
       
       // Consultar detalle_asientos con JOIN a asientos_contables y cuentas
       const { data: detalles, error } = await supabase
