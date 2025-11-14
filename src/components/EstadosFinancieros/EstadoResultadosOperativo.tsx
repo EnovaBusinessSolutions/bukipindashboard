@@ -144,9 +144,21 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   const calcularTotalDepreciaciones = () => {
     return cuentasDepreciaciones.reduce((total, cuenta) => {
       const saldo = obtenerSaldo(cuenta.codigo);
+      console.log(`[DEBUG] Depreciación ${cuenta.codigo}: ${saldo}`);
       return total + saldo;
     }, 0);
   };
+
+  // Debug logs para depreciaciones
+  console.log('[DEBUG Estado Resultados]', {
+    cuentasDepreciacionesEncontradas: cuentasDepreciaciones.length,
+    codigosCuentas: cuentasDepreciaciones.map(c => c.codigo),
+    totalDepreciaciones: calcularTotalDepreciaciones(),
+    saldosPorCuentaKeys: Object.keys(saldosPorCuenta),
+    saldo5109: saldosPorCuenta['5109'],
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString()
+  });
 
   const calcularTotalCostoFinanciero = () => {
     return cuentasCostoFinanciero.reduce((total, cuenta) => {
