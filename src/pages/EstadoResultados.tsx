@@ -4,19 +4,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, RefreshCw } from "lucide-react";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { es } from "date-fns/locale";
 import EstadoResultadosOperativo from "@/components/EstadosFinancieros/EstadoResultadosOperativo";
 import EstadoResultadosEjecutivo from "@/components/EstadosFinancieros/EstadoResultadosEjecutivo";
 import EstadoResultadosAnalitico from "@/components/EstadosFinancieros/EstadoResultadosAnalitico";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type PeriodType = "diario" | "mensual" | "anual";
 
 const EstadoResultados = () => {
   const [periodType, setPeriodType] = useState<PeriodType>("mensual");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const queryClient = useQueryClient();
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
+    queryClient.invalidateQueries({ queryKey: ["cuentas"] });
+  };
 
   // Calcular fechas de inicio y fin según el tipo de período
   const getDateRange = () => {
@@ -48,9 +55,15 @@ const EstadoResultados = () => {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Estado de Resultados</h1>
-        <p className="text-muted-foreground">Análisis de ingresos y gastos del período</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Estado de Resultados</h1>
+          <p className="text-muted-foreground">Análisis de ingresos y gastos del período</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refrescar
+        </Button>
       </div>
 
       {/* Selector de Período */}
