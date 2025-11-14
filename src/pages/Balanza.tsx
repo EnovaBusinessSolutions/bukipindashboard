@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CalendarIcon, ChevronDown, ChevronRight, Filter } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Filter, AlertTriangle } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { useCuentas } from "@/hooks/useCuentas";
+import { Badge } from "@/components/ui/badge";
 
 interface BalanzaEntry {
   fecha: string;
@@ -92,6 +93,15 @@ const Balanza = () => {
       }
     ]) || []
   );
+
+  // Detectar si hay movimientos con fechas futuras
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tieneFechasFuturas = movimientos.some(mov => {
+    const [dia, mes, ano] = mov.fecha.split('/');
+    const fechaMov = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+    return fechaMov > today;
+  });
 
   // Si no hay movimientos, mostrar mensaje
   if (!movimientos || movimientos.length === 0) {
@@ -242,6 +252,24 @@ const Balanza = () => {
           Vista detallada de todos los movimientos contables del periodo
         </p>
       </div>
+
+      {/* Alerta de fechas futuras */}
+      {tieneFechasFuturas && (
+        <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="font-medium text-yellow-900 dark:text-yellow-200">
+                Asientos con fechas futuras detectados
+              </h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                Esta balanza incluye asientos contables con fechas posteriores a hoy. 
+                Esto es normal para depreciaciones mensuales o proyecciones.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Controles */}
       <Card>
@@ -438,7 +466,20 @@ const Balanza = () => {
                                 )}
                                 <div>
                                   <p className="text-sm font-medium">{asiento.referencia}</p>
-                                  <p className="text-xs text-muted-foreground">{asiento.fecha}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs text-muted-foreground">{asiento.fecha}</p>
+                                    {(() => {
+                                      const [dia, mes, ano] = asiento.fecha.split('/');
+                                      const fechaAsiento = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+                                      const hoy = new Date();
+                                      hoy.setHours(0, 0, 0, 0);
+                                      return fechaAsiento > hoy ? (
+                                        <Badge variant="outline" className="text-xs bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700">
+                                          Futuro
+                                        </Badge>
+                                      ) : null;
+                                    })()}
+                                  </div>
                                 </div>
                               </div>
                               <div className="md:col-span-2">
