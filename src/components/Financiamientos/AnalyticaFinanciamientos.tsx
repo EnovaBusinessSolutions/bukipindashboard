@@ -235,7 +235,7 @@ const AnalyticaFinanciamientos = () => {
 
       if (credito.tipo_credito === "simple" || credito.tipo_credito === "arrendamiento") {
         // Amortizaciones iguales
-        const amortizacionMensual = mesesRestantes > 0 ? credito.saldo_actual / mesesRestantes : 0;
+        const amortizacionMensual = credito.plazo_meses > 0 ? credito.monto_total / credito.plazo_meses : 0;
         
         if (periodoAmortizacion === "mensual") {
           const mesesAMostrar = Math.min(periodos, mesesRestantes);
