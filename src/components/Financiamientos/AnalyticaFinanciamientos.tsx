@@ -191,7 +191,7 @@ const AnalyticaFinanciamientos = () => {
     const mesesHastaVencimientoMaximo = Math.max(
       1, // Mínimo 1 periodo
       (fechaVencimientoMaxima.getFullYear() - hoy.getFullYear()) * 12 + 
-      (fechaVencimientoMaxima.getMonth() - hoy.getMonth()) + 1 // +1 para incluir el mes de vencimiento
+      (fechaVencimientoMaxima.getMonth() - hoy.getMonth())
     );
 
     const periodos = periodoAmortizacion === "mensual" 
@@ -230,7 +230,7 @@ const AnalyticaFinanciamientos = () => {
       const fechaVencimiento = new Date(credito.fecha_vencimiento);
       const mesesRestantes = Math.max(0, 
         (fechaVencimiento.getFullYear() - hoy.getFullYear()) * 12 + 
-        (fechaVencimiento.getMonth() - hoy.getMonth()) + 1 // +1 para incluir el mes de vencimiento
+        (fechaVencimiento.getMonth() - hoy.getMonth())
       );
 
       if (credito.tipo_credito === "simple" || credito.tipo_credito === "arrendamiento") {
