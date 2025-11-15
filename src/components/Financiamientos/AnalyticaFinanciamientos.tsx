@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
+import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap } from "recharts";
@@ -17,6 +18,7 @@ const COLORS = [
 
 const AnalyticaFinanciamientos = () => {
   const { financiamientos, isLoading } = useFinanciamientos();
+  const { instituciones } = useInstitucionesFinancieras();
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<string>("todos");
@@ -314,6 +316,57 @@ const AnalyticaFinanciamientos = () => {
     return data;
   };
 
+  // Calcular deuda por acreedor
+  const calcularDeudaPorAcreedor = () => {
+    const deudaPorInstitucion: Record<string, { saldo: number; logo?: string; nombre: string }> = {};
+    
+    financiamientosActivos
+      .filter(f => f.saldo_actual > 0)
+      .forEach(f => {
+        const key = f.institucion_financiera_id || f.institucion_financiera;
+        const institucion = instituciones?.find(i => i.id === f.institucion_financiera_id);
+        
+        if (!deudaPorInstitucion[key]) {
+          deudaPorInstitucion[key] = {
+            saldo: 0,
+            logo: institucion?.logo_url || undefined,
+            nombre: institucion?.nombre || f.institucion_financiera,
+          };
+        }
+        deudaPorInstitucion[key].saldo += f.saldo_actual;
+      });
+    
+    // Convertir a array y ordenar por saldo descendente
+    const acreedoresOrdenados = Object.entries(deudaPorInstitucion)
+      .map(([key, data]) => ({
+        id: key,
+        ...data,
+      }))
+      .sort((a, b) => b.saldo - a.saldo);
+    
+    // Top 5 + agrupar resto
+    const top5 = acreedoresOrdenados.slice(0, 5);
+    const resto = acreedoresOrdenados.slice(5);
+    
+    if (resto.length > 0) {
+      const saldoOtros = resto.reduce((sum, a) => sum + a.saldo, 0);
+      top5.push({
+        id: 'otros',
+        nombre: 'Otros Bancos',
+        saldo: saldoOtros,
+        logo: undefined,
+      });
+    }
+    
+    // Calcular porcentajes
+    const totalDeuda = top5.reduce((sum, a) => sum + a.saldo, 0);
+    return top5.map(a => ({
+      ...a,
+      porcentaje: totalDeuda > 0 ? (a.saldo / totalDeuda) * 100 : 0,
+    }));
+  };
+
+  const acreedoresTop = calcularDeudaPorAcreedor();
   const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
   // Solo mostrar créditos con deuda real
   const nombresCreditos = financiamientosActivos
@@ -437,7 +490,7 @@ const AnalyticaFinanciamientos = () => {
             </Card>
           </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -458,7 +511,7 @@ const AnalyticaFinanciamientos = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <Treemap
                 data={treemapData}
                 dataKey="value"
@@ -508,7 +561,7 @@ const AnalyticaFinanciamientos = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart 
                 data={dataComparacion}
                 layout="vertical"
@@ -564,6 +617,90 @@ const AnalyticaFinanciamientos = () => {
                 </span>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Deuda por Acreedor</CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="formato-acreedores" className="text-xs">Formato:</Label>
+                <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
+                  <SelectTrigger id="formato-acreedores" className="w-24 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="miles">Miles</SelectItem>
+                    <SelectItem value="millones">Millones</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {acreedoresTop.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No hay deuda pendiente con acreedores
+                </p>
+              ) : (
+                acreedoresTop.map((acreedor) => (
+                  <div 
+                    key={acreedor.id} 
+                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                  >
+                    {/* Logo o inicial */}
+                    <div className="flex-shrink-0">
+                      {acreedor.logo ? (
+                        <img 
+                          src={acreedor.logo} 
+                          alt={acreedor.nombre}
+                          className="w-12 h-12 object-contain rounded-md bg-white p-1 border"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-md bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg border">
+                          {acreedor.nombre.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Información */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">
+                        {acreedor.nombre}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {acreedor.porcentaje.toFixed(1)}% del total
+                      </p>
+                    </div>
+                    
+                    {/* Monto */}
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-foreground">
+                        ${formatearValor(acreedor.saldo)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        adeudado
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Resumen total */}
+            {acreedoresTop.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Total Deuda:</span>
+                  <span className="text-lg font-bold text-red-600">
+                    ${formatearValor(acreedoresTop.reduce((sum, a) => sum + a.saldo, 0))}
+                  </span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
