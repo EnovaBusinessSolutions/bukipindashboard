@@ -21,6 +21,7 @@ const AnalyticaFinanciamientos = () => {
   const { instituciones } = useInstitucionesFinancieras();
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
+  const [decimales, setDecimales] = useState<number>(2);
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<string>("todos");
   const [creditoAmortizacion, setCreditoAmortizacion] = useState<string>("todos");
 
@@ -101,17 +102,23 @@ const AnalyticaFinanciamientos = () => {
   // Función para formatear valores según el formato seleccionado
   const formatearValor = (valor: number): string => {
     if (formatoVisualizacion === "miles") {
-      return `${(valor / 1000).toFixed(1)}K`;
+      return `${(valor / 1000).toFixed(decimales)}K`;
     } else if (formatoVisualizacion === "millones") {
-      return `${(valor / 1000000).toFixed(1)}M`;
+      return `${(valor / 1000000).toFixed(decimales)}M`;
     } else {
-      // Formato normal con comas
-      return valor.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      // Formato normal con comas y decimales configurables
+      return valor.toLocaleString('es-MX', { 
+        minimumFractionDigits: decimales, 
+        maximumFractionDigits: decimales 
+      });
     }
   };
 
   const formatearValorCompleto = (valor: number): string => {
-    return `$${valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+    return `$${valor.toLocaleString('es-MX', { 
+      minimumFractionDigits: decimales, 
+      maximumFractionDigits: decimales 
+    })}`;
   };
 
   // Componente personalizado para el contenido del Treemap
@@ -390,7 +397,7 @@ const AnalyticaFinanciamientos = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-6 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Créditos Activos</CardTitle>
@@ -490,25 +497,55 @@ const AnalyticaFinanciamientos = () => {
             </Card>
           </div>
 
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Configuración Visual</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="formato-global" className="text-xs text-muted-foreground">
+                Formato:
+              </Label>
+              <Select 
+                value={formatoVisualizacion} 
+                onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}
+              >
+                <SelectTrigger id="formato-global" className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="miles">Miles (K)</SelectItem>
+                  <SelectItem value="millones">Millones (M)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label htmlFor="decimales-global" className="text-xs text-muted-foreground">
+                Decimales:
+              </Label>
+              <Select 
+                value={decimales.toString()} 
+                onValueChange={(value) => setDecimales(Number(value))}
+              >
+                <SelectTrigger id="decimales-global" className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0 decimales</SelectItem>
+                  <SelectItem value="1">1 decimal</SelectItem>
+                  <SelectItem value="2">2 decimales</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Deuda por Tipo de Crédito</CardTitle>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="formato-treemap" className="text-xs">Formato:</Label>
-                <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
-                  <SelectTrigger id="formato-treemap" className="w-24 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="miles">Miles</SelectItem>
-                    <SelectItem value="millones">Millones</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <CardTitle>Deuda por Tipo de Crédito</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -527,36 +564,21 @@ const AnalyticaFinanciamientos = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Flujo del Financiamiento</CardTitle>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="filtro-credito" className="text-xs">Crédito:</Label>
-                  <Select value={creditoSeleccionado} onValueChange={setCreditoSeleccionado}>
-                    <SelectTrigger id="filtro-credito" className="w-40 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      {financiamientosActivos.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>
-                          {f.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="formato-flujo" className="text-xs">Formato:</Label>
-                  <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
-                    <SelectTrigger id="formato-flujo" className="w-24 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="miles">Miles</SelectItem>
-                      <SelectItem value="millones">Millones</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="filtro-credito" className="text-xs">Crédito:</Label>
+                <Select value={creditoSeleccionado} onValueChange={setCreditoSeleccionado}>
+                  <SelectTrigger id="filtro-credito" className="w-40 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {financiamientosActivos.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
@@ -622,22 +644,7 @@ const AnalyticaFinanciamientos = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Deuda por Acreedor</CardTitle>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="formato-acreedores" className="text-xs">Formato:</Label>
-                <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
-                  <SelectTrigger id="formato-acreedores" className="w-24 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="miles">Miles</SelectItem>
-                    <SelectItem value="millones">Millones</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <CardTitle>Deuda por Acreedor</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -742,19 +749,6 @@ const AnalyticaFinanciamientos = () => {
                   <SelectContent>
                     <SelectItem value="mensual">Mensual</SelectItem>
                     <SelectItem value="anual">Anual</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="formato-visualizacion">Formato:</Label>
-                <Select value={formatoVisualizacion} onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}>
-                  <SelectTrigger id="formato-visualizacion" className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="miles">Miles (K)</SelectItem>
-                    <SelectItem value="millones">Millones (M)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
