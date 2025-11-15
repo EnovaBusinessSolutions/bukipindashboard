@@ -97,14 +97,15 @@ export const useFinanciamientos = () => {
 
       console.log("Financiamiento creado:", nuevoFinanciamiento);
 
-      // Para tarjetas de crédito, NO crear transacción ni asientos contables
+      // Para tarjetas de crédito Y líneas revolventes, NO crear transacción ni asientos contables
       // Solo registrar el límite de crédito disponible
-      if (esTarjetaCredito) {
-        console.log("Tarjeta de crédito registrada - no se genera asiento contable");
+      const esLineaRevolvente = financiamiento.tipo_credito === 'revolvente';
+      if (esTarjetaCredito || esLineaRevolvente) {
+        console.log(`${esTarjetaCredito ? 'Tarjeta de crédito' : 'Línea revolvente'} registrada - no se genera asiento contable`);
         return nuevoFinanciamiento;
       }
 
-      // Para otros tipos de financiamiento, crear transacción de desembolso inicial
+      // Para créditos simples, crear transacción de desembolso inicial
       const transaccionDesembolso = {
         user_id: user.id,
         financiamiento_id: nuevoFinanciamiento.id,
@@ -485,115 +486,6 @@ export const useFinanciamientos = () => {
     },
   });
 
-  const crearCargoTarjeta = useMutation({
-    mutationFn: async (cargo: {
-      financiamiento_id: string;
-      monto: number;
-      fecha: string;
-      cuenta_gasto: string;
-      descripcion: string;
-      proveedor?: string;
-    }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
-
-      // Obtener tarjeta
-      const { data: tarjeta, error: errorTarjeta } = await supabase
-        .from("financiamientos")
-        .select("*")
-        .eq("id", cargo.financiamiento_id)
-        .single();
-
-      if (errorTarjeta || !tarjeta) throw new Error("Tarjeta no encontrada");
-
-      // Validar límite disponible
-      const limiteDisponible = tarjeta.monto_total - tarjeta.saldo_actual;
-      if (cargo.monto > limiteDisponible) {
-        throw new Error(`Límite excedido. Disponible: $${limiteDisponible.toFixed(2)}`);
-      }
-
-      // Actualizar saldo de la tarjeta
-      const nuevoSaldo = tarjeta.saldo_actual + cargo.monto;
-      const { error: errorUpdate } = await supabase
-        .from("financiamientos")
-        .update({ saldo_actual: nuevoSaldo })
-        .eq("id", cargo.financiamiento_id);
-
-      if (errorUpdate) throw errorUpdate;
-
-      // Crear transacción de financiamiento
-      await supabase
-        .from("transacciones_financiamientos")
-        .insert([{
-          user_id: user.id,
-          financiamiento_id: cargo.financiamiento_id,
-          tipo_transaccion: "cargo_tarjeta",
-          monto: cargo.monto,
-          fecha: cargo.fecha,
-          capital_pagado: 0,
-          interes_pagado: 0,
-          saldo_restante: nuevoSaldo,
-          descripcion: cargo.descripcion,
-        }]);
-
-      // Crear asiento contable
-      const { data: numeroAsiento } = await supabase
-        .rpc('generate_asiento_number', { p_user_id: user.id });
-
-      const { data: asiento } = await supabase
-        .from("asientos_contables")
-        .insert([{
-          user_id: user.id,
-          numero_asiento: numeroAsiento,
-          fecha: cargo.fecha,
-          descripcion: `Cargo tarjeta: ${tarjeta.nombre} - ${cargo.descripcion}`,
-        }])
-        .select()
-        .single();
-
-      if (asiento) {
-        // DEBE: Gasto específico (aumenta el gasto)
-        await supabase
-          .from("detalle_asientos")
-          .insert([{
-            asiento_id: asiento.id,
-            cuenta_codigo: cargo.cuenta_gasto,
-            debe: cargo.monto,
-            haber: 0,
-            descripcion: cargo.descripcion + (cargo.proveedor ? ` - ${cargo.proveedor}` : ''),
-          }]);
-
-        // HABER: Tarjeta de Crédito (aumenta el pasivo)
-        await supabase
-          .from("detalle_asientos")
-          .insert([{
-            asiento_id: asiento.id,
-            cuenta_codigo: "2101",
-            debe: 0,
-            haber: cargo.monto,
-            descripcion: `Cargo a ${tarjeta.nombre}`,
-          }]);
-      }
-
-      return { success: true };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["financiamientos"] });
-      queryClient.invalidateQueries({ queryKey: ["transacciones_financiamientos"] });
-      toast({
-        title: "Cargo registrado",
-        description: "El cargo a la tarjeta se ha registrado correctamente.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   return {
     financiamientos,
     transacciones,
@@ -601,6 +493,5 @@ export const useFinanciamientos = () => {
     crearFinanciamiento,
     crearTransaccion,
     crearDisposicion,
-    crearCargoTarjeta,
   };
 };
