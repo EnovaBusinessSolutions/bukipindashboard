@@ -176,10 +176,30 @@ const AnalyticaFinanciamientos = () => {
     // Solo incluir financiamientos con saldo real > 0
     const financiamientosConDeuda = financiamientosActivos.filter(f => f.saldo_actual > 0);
     
-    const periodos = periodoAmortizacion === "mensual" ? 12 : 10;
+    // Calcular la fecha de vencimiento más lejana de todos los créditos
+    const hoy = new Date();
+    let fechaVencimientoMaxima = new Date(hoy);
+
+    financiamientosConDeuda.forEach(credito => {
+      const fechaVencimiento = new Date(credito.fecha_vencimiento);
+      if (fechaVencimiento > fechaVencimientoMaxima) {
+        fechaVencimientoMaxima = fechaVencimiento;
+      }
+    });
+
+    // Calcular cuántos periodos necesitamos mostrar
+    const mesesHastaVencimientoMaximo = Math.max(
+      1, // Mínimo 1 periodo
+      (fechaVencimientoMaxima.getFullYear() - hoy.getFullYear()) * 12 + 
+      (fechaVencimientoMaxima.getMonth() - hoy.getMonth()) + 1 // +1 para incluir el mes de vencimiento
+    );
+
+    const periodos = periodoAmortizacion === "mensual" 
+      ? mesesHastaVencimientoMaximo // Todos los meses hasta el vencimiento
+      : Math.ceil(mesesHastaVencimientoMaximo / 12); // Años completos necesarios
+    
     const data: any[] = [];
     const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    const hoy = new Date();
 
     // Crear estructura de periodos
     for (let i = 0; i < periodos; i++) {
@@ -218,13 +238,13 @@ const AnalyticaFinanciamientos = () => {
         const amortizacionMensual = mesesRestantes > 0 ? credito.saldo_actual / mesesRestantes : 0;
         
         if (periodoAmortizacion === "mensual") {
-          const mesesAMostrar = Math.min(12, mesesRestantes);
+          const mesesAMostrar = Math.min(periodos, mesesRestantes);
           for (let i = 0; i < mesesAMostrar; i++) {
             data[i][credito.nombre] += amortizacionMensual;
           }
         } else {
           const anosRestantes = Math.ceil(mesesRestantes / 12);
-          const anosAMostrar = Math.min(10, anosRestantes);
+          const anosAMostrar = Math.min(periodos, anosRestantes);
           
           // Calcular cuántos meses quedan en el año actual
           const mesesRestantesAnoActual = 12 - hoy.getMonth();
@@ -254,11 +274,11 @@ const AnalyticaFinanciamientos = () => {
         // Se paga en fecha de vencimiento
         const mesesHastaVencimiento = Math.max(0, (fechaVencimiento.getFullYear() - hoy.getFullYear()) * 12 + (fechaVencimiento.getMonth() - hoy.getMonth()));
         
-        if (periodoAmortizacion === "mensual" && mesesHastaVencimiento < 12) {
+        if (periodoAmortizacion === "mensual" && mesesHastaVencimiento < periodos) {
           data[mesesHastaVencimiento][credito.nombre] += credito.saldo_actual;
         } else if (periodoAmortizacion === "anual") {
           const anosHastaVencimiento = Math.floor(mesesHastaVencimiento / 12);
-          if (anosHastaVencimiento < 10) {
+          if (anosHastaVencimiento < periodos) {
             data[anosHastaVencimiento][credito.nombre] += credito.saldo_actual;
           }
         }
