@@ -248,7 +248,9 @@ const AnalyticaFinanciamientos = () => {
             data[i][credito.nombre] += amortizacionMensual;
           }
         } else {
-          const anosRestantes = Math.ceil(mesesRestantes / 12);
+        const anoVencimiento = fechaVencimiento.getFullYear();
+        const anoInicio = hoy.getFullYear();
+        const anosRestantes = (anoVencimiento - anoInicio) + 1; // +1 para incluir ambos años
           const anosAMostrar = Math.min(periodos, anosRestantes);
           
           // Calcular cuántos meses quedan en el año actual
