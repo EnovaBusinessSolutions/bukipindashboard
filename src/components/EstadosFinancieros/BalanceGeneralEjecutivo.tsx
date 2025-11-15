@@ -126,7 +126,9 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
   const balanceCuadrado = Math.abs(totalActivos - totalPasivoMasCapital) < 0.01;
 
   const formatCurrency = (value: number) => {
-    return `$${Math.abs(value).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+    const absValue = Math.abs(value);
+    const formatted = absValue.toLocaleString('es-CO', { minimumFractionDigits: 2 });
+    return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
   const LineItem = ({ 

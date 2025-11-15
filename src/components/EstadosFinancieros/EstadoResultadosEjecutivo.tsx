@@ -129,7 +129,9 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
   const formatCurrency = (value: number) => {
-    return `$${Math.abs(value).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+    const absValue = Math.abs(value);
+    const formatted = absValue.toLocaleString('es-CO', { minimumFractionDigits: 2 });
+    return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
   const LineItem = ({ 
@@ -174,7 +176,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
           {label}
         </span>
         <span className={`${getFontWeight()} ${getColor()} text-right`}>
-          {isNegative && value !== 0 ? `(${formatCurrency(value)})` : formatCurrency(value)}
+          {formatCurrency(value)}
         </span>
         <span className={`${getFontWeight()} ${getColor()} text-right`}>
           {isNegative && value !== 0 ? `(${percentage}%)` : `${percentage}%`}

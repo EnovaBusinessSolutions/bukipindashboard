@@ -258,7 +258,9 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
   });
 
   const formatCurrency = (value: number) => {
-    return `$${Math.abs(value).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    const absValue = Math.abs(value);
+    const formatted = absValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
   const CustomTooltipWaterfall = ({ active, payload }: any) => {
