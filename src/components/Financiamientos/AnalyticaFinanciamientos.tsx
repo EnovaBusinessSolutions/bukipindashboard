@@ -194,9 +194,14 @@ const AnalyticaFinanciamientos = () => {
       (fechaVencimientoMaxima.getMonth() - hoy.getMonth())
     );
 
+    const anoInicio = hoy.getFullYear();
+    const anoVencimiento = fechaVencimientoMaxima.getFullYear();
+    const anosNecesarios = (anoVencimiento - anoInicio) + 1; // +1 para incluir ambos años
+    const anosMinimos = 5; // Requisito: mínimo 5 años de proyección
+
     const periodos = periodoAmortizacion === "mensual" 
-      ? mesesHastaVencimientoMaximo // Todos los meses hasta el vencimiento
-      : Math.ceil(mesesHastaVencimientoMaximo / 12); // Años completos necesarios
+      ? mesesHastaVencimientoMaximo // Vista mensual: todos los meses hasta el vencimiento
+      : Math.max(anosMinimos, anosNecesarios); // Vista anual: mínimo 5 años o los años necesarios
     
     const data: any[] = [];
     const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
