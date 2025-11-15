@@ -88,7 +88,6 @@ const CuentasPorPagar = () => {
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("todos");
 
   const { data: cuentasPorPagar, isLoading } = useCuentasPorPagarConsolidadas();
-  const { data: tarjetasCredito } = useTarjetasCredito();
 
   const queryClient = useQueryClient();
 
@@ -341,35 +340,12 @@ const CuentasPorPagar = () => {
       }
     }
 
-    // Validar límite de crédito si se seleccionó tarjeta de crédito
-    if (metodoPago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
-      const tarjetaId = metodoPago.replace("tarjeta_credito_", "");
-      const validacion = validarLimiteCredito(tarjetaId, monto, tarjetasCredito);
-      
-      if (!validacion.valido) {
-        toast.error(validacion.mensaje);
-        return;
-      }
-    }
-
     registrarPagoMutation.mutate(
       {
         cuentaId: selectedCuenta.id,
         monto: monto,
         metodo: metodoPago,
         tipo: selectedCuenta.tipo_transaccion
-      },
-      {
-        onSuccess: async () => {
-          const tarjetaId = extraerIdTarjetaCredito(metodoPago);
-          if (tarjetaId) {
-            await actualizarSaldoTarjetaCredito(
-              tarjetaId, 
-              monto,
-              `Pago de cuenta: ${selectedCuenta?.proveedor_nombre || 'Proveedor'}`
-            );
-          }
-        }
       }
     );
   };
@@ -1229,13 +1205,6 @@ const CuentasPorPagar = () => {
                     <SelectContent>
                       <SelectItem value="efectivo">Efectivo</SelectItem>
                       <SelectItem value="transferencia">Transferencia Bancaria</SelectItem>
-                      <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                      {tarjetasCredito?.map((tarjeta) => (
-                        <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                          {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
-                        </SelectItem>
-                      ))}
                     </SelectContent>
                   </Select>
                 </div>
