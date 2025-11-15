@@ -301,6 +301,21 @@ const AnalyticaFinanciamientos = () => {
     .filter(f => f.saldo_actual > 0)
     .map(f => f.nombre);
 
+  // Calcular el valor máximo para el eje Y con 20% de margen
+  const limiteYAxis = (() => {
+    if (dataAmortizacionesFuturas.length === 0) return 0;
+    
+    // Encontrar el valor máximo sumando todos los créditos por periodo
+    const valorMaximo = Math.max(...dataAmortizacionesFuturas.map(periodo => {
+      return nombresCreditos.reduce((sum, nombre) => {
+        return sum + (periodo[nombre] || 0);
+      }, 0);
+    }));
+    
+    // Agregar 20% de margen superior
+    return valorMaximo * 1.2;
+  })();
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-4">
@@ -523,8 +538,11 @@ const AnalyticaFinanciamientos = () => {
             <BarChart data={dataAmortizacionesFuturas}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="periodo" />
-              <YAxis />
-              <Tooltip 
+              <YAxis 
+                domain={[0, limiteYAxis]}
+                allowDataOverflow={false}
+              />
+              <Tooltip
                 formatter={(value: number) => formatearValorCompleto(value)}
               />
               <Legend />
