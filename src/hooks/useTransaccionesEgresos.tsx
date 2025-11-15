@@ -21,7 +21,6 @@ interface TransaccionEgreso {
   imagen_comprobante: string | null;
   cuenta_codigo: string | null;
   subcuenta_id: string | null;
-  producto_imagen_url?: string | null;
 }
 
 export const useTransaccionesEgresos = (
@@ -35,10 +34,7 @@ export const useTransaccionesEgresos = (
     queryFn: async () => {
       let query = supabase
         .from('transacciones_egresos')
-        .select(`
-          *,
-          productos_egresos!left(imagen_url)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       // Aplicar filtros de fecha según período
@@ -65,15 +61,7 @@ export const useTransaccionesEgresos = (
 
       const { data, error } = await query;
       if (error) throw error;
-      
-      // Procesar datos para extraer imagen_url del JOIN
-      const processedData = data?.map((t: any) => ({
-        ...t,
-        producto_imagen_url: t.productos_egresos?.imagen_url || null,
-        productos_egresos: undefined
-      })) || [];
-      
-      return processedData;
+      return data || [];
     }
   });
 };

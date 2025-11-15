@@ -116,6 +116,17 @@ const AnalyticaEgresos = () => {
     fechaAnalisisMensual
   );
 
+  // Crear mapa de imágenes de productos por nombre para JOIN manual
+  const mapaImagenesProductos = useMemo(() => {
+    const mapa = new Map<string, string>();
+    (productosEgresos || []).forEach(p => {
+      if (p.imagen_url) {
+        mapa.set(p.nombre.toLowerCase().trim(), p.imagen_url);
+      }
+    });
+    return mapa;
+  }, [productosEgresos]);
+
   // Filtrar transacciones operativas: 5001, 5003, 5004 (Costo de Venta) + 5002 (Costo Inventario) + 51XX (Gastos) + 5204 (Otros Gastos)
   const filteredTransactions = useMemo(() => 
     transacciones.filter(
@@ -577,7 +588,7 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) {
         grouped[key] = {
           nombre: t.descripcion || 'Sin descripción',
-          imagen: t.producto_imagen_url || t.imagen_comprobante || null,
+          imagen: mapaImagenesProductos.get(t.descripcion?.toLowerCase()?.trim() || '') || t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
@@ -594,7 +605,7 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) {
         grouped[key] = {
           nombre: t.descripcion || 'Sin descripción',
-          imagen: t.producto_imagen_url || t.imagen_comprobante || null,
+          imagen: mapaImagenesProductos.get(t.descripcion?.toLowerCase()?.trim() || '') || t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
@@ -611,7 +622,7 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) {
         grouped[key] = {
           nombre: t.descripcion || 'Sin descripción',
-          imagen: t.producto_imagen_url || t.imagen_comprobante || null,
+          imagen: mapaImagenesProductos.get(t.descripcion?.toLowerCase()?.trim() || '') || t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
