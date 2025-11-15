@@ -397,7 +397,7 @@ const AnalyticaFinanciamientos = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Créditos Activos</CardTitle>
@@ -442,16 +442,18 @@ const AnalyticaFinanciamientos = () => {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Estado Vencimientos</CardTitle>
-              </CardHeader>
-              <CardContent>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Estado Vencimientos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              {/* COLUMNA IZQUIERDA - Estado */}
+              <div>
                 {(() => {
                   const hoy = new Date();
                   hoy.setHours(0, 0, 0, 0);
                   
-                  // Buscar créditos vencidos
                   const creditosVencidos = financiamientosActivos.filter(f => {
                     const fechaVencimiento = new Date(f.fecha_vencimiento);
                     fechaVencimiento.setHours(0, 0, 0, 0);
@@ -459,7 +461,6 @@ const AnalyticaFinanciamientos = () => {
                   });
                   
                   if (creditosVencidos.length === 0) {
-                    // ✅ AL DÍA
                     return (
                       <div className="flex items-center gap-2">
                         <div className="text-2xl font-bold text-green-600">✓</div>
@@ -468,10 +469,7 @@ const AnalyticaFinanciamientos = () => {
                     );
                   }
                   
-                  // ⚠️ CON ATRASOS
                   const montoAtrasado = creditosVencidos.reduce((sum, f) => sum + f.saldo_actual, 0);
-                  
-                  // Calcular el máximo atraso en días
                   const diasAtraso = Math.max(...creditosVencidos.map(f => {
                     const fechaVencimiento = new Date(f.fecha_vencimiento);
                     fechaVencimiento.setHours(0, 0, 0, 0);
@@ -485,62 +483,65 @@ const AnalyticaFinanciamientos = () => {
                         <div className="text-sm text-red-600 font-semibold">Atrasado</div>
                       </div>
                       <div className="text-lg font-bold text-red-600">
-                        ${montoAtrasado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        {diasAtraso} días
                       </div>
-                      <div className="text-xs text-red-600">
-                        {diasAtraso} día{diasAtraso !== 1 ? 's' : ''} de atraso
+                      <div className="text-xs text-muted-foreground">
+                        ${montoAtrasado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Configuración Visual</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="space-y-1">
-              <Label htmlFor="formato-global" className="text-xs text-muted-foreground">
-                Formato:
-              </Label>
-              <Select 
-                value={formatoVisualizacion} 
-                onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}
-              >
-                <SelectTrigger id="formato-global" className="h-7 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="miles">Miles (K)</SelectItem>
-                  <SelectItem value="millones">Millones (M)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-1">
-              <Label htmlFor="decimales-global" className="text-xs text-muted-foreground">
-                Decimales:
-              </Label>
-              <Select 
-                value={decimales.toString()} 
-                onValueChange={(value) => setDecimales(Number(value))}
-              >
-                <SelectTrigger id="decimales-global" className="h-7 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">0 decimales</SelectItem>
-                  <SelectItem value="1">1 decimal</SelectItem>
-                  <SelectItem value="2">2 decimales</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* COLUMNA DERECHA - Configuración Visual */}
+              <div className="space-y-2 border-l pl-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2">
+                  Configuración Visual
+                </div>
+                
+                <div className="space-y-1">
+                  <Label htmlFor="formato-global" className="text-xs text-muted-foreground">
+                    Formato:
+                  </Label>
+                  <Select 
+                    value={formatoVisualizacion} 
+                    onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}
+                  >
+                    <SelectTrigger id="formato-global" className="h-7 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="miles">Miles (K)</SelectItem>
+                      <SelectItem value="millones">Millones (M)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-1">
+                  <Label htmlFor="decimales-global" className="text-xs text-muted-foreground">
+                    Decimales:
+                  </Label>
+                  <Select 
+                    value={decimales.toString()} 
+                    onValueChange={(value) => setDecimales(Number(value))}
+                  >
+                    <SelectTrigger id="decimales-global" className="h-7 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0 decimales</SelectItem>
+                      <SelectItem value="1">1 decimal</SelectItem>
+                      <SelectItem value="2">2 decimales</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
+          </div>
+
 
       <div className="grid grid-cols-3 gap-4">
         <Card>
