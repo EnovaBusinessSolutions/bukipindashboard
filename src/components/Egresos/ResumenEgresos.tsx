@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
+import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,8 +21,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const ResumenEgresos = () => {
   const { data: transacciones = [], isLoading: loading } = useTransaccionesEgresos(200);
   const { data: costosVentaInventario, isLoading: loadingCostosVenta } = useCostosVentaInventario();
+  const { data: productosEgresos = [] } = useProductosEgresos();
   const { data: cuentasData } = useCuentas();
   const { toast } = useToast();
+
+  // Crear mapa de imágenes de productos por nombre para JOIN manual
+  const mapaImagenesProductos = useMemo(() => {
+    const mapa = new Map<string, string>();
+    (productosEgresos || []).forEach(p => {
+      if (p.imagen_url) {
+        mapa.set(p.nombre.toLowerCase().trim(), p.imagen_url);
+      }
+    });
+    return mapa;
+  }, [productosEgresos]);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [loadingAsientos, setLoadingAsientos] = useState(false);
@@ -162,7 +175,7 @@ const ResumenEgresos = () => {
       cuenta_codigo: cv.cuenta_codigo,
       monto_total: cv.monto_total,
       proveedor_nombre: cv.proveedor_nombre,
-      imagen_url: cv.imagen_comprobante,
+      imagen_url: mapaImagenesProductos.get(cv.descripcion?.toLowerCase()?.trim() || '') || cv.imagen_comprobante || null,
       cantidad: cv.cantidad,
       costo_unitario: cv.precio_unitario,
       numero_asiento: null,
@@ -181,7 +194,7 @@ const ResumenEgresos = () => {
       cuenta_codigo: g.cuenta_codigo,
       monto_total: g.monto_total,
       proveedor_nombre: g.proveedor_nombre,
-      imagen_url: g.imagen_comprobante,
+      imagen_url: mapaImagenesProductos.get(g.descripcion?.toLowerCase()?.trim() || '') || g.imagen_comprobante || null,
       cantidad: g.cantidad,
       costo_unitario: g.precio_unitario,
       numero_asiento: null,
@@ -200,7 +213,7 @@ const ResumenEgresos = () => {
       cuenta_codigo: og.cuenta_codigo,
       monto_total: og.monto_total,
       proveedor_nombre: og.proveedor_nombre,
-      imagen_url: og.imagen_comprobante,
+      imagen_url: mapaImagenesProductos.get(og.descripcion?.toLowerCase()?.trim() || '') || og.imagen_comprobante || null,
       cantidad: og.cantidad,
       costo_unitario: og.precio_unitario,
       numero_asiento: null,
