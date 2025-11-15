@@ -12,6 +12,8 @@ import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos
 import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
 import { useProveedores } from "@/hooks/useProveedores";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
+import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -66,6 +68,7 @@ const RegistroProductos = () => {
   const { proveedores, createProveedor } = useProveedores();
   const createProducto = useCreateProducto();
   const { data: saldosDisponibles, isLoading: loadingSaldos } = useSaldosDisponibles();
+  const { data: tarjetasCredito } = useTarjetasCredito();
 
   // Filtrar productos existentes con movimientos (compras o ventas)
   const productosExistentes = productosInventario?.filter(producto => 
@@ -256,6 +259,21 @@ const RegistroProductos = () => {
           return;
         }
       }
+
+      // Validar límite de crédito si se seleccionó tarjeta de crédito
+      if (data.metodoPago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+        const tarjetaId = data.metodoPago.replace("tarjeta_credito_", "");
+        const validacion = validarLimiteCredito(tarjetaId, montoPagoActual, tarjetasCredito);
+        
+        if (!validacion.valido) {
+          toast({
+            title: "⚠️ Límite de crédito excedido",
+            description: validacion.mensaje,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
     }
 
     let proveedorId = null;
@@ -332,6 +350,18 @@ const RegistroProductos = () => {
       subcuentaId: data.subcuentaId,
       imagen: selectedImage || undefined,
     });
+
+    // Actualizar saldo de tarjeta de crédito si se usó
+    if ((tipoPago === "contado" || tipoPago === "parcial") && montoPagado > 0) {
+      const tarjetaId = extraerIdTarjetaCredito(data.metodoPago);
+      if (tarjetaId) {
+        await actualizarSaldoTarjetaCredito(
+          tarjetaId, 
+          montoPagado,
+          `Compra de inventario: ${data.cantidad} unidades de ${data.nombre}`
+        );
+      }
+    }
 
     // Si hay pago parcial o pendiente, crear cuenta por pagar
     if ((tipoPago === "parcial" || tipoPago === "pendiente") && montoPendiente > 0) {
@@ -816,7 +846,7 @@ const RegistroProductos = () => {
                               <div className="flex items-center space-x-2">
                                 <CreditCard className="h-4 w-4 text-primary" />
                                 <Label htmlFor="bancos-inv" className="cursor-pointer">
-                                  Bancos <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
+                                  Transferencia/Tarjeta Bancaria <span className="text-sm text-muted-foreground">(se registra en Bancos)</span>
                                 </Label>
                               </div>
                               {/* Mostrar saldo disponible */}
@@ -849,6 +879,33 @@ const RegistroProductos = () => {
                             )}
                           </div>
                         </div>
+
+                        {/* Tarjetas de Crédito Corporativas */}
+                        {tarjetasCredito && tarjetasCredito.length > 0 && tarjetasCredito.map((tarjeta) => (
+                          <div key={tarjeta.id} className="flex items-center space-x-3">
+                            <RadioGroupItem 
+                              value={`tarjeta_credito_${tarjeta.id}`}
+                              id={`tarjeta-inv-${tarjeta.id}`}
+                              disabled={montoTotal > 0 && tarjeta.limite_disponible < (tipoPago === "contado" ? montoTotal : montoPagado)}
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <CreditCard className="h-4 w-4 text-purple-600" />
+                                  <Label htmlFor={`tarjeta-inv-${tarjeta.id}`} className="cursor-pointer">
+                                    {tarjeta.nombre}
+                                  </Label>
+                                </div>
+                                <Badge variant={tarjeta.limite_disponible >= (tipoPago === "contado" ? montoTotal : montoPagado) ? "outline" : "destructive"}>
+                                  Disponible: ${tarjeta.limite_disponible.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </Badge>
+                              </div>
+                              {tarjeta.limite_disponible < (tipoPago === "contado" ? montoTotal : montoPagado) && (
+                                <p className="text-xs text-destructive mt-1">Límite insuficiente</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </RadioGroup>
                     </div>
                   </>
