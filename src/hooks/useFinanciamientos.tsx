@@ -16,6 +16,7 @@ export interface Financiamiento {
   saldo_inicial: number;
   saldo_actual: number;
   institucion_financiera: string;
+  institucion_financiera_id?: string;
   numero_cuenta?: string;
   condiciones?: string;
   subcuenta_id?: string;

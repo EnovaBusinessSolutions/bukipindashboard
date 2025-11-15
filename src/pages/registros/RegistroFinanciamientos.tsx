@@ -7,10 +7,10 @@ import RegistroFinanciamientoForm from "@/components/Financiamientos/RegistroFin
 import RegistroDisposicionForm from "@/components/Financiamientos/RegistroDisposicionForm";
 import RegistroAmortizacionForm from "@/components/Financiamientos/RegistroAmortizacionForm";
 import RegistroCargoInteresForm from "@/components/Financiamientos/RegistroCargoInteresForm";
-
 import ResumenFinanciamientos from "@/components/Financiamientos/ResumenFinanciamientos";
 import DetalleCreditosFinanciamientos from "@/components/Financiamientos/DetalleCreditosFinanciamientos";
 import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
+import CatalogoAcreedores from "@/components/Financiamientos/CatalogoAcreedores";
 
 const RegistroFinanciamientos = () => {
   const [tipoRegistro, setTipoRegistro] = useState<"" | "financiamiento" | "disposicion" | "amortizacion" | "interes">("");
@@ -25,11 +25,12 @@ const RegistroFinanciamientos = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="registro" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="registro">Registro</TabsTrigger>
             <TabsTrigger value="detalle">Detalle</TabsTrigger>
             <TabsTrigger value="resumen">Resumen Transacciones</TabsTrigger>
             <TabsTrigger value="analitica">Analítica</TabsTrigger>
+            <TabsTrigger value="catalogo">Catálogo</TabsTrigger>
           </TabsList>
 
           <TabsContent value="registro" className="space-y-6">
@@ -114,6 +115,10 @@ const RegistroFinanciamientos = () => {
 
           <TabsContent value="analitica">
             <AnalyticaFinanciamientos />
+          </TabsContent>
+
+          <TabsContent value="catalogo">
+            <CatalogoAcreedores />
           </TabsContent>
         </Tabs>
       </div>

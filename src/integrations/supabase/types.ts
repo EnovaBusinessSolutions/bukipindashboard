@@ -238,6 +238,7 @@ export type Database = {
           fecha_vencimiento: string
           id: string
           institucion_financiera: string
+          institucion_financiera_id: string | null
           monto_total: number
           nombre: string
           numero_cuenta: string | null
@@ -260,6 +261,7 @@ export type Database = {
           fecha_vencimiento: string
           id?: string
           institucion_financiera: string
+          institucion_financiera_id?: string | null
           monto_total: number
           nombre: string
           numero_cuenta?: string | null
@@ -282,6 +284,7 @@ export type Database = {
           fecha_vencimiento?: string
           id?: string
           institucion_financiera?: string
+          institucion_financiera_id?: string | null
           monto_total?: number
           nombre?: string
           numero_cuenta?: string | null
@@ -291,6 +294,77 @@ export type Database = {
           subcuenta_id?: string | null
           tasa_interes?: number
           tipo_credito?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamientos_institucion_financiera_id_fkey"
+            columns: ["institucion_financiera_id"]
+            isOneToOne: false
+            referencedRelation: "instituciones_financieras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instituciones_financieras: {
+        Row: {
+          activo: boolean
+          ciudad: string | null
+          codigo_postal: string | null
+          created_at: string
+          direccion: string | null
+          ejecutivo_email: string | null
+          ejecutivo_nombre: string | null
+          ejecutivo_telefono: string | null
+          email_principal: string | null
+          estado: string | null
+          id: string
+          logo_url: string | null
+          nombre: string
+          notas: string | null
+          sitio_web: string | null
+          telefono_principal: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activo?: boolean
+          ciudad?: string | null
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string | null
+          ejecutivo_email?: string | null
+          ejecutivo_nombre?: string | null
+          ejecutivo_telefono?: string | null
+          email_principal?: string | null
+          estado?: string | null
+          id?: string
+          logo_url?: string | null
+          nombre: string
+          notas?: string | null
+          sitio_web?: string | null
+          telefono_principal?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activo?: boolean
+          ciudad?: string | null
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string | null
+          ejecutivo_email?: string | null
+          ejecutivo_nombre?: string | null
+          ejecutivo_telefono?: string | null
+          email_principal?: string | null
+          estado?: string | null
+          id?: string
+          logo_url?: string | null
+          nombre?: string
+          notas?: string | null
+          sitio_web?: string | null
+          telefono_principal?: string | null
           updated_at?: string
           user_id?: string
         }
