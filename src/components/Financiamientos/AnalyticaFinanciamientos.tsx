@@ -325,7 +325,7 @@ const AnalyticaFinanciamientos = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Créditos Activos</CardTitle>
@@ -367,9 +367,63 @@ const AnalyticaFinanciamientos = () => {
             <div className="text-2xl font-bold text-blue-600">
               {totalOriginal > 0 ? ((totalPagado / totalOriginal) * 100).toFixed(1) : 0}%
             </div>
-          </CardContent>
-        </Card>
-      </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Estado Vencimientos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const hoy = new Date();
+                  hoy.setHours(0, 0, 0, 0);
+                  
+                  // Buscar créditos vencidos
+                  const creditosVencidos = financiamientosActivos.filter(f => {
+                    const fechaVencimiento = new Date(f.fecha_vencimiento);
+                    fechaVencimiento.setHours(0, 0, 0, 0);
+                    return fechaVencimiento < hoy && f.saldo_actual > 0;
+                  });
+                  
+                  if (creditosVencidos.length === 0) {
+                    // ✅ AL DÍA
+                    return (
+                      <div className="flex items-center gap-2">
+                        <div className="text-2xl font-bold text-green-600">✓</div>
+                        <div className="text-sm text-green-600">Al día</div>
+                      </div>
+                    );
+                  }
+                  
+                  // ⚠️ CON ATRASOS
+                  const montoAtrasado = creditosVencidos.reduce((sum, f) => sum + f.saldo_actual, 0);
+                  
+                  // Calcular el máximo atraso en días
+                  const diasAtraso = Math.max(...creditosVencidos.map(f => {
+                    const fechaVencimiento = new Date(f.fecha_vencimiento);
+                    fechaVencimiento.setHours(0, 0, 0, 0);
+                    return Math.floor((hoy.getTime() - fechaVencimiento.getTime()) / (1000 * 60 * 60 * 24));
+                  }));
+                  
+                  return (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="text-2xl font-bold text-red-600">⚠</div>
+                        <div className="text-sm text-red-600 font-semibold">Atrasado</div>
+                      </div>
+                      <div className="text-lg font-bold text-red-600">
+                        ${montoAtrasado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-xs text-red-600">
+                        {diasAtraso} día{diasAtraso !== 1 ? 's' : ''} de atraso
+                      </div>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Card>
