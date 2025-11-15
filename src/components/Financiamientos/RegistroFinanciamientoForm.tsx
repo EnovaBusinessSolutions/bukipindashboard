@@ -11,15 +11,20 @@ import { CalendarIcon } from "lucide-react";
 import { format, addMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
+import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import InstitucionFinancieraSelector from "./InstitucionFinancieraSelector";
 
 const RegistroFinanciamientoForm = () => {
   const { crearFinanciamiento } = useFinanciamientos();
+  const { instituciones } = useInstitucionesFinancieras();
   const [step, setStep] = useState<'tipo' | 'datos'>("tipo");
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
     tipo_credito: "",
     institucion_financiera: "",
+    institucion_financiera_id: "",
     numero_cuenta: "",
     monto_total: "",
     tasa_interes: "",
@@ -28,6 +33,8 @@ const RegistroFinanciamientoForm = () => {
   });
   const [fechaInicio, setFechaInicio] = useState<Date>(new Date());
   const [fechaVencimiento, setFechaVencimiento] = useState<Date>();
+
+  const selectedInstitucion = instituciones.find((inst) => inst.id === formData.institucion_financiera_id);
 
   // Calcular automáticamente la fecha de vencimiento para créditos simples
   useEffect(() => {
@@ -52,6 +59,7 @@ const RegistroFinanciamientoForm = () => {
       descripcion: "",
       tipo_credito: "",
       institucion_financiera: "",
+      institucion_financiera_id: "",
       numero_cuenta: "",
       monto_total: "",
       tasa_interes: "",
@@ -74,6 +82,7 @@ const RegistroFinanciamientoForm = () => {
         descripcion: formData.descripcion,
         tipo_credito: formData.tipo_credito,
         institucion_financiera: formData.institucion_financiera,
+        institucion_financiera_id: formData.institucion_financiera_id || undefined,
         numero_cuenta: formData.numero_cuenta,
         monto_total: monto, // Límite de crédito
         tasa_interes: parseFloat(formData.tasa_interes),
@@ -96,6 +105,7 @@ const RegistroFinanciamientoForm = () => {
         descripcion: formData.descripcion,
         tipo_credito: formData.tipo_credito,
         institucion_financiera: formData.institucion_financiera,
+        institucion_financiera_id: formData.institucion_financiera_id || undefined,
         numero_cuenta: formData.numero_cuenta,
         monto_total: monto,
         tasa_interes: parseFloat(formData.tasa_interes),
@@ -115,6 +125,7 @@ const RegistroFinanciamientoForm = () => {
       descripcion: "",
       tipo_credito: "",
       institucion_financiera: "",
+      institucion_financiera_id: "",
       numero_cuenta: "",
       monto_total: "",
       tasa_interes: "",
@@ -203,13 +214,37 @@ const RegistroFinanciamientoForm = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="institucion">Institución Financiera *</Label>
-                <Input
-                  id="institucion"
-                  value={formData.institucion_financiera}
-                  onChange={(e) => setFormData({ ...formData, institucion_financiera: e.target.value })}
-                  placeholder="Ej: Banco Nacional"
-                  required
+                <InstitucionFinancieraSelector
+                  value={formData.institucion_financiera_id}
+                  onChange={(id, nombre) => {
+                    setFormData({ 
+                      ...formData, 
+                      institucion_financiera_id: id,
+                      institucion_financiera: nombre 
+                    });
+                  }}
                 />
+                {selectedInstitucion && (
+                  <Card className="mt-2 p-3 bg-muted">
+                    <div className="flex items-center gap-3">
+                      {selectedInstitucion.logo_url && (
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={selectedInstitucion.logo_url} />
+                          <AvatarFallback>{selectedInstitucion.nombre[0]}</AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div className="flex-1">
+                        <p className="font-medium">{selectedInstitucion.nombre}</p>
+                        {selectedInstitucion.ejecutivo_nombre && (
+                          <p className="text-sm text-muted-foreground">
+                            Ejecutivo: {selectedInstitucion.ejecutivo_nombre}
+                            {selectedInstitucion.ejecutivo_telefono && ` • ${selectedInstitucion.ejecutivo_telefono}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                )}
               </div>
 
               <div className="space-y-2">
