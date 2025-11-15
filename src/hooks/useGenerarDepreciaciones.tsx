@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 interface GenerarDepreciacionesParams {
   mes?: number;
   ano?: number;
+  origen?: 'automatico' | 'manual';
 }
 
 interface GenerarDepreciacionesResponse {
@@ -29,7 +30,7 @@ export const useGenerarDepreciaciones = () => {
   return useMutation({
     mutationFn: async (params: GenerarDepreciacionesParams = {}) => {
       const { data, error } = await supabase.functions.invoke('generar-depreciaciones-manual', {
-        body: params,
+        body: { ...params, origen: params.origen || 'manual' },
       });
 
       if (error) {

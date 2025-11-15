@@ -6,6 +6,7 @@ import { useTransaccionesInversionesConDepreciaciones } from "@/hooks/useTransac
 import { useAsientosInversion } from "@/hooks/useAsientosInversion";
 import { useAsientosInversionBulk } from "@/hooks/useAsientosInversionBulk";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
+import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const ResumenInversiones = () => {
   const { inversiones, isLoading: loadingInversiones, eliminarInversion, actualizarInversion } = useInversiones();
   const { transacciones, isLoading: loadingTransacciones } = useTransaccionesInversionesConDepreciaciones();
+  const { tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
   const [selectedTransaccion, setSelectedTransaccion] = useState<any>(null);
   const { data: asientoInversion, isLoading: loadingAsiento } = useAsientosInversion(
     selectedTransaccion?.inversion_id,
@@ -143,6 +145,17 @@ const ResumenInversiones = () => {
 
   return (
     <div className="space-y-6">
+      {tieneAtrasadas && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              <strong>{totalAtrasadas} depreciación(es) atrasada(s).</strong> Algunos activos no tienen depreciaciones registradas para períodos anteriores.
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       {!loadingAsientos && inversionesSinAsientos.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />

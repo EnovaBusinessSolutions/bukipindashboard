@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
 import { useGenerarDepreciaciones } from "@/hooks/useGenerarDepreciaciones";
-import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText, Play } from "lucide-react";
+import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
+import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText, Play, AlertTriangle } from "lucide-react";
 import { format, lastDayOfMonth, differenceInDays, addMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { useState, useMemo } from "react";
@@ -16,6 +18,7 @@ const ResumenDepreciaciones = () => {
   const { inversiones, isLoading } = useInversiones();
   const [expandedInversiones, setExpandedInversiones] = useState<string[]>([]);
   const { mutate: generarDepreciaciones, isPending } = useGenerarDepreciaciones();
+  const { depreciacionesAtrasadas, tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
   
   // Estado para selector de mes/año
   const fechaActual = new Date();
@@ -54,6 +57,7 @@ const ResumenDepreciaciones = () => {
     generarDepreciaciones({
       mes: parseInt(mesSeleccionado),
       ano: parseInt(anoSeleccionado),
+      origen: 'manual',
     });
   };
 
@@ -361,24 +365,66 @@ const ResumenDepreciaciones = () => {
                 </Select>
               </div>
             </div>
-            <Button 
-              onClick={handleGenerarDepreciaciones}
-              disabled={isPending || inversionesActivas.length === 0 || esMesPasado}
-              size="lg"
-              className="w-full sm:w-auto"
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Generando...
-                </>
-              ) : (
-                <>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  disabled={isPending || inversionesActivas.length === 0}
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
                   <Play className="h-4 w-4 mr-2" />
-                  Generar Depreciaciones
-                </>
-              )}
-            </Button>
+                  Generar Manualmente
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    Generación Manual de Depreciaciones
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-3 text-left">
+                    <p className="font-medium text-foreground">
+                      Las depreciaciones se generan automáticamente entre los días 28-31 de cada mes.
+                    </p>
+                    <p>
+                      <strong>Usa esta función solo si:</strong>
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-sm pl-2">
+                      <li>Necesitas registrar depreciaciones de meses anteriores</li>
+                      <li>El proceso automático falló por algún motivo</li>
+                      <li>Necesitas proyectar depreciaciones futuras</li>
+                    </ul>
+                    <p className="text-sm text-muted-foreground pt-2">
+                      Período seleccionado: <strong>{new Date(parseInt(anoSeleccionado), parseInt(mesSeleccionado) - 1).toLocaleString('es-MX', { month: 'long', year: 'numeric' })}</strong>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Fecha de registro: <strong>Hoy ({format(new Date(), "d 'de' MMMM, yyyy", { locale: es })})</strong>
+                    </p>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleGenerarDepreciaciones}
+                    disabled={isPending}
+                    className="gap-2"
+                  >
+                    {isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generando...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4" />
+                        Generar Ahora
+                      </>
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           
           {esMesPasado && (
@@ -438,6 +484,42 @@ const ResumenDepreciaciones = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* ALERTA DE DEPRECIACIONES ATRASADAS */}
+      {tieneAtrasadas && (
+        <Alert variant="destructive" className="border-l-4 border-red-500">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertDescription className="space-y-2">
+            <p className="font-semibold">
+              {totalAtrasadas} Período(s) de Depreciación Sin Registrar
+            </p>
+            <div className="text-sm space-y-1 mt-2">
+              {depreciacionesAtrasadas.slice(0, 5).map((atraso) => {
+                const ano = atraso.mesAno.substring(0, 4);
+                const mes = atraso.mesAno.substring(4, 6);
+                const fecha = new Date(parseInt(ano), parseInt(mes) - 1);
+                return (
+                  <div key={`${atraso.inversionId}-${atraso.mesAno}`} className="flex justify-between">
+                    <span>{atraso.productoNombre}</span>
+                    <span className="text-muted-foreground">
+                      {fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' })}
+                      {atraso.mesesAtrasados > 0 && ` (${atraso.mesesAtrasados} mes${atraso.mesesAtrasados > 1 ? 'es' : ''} atrás)`}
+                    </span>
+                  </div>
+                );
+              })}
+              {depreciacionesAtrasadas.length > 5 && (
+                <p className="text-muted-foreground italic pt-1">
+                  ... y {depreciacionesAtrasadas.length - 5} más
+                </p>
+              )}
+            </div>
+            <p className="text-sm mt-3">
+              Usa el botón <strong>"Generar Manualmente"</strong> arriba para registrar períodos atrasados.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Tabla de Depreciaciones por Activo */}
       <Card>

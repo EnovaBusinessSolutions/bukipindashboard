@@ -1,5 +1,8 @@
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
+import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
 import RegistroInversionForm from "@/components/Inversiones/RegistroInversionForm";
 import ResumenInversiones from "@/components/Inversiones/ResumenInversiones";
 import ResumenDepreciaciones from "@/components/Inversiones/ResumenDepreciaciones";
@@ -7,6 +10,8 @@ import BajaActivos from "@/components/Inversiones/BajaActivos";
 import AnalyticaInversiones from "@/components/Inversiones/AnalyticaInversiones";
 
 const RegistroInversiones = () => {
+  const { depreciacionesAtrasadas, tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
+
   return (
     <div className="h-full overflow-hidden flex flex-col">
       <div className="p-6 border-b bg-background">
@@ -14,6 +19,17 @@ const RegistroInversiones = () => {
         <p className="text-muted-foreground mt-2">
           Gestiona inversiones de capital, depreciación de activos y análisis financiero
         </p>
+        
+        {/* ALERTA DE DEPRECIACIONES ATRASADAS */}
+        {tieneAtrasadas && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Depreciaciones Atrasadas:</strong> {totalAtrasadas} período(s) sin registrar. 
+              Ve a la pestaña <strong>"Depreciaciones"</strong> para generarlas manualmente.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto p-6">

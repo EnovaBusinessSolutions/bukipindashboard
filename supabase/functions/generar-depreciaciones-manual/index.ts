@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Obtener parámetros (mes y año opcionales)
-    const { mes, ano } = await req.json().catch(() => ({}));
+    // Obtener parámetros (mes, año y origen opcionales)
+    const { mes, ano, origen = 'automatico' } = await req.json().catch(() => ({}));
     
     const fechaProceso = mes && ano 
       ? new Date(ano, mes - 1, 1)  // Si se especifica, usar esa fecha
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     const mesFormateado = fechaProceso.getMonth() + 1;
     const anoFormateado = fechaProceso.getFullYear();
 
-    console.log(`Generando depreciaciones para ${mesFormateado}/${anoFormateado} - Usuario: ${user.id}`);
+    console.log(`Generando depreciaciones para ${mesFormateado}/${anoFormateado} - Usuario: ${user.id} - Origen: ${origen}`);
 
     // Obtener todos los activos activos del usuario
     const { data: activos, error: activosError } = await supabaseClient
@@ -122,6 +122,20 @@ Deno.serve(async (req) => {
             }
           })();
 
+          // Determinar fecha del asiento según origen
+          const hoy = new Date();
+          let fechaAsiento: string;
+
+          if (origen === 'manual') {
+            // Manual: SIEMPRE usar fecha actual (el día que se genera)
+            fechaAsiento = hoy.toISOString().split('T')[0];
+            console.log(`Generación MANUAL - Usando fecha actual: ${fechaAsiento}`);
+          } else {
+            // Automático: usar último día del mes
+            fechaAsiento = new Date(anoFormateado, mesFormateado, 0).toISOString().split('T')[0];
+            console.log(`Generación AUTOMÁTICA - Usando último día del mes: ${fechaAsiento}`);
+          }
+
           // Crear el asiento contable
           const { data: nuevoAsiento, error: asientoError } = await supabaseClient
             .from('asientos_contables')
@@ -129,19 +143,7 @@ Deno.serve(async (req) => {
               user_id: user.id,
               numero_asiento: numeroAsiento,
               descripcion: `Depreciación mensual: ${activo.producto_nombre}`,
-              fecha: (() => {
-                const hoy = new Date();
-                const mesActual = hoy.getMonth() + 1;
-                const anoActual = hoy.getFullYear();
-                
-                // Si es el mes ACTUAL, usar la fecha de HOY
-                if (mesFormateado === mesActual && anoFormateado === anoActual) {
-                  return hoy;
-                }
-                
-                // Si es un mes FUTURO o PASADO, usar el último día del mes
-                return new Date(anoFormateado, mesFormateado, 0); // Día 0 = último día del mes anterior
-              })(),
+              fecha: fechaAsiento,
             })
             .select()
             .single();
