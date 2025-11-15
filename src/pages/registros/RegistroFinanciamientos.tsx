@@ -7,12 +7,13 @@ import RegistroFinanciamientoForm from "@/components/Financiamientos/RegistroFin
 import RegistroDisposicionForm from "@/components/Financiamientos/RegistroDisposicionForm";
 import RegistroAmortizacionForm from "@/components/Financiamientos/RegistroAmortizacionForm";
 import RegistroCargoInteresForm from "@/components/Financiamientos/RegistroCargoInteresForm";
+import RegistroCargoTarjetaForm from "@/components/Financiamientos/RegistroCargoTarjetaForm";
 import ResumenFinanciamientos from "@/components/Financiamientos/ResumenFinanciamientos";
 import DetalleCreditosFinanciamientos from "@/components/Financiamientos/DetalleCreditosFinanciamientos";
 import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
 
 const RegistroFinanciamientos = () => {
-  const [tipoRegistro, setTipoRegistro] = useState<"" | "financiamiento" | "disposicion" | "amortizacion" | "interes">("");
+  const [tipoRegistro, setTipoRegistro] = useState<"" | "financiamiento" | "disposicion" | "amortizacion" | "interes" | "cargo_tarjeta">("");
   return (
     <div className="h-full overflow-hidden flex flex-col">
       <div className="p-6 border-b bg-background">
@@ -33,7 +34,7 @@ const RegistroFinanciamientos = () => {
 
           <TabsContent value="registro" className="space-y-6">
             {!tipoRegistro ? (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("financiamiento")}>
                   <CardHeader>
                     <div className="flex items-center justify-center mb-4">
@@ -89,6 +90,20 @@ const RegistroFinanciamientos = () => {
                     </CardDescription>
                   </CardHeader>
                 </Card>
+
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("cargo_tarjeta")}>
+                  <CardHeader>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="p-3 bg-purple-500/10 rounded-full">
+                        <CreditCard className="h-8 w-8 text-purple-600" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-center">Cargo a Tarjeta</CardTitle>
+                    <CardDescription className="text-center">
+                      Registra compras o gastos con tarjeta corporativa
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
               </div>
             ) : (
               <div className="space-y-4">
@@ -99,6 +114,7 @@ const RegistroFinanciamientos = () => {
                 {tipoRegistro === "disposicion" && <RegistroDisposicionForm />}
                 {tipoRegistro === "amortizacion" && <RegistroAmortizacionForm />}
                 {tipoRegistro === "interes" && <RegistroCargoInteresForm />}
+                {tipoRegistro === "cargo_tarjeta" && <RegistroCargoTarjetaForm />}
               </div>
             )}
           </TabsContent>

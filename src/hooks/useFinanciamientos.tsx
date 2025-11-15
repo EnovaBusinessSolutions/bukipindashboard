@@ -160,12 +160,12 @@ export const useFinanciamientos = () => {
 
       console.log("Asiento contable creado:", asiento);
 
-      // Crear detalles del asiento (Débito a Bancos - cuenta 1001)
+      // Crear detalles del asiento (Débito a Bancos - cuenta 1002)
       const { error: errorDebito } = await supabase
         .from("detalle_asientos")
         .insert([{
           asiento_id: asiento.id,
-          cuenta_codigo: "1001",
+          cuenta_codigo: "1002",
           debe: financiamiento.monto_total,
           haber: 0,
           descripcion: `Desembolso de ${financiamiento.tipo_credito} - ${financiamiento.institucion_financiera}`,
@@ -287,12 +287,13 @@ export const useFinanciamientos = () => {
                 }]);
             }
 
-            // Crédito a Bancos (total del pago)
+            // Crédito a Bancos/Caja según método de pago
+            const cuentaPago = transaccion.metodo_pago === "efectivo" ? "1001" : "1002";
             await supabase
               .from("detalle_asientos")
               .insert([{
                 asiento_id: asiento.id,
-                cuenta_codigo: "1001",
+                cuenta_codigo: cuentaPago,
                 debe: 0,
                 haber: transaccion.monto,
                 descripcion: `Pago de financiamiento - ${financiamiento.nombre}`,
@@ -369,11 +370,237 @@ export const useFinanciamientos = () => {
     },
   });
 
+  const crearDisposicion = useMutation({
+    mutationFn: async (disposicion: {
+      financiamiento_id: string;
+      monto: number;
+      fecha: string;
+      metodo_pago: string;
+      descripcion?: string;
+      numero_referencia?: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      // Obtener financiamiento
+      const { data: financiamiento, error: errorFin } = await supabase
+        .from("financiamientos")
+        .select("*")
+        .eq("id", disposicion.financiamiento_id)
+        .single();
+
+      if (errorFin || !financiamiento) throw new Error("Financiamiento no encontrado");
+
+      // Validar que hay límite disponible
+      const limiteDisponible = financiamiento.monto_total - financiamiento.saldo_actual;
+      if (disposicion.monto > limiteDisponible) {
+        throw new Error(`Límite insuficiente. Disponible: $${limiteDisponible.toFixed(2)}`);
+      }
+
+      // Crear transacción
+      const nuevoSaldo = financiamiento.saldo_actual + disposicion.monto;
+      
+      const { error: errorTransaccion } = await supabase
+        .from("transacciones_financiamientos")
+        .insert([{
+          user_id: user.id,
+          financiamiento_id: disposicion.financiamiento_id,
+          tipo_transaccion: "disposicion",
+          monto: disposicion.monto,
+          fecha: disposicion.fecha,
+          capital_pagado: 0,
+          interes_pagado: 0,
+          saldo_restante: nuevoSaldo,
+          descripcion: disposicion.descripcion || `Disposición de línea revolvente`,
+          metodo_pago: disposicion.metodo_pago,
+          numero_referencia: disposicion.numero_referencia,
+        }]);
+
+      if (errorTransaccion) throw errorTransaccion;
+
+      // Actualizar saldo del financiamiento
+      const { error: errorUpdate } = await supabase
+        .from("financiamientos")
+        .update({ saldo_actual: nuevoSaldo })
+        .eq("id", disposicion.financiamiento_id);
+
+      if (errorUpdate) throw errorUpdate;
+
+      // Crear asiento contable
+      const { data: numeroAsiento } = await supabase
+        .rpc('generate_asiento_number', { p_user_id: user.id });
+
+      const { data: asiento } = await supabase
+        .from("asientos_contables")
+        .insert([{
+          user_id: user.id,
+          numero_asiento: numeroAsiento,
+          fecha: disposicion.fecha,
+          descripcion: `Disposición: ${financiamiento.nombre} - $${disposicion.monto.toFixed(2)}`,
+        }])
+        .select()
+        .single();
+
+      if (asiento) {
+        // DEBE: Bancos/Caja (aumenta el efectivo)
+        const cuentaDestino = disposicion.metodo_pago === "efectivo" ? "1001" : "1002";
+        await supabase
+          .from("detalle_asientos")
+          .insert([{
+            asiento_id: asiento.id,
+            cuenta_codigo: cuentaDestino,
+            debe: disposicion.monto,
+            haber: 0,
+            descripcion: `Disposición de ${financiamiento.nombre}`,
+          }]);
+
+        // HABER: Préstamos Bancarios (aumenta el pasivo)
+        await supabase
+          .from("detalle_asientos")
+          .insert([{
+            asiento_id: asiento.id,
+            cuenta_codigo: "2101",
+            debe: 0,
+            haber: disposicion.monto,
+            descripcion: `Disposición de línea revolvente - ${financiamiento.institucion_financiera}`,
+          }]);
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["financiamientos"] });
+      queryClient.invalidateQueries({ queryKey: ["transacciones_financiamientos"] });
+      toast({
+        title: "Disposición registrada",
+        description: "La disposición se ha registrado correctamente.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const crearCargoTarjeta = useMutation({
+    mutationFn: async (cargo: {
+      financiamiento_id: string;
+      monto: number;
+      fecha: string;
+      cuenta_gasto: string;
+      descripcion: string;
+      proveedor?: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      // Obtener tarjeta
+      const { data: tarjeta, error: errorTarjeta } = await supabase
+        .from("financiamientos")
+        .select("*")
+        .eq("id", cargo.financiamiento_id)
+        .single();
+
+      if (errorTarjeta || !tarjeta) throw new Error("Tarjeta no encontrada");
+
+      // Validar límite disponible
+      const limiteDisponible = tarjeta.monto_total - tarjeta.saldo_actual;
+      if (cargo.monto > limiteDisponible) {
+        throw new Error(`Límite excedido. Disponible: $${limiteDisponible.toFixed(2)}`);
+      }
+
+      // Actualizar saldo de la tarjeta
+      const nuevoSaldo = tarjeta.saldo_actual + cargo.monto;
+      const { error: errorUpdate } = await supabase
+        .from("financiamientos")
+        .update({ saldo_actual: nuevoSaldo })
+        .eq("id", cargo.financiamiento_id);
+
+      if (errorUpdate) throw errorUpdate;
+
+      // Crear transacción de financiamiento
+      await supabase
+        .from("transacciones_financiamientos")
+        .insert([{
+          user_id: user.id,
+          financiamiento_id: cargo.financiamiento_id,
+          tipo_transaccion: "cargo_tarjeta",
+          monto: cargo.monto,
+          fecha: cargo.fecha,
+          capital_pagado: 0,
+          interes_pagado: 0,
+          saldo_restante: nuevoSaldo,
+          descripcion: cargo.descripcion,
+        }]);
+
+      // Crear asiento contable
+      const { data: numeroAsiento } = await supabase
+        .rpc('generate_asiento_number', { p_user_id: user.id });
+
+      const { data: asiento } = await supabase
+        .from("asientos_contables")
+        .insert([{
+          user_id: user.id,
+          numero_asiento: numeroAsiento,
+          fecha: cargo.fecha,
+          descripcion: `Cargo tarjeta: ${tarjeta.nombre} - ${cargo.descripcion}`,
+        }])
+        .select()
+        .single();
+
+      if (asiento) {
+        // DEBE: Gasto específico (aumenta el gasto)
+        await supabase
+          .from("detalle_asientos")
+          .insert([{
+            asiento_id: asiento.id,
+            cuenta_codigo: cargo.cuenta_gasto,
+            debe: cargo.monto,
+            haber: 0,
+            descripcion: cargo.descripcion + (cargo.proveedor ? ` - ${cargo.proveedor}` : ''),
+          }]);
+
+        // HABER: Tarjeta de Crédito (aumenta el pasivo)
+        await supabase
+          .from("detalle_asientos")
+          .insert([{
+            asiento_id: asiento.id,
+            cuenta_codigo: "2101",
+            debe: 0,
+            haber: cargo.monto,
+            descripcion: `Cargo a ${tarjeta.nombre}`,
+          }]);
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["financiamientos"] });
+      queryClient.invalidateQueries({ queryKey: ["transacciones_financiamientos"] });
+      toast({
+        title: "Cargo registrado",
+        description: "El cargo a la tarjeta se ha registrado correctamente.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     financiamientos,
     transacciones,
     isLoading,
     crearFinanciamiento,
     crearTransaccion,
+    crearDisposicion,
+    crearCargoTarjeta,
   };
 };

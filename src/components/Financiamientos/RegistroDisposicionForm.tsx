@@ -37,6 +37,8 @@ const RegistroDisposicionForm = () => {
     ? financiamientoSeleccionado.monto_total - financiamientoSeleccionado.saldo_actual
     : 0;
 
+  const { crearDisposicion } = useFinanciamientos();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -47,22 +49,26 @@ const RegistroDisposicionForm = () => {
       return;
     }
 
-    // TODO: Implementar la lógica para registrar la disposición
-    console.log("Registrando disposición:", {
-      ...formData,
-      fecha: format(fecha, "yyyy-MM-dd"),
+    crearDisposicion.mutate({
+      financiamiento_id: formData.financiamiento_id,
       monto,
+      fecha: format(fecha, "yyyy-MM-dd"),
+      metodo_pago: formData.metodo_pago,
+      descripcion: formData.descripcion,
+      numero_referencia: formData.numero_referencia || undefined,
+    }, {
+      onSuccess: () => {
+        // Reset form
+        setFormData({
+          financiamiento_id: "",
+          monto: "",
+          descripcion: "",
+          metodo_pago: "",
+          numero_referencia: "",
+        });
+        setFecha(new Date());
+      }
     });
-
-    // Reset form
-    setFormData({
-      financiamiento_id: "",
-      monto: "",
-      descripcion: "",
-      metodo_pago: "",
-      numero_referencia: "",
-    });
-    setFecha(new Date());
   };
 
   if (lineasRevolventes.length === 0) {
