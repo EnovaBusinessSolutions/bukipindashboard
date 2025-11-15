@@ -7,13 +7,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = [
+  'hsl(180, 50%, 55%)',  // Teal claro - chart-1
+  'hsl(180, 45%, 45%)',  // Teal medio - chart-2
+  'hsl(180, 55%, 65%)',  // Teal más claro - chart-3
+  'hsl(180, 40%, 40%)',  // Teal oscuro - chart-4
+  'hsl(180, 60%, 70%)',  // Teal muy claro - chart-5
+];
 
 const AnalyticaFinanciamientos = () => {
   const { financiamientos, isLoading } = useFinanciamientos();
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<string>("todos");
+  const [creditoAmortizacion, setCreditoAmortizacion] = useState<string>("todos");
 
   if (isLoading) {
     return (
@@ -84,9 +91,9 @@ const AnalyticaFinanciamientos = () => {
   }));
 
   const dataComparacion = [
-    { name: "Monto Original", valor: totalOriginal, color: "#3b82f6" },
-    { name: "Monto Pagado", valor: totalPagado, color: "#10b981" },
-    { name: "Saldo Pendiente", valor: totalDeuda, color: "#ef4444" },
+    { name: "Monto Original", valor: totalOriginal, color: "hsl(180, 50%, 55%)" },
+    { name: "Monto Pagado", valor: totalPagado, color: "hsl(180, 45%, 45%)" },
+    { name: "Saldo Pendiente", valor: totalDeuda, color: "hsl(180, 40%, 40%)" },
   ];
 
   // Función para formatear valores según el formato seleccionado
@@ -173,8 +180,13 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular amortizaciones futuras por crédito
   const calcularAmortizacionesFuturas = () => {
+    // Filtrar por crédito seleccionado si no es "todos"
+    const financiamientosFiltradosAmort = creditoAmortizacion === "todos"
+      ? financiamientosActivos
+      : financiamientosActivos.filter(f => f.id === creditoAmortizacion);
+    
     // Solo incluir financiamientos con saldo real > 0
-    const financiamientosConDeuda = financiamientosActivos.filter(f => f.saldo_actual > 0);
+    const financiamientosConDeuda = financiamientosFiltradosAmort.filter(f => f.saldo_actual > 0);
     
     // Calcular la fecha de vencimiento más lejana de todos los créditos
     const hoy = new Date();
@@ -526,7 +538,7 @@ const AnalyticaFinanciamientos = () => {
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#3b82f6" }} />
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(180, 50%, 55%)" }} />
                   <span className="text-sm">Monto Original:</span>
                 </div>
                 <span className="text-sm font-semibold">
@@ -535,7 +547,7 @@ const AnalyticaFinanciamientos = () => {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#10b981" }} />
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(180, 45%, 45%)" }} />
                   <span className="text-sm">Monto Pagado:</span>
                 </div>
                 <span className="text-sm font-semibold text-green-600">
@@ -544,7 +556,7 @@ const AnalyticaFinanciamientos = () => {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#ef4444" }} />
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(180, 40%, 40%)" }} />
                   <span className="text-sm">Saldo Pendiente:</span>
                 </div>
                 <span className="text-sm font-semibold text-red-600">
@@ -566,6 +578,24 @@ const AnalyticaFinanciamientos = () => {
               </CardDescription>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="credito-amortizacion">Crédito:</Label>
+                <Select value={creditoAmortizacion} onValueChange={setCreditoAmortizacion}>
+                  <SelectTrigger id="credito-amortizacion" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {financiamientosActivos
+                      .filter(f => f.saldo_actual > 0)
+                      .map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.nombre}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="periodo-amortizacion">Periodo:</Label>
                 <Select value={periodoAmortizacion} onValueChange={(value: "mensual" | "anual") => setPeriodoAmortizacion(value)}>
