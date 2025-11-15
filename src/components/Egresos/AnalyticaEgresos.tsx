@@ -384,8 +384,8 @@ const AnalyticaEgresos = () => {
     });
 
     return Object.entries(grouped)
-      .map(([proveedor, monto]) => ({ proveedor, monto: formatearMonto(monto) }))
-      .sort((a, b) => b.monto - a.monto);
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+      .map(([proveedor, monto]) => ({ proveedor, monto: formatearMonto(monto as number) }));
   };
 
   const datosTopProveedores = useMemo(() => topProveedores(), 
@@ -577,7 +577,7 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) {
         grouped[key] = {
           nombre: t.descripcion || 'Sin descripción',
-          imagen: t.imagen_comprobante || null,
+          imagen: t.producto_imagen_url || t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
@@ -594,7 +594,7 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) {
         grouped[key] = {
           nombre: t.descripcion || 'Sin descripción',
-          imagen: t.imagen_comprobante || null,
+          imagen: t.producto_imagen_url || t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
@@ -611,7 +611,7 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) {
         grouped[key] = {
           nombre: t.descripcion || 'Sin descripción',
-          imagen: t.imagen_comprobante || null,
+          imagen: t.producto_imagen_url || t.imagen_comprobante || null,
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
