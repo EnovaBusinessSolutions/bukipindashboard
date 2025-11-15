@@ -2,16 +2,19 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, LogOut, User, Settings } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
 import { toast } from "@/hooks/use-toast";
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { totalAtrasadas, isLoading: loadingAtrasadas } = useDepreciacionesAtrasadas();
   const [openSections, setOpenSections] = useState({
     contabilidad: false,
     registros: false,
@@ -192,9 +195,14 @@ const Sidebar = () => {
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className={`w-full justify-start ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}`}
+                  className={`w-full justify-between ml-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200 ${item.active ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}`}
                 >
-                  {item.name}
+                  <span>{item.name}</span>
+                  {item.name === "Registro de Inversiones" && !loadingAtrasadas && totalAtrasadas > 0 && (
+                    <Badge variant="destructive" className="ml-auto text-xs">
+                      {totalAtrasadas}
+                    </Badge>
+                  )}
                 </Button>
               </Link>
             ))}

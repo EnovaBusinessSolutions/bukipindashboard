@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useDepreciacionesReales } from "@/hooks/useDepreciacionesReales";
+import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Treemap, Sankey, Rectangle, LabelList } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -12,6 +15,7 @@ const COLORS = ["#10b981", "#059669", "#047857", "#065f46", "#064e3b", "#34d399"
 const AnalyticaInversiones = () => {
   const { inversiones, isLoading } = useInversiones();
   const { data, isLoading: loadingDepreciaciones } = useDepreciacionesReales();
+  const { tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
   const depreciacionesReales = data?.depreciacionesPorInversion || {};
   const periodosRegistrados = data?.periodosRegistrados || {};
   const [periodoDepreciacion, setPeriodoDepreciacion] = useState<"mensual" | "anual">("mensual");
@@ -288,6 +292,17 @@ const AnalyticaInversiones = () => {
           </Select>
         </div>
       </div>
+
+      {/* ALERTA DE DEPRECIACIONES ATRASADAS */}
+      {tieneAtrasadas && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Advertencia:</strong> Hay {totalAtrasadas} período(s) de depreciación sin registrar. 
+            Los análisis pueden estar incompletos. Ve a la pestaña <strong>"Depreciaciones"</strong> para actualizar.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Tarjetas de Métricas Principales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
