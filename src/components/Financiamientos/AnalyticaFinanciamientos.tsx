@@ -498,11 +498,11 @@ const AnalyticaFinanciamientos = () => {
           </div>
 
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Configuración Visual</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
+          <CardContent className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="formato-global" className="text-xs text-muted-foreground">
                 Formato:
               </Label>
@@ -510,7 +510,7 @@ const AnalyticaFinanciamientos = () => {
                 value={formatoVisualizacion} 
                 onValueChange={(value: "normal" | "miles" | "millones") => setFormatoVisualizacion(value)}
               >
-                <SelectTrigger id="formato-global" className="h-8 text-xs">
+                <SelectTrigger id="formato-global" className="h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -521,7 +521,7 @@ const AnalyticaFinanciamientos = () => {
               </Select>
             </div>
             
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="decimales-global" className="text-xs text-muted-foreground">
                 Decimales:
               </Label>
@@ -529,7 +529,7 @@ const AnalyticaFinanciamientos = () => {
                 value={decimales.toString()} 
                 onValueChange={(value) => setDecimales(Number(value))}
               >
-                <SelectTrigger id="decimales-global" className="h-8 text-xs">
+                <SelectTrigger id="decimales-global" className="h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,11 +587,16 @@ const AnalyticaFinanciamientos = () => {
               <BarChart 
                 data={dataComparacion}
                 layout="vertical"
-                margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                margin={{ top: 5, right: 15, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={120} />
+                <YAxis 
+                  type="category" 
+                  dataKey="name" 
+                  width={140}
+                  tick={{ fontSize: 11 }}
+                />
                 <Tooltip 
                   formatter={(value: number) => formatearValorCompleto(value)}
                 />
