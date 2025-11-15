@@ -187,10 +187,9 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
 
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(value);
+    const absValue = Math.abs(value);
+    const formatted = absValue.toLocaleString('es-CO', { minimumFractionDigits: 2 });
+    return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
   const CustomTreemapContent = ({ x, y, width, height, name, size, color }: any) => {
