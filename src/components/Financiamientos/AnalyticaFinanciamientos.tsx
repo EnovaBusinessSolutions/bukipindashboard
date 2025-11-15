@@ -227,11 +227,11 @@ const AnalyticaFinanciamientos = () => {
 
     // Calcular amortizaciones por cada crédito con deuda
     financiamientosConDeuda.forEach((credito) => {
-      const fechaInicio = new Date(credito.fecha_inicio);
       const fechaVencimiento = new Date(credito.fecha_vencimiento);
-      const mesesTranscurridos = Math.max(0, (hoy.getFullYear() - fechaInicio.getFullYear()) * 12 + (hoy.getMonth() - fechaInicio.getMonth()));
-      const totalMeses = credito.plazo_meses;
-      const mesesRestantes = Math.max(0, totalMeses - mesesTranscurridos);
+      const mesesRestantes = Math.max(0, 
+        (fechaVencimiento.getFullYear() - hoy.getFullYear()) * 12 + 
+        (fechaVencimiento.getMonth() - hoy.getMonth()) + 1 // +1 para incluir el mes de vencimiento
+      );
 
       if (credito.tipo_credito === "simple" || credito.tipo_credito === "arrendamiento") {
         // Amortizaciones iguales
@@ -486,7 +486,7 @@ const AnalyticaFinanciamientos = () => {
             <div>
               <CardTitle>Amortizaciones Futuras por Crédito</CardTitle>
               <CardDescription>
-                Proyección de pagos pendientes {periodoAmortizacion === "mensual" ? "en los próximos 12 meses" : "en los próximos 10 años"}
+                Proyección de pagos pendientes hasta el vencimiento de todos los créditos
               </CardDescription>
             </div>
             <div className="flex items-center gap-4">
