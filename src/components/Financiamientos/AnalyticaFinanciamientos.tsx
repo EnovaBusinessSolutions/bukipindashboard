@@ -843,7 +843,7 @@ const AnalyticaFinanciamientos = () => {
                 <Tooltip content={<CustomTooltipWaterfall />} />
                 
                 {/* Barra transparente para posicionamiento */}
-                <Bar dataKey="value" stackId="a" fill="transparent" />
+                <Bar dataKey="value" stackId="a" fill="none" stroke="none" isAnimationActive={false} />
                 
                 {/* Barra visible con colores */}
                 <Bar dataKey="start" stackId="a" radius={[8, 8, 0, 0]} label={renderCustomLabel}>
