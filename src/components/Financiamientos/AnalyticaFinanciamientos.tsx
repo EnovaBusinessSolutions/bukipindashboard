@@ -126,10 +126,6 @@ const AnalyticaFinanciamientos = () => {
   });
 
   // Funciones de formato para gráfica waterfall
-  const formatCurrency = (value: number) => {
-    return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
-
   const CustomTooltipWaterfall = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const chartData = payload[0].payload;
@@ -141,7 +137,7 @@ const AnalyticaFinanciamientos = () => {
         <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
           <p className="font-semibold text-foreground mb-1">{chartData.name}</p>
           <p className={`text-sm ${displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {formatCurrency(displayValue)}
+            {formatearValorCompleto(Math.abs(displayValue))}
           </p>
         </div>
       );
@@ -167,7 +163,7 @@ const AnalyticaFinanciamientos = () => {
         fontSize={12}
         fontWeight="bold"
       >
-        {formatCurrency(displayValue)}
+        ${formatearValor(displayValue)}
       </text>
     );
   };
@@ -297,40 +293,36 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular amortizaciones futuras por crédito
   const calcularAmortizacionesFuturas = () => {
-    // Filtrar por crédito seleccionado si no es "todos"
-    const financiamientosFiltradosAmort = creditoAmortizacion === "todos"
-      ? financiamientosActivos
-      : financiamientosActivos.filter(f => f.id === creditoAmortizacion);
-    
-    // Incluir todos los financiamientos activos (incluso con saldo 0) para visibilidad
-    const financiamientosConDeuda = financiamientosFiltradosAmort;
-    
-    // Calcular la fecha de vencimiento más lejana de todos los créditos
     const hoy = new Date();
+    
+    // IMPORTANTE: Calcular fechaVencimientoMaxima usando TODOS los financiamientos activos
+    // (no los filtrados) para que el rango de fechas no cambie al seleccionar un crédito
     let fechaVencimientoMaxima = new Date(hoy);
-
-    financiamientosConDeuda.forEach(credito => {
+    
+    financiamientosActivos.forEach(credito => {
       const fechaVencimiento = new Date(credito.fecha_vencimiento);
       if (fechaVencimiento > fechaVencimientoMaxima) {
         fechaVencimientoMaxima = fechaVencimiento;
       }
     });
 
-    // Calcular cuántos periodos necesitamos mostrar
-    const mesesHastaVencimientoMaximo = Math.max(
-      1, // Mínimo 1 periodo
-      (fechaVencimientoMaxima.getFullYear() - hoy.getFullYear()) * 12 + 
-      (fechaVencimientoMaxima.getMonth() - hoy.getMonth())
-    );
-
+    // Calcular periodos basados en el filtro de periodo (mensual/anual)
+    // NO basados en el crédito seleccionado
     const anoInicio = hoy.getFullYear();
     const anoVencimiento = fechaVencimientoMaxima.getFullYear();
-    const anosNecesarios = (anoVencimiento - anoInicio) + 1; // +1 para incluir ambos años
-    const anosMinimos = 5; // Requisito: mínimo 5 años de proyección
+    const anosNecesarios = (anoVencimiento - anoInicio) + 1;
+    const anosMinimos = 5;
 
     const periodos = periodoAmortizacion === "mensual" 
-      ? mesesHastaVencimientoMaximo // Vista mensual: todos los meses hasta el vencimiento
-      : Math.max(anosMinimos, anosNecesarios); // Vista anual: mínimo 5 años o los años necesarios
+      ? 12  // SIEMPRE 12 meses fijos para vista de corto plazo
+      : Math.max(anosMinimos, anosNecesarios);
+    
+    // DESPUÉS de calcular periodos, filtrar por crédito seleccionado
+    const financiamientosFiltradosAmort = creditoAmortizacion === "todos"
+      ? financiamientosActivos
+      : financiamientosActivos.filter(f => f.id === creditoAmortizacion);
+    
+    const financiamientosConDeuda = financiamientosFiltradosAmort;
     
     const data: any[] = [];
     const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -837,7 +829,7 @@ const AnalyticaFinanciamientos = () => {
                 />
                 <YAxis 
                   domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
-                  tickFormatter={(value) => formatCurrency(value)}
+                  tickFormatter={(value) => `$${formatearValor(value)}`}
                   tick={{ fill: 'hsl(var(--muted-foreground))' }}
                 />
                 <Tooltip content={<CustomTooltipWaterfall />} />
