@@ -110,7 +110,7 @@ const AnalyticaFinanciamientos = () => {
   const despuesUtilizada = lineaTotal - lineaUtilizada;
   waterfallRevolvente.push({
     name: "(-) Línea Utilizada",
-    value: despuesUtilizada,
+    value: lineaDisponible,
     start: lineaUtilizada,
     fill: "hsl(0, 70%, 55%)",
     isTotal: false
@@ -813,6 +813,7 @@ const AnalyticaFinanciamientos = () => {
                   tick={{ fill: 'hsl(var(--foreground))' }}
                 />
                 <YAxis 
+                  domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                   tickFormatter={(value) => formatCurrency(value)}
                   tick={{ fill: 'hsl(var(--muted-foreground))' }}
                 />
@@ -822,7 +823,13 @@ const AnalyticaFinanciamientos = () => {
                 <Bar dataKey="value" stackId="a" fill="transparent" />
                 
                 {/* Barra visible con colores */}
-                <Bar dataKey="start" stackId="a" radius={[8, 8, 0, 0]}>
+                <Bar dataKey="start" stackId="a" radius={[8, 8, 0, 0]} label={{
+                  position: 'top',
+                  fill: 'hsl(var(--foreground))',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                  formatter: (value: number) => formatCurrency(value)
+                }}>
                   {waterfallRevolvente.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
