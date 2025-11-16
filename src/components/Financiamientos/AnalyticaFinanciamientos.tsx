@@ -22,8 +22,9 @@ const AnalyticaFinanciamientos = () => {
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
   const [decimales, setDecimales] = useState<number>(2);
-  const [creditoSeleccionado, setCreditoSeleccionado] = useState<string>("todos");
   const [creditoAmortizacion, setCreditoAmortizacion] = useState<string>("todos");
+  const [creditoSimpleSeleccionado, setCreditoSimpleSeleccionado] = useState<string>("todos");
+  const [creditoRevolventeSeleccionado, setCreditoRevolventeSeleccionado] = useState<string>("todos");
 
   if (isLoading) {
     return (
@@ -36,15 +37,10 @@ const AnalyticaFinanciamientos = () => {
 
   const financiamientosActivos = financiamientos.filter(f => f.estado === "activo");
   
-  // Filtrar financiamientos según selección
-  const financiamientosFiltrados = creditoSeleccionado === "todos" 
-    ? financiamientosActivos 
-    : financiamientosActivos.filter(f => f.id === creditoSeleccionado);
-  
   // Separar tipos de crédito
-  const tarjetasCorporativas = financiamientosFiltrados.filter(f => f.tipo_credito === "tarjeta_corporativa");
-  const creditosRevolventes = financiamientosFiltrados.filter(f => f.tipo_credito === "revolvente");
-  const creditosSimples = financiamientosFiltrados.filter(f => 
+  const tarjetasCorporativas = financiamientosActivos.filter(f => f.tipo_credito === "tarjeta_corporativa");
+  const creditosRevolventes = financiamientosActivos.filter(f => f.tipo_credito === "revolvente");
+  const creditosSimples = financiamientosActivos.filter(f => 
     f.tipo_credito !== "tarjeta_corporativa" && f.tipo_credito !== "revolvente"
   );
   
@@ -63,6 +59,38 @@ const AnalyticaFinanciamientos = () => {
   const totalDeuda = deudaSimples + deudaTarjetas + deudaRevolvente;
   const totalOriginal = totalOriginalSimples; // Solo créditos simples tienen monto original fijo
   const totalPagado = totalPagadoSimples; // Solo créditos simples calculan pagos por diferencia
+
+  // LÓGICA PARA GRÁFICA DE CRÉDITOS SIMPLES
+  const creditosSimplesFiltrados = creditoSimpleSeleccionado === "todos"
+    ? creditosSimples
+    : creditosSimples.filter(f => f.id === creditoSimpleSeleccionado);
+
+  const totalOriginalSimplesFiltrado = creditosSimplesFiltrados.reduce((sum, f) => sum + f.saldo_inicial, 0);
+  const deudaSimplesFiltrada = creditosSimplesFiltrados.reduce((sum, f) => sum + f.saldo_actual, 0);
+  const totalPagadoSimplesFiltrado = totalOriginalSimplesFiltrado - deudaSimplesFiltrada;
+
+  const dataComparacionSimples = [
+    { name: "Monto Original", valor: totalOriginalSimplesFiltrado, color: "hsl(180, 50%, 55%)" },
+    { name: "Monto Pagado", valor: totalPagadoSimplesFiltrado, color: "hsl(142, 76%, 36%)" },
+    { name: "Saldo Pendiente", valor: deudaSimplesFiltrada, color: "hsl(0, 84%, 60%)" },
+  ];
+
+  // LÓGICA PARA GRÁFICA DE REVOLVENTES/TARJETAS
+  const creditosRevolventesYTarjetas = [...creditosRevolventes, ...tarjetasCorporativas];
+
+  const creditosRevolventesFiltrados = creditoRevolventeSeleccionado === "todos"
+    ? creditosRevolventesYTarjetas
+    : creditosRevolventesYTarjetas.filter(f => f.id === creditoRevolventeSeleccionado);
+
+  const lineaTotal = creditosRevolventesFiltrados.reduce((sum, f) => sum + (f.monto_total || 0), 0);
+  const lineaUtilizada = creditosRevolventesFiltrados.reduce((sum, f) => sum + f.saldo_actual, 0);
+  const lineaDisponible = lineaTotal - lineaUtilizada;
+
+  const dataComparacionRevolvente = [
+    { name: "Línea Total", valor: lineaTotal, color: "hsl(221, 83%, 53%)" },
+    { name: "Línea Utilizada", valor: lineaUtilizada, color: "hsl(0, 84%, 60%)" },
+    { name: "Línea Disponible", valor: lineaDisponible, color: "hsl(142, 76%, 36%)" },
+  ];
   
   // Mostrar todos los tipos activos con su saldo real (incluso si es 0)
   const porTipo = financiamientosActivos.reduce((acc, f) => {
@@ -98,12 +126,6 @@ const AnalyticaFinanciamientos = () => {
     percentage: totalDeudaPorTipo > 0 ? (item.saldo / totalDeudaPorTipo * 100) : 0,
     color: COLORS[index % COLORS.length]
   }));
-
-  const dataComparacion = [
-    { name: "Monto Original", valor: totalOriginal, color: "hsl(180, 50%, 55%)" },
-    { name: "Monto Pagado", valor: totalPagado, color: "hsl(180, 45%, 45%)" },
-    { name: "Saldo Pendiente", valor: totalDeuda, color: "hsl(180, 40%, 40%)" },
-  ];
 
   // Función para formatear valores según el formato seleccionado
   const formatearValor = (valor: number): string => {
@@ -547,7 +569,8 @@ const AnalyticaFinanciamientos = () => {
           </div>
 
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* PRIMERA FILA: Deuda por Tipo + Deuda por Acreedor */}
+      <div className="grid grid-cols-2 gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Deuda por Tipo de Crédito</CardTitle>
@@ -562,93 +585,6 @@ const AnalyticaFinanciamientos = () => {
                 content={<CustomTreemapContent />}
               />
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Flujo del Financiamiento</CardTitle>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="filtro-credito" className="text-xs">Crédito:</Label>
-                <Select value={creditoSeleccionado} onValueChange={setCreditoSeleccionado}>
-                  <SelectTrigger id="filtro-credito" className="w-40 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    {financiamientosActivos.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart 
-                data={dataComparacion}
-                layout="vertical"
-                margin={{ top: 5, right: 15, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis 
-                  type="category" 
-                  dataKey="name" 
-                  width={140}
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip 
-                  formatter={(value: number) => formatearValorCompleto(value)}
-                />
-                <Bar dataKey="valor" name="Monto">
-                  {dataComparacion.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                  <LabelList 
-                    dataKey="valor" 
-                    position="right"
-                    fill="#000"
-                    fontSize={11}
-                    fontWeight="bold"
-                    formatter={(value: number) => `$${formatearValor(value)}`}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(180, 50%, 55%)" }} />
-                  <span className="text-sm">Monto Original:</span>
-                </div>
-                <span className="text-sm font-semibold">
-                  ${totalOriginal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(180, 45%, 45%)" }} />
-                  <span className="text-sm">Monto Pagado:</span>
-                </div>
-                <span className="text-sm font-semibold text-green-600">
-                  ${totalPagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(180, 40%, 40%)" }} />
-                  <span className="text-sm">Saldo Pendiente:</span>
-                </div>
-                <span className="text-sm font-semibold text-red-600">
-                  ${totalDeuda.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
@@ -718,6 +654,123 @@ const AnalyticaFinanciamientos = () => {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* SEGUNDA FILA: Comportamiento Crédito Simple + Comportamiento Revolvente */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Gráfica 3: Comportamiento Crédito Simple */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Comportamiento Crédito Simple</CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="filtro-credito-simple" className="text-xs">Crédito:</Label>
+                <Select value={creditoSimpleSeleccionado} onValueChange={setCreditoSimpleSeleccionado}>
+                  <SelectTrigger id="filtro-credito-simple" className="w-40 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {creditosSimples.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nombre} {f.saldo_actual === 0 ? "(Saldo: $0)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <CardDescription>Monto original vs. pagado</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart 
+                data={dataComparacionSimples}
+                layout="vertical"
+                margin={{ top: 5, right: 15, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  type="number" 
+                  tickFormatter={(value) => `$${formatearValor(value)}`}
+                />
+                <YAxis dataKey="name" type="category" width={120} />
+                <Tooltip 
+                  formatter={(value: number) => formatearValorCompleto(value)}
+                  contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                />
+                <Bar dataKey="valor" radius={[0, 8, 8, 0]}>
+                  {dataComparacionSimples.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                  <LabelList 
+                    dataKey="valor" 
+                    position="right" 
+                    formatter={(value: number) => `$${formatearValor(value)}`}
+                    style={{ fill: 'hsl(var(--foreground))', fontSize: '12px', fontWeight: 'bold' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Gráfica 4: Comportamiento Revolvente/Tarjetas */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Comportamiento Revolvente/Tarjetas</CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="filtro-credito-revolvente" className="text-xs">Crédito:</Label>
+                <Select value={creditoRevolventeSeleccionado} onValueChange={setCreditoRevolventeSeleccionado}>
+                  <SelectTrigger id="filtro-credito-revolvente" className="w-40 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {creditosRevolventesYTarjetas.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nombre} {f.saldo_actual === 0 ? "(Sin disposiciones)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <CardDescription>Capacidad y utilización de líneas de crédito</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart 
+                data={dataComparacionRevolvente}
+                layout="vertical"
+                margin={{ top: 5, right: 15, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  type="number" 
+                  tickFormatter={(value) => `$${formatearValor(value)}`}
+                />
+                <YAxis dataKey="name" type="category" width={130} />
+                <Tooltip 
+                  formatter={(value: number) => formatearValorCompleto(value)}
+                  contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                />
+                <Bar dataKey="valor" radius={[0, 8, 8, 0]}>
+                  {dataComparacionRevolvente.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                  <LabelList 
+                    dataKey="valor" 
+                    position="right" 
+                    formatter={(value: number) => `$${formatearValor(value)}`}
+                    style={{ fill: 'hsl(var(--foreground))', fontSize: '12px', fontWeight: 'bold' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
