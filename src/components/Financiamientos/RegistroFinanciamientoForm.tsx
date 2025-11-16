@@ -36,7 +36,7 @@ const RegistroFinanciamientoForm = () => {
 
   const selectedInstitucion = instituciones.find((inst) => inst.id === formData.institucion_financiera_id);
 
-  // Calcular automáticamente la fecha de vencimiento para créditos simples
+  // Calcular automáticamente la fecha de vencimiento
   useEffect(() => {
     if (formData.tipo_credito === "simple" && fechaInicio && formData.plazo_meses) {
       const meses = parseInt(formData.plazo_meses);
@@ -44,6 +44,10 @@ const RegistroFinanciamientoForm = () => {
         const nuevaFechaVencimiento = addMonths(fechaInicio, meses);
         setFechaVencimiento(nuevaFechaVencimiento);
       }
+    } else if (formData.tipo_credito === "revolvente" && fechaInicio) {
+      // Para crédito revolvente: vencimiento a 1 año (12 meses)
+      const nuevaFechaVencimiento = addMonths(fechaInicio, 12);
+      setFechaVencimiento(nuevaFechaVencimiento);
     }
   }, [fechaInicio, formData.plazo_meses, formData.tipo_credito]);
 
@@ -69,6 +73,7 @@ const RegistroFinanciamientoForm = () => {
   };
 
   const esLineaCredito = formData.tipo_credito === "tarjeta_corporativa" || formData.tipo_credito === "revolvente";
+  const esRevolvente = formData.tipo_credito === "revolvente";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +93,9 @@ const RegistroFinanciamientoForm = () => {
         tasa_interes: parseFloat(formData.tasa_interes),
         plazo_meses: 1, // No aplica pero es requerido
         fecha_inicio: format(fechaInicio, "yyyy-MM-dd"),
-        fecha_vencimiento: format(addMonths(fechaInicio, 60), "yyyy-MM-dd"), // 5 años por defecto
+        fecha_vencimiento: fechaVencimiento 
+          ? format(fechaVencimiento, "yyyy-MM-dd") 
+          : format(addMonths(fechaInicio, formData.tipo_credito === "revolvente" ? 12 : 60), "yyyy-MM-dd"),
         saldo_inicial: 0,
         saldo_actual: 0,
         condiciones: formData.condiciones,
@@ -247,15 +254,18 @@ const RegistroFinanciamientoForm = () => {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="numero_cuenta">Número de {esLineaCredito ? "Tarjeta/Cuenta" : "Cuenta/Contrato"}</Label>
-                <Input
-                  id="numero_cuenta"
-                  value={formData.numero_cuenta}
-                  onChange={(e) => setFormData({ ...formData, numero_cuenta: e.target.value })}
-                  placeholder={esLineaCredito ? "**** **** **** 1234" : "Ej: 123456789"}
-                />
-              </div>
+              {/* Mostrar número de cuenta solo para tarjeta corporativa y créditos simples, NO para revolvente */}
+              {!esRevolvente && (
+                <div className="space-y-2">
+                  <Label htmlFor="numero_cuenta">Número de {esLineaCredito ? "Tarjeta/Cuenta" : "Cuenta/Contrato"}</Label>
+                  <Input
+                    id="numero_cuenta"
+                    value={formData.numero_cuenta}
+                    onChange={(e) => setFormData({ ...formData, numero_cuenta: e.target.value })}
+                    placeholder={esLineaCredito ? "**** **** **** 1234" : "Ej: 123456789"}
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="monto_total">{esLineaCredito ? "Límite de Crédito" : "Monto del Préstamo"} *</Label>
@@ -282,6 +292,42 @@ const RegistroFinanciamientoForm = () => {
                   required
                 />
               </div>
+
+              {/* Campos de fecha para crédito revolvente */}
+              {esRevolvente && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Fecha de Registro *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={fechaInicio}
+                          onSelect={(date) => date && setFechaInicio(date)}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Fecha de Vencimiento (1 año)</Label>
+                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará a 1 año"}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {!esLineaCredito && (
                 <>
