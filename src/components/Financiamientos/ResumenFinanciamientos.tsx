@@ -160,16 +160,70 @@ const ResumenFinanciamientos = () => {
         </Card>
       )}
 
-      {/* Financiamientos tradicionales (no tarjetas) */}
-      {financiamientos.filter(f => f.tipo_credito !== 'tarjeta_corporativa').length > 0 && (
+      {/* Líneas de Crédito Revolventes */}
+      {financiamientos.filter(f => f.tipo_credito === 'revolvente').length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Financiamientos Activos</CardTitle>
+            <CardTitle>Líneas de Crédito Revolventes</CardTitle>
           </CardHeader>
           <CardContent>
             <Accordion type="single" collapsible className="w-full">
               {financiamientos
-                .filter(f => f.tipo_credito !== 'tarjeta_corporativa')
+                .filter(f => f.tipo_credito === 'revolvente')
+                .map((financiamiento) => (
+                  <AccordionItem key={financiamiento.id} value={financiamiento.id}>
+                    <AccordionTrigger>
+                      <div className="flex justify-between items-center w-full pr-4">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">{financiamiento.nombre}</span>
+                          <span className="text-sm text-muted-foreground">{financiamiento.institucion_financiera}</span>
+                        </div>
+                        <div className="flex gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Línea Aprobada: </span>
+                            <span className="font-medium">${financiamiento.monto_total.toLocaleString('es-MX')}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Monto Utilizado: </span>
+                            <span className="font-medium text-destructive">
+                              ${financiamiento.saldo_actual.toLocaleString('es-MX')}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Disponible: </span>
+                            <span className="font-medium text-success">
+                              ${(financiamiento.monto_total - financiamiento.saldo_actual).toLocaleString('es-MX')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <TransaccionesFinanciamiento 
+                        financiamientoId={financiamiento.id}
+                        nombreFinanciamiento={financiamiento.nombre}
+                        montoTotal={financiamiento.monto_total}
+                        saldoActual={financiamiento.saldo_actual}
+                        saldoInicial={financiamiento.saldo_inicial}
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Créditos Simples (no revolventes ni tarjetas) */}
+      {financiamientos.filter(f => f.tipo_credito !== 'tarjeta_corporativa' && f.tipo_credito !== 'revolvente').length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Créditos Simples</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {financiamientos
+                .filter(f => f.tipo_credito !== 'tarjeta_corporativa' && f.tipo_credito !== 'revolvente')
                 .map((financiamiento) => (
                   <AccordionItem key={financiamiento.id} value={financiamiento.id}>
                     <AccordionTrigger>
@@ -184,15 +238,15 @@ const ResumenFinanciamientos = () => {
                             <span className="font-medium">${financiamiento.monto_total.toLocaleString('es-MX')}</span>
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Saldo Actual: </span>
-                            <span className="font-medium text-destructive">
-                              ${financiamiento.saldo_actual.toLocaleString('es-MX')}
+                            <span className="text-muted-foreground">Amortizado: </span>
+                            <span className="font-medium text-success">
+                              ${(financiamiento.monto_total - financiamiento.saldo_actual).toLocaleString('es-MX')}
                             </span>
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Pagado: </span>
-                            <span className="font-medium text-success">
-                              ${(financiamiento.monto_total - financiamiento.saldo_actual).toLocaleString('es-MX')}
+                            <span className="text-muted-foreground">Pendiente: </span>
+                            <span className="font-medium text-destructive">
+                              ${financiamiento.saldo_actual.toLocaleString('es-MX')}
                             </span>
                           </div>
                         </div>
