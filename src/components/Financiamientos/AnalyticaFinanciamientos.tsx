@@ -41,22 +41,28 @@ const AnalyticaFinanciamientos = () => {
     ? financiamientosActivos 
     : financiamientosActivos.filter(f => f.id === creditoSeleccionado);
   
-  // Separar tarjetas corporativas de financiamientos tradicionales
+  // Separar tipos de crédito
   const tarjetasCorporativas = financiamientosFiltrados.filter(f => f.tipo_credito === "tarjeta_corporativa");
-  const financiamientosTradicionales = financiamientosFiltrados.filter(f => f.tipo_credito !== "tarjeta_corporativa");
+  const creditosRevolventes = financiamientosFiltrados.filter(f => f.tipo_credito === "revolvente");
+  const creditosSimples = financiamientosFiltrados.filter(f => 
+    f.tipo_credito !== "tarjeta_corporativa" && f.tipo_credito !== "revolvente"
+  );
   
   // Para tarjetas: solo el saldo actual cuenta como deuda (lo utilizado)
   const deudaTarjetas = tarjetasCorporativas.reduce((sum, f) => sum + f.saldo_actual, 0);
   
-  // Para financiamientos tradicionales: usar saldo_inicial como monto original
-  const totalOriginalTradicional = financiamientosTradicionales.reduce((sum, f) => sum + f.saldo_inicial, 0);
-  const deudaTradicional = financiamientosTradicionales.reduce((sum, f) => sum + f.saldo_actual, 0);
-  const totalPagadoTradicional = totalOriginalTradicional - deudaTradicional;
+  // Para créditos revolventes: solo el saldo actual es deuda (no tienen "monto original")
+  const deudaRevolvente = creditosRevolventes.reduce((sum, f) => sum + f.saldo_actual, 0);
+  
+  // Para créditos simples: usar saldo_inicial como monto original
+  const totalOriginalSimples = creditosSimples.reduce((sum, f) => sum + f.saldo_inicial, 0);
+  const deudaSimples = creditosSimples.reduce((sum, f) => sum + f.saldo_actual, 0);
+  const totalPagadoSimples = totalOriginalSimples - deudaSimples;
   
   // Totales combinados
-  const totalDeuda = deudaTradicional + deudaTarjetas;
-  const totalOriginal = totalOriginalTradicional; // Tarjetas no cuentan como "monto original"
-  const totalPagado = totalPagadoTradicional; // Solo financiamientos tradicionales tienen pagos
+  const totalDeuda = deudaSimples + deudaTarjetas + deudaRevolvente;
+  const totalOriginal = totalOriginalSimples; // Solo créditos simples tienen monto original fijo
+  const totalPagado = totalPagadoSimples; // Solo créditos simples calculan pagos por diferencia
   
   // Mostrar todos los tipos activos con su saldo real (incluso si es 0)
   const porTipo = financiamientosActivos.reduce((acc, f) => {
