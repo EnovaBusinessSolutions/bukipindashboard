@@ -148,6 +148,29 @@ const AnalyticaFinanciamientos = () => {
     }
     return null;
   };
+
+  // Renderizador personalizado de etiquetas que muestra solo el valor 'start', no el acumulado
+  const renderCustomLabel = (props: any) => {
+    const { x, y, width, height, value, index } = props;
+    const entry = waterfallRevolvente[index];
+    
+    // Mostrar la etiqueta con el valor 'start', que es el valor real de la barra
+    const displayValue = entry.start;
+    
+    return (
+      <text
+        x={x + width / 2}
+        y={y - 5}
+        fill="hsl(var(--foreground))"
+        textAnchor="middle"
+        dominantBaseline="bottom"
+        fontSize={12}
+        fontWeight="bold"
+      >
+        {formatCurrency(displayValue)}
+      </text>
+    );
+  };
   
   // Mostrar todos los tipos activos con su saldo real (incluso si es 0)
   const porTipo = financiamientosActivos.reduce((acc, f) => {
@@ -823,13 +846,7 @@ const AnalyticaFinanciamientos = () => {
                 <Bar dataKey="value" stackId="a" fill="transparent" />
                 
                 {/* Barra visible con colores */}
-                <Bar dataKey="start" stackId="a" radius={[8, 8, 0, 0]} label={{
-                  position: 'top',
-                  fill: 'hsl(var(--foreground))',
-                  fontSize: 12,
-                  fontWeight: 'bold',
-                  formatter: (value: number) => formatCurrency(value)
-                }}>
+                <Bar dataKey="start" stackId="a" radius={[8, 8, 0, 0]} label={renderCustomLabel}>
                   {waterfallRevolvente.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
