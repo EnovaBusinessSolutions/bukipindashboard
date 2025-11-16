@@ -194,8 +194,8 @@ const AnalyticaFinanciamientos = () => {
       ? financiamientosActivos
       : financiamientosActivos.filter(f => f.id === creditoAmortizacion);
     
-    // Solo incluir financiamientos con saldo real > 0
-    const financiamientosConDeuda = financiamientosFiltradosAmort.filter(f => f.saldo_actual > 0);
+    // Incluir todos los financiamientos activos (incluso con saldo 0) para visibilidad
+    const financiamientosConDeuda = financiamientosFiltradosAmort;
     
     // Calcular la fecha de vencimiento más lejana de todos los créditos
     const hoy = new Date();
@@ -375,10 +375,8 @@ const AnalyticaFinanciamientos = () => {
 
   const acreedoresTop = calcularDeudaPorAcreedor();
   const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
-  // Solo mostrar créditos con deuda real
-  const nombresCreditos = financiamientosActivos
-    .filter(f => f.saldo_actual > 0)
-    .map(f => f.nombre);
+  // Mostrar todos los créditos activos en la leyenda (incluso con saldo 0)
+  const nombresCreditos = financiamientosActivos.map(f => f.nombre);
 
   // Calcular el valor máximo para el eje Y con 20% de margen
   const limiteYAxis = (() => {
@@ -736,13 +734,11 @@ const AnalyticaFinanciamientos = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    {financiamientosActivos
-                      .filter(f => f.saldo_actual > 0)
-                      .map((f) => (
-                        <SelectItem key={f.id} value={f.id}>
-                          {f.nombre}
-                        </SelectItem>
-                      ))}
+                    {financiamientosActivos.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nombre} {f.saldo_actual === 0 ? "(Sin disposiciones)" : ""}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
