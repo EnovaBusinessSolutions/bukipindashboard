@@ -4,7 +4,7 @@ import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap, ReferenceLine } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -72,7 +72,7 @@ const AnalyticaFinanciamientos = () => {
   const dataComparacionSimples = [
     { name: "Monto Original", valor: totalOriginalSimplesFiltrado, color: "hsl(180, 50%, 55%)" },
     { name: "Monto Pagado", valor: totalPagadoSimplesFiltrado, color: "hsl(142, 76%, 36%)" },
-    { name: "Saldo Pendiente", valor: deudaSimplesFiltrada, color: "hsl(0, 84%, 60%)" },
+    { name: "Saldo Pendiente", valor: deudaSimplesFiltrada, color: "hsl(0, 70%, 55%)" },
   ];
 
   // LÓGICA PARA GRÁFICA DE REVOLVENTES/TARJETAS
@@ -86,11 +86,68 @@ const AnalyticaFinanciamientos = () => {
   const lineaUtilizada = creditosRevolventesFiltrados.reduce((sum, f) => sum + f.saldo_actual, 0);
   const lineaDisponible = lineaTotal - lineaUtilizada;
 
-  const dataComparacionRevolvente = [
-    { name: "Línea Total", valor: lineaTotal, color: "hsl(221, 83%, 53%)" },
-    { name: "Línea Utilizada", valor: lineaUtilizada, color: "hsl(0, 84%, 60%)" },
-    { name: "Línea Disponible", valor: lineaDisponible, color: "hsl(142, 76%, 36%)" },
-  ];
+  // Estructura de datos para gráfica waterfall
+  interface ChartDataWaterfall {
+    name: string;
+    value: number;
+    start: number;
+    fill: string;
+    isTotal: boolean;
+  }
+
+  const waterfallRevolvente: ChartDataWaterfall[] = [];
+
+  // 1. Línea Total (inicio - teal)
+  waterfallRevolvente.push({
+    name: "Línea Total",
+    value: 0,
+    start: lineaTotal,
+    fill: "hsl(180, 50%, 55%)",
+    isTotal: true
+  });
+
+  // 2. Línea Utilizada (resta - rojo)
+  const despuesUtilizada = lineaTotal - lineaUtilizada;
+  waterfallRevolvente.push({
+    name: "(-) Línea Utilizada",
+    value: despuesUtilizada,
+    start: lineaUtilizada,
+    fill: "hsl(0, 70%, 55%)",
+    isTotal: false
+  });
+
+  // 3. Línea Disponible (resultado - verde)
+  waterfallRevolvente.push({
+    name: "= Línea Disponible",
+    value: 0,
+    start: lineaDisponible,
+    fill: "hsl(142, 76%, 36%)",
+    isTotal: true
+  });
+
+  // Funciones de formato para gráfica waterfall
+  const formatCurrency = (value: number) => {
+    return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
+  const CustomTooltipWaterfall = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const chartData = payload[0].payload;
+      const displayValue = chartData.isTotal 
+        ? chartData.start 
+        : (chartData.name.includes("(-)") ? -chartData.start : chartData.start);
+      
+      return (
+        <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
+          <p className="font-semibold text-foreground mb-1">{chartData.name}</p>
+          <p className={`text-sm ${displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(displayValue)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
   
   // Mostrar todos los tipos activos con su saldo real (incluso si es 0)
   const porTipo = financiamientosActivos.reduce((acc, f) => {
@@ -743,32 +800,36 @@ const AnalyticaFinanciamientos = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart 
-                data={dataComparacionRevolvente}
-                layout="vertical"
-                margin={{ top: 5, right: 15, left: 20, bottom: 5 }}
+              <BarChart
+                data={waterfallRevolvente}
+                margin={{ top: 20, right: 30, left: 60, bottom: 20 }}
+                barGap={8}
               >
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
-                  type="number" 
-                  tickFormatter={(value) => `$${formatearValor(value)}`}
+                  dataKey="name"
+                  angle={0}
+                  textAnchor="middle"
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
-                <YAxis dataKey="name" type="category" width={130} />
-                <Tooltip 
-                  formatter={(value: number) => formatearValorCompleto(value)}
-                  contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                <YAxis 
+                  tickFormatter={(value) => formatCurrency(value)}
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
                 />
-                <Bar dataKey="valor" radius={[0, 8, 8, 0]}>
-                  {dataComparacionRevolvente.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                <Tooltip content={<CustomTooltipWaterfall />} />
+                
+                {/* Barra transparente para posicionamiento */}
+                <Bar dataKey="value" stackId="a" fill="transparent" />
+                
+                {/* Barra visible con colores */}
+                <Bar dataKey="start" stackId="a" radius={[8, 8, 0, 0]}>
+                  {waterfallRevolvente.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
-                  <LabelList 
-                    dataKey="valor" 
-                    position="right" 
-                    formatter={(value: number) => `$${formatearValor(value)}`}
-                    style={{ fill: 'hsl(var(--foreground))', fontSize: '12px', fontWeight: 'bold' }}
-                  />
                 </Bar>
+                
+                {/* Línea de referencia en cero */}
+                <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeWidth={1} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
