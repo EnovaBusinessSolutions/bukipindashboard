@@ -192,21 +192,32 @@ const RegistroDisposicionForm = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="metodo_pago">Método de Pago</Label>
+              <Label htmlFor="metodo_pago">Método de Pago *</Label>
               <Select
                 value={formData.metodo_pago}
                 onValueChange={(value) => setFormData({ ...formData, metodo_pago: value })}
+                required
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona método" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="transferencia">Transferencia</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="transferencia">Transferencia/Bancos</SelectItem>
                   <SelectItem value="efectivo">Efectivo</SelectItem>
-                  <SelectItem value="domiciliacion">Domiciliación</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Mensaje informativo sobre método de pago */}
+            <div className="col-span-2">
+              <Alert className="bg-blue-50 border-blue-200">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-sm text-blue-800">
+                  <strong>Nota:</strong> Las disposiciones de crédito generalmente se realizan mediante 
+                  transferencia bancaria. La opción de efectivo está disponible para casos especiales 
+                  donde el usuario lo requiera.
+                </AlertDescription>
+              </Alert>
             </div>
 
             <div className="space-y-2">
