@@ -94,6 +94,7 @@ const TransaccionesFinanciamiento = ({
   const getTipoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
       desembolso: "Desembolso Inicial",
+      disposicion: "Disposición",
       amortizacion: "Amortización",
       cargo_interes: "Cargo por Interés",
     };
@@ -103,6 +104,7 @@ const TransaccionesFinanciamiento = ({
   const getTipoVariant = (tipo: string): "default" | "secondary" | "destructive" => {
     const variants: Record<string, "default" | "secondary" | "destructive"> = {
       desembolso: "secondary",
+      disposicion: "secondary",
       amortizacion: "default",
       cargo_interes: "destructive",
     };
@@ -114,6 +116,11 @@ const TransaccionesFinanciamiento = ({
       return {
         cargo: '1002 - Bancos',
         abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`
+      };
+    } else if (transaccion.tipo_transaccion === 'disposicion') {
+      return {
+        cargo: transaccion.metodo_pago === 'efectivo' ? '1001 - Caja' : '1002 - Bancos',
+        abono: `2101 - Préstamos Bancarios LP (${nombreFinanciamiento})`
       };
     } else if (transaccion.tipo_transaccion === 'amortizacion') {
       return {
