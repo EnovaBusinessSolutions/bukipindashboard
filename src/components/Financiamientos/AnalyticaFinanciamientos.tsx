@@ -459,10 +459,26 @@ const AnalyticaFinanciamientos = () => {
           }
         }
       } else if (credito.tipo_credito === "tarjeta_corporativa") {
-        // Pago al mes siguiente
-        if (periodoAmortizacion === "mensual") {
-          data[0][credito.nombre] += credito.saldo_actual;
-        } else {
+        // Verificar si ya se pagó en el mes actual
+        const fechaActual = new Date();
+        const mesActual = fechaActual.getMonth();
+        const anoActual = fechaActual.getFullYear();
+        
+        const pagosEnMesActual = (transacciones || []).filter(t => {
+          const fechaTransaccion = new Date(t.fecha);
+          return t.financiamiento_id === credito.id && 
+                 t.tipo_transaccion === 'amortizacion' &&
+                 fechaTransaccion.getMonth() === mesActual &&
+                 fechaTransaccion.getFullYear() === anoActual;
+        });
+
+        // Si ya se pagó este mes, mostrar el saldo en el próximo periodo (índice 1)
+        // Si no se ha pagado, mostrar en el periodo actual (índice 0)
+        const indice = pagosEnMesActual.length > 0 ? 1 : 0;
+        
+        if (periodoAmortizacion === "mensual" && indice < periodos) {
+          data[indice][credito.nombre] += credito.saldo_actual;
+        } else if (periodoAmortizacion === "anual") {
           data[0][credito.nombre] += credito.saldo_actual;
         }
       }
