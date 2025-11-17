@@ -27,6 +27,7 @@ const AnalyticaFinanciamientos = () => {
   const [creditoRevolventeSeleccionado, setCreditoRevolventeSeleccionado] = useState<string>("todos");
   const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<"mensual" | "anual">("mensual");
   const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<string>("total");
+  const [tipoGastoFiltro, setTipoGastoFiltro] = useState<"pagados" | "devengados">("devengados");
 
   if (isLoading) {
     return (
@@ -482,9 +483,26 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular gastos financieros históricos (intereses pagados)
   const calcularGastosFinancierosHistoricos = () => {
-    if (!financiamientos || !transacciones || transacciones.length === 0) return [];
+    if (!financiamientos || !transacciones || transacciones.length === 0) {
+      // Retornar al menos un periodo con valores en 0 para mostrar la gráfica
+      const hoy = new Date();
+      const periodoActual = periodoGastosFinancieros === "mensual" 
+        ? `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+        : `${hoy.getFullYear()}`;
+      
+      return [{
+        periodo: periodoActual,
+        simple: 0,
+        revolvente: 0,
+        tarjeta: 0,
+        total: 0,
+        periodoFormateado: periodoGastosFinancieros === "mensual"
+          ? hoy.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+          : `${hoy.getFullYear()}`
+      }];
+    }
     
-    // Crear un mapa de financiamiento_id -> tipo_credito para clasificar las transacciones
+    // Crear un mapa de financiamiento_id -> tipo_credito
     const financiamientosPorId = new Map(
       financiamientos.map(f => [f.id, f.tipo_credito])
     );
@@ -495,12 +513,38 @@ const AnalyticaFinanciamientos = () => {
       tipoCreditoAsociado: financiamientosPorId.get(t.financiamiento_id) || 'desconocido'
     }));
     
-    // Filtrar solo transacciones con intereses pagados
-    const transaccionesConIntereses = transaccionesConTipo.filter(t => (t.interes_pagado || 0) > 0);
+    // Filtrar según el tipo de visualización
+    const transaccionesRelevantes = transaccionesConTipo.filter(t => {
+      if (t.tipo_transaccion !== 'cargo_interes') return false;
+      
+      if (tipoGastoFiltro === "pagados") {
+        return (t.interes_pagado || 0) > 0;
+      } else {
+        // "devengados" = todos los cargos de interés (monto completo)
+        return t.monto > 0;
+      }
+    });
     
-    if (transaccionesConIntereses.length === 0) return [];
+    if (transaccionesRelevantes.length === 0) {
+      // Retornar al menos el periodo actual en 0
+      const hoy = new Date();
+      const periodoActual = periodoGastosFinancieros === "mensual" 
+        ? `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+        : `${hoy.getFullYear()}`;
+      
+      return [{
+        periodo: periodoActual,
+        simple: 0,
+        revolvente: 0,
+        tarjeta: 0,
+        total: 0,
+        periodoFormateado: periodoGastosFinancieros === "mensual"
+          ? hoy.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+          : `${hoy.getFullYear()}`
+      }];
+    }
     
-    // Agrupar por periodo (mes o año)
+    // Agrupar por periodo
     const datosPorPeriodo = new Map<string, {
       periodo: string,
       simple: number,
@@ -509,7 +553,7 @@ const AnalyticaFinanciamientos = () => {
       total: number
     }>();
     
-    transaccionesConIntereses.forEach(t => {
+    transaccionesRelevantes.forEach(t => {
       const fecha = new Date(t.fecha);
       let clavePeriodo: string;
       
@@ -530,26 +574,75 @@ const AnalyticaFinanciamientos = () => {
       }
       
       const datos = datosPorPeriodo.get(clavePeriodo)!;
-      const intereses = t.interes_pagado || 0;
+      
+      // Usar monto o interes_pagado según el filtro
+      const valor = tipoGastoFiltro === "pagados" 
+        ? (t.interes_pagado || 0) 
+        : t.monto;
       
       // Clasificar por tipo de crédito
       if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
-        datos.tarjeta += intereses;
+        datos.tarjeta += valor;
       } else if (t.tipoCreditoAsociado === 'revolvente') {
-        datos.revolvente += intereses;
+        datos.revolvente += valor;
       } else {
-        datos.simple += intereses;
+        datos.simple += valor;
       }
       
-      datos.total += intereses;
+      datos.total += valor;
     });
     
-    // Convertir a array y ordenar por periodo
+    // Llenar periodos faltantes con ceros para continuidad
+    const periodosArray = Array.from(datosPorPeriodo.keys()).sort();
+    if (periodosArray.length > 1) {
+      const primerPeriodo = periodosArray[0];
+      const ultimoPeriodo = periodosArray[periodosArray.length - 1];
+      
+      if (periodoGastosFinancieros === "mensual") {
+        const [añoInicio, mesInicio] = primerPeriodo.split('-').map(Number);
+        const [añoFin, mesFin] = ultimoPeriodo.split('-').map(Number);
+        
+        let fecha = new Date(añoInicio, mesInicio - 1);
+        const fechaFin = new Date(añoFin, mesFin - 1);
+        
+        while (fecha <= fechaFin) {
+          const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+          if (!datosPorPeriodo.has(clave)) {
+            datosPorPeriodo.set(clave, {
+              periodo: clave,
+              simple: 0,
+              revolvente: 0,
+              tarjeta: 0,
+              total: 0
+            });
+          }
+          fecha.setMonth(fecha.getMonth() + 1);
+        }
+      } else {
+        const añoInicio = parseInt(primerPeriodo);
+        const añoFin = parseInt(ultimoPeriodo);
+        
+        for (let año = añoInicio; año <= añoFin; año++) {
+          const clave = `${año}`;
+          if (!datosPorPeriodo.has(clave)) {
+            datosPorPeriodo.set(clave, {
+              periodo: clave,
+              simple: 0,
+              revolvente: 0,
+              tarjeta: 0,
+              total: 0
+            });
+          }
+        }
+      }
+    }
+    
+    // Convertir a array y ordenar
     const datosArray = Array.from(datosPorPeriodo.values()).sort((a, b) => 
       a.periodo.localeCompare(b.periodo)
     );
     
-    // Formatear los periodos para mejor visualización
+    // Formatear periodos
     return datosArray.map(d => ({
       ...d,
       periodoFormateado: periodoGastosFinancieros === "mensual" 
@@ -1059,10 +1152,25 @@ const AnalyticaFinanciamientos = () => {
             <div>
               <CardTitle>Evolución de Gastos Financieros</CardTitle>
               <CardDescription>
-                Histórico de intereses pagados por periodo
+                {tipoGastoFiltro === "devengados" 
+                  ? "Histórico de todos los cargos de intereses (pagados y pendientes)"
+                  : "Histórico de intereses efectivamente pagados"
+                }
               </CardDescription>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="tipo-gasto-filtro">Mostrar:</Label>
+                <Select value={tipoGastoFiltro} onValueChange={(value: "pagados" | "devengados") => setTipoGastoFiltro(value)}>
+                  <SelectTrigger id="tipo-gasto-filtro" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="devengados">Devengados</SelectItem>
+                    <SelectItem value="pagados">Pagados</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="tipo-gasto">Tipo:</Label>
                 <Select value={tipoGastoFinanciero} onValueChange={setTipoGastoFinanciero}>
@@ -1094,39 +1202,34 @@ const AnalyticaFinanciamientos = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {dataGastosFinancieros.length === 0 ? (
-            <div className="flex items-center justify-center h-[400px] text-muted-foreground">
-              No hay datos de gastos financieros para mostrar
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={dataGastosFinancieros}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="periodoFormateado"
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={dataGastosFinancieros}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="periodoFormateado"
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis tickFormatter={(value) => `$${formatearValor(value)}`} />
+              <Tooltip
+                formatter={(value: number) => formatearValorCompleto(value)}
+                labelStyle={{ color: '#000' }}
+              />
+              <Legend />
+              
+              {/* Renderizar líneas según el filtro seleccionado */}
+              {tipoGastoFinanciero === "total" && (
+                <Line 
+                  type="monotone" 
+                  dataKey="total" 
+                  stroke="hsl(180, 50%, 55%)" 
+                  strokeWidth={3}
+                  name="Total Intereses"
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 6 }}
                 />
-                <YAxis tickFormatter={(value) => `$${formatearValor(value)}`} />
-                <Tooltip
-                  formatter={(value: number) => formatearValorCompleto(value)}
-                  labelStyle={{ color: '#000' }}
-                />
-                <Legend />
-                
-                {/* Renderizar líneas según el filtro seleccionado */}
-                {tipoGastoFinanciero === "total" && (
-                  <Line 
-                    type="monotone" 
-                    dataKey="total" 
-                    stroke="hsl(180, 50%, 55%)" 
-                    strokeWidth={3}
-                    name="Total Intereses"
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                )}
+              )}
                 
                 {tipoGastoFinanciero === "simple" && (
                   <Line 
@@ -1197,7 +1300,6 @@ const AnalyticaFinanciamientos = () => {
                 )}
               </LineChart>
             </ResponsiveContainer>
-          )}
         </CardContent>
       </Card>
     </div>
