@@ -337,13 +337,13 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
               const valorFinal = d.value + d.start;
               return valorFinal < 0 || d.value < 0;
             });
-            const bottomMargin = hayValoresNegativos ? 160 : 120;
+            const bottomMargin = hayValoresNegativos ? 210 : 120;
             
             return (
-              <ResponsiveContainer width="100%" height={700}>
+              <ResponsiveContainer width="100%" height={850}>
                 <BarChart
                   data={waterfallData}
-                  margin={{ top: 20, right: 30, left: 100, bottom: bottomMargin }}
+                  margin={{ top: 20, right: 20, left: 75, bottom: bottomMargin }}
               barGap={8}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
