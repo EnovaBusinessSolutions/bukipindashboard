@@ -633,15 +633,19 @@ const AnalyticaFinanciamientos = () => {
       });
       
       // Retornar los 12 meses ordenados
-      return Array.from(datosPorPeriodo.values())
-        .sort((a, b) => a.periodo.localeCompare(b.periodo))
-        .map(d => ({
+    return Array.from(datosPorPeriodo.values())
+      .sort((a, b) => a.periodo.localeCompare(b.periodo))
+      .map(d => {
+        // Parsear manualmente para evitar problemas de zona horaria
+        const [año, mes] = d.periodo.split('-');
+        const nombresMeses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        const nombreMes = nombresMeses[parseInt(mes) - 1];
+        
+        return {
           ...d,
-          periodoFormateado: new Date(d.periodo + "-01").toLocaleDateString('es-MX', { 
-            month: 'short', 
-            year: 'numeric' 
-          })
-        }));
+          periodoFormateado: `${nombreMes} ${año}`
+        };
+      });
       
     } else {
       // MODO ANUAL: Solo años con datos
