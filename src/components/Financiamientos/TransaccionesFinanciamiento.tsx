@@ -127,14 +127,14 @@ const TransaccionesFinanciamiento = ({
         cargo: `2101 - Créditos Bancarios (${nombreFinanciamiento})`,
         abono: transaccion.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos',
         adicional: transaccion.interes_pagado > 0 ? {
-          cargo: '5006 - Intereses Pagados',
+          cargo: '5201 - Gastos Financieros',
           abono: transaccion.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos',
           monto: transaccion.interes_pagado
         } : null
       };
     } else if (transaccion.tipo_transaccion === 'cargo_interes') {
       return {
-        cargo: '5006 - Intereses Pagados',
+        cargo: '5201 - Gastos Financieros',
         abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`
       };
     }
