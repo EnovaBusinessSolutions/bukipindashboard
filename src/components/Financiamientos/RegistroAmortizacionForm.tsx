@@ -140,20 +140,30 @@ const RegistroAmortizacionForm = () => {
       return;
     }
 
-    // Validar fondos suficientes
-    if (metodoPago === "efectivo" && saldos && montoTotal > saldos.efectivo) {
+    // FASE 1: Verificar que los saldos se hayan cargado
+    if (!saldos) {
       toast({
-        title: "Fondos insuficientes",
-        description: `No tienes suficiente efectivo. Disponible: $${formatCurrency(saldos.efectivo)}`,
+        title: "⚠️ Error de validación",
+        description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // FASE 2: Validar fondos suficientes
+    if (metodoPago === "efectivo" && montoTotal > saldos.efectivo) {
+      toast({
+        title: "💰 Saldo insuficiente en efectivo",
+        description: `Disponible: $${formatCurrency(saldos.efectivo)} | Necesitas: $${formatCurrency(montoTotal)}`,
         variant: "destructive",
       });
       return;
     }
 
-    if (metodoPago === "transferencia" && saldos && montoTotal > saldos.bancos) {
+    if (metodoPago === "transferencia" && montoTotal > saldos.bancos) {
       toast({
-        title: "Fondos insuficientes",
-        description: `No tienes suficiente saldo en bancos. Disponible: $${formatCurrency(saldos.bancos)}`,
+        title: "🏦 Saldo insuficiente en bancos",
+        description: `Disponible: $${formatCurrency(saldos.bancos)} | Necesitas: $${formatCurrency(montoTotal)}`,
         variant: "destructive",
       });
       return;

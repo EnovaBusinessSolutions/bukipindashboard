@@ -196,17 +196,19 @@ const RegistroProductos = () => {
     if (tipoPago === "contado" || tipoPago === "parcial") {
       const montoPagoActual = data.montoPagado;
       
-      if (data.metodoPago === "efectivo") {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast({
-            title: "Error",
-            description: "Usuario no autenticado",
-            variant: "destructive"
-          });
-          return;
-        }
+      // FASE 1: Verificar autenticación
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "⚠️ Error de autenticación",
+          description: "Usuario no autenticado",
+          variant: "destructive"
+        });
+        return;
+      }
 
+      // FASE 2: Validar saldo disponible según método de pago
+      if (data.metodoPago === "efectivo") {
         const { data: detalles } = await supabase
           .from("detalle_asientos")
           .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
@@ -220,8 +222,8 @@ const RegistroProductos = () => {
 
         if (montoPagoActual > efectivo) {
           toast({
-            title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${formatCurrency(efectivo)} | Monto solicitado: $${formatCurrency(montoPagoActual)}`,
+            title: "💰 Saldo insuficiente en efectivo",
+            description: `Disponible: $${formatCurrency(efectivo)} | Necesitas: $${formatCurrency(montoPagoActual)}`,
             variant: "destructive"
           });
           return;
@@ -229,16 +231,6 @@ const RegistroProductos = () => {
       }
 
       if (data.metodoPago === "bancos") {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast({
-            title: "Error",
-            description: "Usuario no autenticado",
-            variant: "destructive"
-          });
-          return;
-        }
-
         const { data: detalles } = await supabase
           .from("detalle_asientos")
           .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
@@ -252,8 +244,8 @@ const RegistroProductos = () => {
 
         if (montoPagoActual > bancos) {
           toast({
-            title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${formatCurrency(bancos)} | Monto solicitado: $${formatCurrency(montoPagoActual)}`,
+            title: "🏦 Saldo insuficiente en bancos",
+            description: `Disponible: $${formatCurrency(bancos)} | Necesitas: $${formatCurrency(montoPagoActual)}`,
             variant: "destructive"
           });
           return;

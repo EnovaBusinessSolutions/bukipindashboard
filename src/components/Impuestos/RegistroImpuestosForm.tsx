@@ -160,7 +160,7 @@ export const RegistroImpuestosForm = () => {
       }
     }
 
-    // Validar saldo disponible antes de registrar
+    // FASE 1: Validar saldo disponible antes de registrar
     let montoPagadoFinal = 0;
     if (tipoPago === "total") {
       montoPagadoFinal = parseFloat(isrReal);
@@ -176,15 +176,25 @@ export const RegistroImpuestosForm = () => {
           .eq("cuenta_codigo", "1001")
           .eq("asientos_contables.user_id", user.id);
 
+        if (!detalles) {
+          toast({
+            title: "⚠️ Error de validación",
+            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
+            variant: "destructive"
+          });
+          setIsSaving(false);
+          return;
+        }
+
         let efectivo = 0;
-        detalles?.forEach(detalle => {
+        detalles.forEach(detalle => {
           efectivo += (detalle.debe || 0) - (detalle.haber || 0);
         });
 
         if (montoPagadoFinal > efectivo) {
           toast({
-            title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${formatCurrency(efectivo)} | Monto solicitado: $${formatCurrency(montoPagadoFinal)}`,
+            title: "💰 Saldo insuficiente en efectivo",
+            description: `Disponible: $${formatCurrency(efectivo)} | Necesitas: $${formatCurrency(montoPagadoFinal)}`,
             variant: "destructive"
           });
           setIsSaving(false);
@@ -199,15 +209,25 @@ export const RegistroImpuestosForm = () => {
           .eq("cuenta_codigo", "1002")
           .eq("asientos_contables.user_id", user.id);
 
+        if (!detalles) {
+          toast({
+            title: "⚠️ Error de validación",
+            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
+            variant: "destructive"
+          });
+          setIsSaving(false);
+          return;
+        }
+
         let bancos = 0;
-        detalles?.forEach(detalle => {
+        detalles.forEach(detalle => {
           bancos += (detalle.debe || 0) - (detalle.haber || 0);
         });
 
         if (montoPagadoFinal > bancos) {
           toast({
-            title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${formatCurrency(bancos)} | Monto solicitado: $${formatCurrency(montoPagadoFinal)}`,
+            title: "🏦 Saldo insuficiente en bancos",
+            description: `Disponible: $${formatCurrency(bancos)} | Necesitas: $${formatCurrency(montoPagadoFinal)}`,
             variant: "destructive"
           });
           setIsSaving(false);
