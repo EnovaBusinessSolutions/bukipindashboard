@@ -379,7 +379,12 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                     const isNegative = item.isTotal 
                       ? item.start < 0          // Subtotales: por signo del valor
                       : item.name.includes("(-)"); // Egresos: por nombre
-                    const displayValue = isNegative ? -item.start : item.start;
+                    
+                    // Para subtotales, usar directamente el valor (ya tiene su signo)
+                    // Para egresos, invertir el signo (start es positivo, queremos mostrar negativo)
+                    const displayValue = item.isTotal 
+                      ? item.start                              // Subtotales: valor directo
+                      : (item.name.includes("(-)") ? -item.start : item.start); // Egresos: invertir signo
                     
                     // Posicionar dinámicamente según el signo
                     const yPosition = isNegative 
