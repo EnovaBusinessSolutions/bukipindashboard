@@ -14,6 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface AjustePorcentaje {
   id: string;
@@ -24,6 +26,14 @@ interface AjustePorcentaje {
 
 export const FormularioAccionista = () => {
   const { accionistas, isLoading, crearAccionista, actualizarAccionista, eliminarAccionista } = useAccionistas();
+  
+  // Calcular porcentaje total asignado y disponible
+  const porcentajeTotalAsignado = accionistas.reduce(
+    (sum, a) => sum + (a.porcentaje_participacion || 0), 
+    0
+  );
+  const porcentajeDisponible = 100 - porcentajeTotalAsignado;
+  
   const [modoEdicion, setModoEdicion] = useState(false);
   const [accionistaEditandoId, setAccionistaEditandoId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
@@ -31,6 +41,12 @@ export const FormularioAccionista = () => {
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [rfc, setRfc] = useState("");
+  
+  // Validar si el porcentaje excede el límite disponible
+  const porcentajeNumerico = parseFloat(porcentaje) || 0;
+  const excedeLimite = modoEdicion 
+    ? false 
+    : porcentajeNumerico > porcentajeDisponible;
 
   // Estados para el diálogo de dilución
   const [mostrarDialogoDilucion, setMostrarDialogoDilucion] = useState(false);
@@ -62,6 +78,21 @@ export const FormularioAccionista = () => {
     e.preventDefault();
     
     if (!nombre.trim()) return;
+
+    const porcentajeNumerico = porcentaje ? parseFloat(porcentaje) : 0;
+    
+    // Validación: No permitir crear si excede el 100%
+    if (!modoEdicion) {
+      const nuevoTotal = porcentajeTotalAsignado + porcentajeNumerico;
+      if (nuevoTotal > 100) {
+        toast({
+          title: "Error de validación",
+          description: `El porcentaje excede el límite. Disponible: ${porcentajeDisponible.toFixed(2)}%`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     if (modoEdicion && accionistaEditandoId) {
       actualizarAccionista.mutate({
@@ -133,12 +164,18 @@ export const FormularioAccionista = () => {
   };
 
   const confirmarDilucion = async () => {
-    // Validar que la suma sea 100%
+    // Calcular suma de porcentajes ajustados + nuevo accionista
     const sumaPorcentajes = ajustesPorcentajes.reduce((sum, a) => sum + a.porcentajeNuevo, 0) + 
                             (nuevoAccionistaData?.porcentaje_participacion || 0);
-    
+
+    // Validar que la suma sea EXACTAMENTE 100%
     if (Math.abs(sumaPorcentajes - 100) > 0.01) {
-      return; // No hacer nada si no suma 100%
+      toast({
+        title: "Validación de participación",
+        description: `La suma debe ser exactamente 100%. Actual: ${sumaPorcentajes.toFixed(2)}%`,
+        variant: "destructive",
+      });
+      return;
     }
 
     // Crear el nuevo accionista
@@ -251,7 +288,9 @@ export const FormularioAccionista = () => {
             {/* Validación de Suma */}
             <Alert variant={esSumaValida ? "default" : "destructive"}>
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Suma de Porcentajes</AlertTitle>
+              <AlertTitle>
+                {esSumaValida ? "✓ Suma correcta" : "⚠ Suma incorrecta"}
+              </AlertTitle>
               <AlertDescription>
                 <div className="flex justify-between items-center mt-2">
                   <span>Total:</span>
@@ -259,9 +298,13 @@ export const FormularioAccionista = () => {
                     {sumaPorcentajes.toFixed(2)}%
                   </span>
                 </div>
-                {!esSumaValida && (
+                {esSumaValida ? (
+                  <p className="text-sm mt-2 text-green-600">
+                    ✓ La distribución es válida
+                  </p>
+                ) : (
                   <p className="text-sm mt-2">
-                    ⚠️ La suma debe ser exactamente 100%. Ajusta los porcentajes de los accionistas actuales.
+                    ⚠️ Debe ser exactamente 100% ({sumaPorcentajes > 100 ? 'excede' : 'falta'} {Math.abs(100 - sumaPorcentajes).toFixed(2)}%)
                   </p>
                 )}
               </AlertDescription>
@@ -285,6 +328,61 @@ export const FormularioAccionista = () => {
       </Dialog>
 
       <div className="space-y-6">
+        {/* Tarjeta de Estado de Participación Societaria */}
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Estado de Participación Societaria</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                <p className="text-sm text-muted-foreground mb-1">Total Asignado</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {porcentajeTotalAsignado.toFixed(2)}%
+                </p>
+              </div>
+              
+              <div className={cn(
+                "text-center p-4 border rounded-lg",
+                porcentajeDisponible === 0 
+                  ? "bg-green-50 dark:bg-green-950/20" 
+                  : "bg-orange-50 dark:bg-orange-950/20"
+              )}>
+                <p className="text-sm text-muted-foreground mb-1">Disponible</p>
+                <p className={cn(
+                  "text-2xl font-bold",
+                  porcentajeDisponible === 0 ? "text-green-600" : "text-orange-600"
+                )}>
+                  {porcentajeDisponible.toFixed(2)}%
+                </p>
+              </div>
+              
+              <div className="text-center p-4 border rounded-lg bg-purple-50 dark:bg-purple-950/20">
+                <p className="text-sm text-muted-foreground mb-1">Accionistas</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {accionistas.length}
+                </p>
+              </div>
+            </div>
+            
+            {porcentajeDisponible !== 0 && (
+              <Alert className="mt-4" variant={porcentajeDisponible > 0 ? "default" : "destructive"}>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>
+                  {porcentajeDisponible > 0 
+                    ? "Participación incompleta" 
+                    : "Participación excedida"}
+                </AlertTitle>
+                <AlertDescription>
+                  {porcentajeDisponible > 0 
+                    ? `Faltan ${porcentajeDisponible.toFixed(2)}% por asignar a accionistas` 
+                    : `Se ha excedido el límite en ${Math.abs(porcentajeDisponible).toFixed(2)}%`}
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -313,17 +411,41 @@ export const FormularioAccionista = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="porcentaje">% de Participación</Label>
-              <Input
-                id="porcentaje"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                placeholder="0.00"
-                value={porcentaje}
-                onChange={(e) => setPorcentaje(e.target.value)}
-              />
+              <Label htmlFor="porcentaje">
+                % de Participación
+                {!modoEdicion && (
+                  <span className="text-xs text-muted-foreground ml-2">
+                    (Disponible: {porcentajeDisponible.toFixed(2)}%)
+                  </span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="porcentaje"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={modoEdicion ? 100 : porcentajeDisponible}
+                  placeholder={modoEdicion ? "0.00" : porcentajeDisponible.toFixed(2)}
+                  value={porcentaje}
+                  onChange={(e) => setPorcentaje(e.target.value)}
+                  className={cn("flex-1", excedeLimite && "border-destructive")}
+                />
+                {!modoEdicion && porcentajeDisponible > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setPorcentaje(porcentajeDisponible.toFixed(2))}
+                  >
+                    Asignar todo ({porcentajeDisponible.toFixed(2)}%)
+                  </Button>
+                )}
+              </div>
+              {excedeLimite && (
+                <p className="text-xs text-destructive">
+                  El porcentaje excede el disponible ({porcentajeDisponible.toFixed(2)}%)
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -411,6 +533,26 @@ export const FormularioAccionista = () => {
                   </div>
                 </div>
               ))}
+              
+              {/* Mostrar "Sin socio asignado" si hay porcentaje disponible */}
+              {porcentajeDisponible > 0 && (
+                <div className="flex items-center justify-between p-3 border-2 border-dashed border-orange-400 rounded-lg bg-orange-50 dark:bg-orange-950/20">
+                  <div className="flex-1">
+                    <p className="font-medium text-orange-700 dark:text-orange-400">
+                      Sin socio asignado
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Participación pendiente de asignar
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-orange-600">
+                      {porcentajeDisponible.toFixed(2)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">Disponible</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
