@@ -82,14 +82,7 @@ const RegistroAmortizacionForm = () => {
     const interes = parseFloat(interesPagado);
 
     // Validar que no se pague más de lo que debe
-    if (capital > capitalPendiente) {
-      toast({
-        title: "Error en el monto",
-        description: `No puedes pagar más capital del pendiente. Máximo: $${formatCurrency(capitalPendiente)}`,
-        variant: "destructive",
-      });
-      return;
-    }
+    // Capital: Se permite pagar más del saldo (genera saldo a favor en tarjetas de crédito)
 
     if (interes > interesesPendientes) {
       toast({
@@ -119,7 +112,7 @@ const RegistroAmortizacionForm = () => {
       return;
     }
 
-    const nuevoSaldo = financiamientoSeleccionado.saldo_actual - capital;
+    const nuevoSaldo = Math.max(0, financiamientoSeleccionado.saldo_actual - capital);
 
     crearTransaccion.mutate({
       financiamiento_id: financiamientoId,
@@ -231,7 +224,7 @@ const RegistroAmortizacionForm = () => {
                 step="0.01"
                 value={capitalPagado}
                 onChange={(e) => setCapitalPagado(e.target.value)}
-                placeholder={`Máx: $${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                placeholder={`Pendiente: $${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })} (puedes pagar más)`}
                 required
               />
               <p className="text-xs text-muted-foreground">
@@ -245,6 +238,7 @@ const RegistroAmortizacionForm = () => {
                 id="interes"
                 type="number"
                 step="0.01"
+                max={interesesPendientes}
                 value={interesPagado}
                 onChange={(e) => setInteresPagado(e.target.value)}
                 placeholder={`Máx: $${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
@@ -265,12 +259,18 @@ const RegistroAmortizacionForm = () => {
               </div>
               
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
-                  <p className="text-xs text-muted-foreground mb-1">Capital que quedará</p>
-                  <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                    ${Math.max(0, capitalPendiente - (parseFloat(capitalPagado) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
+              <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                <p className="text-xs text-muted-foreground mb-1">
+                  {(capitalPendiente - (parseFloat(capitalPagado) || 0)) < 0 ? "Saldo a Favor" : "Capital que quedará"}
+                </p>
+                <p className={`text-lg font-bold ${
+                  (capitalPendiente - (parseFloat(capitalPagado) || 0)) < 0 
+                    ? "text-green-600 dark:text-green-400" 
+                    : "text-purple-600 dark:text-purple-400"
+                }`}>
+                  ${Math.abs(capitalPendiente - (parseFloat(capitalPagado) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
                 
                 <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
                   <p className="text-xs text-muted-foreground mb-1">Intereses que quedarán</p>
@@ -282,14 +282,14 @@ const RegistroAmortizacionForm = () => {
               
               <div className={cn(
                 "p-3 rounded-lg border-2",
-                (capitalPendiente - (parseFloat(capitalPagado) || 0)) === 0 && (interesesPendientes - (parseFloat(interesPagado) || 0)) === 0
+                (capitalPendiente - (parseFloat(capitalPagado) || 0)) <= 0 && (interesesPendientes - (parseFloat(interesPagado) || 0)) === 0
                   ? "bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-700"
                   : "bg-white dark:bg-gray-950 border-purple-300 dark:border-purple-700"
               )}>
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">
-                    {(capitalPendiente - (parseFloat(capitalPagado) || 0)) === 0 && (interesesPendientes - (parseFloat(interesPagado) || 0)) === 0
-                      ? "✅ Deuda liquidada completamente"
+                    {(capitalPendiente - (parseFloat(capitalPagado) || 0)) <= 0 && (interesesPendientes - (parseFloat(interesPagado) || 0)) === 0
+                      ? `✅ Deuda liquidada completamente${(capitalPendiente - (parseFloat(capitalPagado) || 0)) < 0 ? " (con saldo a favor)" : ""}`
                       : "Saldo Total que quedará:"
                     }
                   </p>
