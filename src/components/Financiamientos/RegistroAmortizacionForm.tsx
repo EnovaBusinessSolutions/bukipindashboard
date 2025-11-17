@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const RegistroAmortizacionForm = () => {
   const { financiamientos, transacciones, crearTransaccion } = useFinanciamientos();
@@ -27,6 +28,7 @@ const RegistroAmortizacionForm = () => {
   const [numeroReferencia, setNumeroReferencia] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fecha, setFecha] = useState<Date>(new Date());
+  const [mostrarAdvertenciaEfectivo, setMostrarAdvertenciaEfectivo] = useState(false);
 
   const financiamientoSeleccionado = financiamientos.find(f => f.id === financiamientoId);
 
@@ -319,7 +321,16 @@ const RegistroAmortizacionForm = () => {
 
             <div className="space-y-2">
               <Label htmlFor="metodo_pago">Método de Pago *</Label>
-              <Select value={metodoPago} onValueChange={setMetodoPago} required>
+              <Select 
+                value={metodoPago} 
+                onValueChange={(value) => {
+                  setMetodoPago(value);
+                  if (value === "efectivo") {
+                    setMostrarAdvertenciaEfectivo(true);
+                  }
+                }} 
+                required
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona método" />
                 </SelectTrigger>
@@ -378,6 +389,34 @@ const RegistroAmortizacionForm = () => {
           <Button type="submit" className="w-full">
             Registrar Amortización
           </Button>
+
+          {/* Advertencia para pagos en efectivo */}
+          <AlertDialog open={mostrarAdvertenciaEfectivo} onOpenChange={setMostrarAdvertenciaEfectivo}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>⚠️ Advertencia: Pago en Efectivo</AlertDialogTitle>
+                <AlertDialogDescription className="space-y-2">
+                  <p>
+                    Has seleccionado <strong>Efectivo</strong> como método de pago para esta amortización.
+                  </p>
+                  <p className="text-amber-600 dark:text-amber-400">
+                    Ten en cuenta que los pagos a instituciones financieras <strong>regularmente se realizan por transferencia bancaria</strong>.
+                  </p>
+                  <p>
+                    ¿Estás seguro de que deseas continuar con el pago en efectivo?
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setMetodoPago("")}>
+                  Cancelar y cambiar
+                </AlertDialogCancel>
+                <AlertDialogAction onClick={() => setMostrarAdvertenciaEfectivo(false)}>
+                  Sí, continuar con efectivo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </form>
       </CardContent>
     </Card>
