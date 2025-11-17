@@ -513,7 +513,26 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular gastos financieros históricos (intereses pagados)
   const calcularGastosFinancierosHistoricos = () => {
-    if (!financiamientos) {
+    // Función auxiliar para extraer nombre del financiamiento de la descripción
+    const extraerNombreFinanciamiento = (descripcion: string): string | null => {
+      const patrones = [
+        /cargo\s+por\s+intereses:\s*(.+)/i,
+        /intereses\s+pagados?\s*-?\s*(.+)/i,
+        /pago\s+de\s+(?:amortización|intereses)\s*:?\s*(.+)/i,
+        /acumulación\s+de\s+intereses\s*-?\s*(.+)/i,
+      ];
+      
+      for (const patron of patrones) {
+        const match = descripcion.match(patron);
+        if (match && match[1]) {
+          return match[1].toLowerCase().trim();
+        }
+      }
+      
+      return null;
+    };
+
+    if (!gastosFinancieros || gastosFinancieros.length === 0) {
       const hoy = new Date();
       const añoActual = hoy.getFullYear();
       
@@ -532,40 +551,24 @@ const AnalyticaFinanciamientos = () => {
           };
         });
       } else {
-        // Anual: si no hay datos, retornar array vacío
         return [];
       }
     }
     
-    // Crear un mapa de financiamiento_id -> tipo_credito
-    const financiamientosPorId = new Map(
-      financiamientos.map(f => [f.id, f.tipo_credito])
-    );
-    
-    // Solo transacciones con intereses PAGADOS (no pendientes)
-    const transaccionesConIntereses = (transacciones || [])
-      .filter(t => t.tipo_transaccion === 'cargo_interes' && (t.interes_pagado || 0) > 0)
-      .map(t => ({
-        ...t,
-        tipoCreditoAsociado: financiamientosPorId.get(t.financiamiento_id) || 'desconocido'
-      }));
+    // Crear mapa: nombre_financiamiento → tipo_credito
+    const financiamientosPorNombre = new Map<string, string>();
+    if (financiamientos) {
+      financiamientos.forEach(f => {
+        const nombreNormalizado = f.nombre.toLowerCase().trim();
+        financiamientosPorNombre.set(nombreNormalizado, f.tipo_credito);
+      });
+    }
     
     if (periodoGastosFinancieros === "mensual") {
-      // MODO MENSUAL: Siempre mostrar 12 meses completos
-      const hoy = new Date();
-      const añoActual = hoy.getFullYear();
+      // MODO MENSUAL: Siempre mostrar enero-diciembre del AÑO ACTUAL
+      const añoActual = new Date().getFullYear();
       
-      // Determinar el rango de años con datos
-      let añoMin = añoActual;
-      let añoMax = añoActual;
-      
-      if (transaccionesConIntereses.length > 0) {
-        const fechas = transaccionesConIntereses.map(t => new Date(t.fecha).getFullYear());
-        añoMin = Math.min(...fechas);
-        añoMax = Math.max(...fechas);
-      }
-      
-      // Crear mapa para acumular datos por mes
+      // Crear los 12 meses del año actual con valores en 0
       const datosPorPeriodo = new Map<string, {
         periodo: string,
         simple: number,
@@ -574,55 +577,68 @@ const AnalyticaFinanciamientos = () => {
         total: number
       }>();
       
-      // Generar TODOS los meses del rango de años
-      for (let año = añoMin; año <= añoMax; año++) {
-        for (let mes = 1; mes <= 12; mes++) {
-          const clave = `${año}-${String(mes).padStart(2, '0')}`;
-          datosPorPeriodo.set(clave, {
-            periodo: clave,
-            simple: 0,
-            revolvente: 0,
-            tarjeta: 0,
-            total: 0
-          });
-        }
+      for (let mes = 1; mes <= 12; mes++) {
+        const clave = `${añoActual}-${String(mes).padStart(2, '0')}`;
+        datosPorPeriodo.set(clave, {
+          periodo: clave,
+          simple: 0,
+          revolvente: 0,
+          tarjeta: 0,
+          total: 0
+        });
       }
       
-      // Acumular los intereses pagados reales
-      transaccionesConIntereses.forEach(t => {
-        const fecha = new Date(t.fecha);
-        const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      // Procesar gastosFinancieros y acumular SOLO los del año actual
+      gastosFinancieros.forEach(gasto => {
+        const fecha = new Date(gasto.asientos_contables?.fecha);
+        if (fecha.getFullYear() !== añoActual) return; // Ignorar otros años
         
+        const clave = `${añoActual}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
         const datos = datosPorPeriodo.get(clave);
         if (!datos) return;
         
-        const valor = t.interes_pagado || 0;
+        // Extraer nombre del financiamiento de la descripción
+        const descripcion = gasto.asientos_contables?.descripcion || '';
+        const nombreFinanciamiento = extraerNombreFinanciamiento(descripcion);
         
-        if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
-          datos.tarjeta += valor;
-        } else if (t.tipoCreditoAsociado === 'revolvente') {
-          datos.revolvente += valor;
-        } else {
-          datos.simple += valor;
+        // Mapear a tipo_credito
+        let tipoCredito = 'desconocido';
+        if (nombreFinanciamiento) {
+          for (const [nombre, tipo] of financiamientosPorNombre.entries()) {
+            if (nombre.includes(nombreFinanciamiento) || nombreFinanciamiento.includes(nombre)) {
+              tipoCredito = tipo;
+              break;
+            }
+          }
         }
         
-        datos.total += valor;
+        const monto = gasto.debe || 0;
+        
+        // Acumular por tipo
+        if (tipoCredito === 'tarjeta_corporativa') {
+          datos.tarjeta += monto;
+        } else if (tipoCredito === 'revolvente') {
+          datos.revolvente += monto;
+        } else if (tipoCredito === 'simple') {
+          datos.simple += monto;
+        }
+        
+        datos.total += monto;
       });
       
-      // Convertir a array y ordenar
+      // Retornar los 12 meses ordenados
       return Array.from(datosPorPeriodo.values())
         .sort((a, b) => a.periodo.localeCompare(b.periodo))
         .map(d => ({
           ...d,
-          periodoFormateado: new Date(d.periodo + "-01").toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+          periodoFormateado: new Date(d.periodo + "-01").toLocaleDateString('es-MX', { 
+            month: 'short', 
+            year: 'numeric' 
+          })
         }));
       
     } else {
-      // MODO ANUAL: Solo años con datos reales
-      if (transaccionesConIntereses.length === 0) {
-        return [];
-      }
-      
+      // MODO ANUAL: Solo años con datos
       const datosPorAño = new Map<string, {
         periodo: string,
         simple: number,
@@ -631,8 +647,8 @@ const AnalyticaFinanciamientos = () => {
         total: number
       }>();
       
-      transaccionesConIntereses.forEach(t => {
-        const fecha = new Date(t.fecha);
+      gastosFinancieros.forEach(gasto => {
+        const fecha = new Date(gasto.asientos_contables?.fecha);
         const clave = `${fecha.getFullYear()}`;
         
         if (!datosPorAño.has(clave)) {
@@ -646,20 +662,38 @@ const AnalyticaFinanciamientos = () => {
         }
         
         const datos = datosPorAño.get(clave)!;
-        const valor = t.interes_pagado || 0;
         
-        if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
-          datos.tarjeta += valor;
-        } else if (t.tipoCreditoAsociado === 'revolvente') {
-          datos.revolvente += valor;
-        } else {
-          datos.simple += valor;
+        // Extraer nombre del financiamiento de la descripción
+        const descripcion = gasto.asientos_contables?.descripcion || '';
+        const nombreFinanciamiento = extraerNombreFinanciamiento(descripcion);
+        
+        // Mapear a tipo_credito
+        let tipoCredito = 'desconocido';
+        if (nombreFinanciamiento) {
+          for (const [nombre, tipo] of financiamientosPorNombre.entries()) {
+            if (nombre.includes(nombreFinanciamiento) || nombreFinanciamiento.includes(nombre)) {
+              tipoCredito = tipo;
+              break;
+            }
+          }
         }
         
-        datos.total += valor;
+        const monto = gasto.debe || 0;
+        
+        // Acumular por tipo
+        if (tipoCredito === 'tarjeta_corporativa') {
+          datos.tarjeta += monto;
+        } else if (tipoCredito === 'revolvente') {
+          datos.revolvente += monto;
+        } else if (tipoCredito === 'simple') {
+          datos.simple += monto;
+        }
+        
+        datos.total += monto;
       });
       
-      // Solo retornar años con datos (no llenar huecos)
+      if (datosPorAño.size === 0) return [];
+      
       return Array.from(datosPorAño.values())
         .sort((a, b) => a.periodo.localeCompare(b.periodo))
         .map(d => ({
