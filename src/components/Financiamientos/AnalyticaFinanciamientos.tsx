@@ -396,11 +396,23 @@ const AnalyticaFinanciamientos = () => {
       );
 
       if (credito.tipo_credito === "simple" || credito.tipo_credito === "arrendamiento") {
-        // Amortizaciones iguales
-        const amortizacionMensual = credito.plazo_meses > 0 ? credito.monto_total / credito.plazo_meses : 0;
+        // Contar cuántas amortizaciones ya se pagaron
+        const transaccionesCredito = (transacciones || []).filter(
+          t => t.financiamiento_id === credito.id && t.tipo_transaccion === 'amortizacion'
+        );
+        const pagosRealizados = transaccionesCredito.length;
+        
+        // Calcular meses realmente pendientes por pagar
+        const mesesPendientesPorPagar = Math.max(0, credito.plazo_meses - pagosRealizados);
+        
+        // Calcular amortización mensual basada en saldo actual dividido entre meses pendientes
+        const amortizacionMensual = mesesPendientesPorPagar > 0 
+          ? credito.saldo_actual / mesesPendientesPorPagar 
+          : 0;
         
         if (periodoAmortizacion === "mensual") {
-          const mesesAMostrar = Math.min(periodos, mesesRestantes);
+          // Solo mostrar los meses pendientes por pagar
+          const mesesAMostrar = Math.min(periodos, mesesPendientesPorPagar);
           for (let i = 0; i < mesesAMostrar; i++) {
             data[i][credito.nombre] += amortizacionMensual;
           }
@@ -419,19 +431,19 @@ const AnalyticaFinanciamientos = () => {
             
             if (i === 0) {
               // Primer año: solo meses restantes del año actual
-              mesesEnEsteAno = Math.min(mesesRestantesAnoActual, mesesRestantes);
-            } else if (mesesContados + 12 <= mesesRestantes) {
+              mesesEnEsteAno = Math.min(mesesRestantesAnoActual, mesesPendientesPorPagar);
+            } else if (mesesContados + 12 <= mesesPendientesPorPagar) {
               // Años completos intermedios
               mesesEnEsteAno = 12;
             } else {
               // Último año parcial
-              mesesEnEsteAno = mesesRestantes - mesesContados;
+              mesesEnEsteAno = mesesPendientesPorPagar - mesesContados;
             }
             
             data[i][credito.nombre] += amortizacionMensual * mesesEnEsteAno;
             mesesContados += mesesEnEsteAno;
             
-            if (mesesContados >= mesesRestantes) break;
+            if (mesesContados >= mesesPendientesPorPagar) break;
           }
         }
       } else if (credito.tipo_credito === "revolvente") {
