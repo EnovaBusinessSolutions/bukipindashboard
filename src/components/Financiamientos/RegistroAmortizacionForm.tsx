@@ -282,7 +282,7 @@ const RegistroAmortizacionForm = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="capital">Capital Pagado *</Label>
+              <Label htmlFor="capital">Capital Pagado * {financiamientoSeleccionado?.tipo_credito === 'simple' && <span className="text-xs text-muted-foreground">(Fijo)</span>}</Label>
               <Input
                 id="capital"
                 type="number"
@@ -291,6 +291,8 @@ const RegistroAmortizacionForm = () => {
                 onChange={(e) => setCapitalPagado(e.target.value)}
                 placeholder={`Pendiente: $${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })} (puedes pagar más)`}
                 required
+                readOnly={financiamientoSeleccionado?.tipo_credito === 'simple'}
+                className={financiamientoSeleccionado?.tipo_credito === 'simple' ? "bg-muted cursor-not-allowed" : ""}
               />
               <p className="text-xs text-muted-foreground">
                 Capital pendiente: ${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
@@ -298,7 +300,7 @@ const RegistroAmortizacionForm = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="interes">Interés Pagado *</Label>
+              <Label htmlFor="interes">Interés Pagado * {financiamientoSeleccionado?.tipo_credito === 'simple' && <span className="text-xs text-muted-foreground">(Se registra por separado)</span>}</Label>
               <Input
                 id="interes"
                 type="number"
@@ -320,6 +322,8 @@ const RegistroAmortizacionForm = () => {
                 }}
                 placeholder={`Máx: $${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                 required
+                readOnly={financiamientoSeleccionado?.tipo_credito === 'simple'}
+                className={financiamientoSeleccionado?.tipo_credito === 'simple' ? "bg-muted cursor-not-allowed" : ""}
               />
             <p className="text-xs text-muted-foreground">
               Intereses pendientes: ${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
