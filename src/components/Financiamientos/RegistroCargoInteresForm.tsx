@@ -11,15 +11,20 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { Textarea } from "@/components/ui/textarea";
+import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 const RegistroCargoInteresForm = () => {
   const { financiamientos, crearTransaccion } = useFinanciamientos();
+  const { data: saldos } = useSaldosDisponibles();
   const [financiamientoId, setFinanciamientoId] = useState("");
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fecha, setFecha] = useState<Date>(new Date());
   const [tipoPago, setTipoPago] = useState<"pagado" | "pendiente">("pendiente");
   const [metodoPago, setMetodoPago] = useState("");
+  const [mostrarAdvertenciaEfectivo, setMostrarAdvertenciaEfectivo] = useState(false);
 
   const financiamientoSeleccionado = financiamientos.find(f => f.id === financiamientoId);
 
@@ -29,6 +34,24 @@ const RegistroCargoInteresForm = () => {
     if (!financiamientoSeleccionado) return;
 
     const montoInteres = parseFloat(monto);
+    
+    // Validar solo si el tipo de pago es "pagado"
+    if (tipoPago === "pagado") {
+      // Validar saldo disponible según método de pago
+      if (metodoPago === "efectivo" && montoInteres > (saldos?.efectivo || 0)) {
+        toast.error("Saldo insuficiente en efectivo", {
+          description: `Necesitas $${montoInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })} pero solo tienes $${(saldos?.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} disponibles en efectivo.`
+        });
+        return;
+      }
+      
+      if (metodoPago === "transferencia" && montoInteres > (saldos?.bancos || 0)) {
+        toast.error("Saldo insuficiente en bancos", {
+          description: `Necesitas $${montoInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })} pero solo tienes $${(saldos?.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} disponibles en bancos.`
+        });
+        return;
+      }
+    }
     
     // Si es PENDIENTE: aumenta el saldo
     // Si es PAGADO: NO aumenta el saldo
@@ -129,13 +152,37 @@ const RegistroCargoInteresForm = () => {
           {tipoPago === "pagado" && (
             <div className="space-y-2">
               <Label htmlFor="metodoPago">Método de Pago *</Label>
-              <Select value={metodoPago} onValueChange={setMetodoPago} required>
+              <Select 
+                value={metodoPago} 
+                onValueChange={(value) => {
+                  setMetodoPago(value);
+                  // Si elige efectivo, mostrar advertencia
+                  if (value === "efectivo") {
+                    setMostrarAdvertenciaEfectivo(true);
+                  }
+                }} 
+                required
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona método" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="efectivo">Efectivo</SelectItem>
-                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="efectivo">
+                    <div className="flex items-center justify-between w-full">
+                      <span>Efectivo</span>
+                      <span className="text-xs text-muted-foreground ml-4">
+                        (Disponible: ${saldos?.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'})
+                      </span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="transferencia">
+                    <div className="flex items-center justify-between w-full">
+                      <span>Transferencia</span>
+                      <span className="text-xs text-muted-foreground ml-4">
+                        (Disponible: ${saldos?.bancos.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'})
+                      </span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -177,6 +224,39 @@ const RegistroCargoInteresForm = () => {
             Registrar Cargo
           </Button>
         </form>
+
+        {/* Advertencia para pagos en efectivo */}
+        <AlertDialog open={mostrarAdvertenciaEfectivo} onOpenChange={setMostrarAdvertenciaEfectivo}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>⚠️ Advertencia: Pago en Efectivo</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  Has seleccionado <strong>Efectivo</strong> como método de pago.
+                </p>
+                <p className="text-amber-600 dark:text-amber-400">
+                  Ten en cuenta que los pagos a instituciones financieras <strong>regularmente se realizan por transferencia bancaria</strong>.
+                </p>
+                <p>
+                  ¿Estás seguro de que deseas continuar con el pago en efectivo?
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setMetodoPago("");
+                setMostrarAdvertenciaEfectivo(false);
+              }}>
+                Cambiar a Transferencia
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                setMostrarAdvertenciaEfectivo(false);
+              }}>
+                Continuar con Efectivo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
