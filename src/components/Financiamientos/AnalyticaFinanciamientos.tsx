@@ -411,9 +411,9 @@ const AnalyticaFinanciamientos = () => {
           : 0;
         
         if (periodoAmortizacion === "mensual") {
-          // Solo mostrar los meses pendientes por pagar
-          const mesesAMostrar = Math.min(periodos, mesesPendientesPorPagar);
-          for (let i = 0; i < mesesAMostrar; i++) {
+          // Solo mostrar los meses pendientes por pagar, empezando desde el próximo mes
+          const mesesAMostrar = Math.min(periodos - 1, mesesPendientesPorPagar);
+          for (let i = 1; i <= mesesAMostrar; i++) {
             data[i][credito.nombre] += amortizacionMensual;
           }
         } else {
