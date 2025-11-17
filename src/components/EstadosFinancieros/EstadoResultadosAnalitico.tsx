@@ -768,7 +768,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
           </div>
         </CardHeader>
         
-        <CardContent className="p-6">
+              <CardContent className="p-4">
           {(() => {
             const agrupador = agrupadores.find(ag => ag.id === agrupadorSeleccionado);
             
@@ -796,11 +796,11 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
             
             return (
               <>
-                <ResponsiveContainer width="100%" height={Math.max(300, datosDesglose.length * 50)}>
+                <ResponsiveContainer width="100%" height={Math.max(350, datosDesglose.length * 60)}>
                   <BarChart 
                     data={datosDesglose} 
                     layout="vertical"
-                    margin={{ top: 20, right: 30, left: 250, bottom: 20 }}
+                    margin={{ top: 20, right: 40, left: 20, bottom: 20 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
@@ -813,7 +813,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                       type="category" 
                       dataKey="nombre"
                       tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
-                      width={240}
+                      width={380}
                     />
                     <Tooltip 
                       formatter={(value: number) => formatCurrency(value)}
