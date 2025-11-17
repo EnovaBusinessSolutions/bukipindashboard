@@ -331,10 +331,10 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={550}>
+          <ResponsiveContainer width="100%" height={700}>
             <BarChart
               data={waterfallData}
-              margin={{ top: 20, right: 30, left: 60, bottom: 100 }}
+              margin={{ top: 20, right: 30, left: 100, bottom: 120 }}
               barGap={8}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -421,28 +421,23 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
             <h3 className="text-lg font-semibold text-center">Métricas Clave y Márgenes</h3>
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
-              {/* Ventas */}
-              <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
-                <p className="text-muted-foreground text-xs">Ventas</p>
-                <p className="font-semibold text-lg">{formatCurrency(totalVentas)}</p>
-                <p className="text-xs text-muted-foreground">100%</p>
-              </div>
+            {/* Ventas */}
+            <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
+              <p className="text-muted-foreground text-xs">Ventas</p>
+              <p className="font-semibold text-lg">{formatCurrency(totalVentas)}</p>
+            </div>
               
-              {/* Otros Ingresos */}
-              <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
-                <p className="text-muted-foreground text-xs">Otros Ingresos</p>
-                <p className="font-semibold text-lg">{formatCurrency(totalOtrosIngresos)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {totalIngresos > 0 ? `${((totalOtrosIngresos / totalIngresos) * 100).toFixed(1)}%` : '0%'}
-                </p>
-              </div>
+            {/* Otros Ingresos */}
+            <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
+              <p className="text-muted-foreground text-xs">Otros Ingresos</p>
+              <p className="font-semibold text-lg">{formatCurrency(totalOtrosIngresos)}</p>
+            </div>
               
-              {/* Total Ingresos */}
-              <div className="space-y-1 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <p className="text-muted-foreground text-xs font-semibold">Total Ingresos</p>
-                <p className="font-semibold text-lg text-blue-600">{formatCurrency(totalIngresos)}</p>
-                <p className="text-xs text-blue-600 font-medium">100%</p>
-              </div>
+            {/* Total Ingresos */}
+            <div className="space-y-1 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-muted-foreground text-xs font-semibold">Total Ingresos</p>
+              <p className="font-semibold text-lg text-blue-600">{formatCurrency(totalIngresos)}</p>
+            </div>
               
               {/* Utilidad Bruta */}
               <div className="space-y-1 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
