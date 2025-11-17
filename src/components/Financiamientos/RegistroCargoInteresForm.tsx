@@ -36,6 +36,11 @@ const RegistroCargoInteresForm = () => {
       ? financiamientoSeleccionado.saldo_actual + montoInteres
       : financiamientoSeleccionado.saldo_actual;
 
+    // Mejorar la construcción de la descripción final
+    const descripcionFinal = descripcion.trim() 
+      ? `${descripcion.trim()} (${tipoPago === "pagado" ? "Pagado" : "Pendiente"})`
+      : `Cargo de intereses (${tipoPago === "pagado" ? "Pagado" : "Pendiente"})`;
+
     crearTransaccion.mutate({
       financiamiento_id: financiamientoId,
       tipo_transaccion: "cargo_interes",
@@ -45,7 +50,7 @@ const RegistroCargoInteresForm = () => {
       interes_pagado: tipoPago === "pagado" ? montoInteres : 0,
       saldo_restante: nuevoSaldo,
       metodo_pago: tipoPago === "pagado" ? metodoPago : null,
-      descripcion: descripcion + (tipoPago === "pagado" ? " (Pagado)" : " (Pendiente)"),
+      descripcion: descripcionFinal,
     });
 
     // Reset form
@@ -158,14 +163,13 @@ const RegistroCargoInteresForm = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descripcion">Descripción *</Label>
+            <Label htmlFor="descripcion">Descripción (opcional)</Label>
             <Textarea
               id="descripcion"
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               placeholder="Detalla el motivo del cargo (intereses ordinarios, moratorios, comisión, etc.)"
               rows={3}
-              required
             />
           </div>
 
