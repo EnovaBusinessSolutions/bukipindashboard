@@ -485,7 +485,7 @@ const AnalyticaFinanciamientos = () => {
           .reduce((sum, t) => sum + t.monto, 0);
         
         const interesesPagados = transaccionesFinanciamiento
-          .filter(t => t.tipo_transaccion === 'amortizacion')
+          .filter(t => t.tipo_transaccion === 'amortizacion' || t.tipo_transaccion === 'cargo_interes')
           .reduce((sum, t) => sum + (t.interes_pagado || 0), 0);
         
         const interesesPendientes = interesesDevengados - interesesPagados;
@@ -567,7 +567,7 @@ const AnalyticaFinanciamientos = () => {
           .reduce((sum, t) => sum + t.monto, 0);
         
         const interesesPagados = transaccionesFinanciamiento
-          .filter(t => t.tipo_transaccion === 'amortizacion')
+          .filter(t => t.tipo_transaccion === 'amortizacion' || t.tipo_transaccion === 'cargo_interes')
           .reduce((sum, t) => sum + (t.interes_pagado || 0), 0);
         
         const interesesPendientes = interesesDevengados - interesesPagados;
