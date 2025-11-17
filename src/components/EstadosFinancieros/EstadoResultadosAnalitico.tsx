@@ -788,25 +788,32 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                 valor: cuenta.saldo
               }));
             
+            // Calcular dominio para XAxis (agregar 20% de espacio arriba)
+            const maxValor = Math.max(...datosDesglose.map(d => Math.abs(d.valor)));
+            const minValor = Math.min(...datosDesglose.map(d => d.valor));
+            const domainMax = maxValor * 1.2;
+            const domainMin = minValor < 0 ? minValor * 1.2 : 0;
+            
             return (
               <>
                 <ResponsiveContainer width="100%" height={Math.max(300, datosDesglose.length * 50)}>
                   <BarChart 
                     data={datosDesglose} 
                     layout="vertical"
-                    margin={{ top: 20, right: 30, left: 200, bottom: 20 }}
+                    margin={{ top: 20, right: 30, left: 250, bottom: 20 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
                       type="number"
+                      domain={[domainMin, domainMax]}
                       tickFormatter={(value) => formatCurrency(value)}
-                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
                     />
                     <YAxis 
                       type="category" 
                       dataKey="nombre"
-                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 10 }}
-                      width={190}
+                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
+                      width={240}
                     />
                     <Tooltip 
                       formatter={(value: number) => formatCurrency(value)}
@@ -824,7 +831,7 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                         position: 'right',
                         formatter: (value: number) => formatCurrency(value),
                         fill: 'hsl(var(--foreground))',
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 'bold'
                       }}
                     >
