@@ -122,7 +122,7 @@ const TransaccionesTarjetaCredito = ({
     } else if (transaccion.tipoTransaccion === 'cargo_interes') {
       // Cargo por intereses
       return {
-        cargo: '5006 - Intereses Pagados',
+        cargo: '5201 - Gastos Financieros',
         abono: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`
       };
     }

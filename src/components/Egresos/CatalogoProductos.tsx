@@ -58,7 +58,7 @@ const CatalogoProductos = () => {
         { codigo: "5106", nombre: "Sueldos y Salarios Administración", subgrupo: "Gastos de Operación" },
         { codigo: "5107", nombre: "Renta de Oficinas", subgrupo: "Gastos de Operación" },
         { codigo: "5108", nombre: "Servicios Públicos", subgrupo: "Gastos de Operación" },
-        { codigo: "5201", nombre: "Intereses Pagados", subgrupo: "Gastos Financieros" },
+        { codigo: "5201", nombre: "Gastos Financieros", subgrupo: "Gastos Financieros" },
         { codigo: "5202", nombre: "Comisiones Bancarias", subgrupo: "Gastos Financieros" }
       ];
     }
