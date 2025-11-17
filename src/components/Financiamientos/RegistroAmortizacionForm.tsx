@@ -240,7 +240,19 @@ const RegistroAmortizacionForm = () => {
                 step="0.01"
                 max={interesesPendientes}
                 value={interesPagado}
-                onChange={(e) => setInteresPagado(e.target.value)}
+                onChange={(e) => {
+                  const valor = parseFloat(e.target.value) || 0;
+                  if (valor <= interesesPendientes) {
+                    setInteresPagado(e.target.value);
+                  } else {
+                    setInteresPagado(interesesPendientes.toString());
+                    toast({
+                      title: "Límite alcanzado",
+                      description: `No puedes pagar más de $${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })} en intereses`,
+                      variant: "destructive",
+                    });
+                  }
+                }}
                 placeholder={`Máx: $${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                 required
               />
