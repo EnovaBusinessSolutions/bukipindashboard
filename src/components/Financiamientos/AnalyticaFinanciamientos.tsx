@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +31,7 @@ const AnalyticaFinanciamientos = () => {
   const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<"mensual" | "anual">("mensual");
   const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<string>("total");
   const [tipoDeudaAcreedor, setTipoDeudaAcreedor] = useState<"total" | "capital" | "intereses">("total");
+  const [acreedorSeleccionado, setAcreedorSeleccionado] = useState<string | null>(null);
 
   // Consulta para obtener gastos financieros de la cuenta 5201
   const { data: gastosFinancieros, isLoading: isLoadingGastos } = useQuery({
@@ -546,7 +548,63 @@ const AnalyticaFinanciamientos = () => {
     }));
   };
 
+  // Calcular créditos por acreedor individual
+  const calcularCreditosPorAcreedor = (acreedorId: string) => {
+    const creditosDelAcreedor = financiamientosActivos
+      .filter(f => f.saldo_actual > 0)
+      .filter(f => {
+        const key = f.institucion_financiera_id || f.institucion_financiera;
+        return key === acreedorId;
+      })
+      .map(f => {
+        // Calcular intereses devengados pendientes
+        const transaccionesFinanciamiento = (transacciones || []).filter(
+          t => t.financiamiento_id === f.id
+        );
+        
+        const interesesDevengados = transaccionesFinanciamiento
+          .filter(t => t.tipo_transaccion === 'cargo_interes')
+          .reduce((sum, t) => sum + t.monto, 0);
+        
+        const interesesPagados = transaccionesFinanciamiento
+          .filter(t => t.tipo_transaccion === 'amortizacion')
+          .reduce((sum, t) => sum + (t.interes_pagado || 0), 0);
+        
+        const interesesPendientes = interesesDevengados - interesesPagados;
+        const capitalPendiente = f.saldo_actual - interesesPendientes;
+        
+        return {
+          id: f.id,
+          nombre: f.nombre,
+          tipo_credito: f.tipo_credito,
+          total: f.saldo_actual,
+          capital: capitalPendiente,
+          intereses: interesesPendientes,
+          saldo: tipoDeudaAcreedor === "total" 
+            ? f.saldo_actual 
+            : tipoDeudaAcreedor === "capital" 
+            ? capitalPendiente 
+            : interesesPendientes,
+        };
+      })
+      .filter(c => c.saldo > 0)
+      .sort((a, b) => b.saldo - a.saldo);
+    
+    // Calcular porcentajes
+    const totalDeuda = creditosDelAcreedor.reduce((sum, c) => sum + c.saldo, 0);
+    return creditosDelAcreedor.map(c => ({
+      ...c,
+      porcentaje: totalDeuda > 0 ? (c.saldo / totalDeuda) * 100 : 0,
+    }));
+  };
+
   const acreedoresTop = calcularDeudaPorAcreedor();
+  const creditosDetalle = acreedorSeleccionado 
+    ? calcularCreditosPorAcreedor(acreedorSeleccionado) 
+    : [];
+  const nombreAcreedorSeleccionado = acreedorSeleccionado 
+    ? acreedoresTop.find(a => a.id === acreedorSeleccionado)?.nombre 
+    : '';
   const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
   // Mostrar todos los créditos activos en la leyenda (incluso con saldo 0)
   const nombresCreditos = financiamientosActivos.map(f => f.nombre);
@@ -940,8 +998,28 @@ const AnalyticaFinanciamientos = () => {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Deuda por Acreedor</CardTitle>
                   <div className="flex items-center gap-2">
+                    <CardTitle>Resumen Deuda</CardTitle>
+                    {acreedorSeleccionado && (
+                      <>
+                        <span className="text-muted-foreground">/</span>
+                        <span className="text-sm text-muted-foreground">
+                          {nombreAcreedorSeleccionado}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {acreedorSeleccionado && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAcreedorSeleccionado(null)}
+                        className="h-8"
+                      >
+                        ← Volver
+                      </Button>
+                    )}
                     <Label className="text-xs text-muted-foreground">Mostrar:</Label>
                     <Select value={tipoDeudaAcreedor} onValueChange={(value: "total" | "capital" | "intereses") => setTipoDeudaAcreedor(value)}>
                       <SelectTrigger className="w-[140px] h-8">
@@ -958,64 +1036,131 @@ const AnalyticaFinanciamientos = () => {
               </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {acreedoresTop.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay deuda pendiente con acreedores
-                </p>
-              ) : (
-                acreedoresTop.map((acreedor) => (
-                  <div 
-                    key={acreedor.id} 
-                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                  >
-                    {/* Logo o inicial */}
-                    <div className="flex-shrink-0">
-                      {acreedor.logo ? (
-                        <img 
-                          src={acreedor.logo} 
-                          alt={acreedor.nombre}
-                          className="w-12 h-12 object-contain rounded-md bg-white p-1 border"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-md bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg border">
-                          {acreedor.nombre.charAt(0).toUpperCase()}
+              {/* Vista por Acreedor (Default) */}
+              {!acreedorSeleccionado && (
+                <>
+                  {acreedoresTop.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No hay deuda pendiente con acreedores
+                    </p>
+                  ) : (
+                    acreedoresTop.map((acreedor) => (
+                      <div 
+                        key={acreedor.id} 
+                        className={`flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors ${
+                          acreedor.id !== 'otros' ? 'cursor-pointer' : ''
+                        }`}
+                        onClick={() => {
+                          if (acreedor.id !== 'otros') {
+                            setAcreedorSeleccionado(acreedor.id);
+                          }
+                        }}
+                      >
+                        {/* Logo o inicial */}
+                        <div className="flex-shrink-0">
+                          {acreedor.logo ? (
+                            <img 
+                              src={acreedor.logo} 
+                              alt={acreedor.nombre}
+                              className="w-12 h-12 object-contain rounded-md bg-white p-1 border"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-md bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg border">
+                              {acreedor.nombre.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    
-                    {/* Información */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">
-                        {acreedor.nombre}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {acreedor.porcentaje.toFixed(1)}% del total
-                      </p>
-                    </div>
-                    
-                    {/* Monto */}
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-foreground">
-                        ${formatearValor(acreedor.saldo)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        adeudado
-                      </p>
-                    </div>
-                  </div>
-                ))
+                        
+                        {/* Información */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">
+                            {acreedor.nombre}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {acreedor.porcentaje.toFixed(1)}% del total
+                          </p>
+                        </div>
+                        
+                        {/* Monto */}
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-foreground">
+                            ${formatearValor(acreedor.saldo)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            adeudado
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+
+              {/* Vista por Créditos Individuales */}
+              {acreedorSeleccionado && (
+                <>
+                  {creditosDetalle.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No hay créditos activos para este acreedor
+                    </p>
+                  ) : (
+                    creditosDetalle.map((credito) => (
+                      <div 
+                        key={credito.id} 
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      >
+                        {/* Icono de crédito */}
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg border">
+                            {credito.tipo_credito === 'simple' ? '💳' : 
+                             credito.tipo_credito === 'revolvente' ? '🔄' : 
+                             credito.tipo_credito === 'tarjeta_corporativa' ? '💰' : '📋'}
+                          </div>
+                        </div>
+                        
+                        {/* Información */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">
+                            {credito.nombre}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {credito.tipo_credito === 'simple' ? 'Crédito Simple' :
+                             credito.tipo_credito === 'revolvente' ? 'Crédito Revolvente' :
+                             credito.tipo_credito === 'tarjeta_corporativa' ? 'Tarjeta Corporativa' :
+                             credito.tipo_credito} • {credito.porcentaje.toFixed(1)}% del total
+                          </p>
+                        </div>
+                        
+                        {/* Monto */}
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-foreground">
+                            ${formatearValor(credito.saldo)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            adeudado
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
               )}
             </div>
             
             {/* Resumen total */}
-            {acreedoresTop.length > 0 && (
+            {((acreedoresTop.length > 0 && !acreedorSeleccionado) || 
+              (creditosDetalle.length > 0 && acreedorSeleccionado)) && (
               <div className="mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">
                     Total {tipoDeudaAcreedor === "total" ? "Deuda" : tipoDeudaAcreedor === "capital" ? "Capital" : "Intereses"}:
                   </span>
                   <span className="text-lg font-bold text-red-600">
-                    ${formatearValor(acreedoresTop.reduce((sum, a) => sum + a.saldo, 0))}
+                    ${formatearValor(
+                      acreedorSeleccionado
+                        ? creditosDetalle.reduce((sum, c) => sum + c.saldo, 0)
+                        : acreedoresTop.reduce((sum, a) => sum + a.saldo, 0)
+                    )}
                   </span>
                 </div>
               </div>
