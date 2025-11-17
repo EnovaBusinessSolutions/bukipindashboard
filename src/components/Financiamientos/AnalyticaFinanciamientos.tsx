@@ -27,7 +27,6 @@ const AnalyticaFinanciamientos = () => {
   const [creditoRevolventeSeleccionado, setCreditoRevolventeSeleccionado] = useState<string>("todos");
   const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<"mensual" | "anual">("mensual");
   const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<string>("total");
-  const [tipoGastoFiltro, setTipoGastoFiltro] = useState<"pagados" | "devengados">("devengados");
 
   if (isLoading) {
     return (
@@ -483,23 +482,28 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular gastos financieros históricos (intereses pagados)
   const calcularGastosFinancierosHistoricos = () => {
-    if (!financiamientos || !transacciones || transacciones.length === 0) {
-      // Retornar al menos un periodo con valores en 0 para mostrar la gráfica
+    if (!financiamientos) {
       const hoy = new Date();
-      const periodoActual = periodoGastosFinancieros === "mensual" 
-        ? `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
-        : `${hoy.getFullYear()}`;
+      const añoActual = hoy.getFullYear();
       
-      return [{
-        periodo: periodoActual,
-        simple: 0,
-        revolvente: 0,
-        tarjeta: 0,
-        total: 0,
-        periodoFormateado: periodoGastosFinancieros === "mensual"
-          ? hoy.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
-          : `${hoy.getFullYear()}`
-      }];
+      if (periodoGastosFinancieros === "mensual") {
+        // Generar los 12 meses del año actual en cero
+        return Array.from({ length: 12 }, (_, i) => {
+          const mes = i + 1;
+          const clave = `${añoActual}-${String(mes).padStart(2, '0')}`;
+          return {
+            periodo: clave,
+            simple: 0,
+            revolvente: 0,
+            tarjeta: 0,
+            total: 0,
+            periodoFormateado: new Date(añoActual, i, 1).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+          };
+        });
+      } else {
+        // Anual: si no hay datos, retornar array vacío
+        return [];
+      }
     }
     
     // Crear un mapa de financiamiento_id -> tipo_credito
@@ -507,148 +511,131 @@ const AnalyticaFinanciamientos = () => {
       financiamientos.map(f => [f.id, f.tipo_credito])
     );
     
-    // Clasificar transacciones por tipo de crédito
-    const transaccionesConTipo = transacciones.map(t => ({
-      ...t,
-      tipoCreditoAsociado: financiamientosPorId.get(t.financiamiento_id) || 'desconocido'
-    }));
+    // Solo transacciones con intereses PAGADOS (no pendientes)
+    const transaccionesConIntereses = (transacciones || [])
+      .filter(t => t.tipo_transaccion === 'cargo_interes' && (t.interes_pagado || 0) > 0)
+      .map(t => ({
+        ...t,
+        tipoCreditoAsociado: financiamientosPorId.get(t.financiamiento_id) || 'desconocido'
+      }));
     
-    // Filtrar según el tipo de visualización
-    const transaccionesRelevantes = transaccionesConTipo.filter(t => {
-      if (t.tipo_transaccion !== 'cargo_interes') return false;
-      
-      if (tipoGastoFiltro === "pagados") {
-        return (t.interes_pagado || 0) > 0;
-      } else {
-        // "devengados" = todos los cargos de interés (monto completo)
-        return t.monto > 0;
-      }
-    });
-    
-    if (transaccionesRelevantes.length === 0) {
-      // Retornar al menos el periodo actual en 0
+    if (periodoGastosFinancieros === "mensual") {
+      // MODO MENSUAL: Siempre mostrar 12 meses completos
       const hoy = new Date();
-      const periodoActual = periodoGastosFinancieros === "mensual" 
-        ? `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
-        : `${hoy.getFullYear()}`;
+      const añoActual = hoy.getFullYear();
       
-      return [{
-        periodo: periodoActual,
-        simple: 0,
-        revolvente: 0,
-        tarjeta: 0,
-        total: 0,
-        periodoFormateado: periodoGastosFinancieros === "mensual"
-          ? hoy.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
-          : `${hoy.getFullYear()}`
-      }];
-    }
-    
-    // Agrupar por periodo
-    const datosPorPeriodo = new Map<string, {
-      periodo: string,
-      simple: number,
-      revolvente: number,
-      tarjeta: number,
-      total: number
-    }>();
-    
-    transaccionesRelevantes.forEach(t => {
-      const fecha = new Date(t.fecha);
-      let clavePeriodo: string;
+      // Determinar el rango de años con datos
+      let añoMin = añoActual;
+      let añoMax = añoActual;
       
-      if (periodoGastosFinancieros === "mensual") {
-        clavePeriodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-      } else {
-        clavePeriodo = `${fecha.getFullYear()}`;
+      if (transaccionesConIntereses.length > 0) {
+        const fechas = transaccionesConIntereses.map(t => new Date(t.fecha).getFullYear());
+        añoMin = Math.min(...fechas);
+        añoMax = Math.max(...fechas);
       }
       
-      if (!datosPorPeriodo.has(clavePeriodo)) {
-        datosPorPeriodo.set(clavePeriodo, {
-          periodo: clavePeriodo,
-          simple: 0,
-          revolvente: 0,
-          tarjeta: 0,
-          total: 0
-        });
-      }
+      // Crear mapa para acumular datos por mes
+      const datosPorPeriodo = new Map<string, {
+        periodo: string,
+        simple: number,
+        revolvente: number,
+        tarjeta: number,
+        total: number
+      }>();
       
-      const datos = datosPorPeriodo.get(clavePeriodo)!;
-      
-      // Usar monto o interes_pagado según el filtro
-      const valor = tipoGastoFiltro === "pagados" 
-        ? (t.interes_pagado || 0) 
-        : t.monto;
-      
-      // Clasificar por tipo de crédito
-      if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
-        datos.tarjeta += valor;
-      } else if (t.tipoCreditoAsociado === 'revolvente') {
-        datos.revolvente += valor;
-      } else {
-        datos.simple += valor;
-      }
-      
-      datos.total += valor;
-    });
-    
-    // Llenar periodos faltantes con ceros para continuidad
-    const periodosArray = Array.from(datosPorPeriodo.keys()).sort();
-    if (periodosArray.length > 1) {
-      const primerPeriodo = periodosArray[0];
-      const ultimoPeriodo = periodosArray[periodosArray.length - 1];
-      
-      if (periodoGastosFinancieros === "mensual") {
-        const [añoInicio, mesInicio] = primerPeriodo.split('-').map(Number);
-        const [añoFin, mesFin] = ultimoPeriodo.split('-').map(Number);
-        
-        let fecha = new Date(añoInicio, mesInicio - 1);
-        const fechaFin = new Date(añoFin, mesFin - 1);
-        
-        while (fecha <= fechaFin) {
-          const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-          if (!datosPorPeriodo.has(clave)) {
-            datosPorPeriodo.set(clave, {
-              periodo: clave,
-              simple: 0,
-              revolvente: 0,
-              tarjeta: 0,
-              total: 0
-            });
-          }
-          fecha.setMonth(fecha.getMonth() + 1);
-        }
-      } else {
-        const añoInicio = parseInt(primerPeriodo);
-        const añoFin = parseInt(ultimoPeriodo);
-        
-        for (let año = añoInicio; año <= añoFin; año++) {
-          const clave = `${año}`;
-          if (!datosPorPeriodo.has(clave)) {
-            datosPorPeriodo.set(clave, {
-              periodo: clave,
-              simple: 0,
-              revolvente: 0,
-              tarjeta: 0,
-              total: 0
-            });
-          }
+      // Generar TODOS los meses del rango de años
+      for (let año = añoMin; año <= añoMax; año++) {
+        for (let mes = 1; mes <= 12; mes++) {
+          const clave = `${año}-${String(mes).padStart(2, '0')}`;
+          datosPorPeriodo.set(clave, {
+            periodo: clave,
+            simple: 0,
+            revolvente: 0,
+            tarjeta: 0,
+            total: 0
+          });
         }
       }
+      
+      // Acumular los intereses pagados reales
+      transaccionesConIntereses.forEach(t => {
+        const fecha = new Date(t.fecha);
+        const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+        
+        const datos = datosPorPeriodo.get(clave);
+        if (!datos) return;
+        
+        const valor = t.interes_pagado || 0;
+        
+        if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
+          datos.tarjeta += valor;
+        } else if (t.tipoCreditoAsociado === 'revolvente') {
+          datos.revolvente += valor;
+        } else {
+          datos.simple += valor;
+        }
+        
+        datos.total += valor;
+      });
+      
+      // Convertir a array y ordenar
+      return Array.from(datosPorPeriodo.values())
+        .sort((a, b) => a.periodo.localeCompare(b.periodo))
+        .map(d => ({
+          ...d,
+          periodoFormateado: new Date(d.periodo + "-01").toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+        }));
+      
+    } else {
+      // MODO ANUAL: Solo años con datos reales
+      if (transaccionesConIntereses.length === 0) {
+        return [];
+      }
+      
+      const datosPorAño = new Map<string, {
+        periodo: string,
+        simple: number,
+        revolvente: number,
+        tarjeta: number,
+        total: number
+      }>();
+      
+      transaccionesConIntereses.forEach(t => {
+        const fecha = new Date(t.fecha);
+        const clave = `${fecha.getFullYear()}`;
+        
+        if (!datosPorAño.has(clave)) {
+          datosPorAño.set(clave, {
+            periodo: clave,
+            simple: 0,
+            revolvente: 0,
+            tarjeta: 0,
+            total: 0
+          });
+        }
+        
+        const datos = datosPorAño.get(clave)!;
+        const valor = t.interes_pagado || 0;
+        
+        if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
+          datos.tarjeta += valor;
+        } else if (t.tipoCreditoAsociado === 'revolvente') {
+          datos.revolvente += valor;
+        } else {
+          datos.simple += valor;
+        }
+        
+        datos.total += valor;
+      });
+      
+      // Solo retornar años con datos (no llenar huecos)
+      return Array.from(datosPorAño.values())
+        .sort((a, b) => a.periodo.localeCompare(b.periodo))
+        .map(d => ({
+          ...d,
+          periodoFormateado: d.periodo
+        }));
     }
-    
-    // Convertir a array y ordenar
-    const datosArray = Array.from(datosPorPeriodo.values()).sort((a, b) => 
-      a.periodo.localeCompare(b.periodo)
-    );
-    
-    // Formatear periodos
-    return datosArray.map(d => ({
-      ...d,
-      periodoFormateado: periodoGastosFinancieros === "mensual" 
-        ? new Date(d.periodo + "-01").toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
-        : d.periodo
-    }));
   };
 
   const dataGastosFinancieros = calcularGastosFinancierosHistoricos();
@@ -1151,26 +1138,11 @@ const AnalyticaFinanciamientos = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Evolución de Gastos Financieros</CardTitle>
-              <CardDescription>
-                {tipoGastoFiltro === "devengados" 
-                  ? "Histórico de todos los cargos de intereses (pagados y pendientes)"
-                  : "Histórico de intereses efectivamente pagados"
-                }
-              </CardDescription>
+            <CardDescription>
+              Histórico de costos financieros por periodo (intereses pagados)
+            </CardDescription>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="tipo-gasto-filtro">Mostrar:</Label>
-                <Select value={tipoGastoFiltro} onValueChange={(value: "pagados" | "devengados") => setTipoGastoFiltro(value)}>
-                  <SelectTrigger id="tipo-gasto-filtro" className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="devengados">Devengados</SelectItem>
-                    <SelectItem value="pagados">Pagados</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="tipo-gasto">Tipo:</Label>
                 <Select value={tipoGastoFinanciero} onValueChange={setTipoGastoFinanciero}>
@@ -1201,8 +1173,13 @@ const AnalyticaFinanciamientos = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
+          <CardContent>
+            {periodoGastosFinancieros === "anual" && dataGastosFinancieros.length === 0 ? (
+              <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                No hay pagos de intereses registrados
+              </div>
+            ) : (
+            <ResponsiveContainer width="100%" height={400}>
             <LineChart data={dataGastosFinancieros}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
@@ -1300,7 +1277,8 @@ const AnalyticaFinanciamientos = () => {
                 )}
               </LineChart>
             </ResponsiveContainer>
-        </CardContent>
+            )}
+          </CardContent>
       </Card>
     </div>
   );
