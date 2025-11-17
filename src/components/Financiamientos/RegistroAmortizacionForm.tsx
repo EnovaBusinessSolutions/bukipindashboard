@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 
 const RegistroAmortizacionForm = () => {
-  const { financiamientos, crearTransaccion } = useFinanciamientos();
+  const { financiamientos, transacciones, crearTransaccion } = useFinanciamientos();
   const { data: saldos } = useSaldosDisponibles();
   const { toast } = useToast();
   const [financiamientoId, setFinanciamientoId] = useState("");
@@ -30,6 +30,38 @@ const RegistroAmortizacionForm = () => {
 
   const financiamientoSeleccionado = financiamientos.find(f => f.id === financiamientoId);
 
+  // Calcular saldos desglosados para el financiamiento seleccionado
+  const calcularSaldosDesglosados = () => {
+    if (!financiamientoSeleccionado) {
+      return { capitalPendiente: 0, interesesPendientes: 0 };
+    }
+
+    // Filtrar transacciones del financiamiento seleccionado
+    const transaccionesFinanciamiento = transacciones.filter(
+      t => t.financiamiento_id === financiamientoSeleccionado.id
+    );
+
+    // Calcular intereses devengados (todos los cargos de interés)
+    const interesesDevengados = transaccionesFinanciamiento
+      .filter(t => t.tipo_transaccion === 'cargo_interes')
+      .reduce((sum, t) => sum + t.monto, 0);
+
+    // Calcular intereses pagados (incluye amortizaciones Y cargos pagados al momento)
+    const interesesPagados = transaccionesFinanciamiento
+      .filter(t => t.tipo_transaccion === 'amortizacion' || t.tipo_transaccion === 'cargo_interes')
+      .reduce((sum, t) => sum + (t.interes_pagado || 0), 0);
+
+    // Intereses pendientes
+    const interesesPendientes = Math.max(0, interesesDevengados - interesesPagados);
+
+    // Capital pendiente = Saldo actual - Intereses pendientes
+    const capitalPendiente = Math.max(0, financiamientoSeleccionado.saldo_actual - interesesPendientes);
+
+    return { capitalPendiente, interesesPendientes };
+  };
+
+  const { capitalPendiente, interesesPendientes } = calcularSaldosDesglosados();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -38,6 +70,25 @@ const RegistroAmortizacionForm = () => {
     const montoTotal = parseFloat(monto);
     const capital = parseFloat(capitalPagado);
     const interes = parseFloat(interesPagado);
+
+    // Validar que no se pague más de lo que debe
+    if (capital > capitalPendiente) {
+      toast({
+        title: "Error en el monto",
+        description: `No puedes pagar más capital del pendiente. Máximo: $${formatCurrency(capitalPendiente)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (interes > interesesPendientes) {
+      toast({
+        title: "Error en el monto",
+        description: `No puedes pagar más intereses de los pendientes. Máximo: $${formatCurrency(interesesPendientes)}`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Validar fondos suficientes
     if (metodoPago === "efectivo" && saldos && montoTotal > saldos.efectivo) {
@@ -110,16 +161,54 @@ const RegistroAmortizacionForm = () => {
           </div>
 
           {financiamientoSeleccionado && (
-            <div className="p-4 bg-muted rounded-lg space-y-2">
-              <p className="text-sm">
-                <span className="font-medium">Institución:</span> {financiamientoSeleccionado.institucion_financiera}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Saldo Actual:</span> ${financiamientoSeleccionado.saldo_actual.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Tasa:</span> {financiamientoSeleccionado.tasa_interes}%
-              </p>
+            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg space-y-3 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center justify-between">
+                <p className="text-sm">
+                  <span className="font-medium">Institución:</span> {financiamientoSeleccionado.institucion_financiera}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Tasa: {financiamientoSeleccionado.tasa_interes}%
+                </p>
+              </div>
+              
+              <div className="h-px bg-blue-200 dark:bg-blue-800"></div>
+              
+              {/* Saldos Desglosados */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs text-muted-foreground mb-1">Capital Pendiente</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                    ${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <p className="text-xs text-muted-foreground mb-1">Intereses Pendientes</p>
+                  <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                    ${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Saldo Total */}
+              <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border-2 border-blue-300 dark:border-blue-700">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Saldo Total a Pagar:</p>
+                  <p className="text-xl font-bold text-foreground">
+                    ${financiamientoSeleccionado.saldo_actual.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Indicador de intereses pendientes */}
+              {interesesPendientes > 0 && (
+                <div className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950 p-2 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <span className="font-medium">⚠️ Tienes intereses pendientes</span>
+                  <span className="text-muted-foreground">
+                    ({((interesesPendientes / financiamientoSeleccionado.saldo_actual) * 100).toFixed(1)}% del saldo total)
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -132,8 +221,12 @@ const RegistroAmortizacionForm = () => {
                 step="0.01"
                 value={capitalPagado}
                 onChange={(e) => setCapitalPagado(e.target.value)}
+                placeholder={`Máx: $${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Capital pendiente: ${capitalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -144,8 +237,12 @@ const RegistroAmortizacionForm = () => {
                 step="0.01"
                 value={interesPagado}
                 onChange={(e) => setInteresPagado(e.target.value)}
+                placeholder={`Máx: $${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Intereses pendientes: ${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              </p>
             </div>
 
             <div className="space-y-2 col-span-2">
