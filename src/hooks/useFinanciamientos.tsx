@@ -328,7 +328,7 @@ export const useFinanciamientos = () => {
             .single();
 
           if (asiento) {
-            // Débito a Gastos Financieros
+            // DEBE: Gastos Financieros (SIEMPRE)
             await supabase
               .from("detalle_asientos")
               .insert([{
@@ -339,16 +339,31 @@ export const useFinanciamientos = () => {
                 descripcion: transaccion.descripcion || `Cargo por intereses - ${financiamiento.nombre}`,
               }]);
 
-            // Crédito a Pasivo Bancario
-            await supabase
-              .from("detalle_asientos")
-              .insert([{
-                asiento_id: asiento.id,
-                cuenta_codigo: "2101",
-                debe: 0,
-                haber: transaccion.monto,
-                descripcion: `Acumulación de intereses - ${financiamiento.nombre}`,
-              }]);
+            // HABER: Depende si se pagó o no
+            if (transaccion.interes_pagado > 0) {
+              // CASO 1: Se pagó inmediatamente → reducir efectivo/bancos
+              const cuentaPago = transaccion.metodo_pago === "efectivo" ? "1001" : "1002";
+              await supabase
+                .from("detalle_asientos")
+                .insert([{
+                  asiento_id: asiento.id,
+                  cuenta_codigo: cuentaPago,
+                  debe: 0,
+                  haber: transaccion.monto,
+                  descripcion: `Pago de intereses - ${financiamiento.nombre}`,
+                }]);
+            } else {
+              // CASO 2: Quedó pendiente → aumentar pasivo
+              await supabase
+                .from("detalle_asientos")
+                .insert([{
+                  asiento_id: asiento.id,
+                  cuenta_codigo: "2101",
+                  debe: 0,
+                  haber: transaccion.monto,
+                  descripcion: `Acumulación de intereses - ${financiamiento.nombre}`,
+                }]);
+            }
           }
         }
       }

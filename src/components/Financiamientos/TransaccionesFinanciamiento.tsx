@@ -133,10 +133,19 @@ const TransaccionesFinanciamiento = ({
         } : null
       };
     } else if (transaccion.tipo_transaccion === 'cargo_interes') {
-      return {
-        cargo: '5201 - Gastos Financieros',
-        abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`
-      };
+      // Si interes_pagado > 0 significa que se pagó inmediatamente
+      if (transaccion.interes_pagado > 0) {
+        return {
+          cargo: '5201 - Gastos Financieros',
+          abono: transaccion.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos'
+        };
+      } else {
+        // Si NO se pagó, aumenta el pasivo
+        return {
+          cargo: '5201 - Gastos Financieros',
+          abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`
+        };
+      }
     }
     return { cargo: 'N/A', abono: 'N/A' };
   };
