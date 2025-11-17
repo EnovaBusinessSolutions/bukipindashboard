@@ -278,6 +278,13 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
     isTotal: true
   });
 
+  // Calcular márgenes
+  const margenBruto = totalIngresos > 0 ? (utilidadBruta / totalIngresos) * 100 : 0;
+  const margenEBITDA = totalIngresos > 0 ? (ebitda / totalIngresos) * 100 : 0;
+  const margenEBIT = totalIngresos > 0 ? (ebit / totalIngresos) * 100 : 0;
+  const margenAntesImpuestos = totalIngresos > 0 ? (utilidadAntesImpuestos / totalIngresos) * 100 : 0;
+  const margenNeto = totalIngresos > 0 ? (utilidadNeta / totalIngresos) * 100 : 0;
+
   const formatCurrency = (value: number) => {
     const absValue = Math.abs(value);
     const formatted = absValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -394,32 +401,101 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
             </BarChart>
           </ResponsiveContainer>
           
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div className="space-y-1">
-              <p className="text-muted-foreground">Ventas</p>
-              <p className="font-semibold text-lg">{formatCurrency(totalVentas)}</p>
+          {/* Leyenda de colores */}
+          <div className="mt-4 flex justify-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-green-500"></div>
+              <span className="text-muted-foreground">Ingresos</span>
             </div>
-            <div className="space-y-1">
-              <p className="text-muted-foreground">Otros Ingresos</p>
-              <p className="font-semibold text-lg">{formatCurrency(totalOtrosIngresos)}</p>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-red-500"></div>
+              <span className="text-muted-foreground">Egresos</span>
             </div>
-            <div className="space-y-1">
-              <p className="text-muted-foreground">Total Ingresos</p>
-              <p className="font-semibold text-lg">{formatCurrency(totalIngresos)}</p>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border-2 border-blue-500 bg-blue-500"></div>
+              <span className="text-muted-foreground">Subtotales</span>
             </div>
-            <div className="space-y-1">
-              <p className="text-muted-foreground">Utilidad Bruta</p>
-              <p className="font-semibold text-lg">{formatCurrency(utilidadBruta)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-muted-foreground">EBITDA</p>
-              <p className="font-semibold text-lg">{formatCurrency(ebitda)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-muted-foreground">Utilidad Neta</p>
-              <p className={`font-semibold text-lg ${utilidadNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(utilidadNeta)}
-              </p>
+          </div>
+          
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-semibold text-center">Métricas Clave y Márgenes</h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
+              {/* Ventas */}
+              <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
+                <p className="text-muted-foreground text-xs">Ventas</p>
+                <p className="font-semibold text-lg">{formatCurrency(totalVentas)}</p>
+                <p className="text-xs text-muted-foreground">100%</p>
+              </div>
+              
+              {/* Otros Ingresos */}
+              <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
+                <p className="text-muted-foreground text-xs">Otros Ingresos</p>
+                <p className="font-semibold text-lg">{formatCurrency(totalOtrosIngresos)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {totalIngresos > 0 ? `${((totalOtrosIngresos / totalIngresos) * 100).toFixed(1)}%` : '0%'}
+                </p>
+              </div>
+              
+              {/* Total Ingresos */}
+              <div className="space-y-1 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-muted-foreground text-xs font-semibold">Total Ingresos</p>
+                <p className="font-semibold text-lg text-blue-600">{formatCurrency(totalIngresos)}</p>
+                <p className="text-xs text-blue-600 font-medium">100%</p>
+              </div>
+              
+              {/* Utilidad Bruta */}
+              <div className="space-y-1 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-muted-foreground text-xs">Utilidad Bruta</p>
+                <p className="font-semibold text-lg text-green-600">{formatCurrency(utilidadBruta)}</p>
+                <p className="text-xs text-green-600 font-medium">
+                  Margen: {margenBruto.toFixed(1)}%
+                </p>
+              </div>
+              
+              {/* EBITDA */}
+              <div className="space-y-1 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-muted-foreground text-xs">EBITDA</p>
+                <p className="font-semibold text-lg text-green-600">{formatCurrency(ebitda)}</p>
+                <p className="text-xs text-green-600 font-medium">
+                  Margen: {margenEBITDA.toFixed(1)}%
+                </p>
+              </div>
+              
+              {/* EBIT */}
+              <div className="space-y-1 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-muted-foreground text-xs">EBIT</p>
+                <p className="font-semibold text-lg text-green-600">{formatCurrency(ebit)}</p>
+                <p className="text-xs text-green-600 font-medium">
+                  Margen: {margenEBIT.toFixed(1)}%
+                </p>
+              </div>
+              
+              {/* Utilidad A. Impuestos */}
+              <div className="space-y-1 p-3 bg-muted/30 rounded-lg">
+                <p className="text-muted-foreground text-xs">Util. A. Impuestos</p>
+                <p className={`font-semibold text-lg ${utilidadAntesImpuestos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(utilidadAntesImpuestos)}
+                </p>
+                <p className={`text-xs font-medium ${utilidadAntesImpuestos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  Margen: {margenAntesImpuestos.toFixed(1)}%
+                </p>
+              </div>
+              
+              {/* Utilidad Neta */}
+              <div className={`space-y-1 p-3 border-2 rounded-lg ${
+                utilidadNeta >= 0 
+                  ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700' 
+                  : 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700'
+              }`}>
+                <p className="text-muted-foreground text-xs font-semibold">UTILIDAD NETA</p>
+                <p className={`font-bold text-xl ${utilidadNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(utilidadNeta)}
+                </p>
+                <p className={`text-xs font-bold ${utilidadNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  Margen: {margenNeto.toFixed(1)}%
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>
