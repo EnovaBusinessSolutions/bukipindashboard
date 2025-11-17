@@ -29,6 +29,7 @@ const AnalyticaFinanciamientos = () => {
   const [creditoRevolventeSeleccionado, setCreditoRevolventeSeleccionado] = useState<string>("todos");
   const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<"mensual" | "anual">("mensual");
   const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<string>("total");
+  const [tipoDeudaAcreedor, setTipoDeudaAcreedor] = useState<"total" | "capital" | "intereses">("total");
 
   // Consulta para obtener gastos financieros de la cuenta 5201
   const { data: gastosFinancieros, isLoading: isLoadingGastos } = useQuery({
@@ -458,7 +459,13 @@ const AnalyticaFinanciamientos = () => {
 
   // Calcular deuda por acreedor
   const calcularDeudaPorAcreedor = () => {
-    const deudaPorInstitucion: Record<string, { saldo: number; logo?: string; nombre: string }> = {};
+    const deudaPorInstitucion: Record<string, { 
+      total: number; 
+      capital: number; 
+      intereses: number;
+      logo?: string; 
+      nombre: string 
+    }> = {};
     
     financiamientosActivos
       .filter(f => f.saldo_actual > 0)
@@ -466,22 +473,51 @@ const AnalyticaFinanciamientos = () => {
         const key = f.institucion_financiera_id || f.institucion_financiera;
         const institucion = instituciones?.find(i => i.id === f.institucion_financiera_id);
         
+        // Calcular intereses devengados pendientes
+        const transaccionesFinanciamiento = (transacciones || []).filter(
+          t => t.financiamiento_id === f.id
+        );
+        
+        const interesesDevengados = transaccionesFinanciamiento
+          .filter(t => t.tipo_transaccion === 'cargo_interes')
+          .reduce((sum, t) => sum + t.monto, 0);
+        
+        const interesesPagados = transaccionesFinanciamiento
+          .filter(t => t.tipo_transaccion === 'amortizacion')
+          .reduce((sum, t) => sum + (t.interes_pagado || 0), 0);
+        
+        const interesesPendientes = interesesDevengados - interesesPagados;
+        const capitalPendiente = f.saldo_actual - interesesPendientes;
+        
         if (!deudaPorInstitucion[key]) {
           deudaPorInstitucion[key] = {
-            saldo: 0,
+            total: 0,
+            capital: 0,
+            intereses: 0,
             logo: institucion?.logo_url || undefined,
             nombre: institucion?.nombre || f.institucion_financiera,
           };
         }
-        deudaPorInstitucion[key].saldo += f.saldo_actual;
+        
+        deudaPorInstitucion[key].total += f.saldo_actual;
+        deudaPorInstitucion[key].capital += capitalPendiente;
+        deudaPorInstitucion[key].intereses += interesesPendientes;
       });
     
-    // Convertir a array y ordenar por saldo descendente
+    // Convertir a array y ordenar según el filtro activo
+    const valorOrden = tipoDeudaAcreedor === "total" 
+      ? "total" 
+      : tipoDeudaAcreedor === "capital" 
+      ? "capital" 
+      : "intereses";
+    
     const acreedoresOrdenados = Object.entries(deudaPorInstitucion)
       .map(([key, data]) => ({
         id: key,
         ...data,
+        saldo: data[valorOrden], // El valor que se mostrará
       }))
+      .filter(a => a.saldo > 0) // Solo mostrar si hay saldo en el tipo seleccionado
       .sort((a, b) => b.saldo - a.saldo);
     
     // Top 5 + agrupar resto
@@ -490,10 +526,14 @@ const AnalyticaFinanciamientos = () => {
     
     if (resto.length > 0) {
       const saldoOtros = resto.reduce((sum, a) => sum + a.saldo, 0);
+      
       top5.push({
         id: 'otros',
         nombre: 'Otros Bancos',
         saldo: saldoOtros,
+        total: resto.reduce((sum, a) => sum + a.total, 0),
+        capital: resto.reduce((sum, a) => sum + a.capital, 0),
+        intereses: resto.reduce((sum, a) => sum + a.intereses, 0),
         logo: undefined,
       });
     }
@@ -897,10 +937,25 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Deuda por Acreedor</CardTitle>
-          </CardHeader>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Deuda por Acreedor</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-muted-foreground">Mostrar:</Label>
+                    <Select value={tipoDeudaAcreedor} onValueChange={(value: "total" | "capital" | "intereses") => setTipoDeudaAcreedor(value)}>
+                      <SelectTrigger className="w-[140px] h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="total">Deuda Total</SelectItem>
+                        <SelectItem value="capital">Solo Capital</SelectItem>
+                        <SelectItem value="intereses">Solo Intereses</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {acreedoresTop.length === 0 ? (
@@ -956,7 +1011,9 @@ const AnalyticaFinanciamientos = () => {
             {acreedoresTop.length > 0 && (
               <div className="mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">Total Deuda:</span>
+                  <span className="text-sm font-semibold">
+                    Total {tipoDeudaAcreedor === "total" ? "Deuda" : tipoDeudaAcreedor === "capital" ? "Capital" : "Intereses"}:
+                  </span>
                   <span className="text-lg font-bold text-red-600">
                     ${formatearValor(acreedoresTop.reduce((sum, a) => sum + a.saldo, 0))}
                   </span>
