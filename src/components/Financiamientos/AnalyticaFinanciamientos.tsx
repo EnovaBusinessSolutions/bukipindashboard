@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap, ReferenceLine, LineChart, Line } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const COLORS = [
   'hsl(180, 50%, 55%)',  // Teal claro - chart-1
@@ -28,7 +30,36 @@ const AnalyticaFinanciamientos = () => {
   const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<"mensual" | "anual">("mensual");
   const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<string>("total");
 
-  if (isLoading) {
+  // Consulta para obtener gastos financieros de la cuenta 5201
+  const { data: gastosFinancieros, isLoading: isLoadingGastos } = useQuery({
+    queryKey: ["gastos-financieros-5201"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      const { data, error } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          id,
+          debe,
+          cuenta_codigo,
+          asientos_contables!inner(
+            id,
+            fecha,
+            descripcion,
+            user_id
+          )
+        `)
+        .eq("cuenta_codigo", "5201")
+        .eq("asientos_contables.user_id", user.id)
+        .gt("debe", 0);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  if (isLoading || isLoadingGastos) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-32 w-full" />
@@ -1139,7 +1170,7 @@ const AnalyticaFinanciamientos = () => {
             <div>
               <CardTitle>Evolución de Gastos Financieros</CardTitle>
             <CardDescription>
-              Histórico de costos financieros por periodo (intereses pagados)
+              Evolución de la cuenta 5201 - Gastos Financieros (intereses pagados y devengados)
             </CardDescription>
             </div>
             <div className="flex items-center gap-4">
