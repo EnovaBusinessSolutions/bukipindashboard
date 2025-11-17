@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Plus, TrendingUp, TrendingDown } from "lucide-react";
+import { CalendarIcon, Plus, TrendingUp, TrendingDown, FileText, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,65 @@ import { useAccionistas } from "@/hooks/useAccionistas";
 import { GraficaWaterfall } from "@/components/Capital/GraficaWaterfall";
 import { GraficaRadialKPI } from "@/components/Capital/GraficaRadialKPI";
 import { FormularioAccionista } from "@/components/Capital/FormularioAccionista";
+import { DetalleAsientoCapital } from "@/components/Capital/DetalleAsientoCapital";
+import { useAsientosCapital } from "@/hooks/useAsientosCapital";
+import { Badge } from "@/components/ui/badge";
+
+// Componente interno para filas expandibles
+const FilaTransaccionExpandible = ({ transaccion }: { transaccion: any }) => {
+  const { data: asiento, isLoading } = useAsientosCapital(transaccion.id);
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <tr className="border-b hover:bg-muted/50">
+        <td className="p-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpanded(!expanded)}
+            className="h-8 w-8 p-0"
+          >
+            <ChevronDown className={cn(
+              "h-4 w-4 transition-transform",
+              expanded && "rotate-180"
+            )} />
+          </Button>
+        </td>
+        <td className="p-3 text-sm">
+          {format(new Date(transaccion.fecha), "dd/MM/yyyy", { locale: es })}
+        </td>
+        <td className="p-3 text-sm font-medium">{transaccion.socio}</td>
+        <td className="p-3">
+          {transaccion.tipo_movimiento === "aportacion" ? (
+            <Badge className="bg-green-500">
+              <TrendingUp className="w-3 h-3 mr-1" />
+              Aportación
+            </Badge>
+          ) : (
+            <Badge className="bg-red-500">
+              <TrendingDown className="w-3 h-3 mr-1" />
+              Dividendo
+            </Badge>
+          )}
+        </td>
+        <td className="p-3 text-right font-mono text-sm">
+          ${Number(transaccion.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+        </td>
+        <td className="p-3 text-sm text-muted-foreground">
+          {transaccion.descripcion || "-"}
+        </td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={6} className="p-4 bg-muted/20">
+            <DetalleAsientoCapital asiento={asiento} isLoading={isLoading} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+};
 
 const RegistroCapital = () => {
   const {
@@ -369,6 +428,7 @@ const RegistroCapital = () => {
                     <table className="w-full">
                       <thead className="bg-muted/50">
                         <tr>
+                          <th className="p-3 text-left text-sm font-medium w-10"></th>
                           <th className="p-3 text-left text-sm font-medium">Fecha</th>
                           <th className="p-3 text-left text-sm font-medium">Socio</th>
                           <th className="p-3 text-left text-sm font-medium">Tipo</th>
@@ -378,28 +438,7 @@ const RegistroCapital = () => {
                       </thead>
                       <tbody>
                         {transacciones.map((t) => (
-                          <tr key={t.id} className="border-b">
-                            <td className="p-3 text-sm">
-                              {format(new Date(t.fecha), "dd/MM/yyyy", { locale: es })}
-                            </td>
-                            <td className="p-3 text-sm font-medium">{t.socio}</td>
-                            <td className="p-3 text-sm">
-                              <span className={cn(
-                                "px-2 py-1 rounded text-xs",
-                                t.tipo_movimiento === "aportacion"
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-red-100 text-red-700"
-                              )}>
-                                {t.tipo_movimiento === "aportacion" ? "Aportación" : "Dividendo"}
-                              </span>
-                            </td>
-                            <td className="p-3 text-sm text-right font-medium">
-                              ${Number(t.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-3 text-sm text-muted-foreground">
-                              {t.descripcion || "-"}
-                            </td>
-                          </tr>
+                          <FilaTransaccionExpandible key={t.id} transaccion={t} />
                         ))}
                       </tbody>
                     </table>
