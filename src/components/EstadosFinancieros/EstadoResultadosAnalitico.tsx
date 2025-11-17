@@ -369,17 +369,28 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                 radius={[6, 6, 6, 6]}
                 label={{
                   position: 'top',
-                  content: ({ x, y, width, value, index }: any) => {
+                  content: ({ x, y, width, value, index, height }: any) => {
                     const item = waterfallData[index];
                     if (!item) return null;
-                    const displayValue = item.name.includes("(-)") ? -item.start : item.start;
+                    
+                    // Determinar si es negativo basado en el nombre
+                    const isNegative = item.name.includes("(-)");
+                    const displayValue = isNegative ? -item.start : item.start;
+                    
+                    // Posicionar dinámicamente según el signo
+                    const yPosition = isNegative 
+                      ? Number(y) + Number(height) + 15  // Abajo para negativos
+                      : Number(y) - 5;                    // Arriba para positivos
+                    
+                    const baseline = isNegative ? 'top' : 'bottom';
+                    
                     return (
                       <text
                         x={Number(x) + Number(width) / 2}
-                        y={Number(y) - 5}
+                        y={yPosition}
                         fill="hsl(var(--foreground))"
                         textAnchor="middle"
-                        dominantBaseline="bottom"
+                        dominantBaseline={baseline}
                         fontSize={10}
                         fontWeight="bold"
                       >
