@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,14 @@ const RegistroAmortizacionForm = () => {
   };
 
   const { capitalPendiente, interesesPendientes } = calcularSaldosDesglosados();
+
+  // Calcular monto total automáticamente
+  useEffect(() => {
+    const capital = parseFloat(capitalPagado) || 0;
+    const interes = parseFloat(interesPagado) || 0;
+    const total = capital + interes;
+    setMonto(total > 0 ? total.toString() : "");
+  }, [capitalPagado, interesPagado]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,21 +248,73 @@ const RegistroAmortizacionForm = () => {
                 placeholder={`Máx: $${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                 required
               />
-              <p className="text-xs text-muted-foreground">
-                Intereses pendientes: ${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Intereses pendientes: ${interesesPendientes.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
 
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="monto">Monto Total del Pago *</Label>
-              <Input
-                id="monto"
-                type="number"
-                step="0.01"
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-                required
-              />
+          {/* Previsualización del Saldo Restante */}
+          {financiamientoSeleccionado && (capitalPagado || interesPagado) && (
+            <div className="col-span-2 p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 rounded-lg space-y-3 border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                  📊 Previsualización después del pago
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <p className="text-xs text-muted-foreground mb-1">Capital que quedará</p>
+                  <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                    ${Math.max(0, capitalPendiente - (parseFloat(capitalPagado) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <p className="text-xs text-muted-foreground mb-1">Intereses que quedarán</p>
+                  <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                    ${Math.max(0, interesesPendientes - (parseFloat(interesPagado) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              
+              <div className={cn(
+                "p-3 rounded-lg border-2",
+                (capitalPendiente - (parseFloat(capitalPagado) || 0)) === 0 && (interesesPendientes - (parseFloat(interesPagado) || 0)) === 0
+                  ? "bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-700"
+                  : "bg-white dark:bg-gray-950 border-purple-300 dark:border-purple-700"
+              )}>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">
+                    {(capitalPendiente - (parseFloat(capitalPagado) || 0)) === 0 && (interesesPendientes - (parseFloat(interesPagado) || 0)) === 0
+                      ? "✅ Deuda liquidada completamente"
+                      : "Saldo Total que quedará:"
+                    }
+                  </p>
+                  {((capitalPendiente - (parseFloat(capitalPagado) || 0)) > 0 || (interesesPendientes - (parseFloat(interesPagado) || 0)) > 0) && (
+                    <p className="text-xl font-bold text-foreground">
+                      ${(Math.max(0, capitalPendiente - (parseFloat(capitalPagado) || 0)) + Math.max(0, interesesPendientes - (parseFloat(interesPagado) || 0))).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 col-span-2">
+            <Label htmlFor="monto">Monto Total del Pago (calculado automáticamente)</Label>
+            <Input
+              id="monto"
+              type="number"
+              step="0.01"
+              value={monto}
+              disabled
+              className="bg-muted cursor-not-allowed"
+              placeholder="Se calculará automáticamente"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este monto se calcula sumando el capital + interés pagados
+            </p>
             </div>
 
             <div className="space-y-2">
