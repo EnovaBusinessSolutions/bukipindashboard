@@ -54,6 +54,29 @@ export const useFinanciamientos = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
+      
+      // Corrección automática del saldo Amex Corp (ejecutar solo una vez)
+      const amexCard = (data as Financiamiento[]).find(
+        f => f.id === '77ca12dc-a22a-4b2b-a4b5-ad4d77d9e301' && f.saldo_actual === 2300
+      );
+      
+      if (amexCard) {
+        console.log("Corrigiendo saldo de Amex Corp de $2,300 a $2,000");
+        await supabase
+          .from("financiamientos")
+          .update({ saldo_actual: 2000 })
+          .eq("id", '77ca12dc-a22a-4b2b-a4b5-ad4d77d9e301');
+        
+        // Refetch para obtener datos actualizados
+        const { data: updatedData, error: refetchError } = await supabase
+          .from("financiamientos")
+          .select("*")
+          .order("created_at", { ascending: false });
+        
+        if (refetchError) throw refetchError;
+        return updatedData as Financiamiento[];
+      }
+      
       return data as Financiamiento[];
     },
   });
