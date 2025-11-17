@@ -4,7 +4,7 @@ import { useFinanciamientos } from "@/hooks/useFinanciamientos";
 import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap, ReferenceLine } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, Treemap, ReferenceLine, LineChart, Line } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -17,7 +17,7 @@ const COLORS = [
 ];
 
 const AnalyticaFinanciamientos = () => {
-  const { financiamientos, isLoading } = useFinanciamientos();
+  const { financiamientos, isLoading, transacciones } = useFinanciamientos();
   const { instituciones } = useInstitucionesFinancieras();
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<"mensual" | "anual">("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<"normal" | "miles" | "millones">("normal");
@@ -25,6 +25,8 @@ const AnalyticaFinanciamientos = () => {
   const [creditoAmortizacion, setCreditoAmortizacion] = useState<string>("todos");
   const [creditoSimpleSeleccionado, setCreditoSimpleSeleccionado] = useState<string>("todos");
   const [creditoRevolventeSeleccionado, setCreditoRevolventeSeleccionado] = useState<string>("todos");
+  const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<"mensual" | "anual">("mensual");
+  const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<string>("total");
 
   if (isLoading) {
     return (
@@ -477,6 +479,86 @@ const AnalyticaFinanciamientos = () => {
   const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
   // Mostrar todos los créditos activos en la leyenda (incluso con saldo 0)
   const nombresCreditos = financiamientosActivos.map(f => f.nombre);
+
+  // Calcular gastos financieros históricos (intereses pagados)
+  const calcularGastosFinancierosHistoricos = () => {
+    if (!financiamientos || !transacciones || transacciones.length === 0) return [];
+    
+    // Crear un mapa de financiamiento_id -> tipo_credito para clasificar las transacciones
+    const financiamientosPorId = new Map(
+      financiamientos.map(f => [f.id, f.tipo_credito])
+    );
+    
+    // Clasificar transacciones por tipo de crédito
+    const transaccionesConTipo = transacciones.map(t => ({
+      ...t,
+      tipoCreditoAsociado: financiamientosPorId.get(t.financiamiento_id) || 'desconocido'
+    }));
+    
+    // Filtrar solo transacciones con intereses pagados
+    const transaccionesConIntereses = transaccionesConTipo.filter(t => (t.interes_pagado || 0) > 0);
+    
+    if (transaccionesConIntereses.length === 0) return [];
+    
+    // Agrupar por periodo (mes o año)
+    const datosPorPeriodo = new Map<string, {
+      periodo: string,
+      simple: number,
+      revolvente: number,
+      tarjeta: number,
+      total: number
+    }>();
+    
+    transaccionesConIntereses.forEach(t => {
+      const fecha = new Date(t.fecha);
+      let clavePeriodo: string;
+      
+      if (periodoGastosFinancieros === "mensual") {
+        clavePeriodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      } else {
+        clavePeriodo = `${fecha.getFullYear()}`;
+      }
+      
+      if (!datosPorPeriodo.has(clavePeriodo)) {
+        datosPorPeriodo.set(clavePeriodo, {
+          periodo: clavePeriodo,
+          simple: 0,
+          revolvente: 0,
+          tarjeta: 0,
+          total: 0
+        });
+      }
+      
+      const datos = datosPorPeriodo.get(clavePeriodo)!;
+      const intereses = t.interes_pagado || 0;
+      
+      // Clasificar por tipo de crédito
+      if (t.tipoCreditoAsociado === 'tarjeta_corporativa') {
+        datos.tarjeta += intereses;
+      } else if (t.tipoCreditoAsociado === 'revolvente') {
+        datos.revolvente += intereses;
+      } else {
+        datos.simple += intereses;
+      }
+      
+      datos.total += intereses;
+    });
+    
+    // Convertir a array y ordenar por periodo
+    const datosArray = Array.from(datosPorPeriodo.values()).sort((a, b) => 
+      a.periodo.localeCompare(b.periodo)
+    );
+    
+    // Formatear los periodos para mejor visualización
+    return datosArray.map(d => ({
+      ...d,
+      periodoFormateado: periodoGastosFinancieros === "mensual" 
+        ? new Date(d.periodo + "-01").toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+        : d.periodo
+    }));
+  };
+
+  const dataGastosFinancieros = calcularGastosFinancierosHistoricos();
 
   // Calcular el valor máximo para el eje Y con 20% de margen
   const limiteYAxis = (() => {
@@ -967,6 +1049,155 @@ const AnalyticaFinanciamientos = () => {
               })}
             </BarChart>
           </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Gráfica de Gastos Financieros Históricos */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Evolución de Gastos Financieros</CardTitle>
+              <CardDescription>
+                Histórico de intereses pagados por periodo
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="tipo-gasto">Tipo:</Label>
+                <Select value={tipoGastoFinanciero} onValueChange={setTipoGastoFinanciero}>
+                  <SelectTrigger id="tipo-gasto" className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="total">Total</SelectItem>
+                    <SelectItem value="simple">Créditos Simples</SelectItem>
+                    <SelectItem value="revolvente">Líneas Revolventes</SelectItem>
+                    <SelectItem value="tarjeta">Tarjetas Corporativas</SelectItem>
+                    <SelectItem value="combinada">Combinada (Todas)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="periodo-gastos">Periodo:</Label>
+                <Select value={periodoGastosFinancieros} onValueChange={(value: "mensual" | "anual") => setPeriodoGastosFinancieros(value)}>
+                  <SelectTrigger id="periodo-gastos" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mensual">Mensual</SelectItem>
+                    <SelectItem value="anual">Anual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {dataGastosFinancieros.length === 0 ? (
+            <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+              No hay datos de gastos financieros para mostrar
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart data={dataGastosFinancieros}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="periodoFormateado"
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis tickFormatter={(value) => `$${formatearValor(value)}`} />
+                <Tooltip
+                  formatter={(value: number) => formatearValorCompleto(value)}
+                  labelStyle={{ color: '#000' }}
+                />
+                <Legend />
+                
+                {/* Renderizar líneas según el filtro seleccionado */}
+                {tipoGastoFinanciero === "total" && (
+                  <Line 
+                    type="monotone" 
+                    dataKey="total" 
+                    stroke="hsl(180, 50%, 55%)" 
+                    strokeWidth={3}
+                    name="Total Intereses"
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                )}
+                
+                {tipoGastoFinanciero === "simple" && (
+                  <Line 
+                    type="monotone" 
+                    dataKey="simple" 
+                    stroke="hsl(180, 50%, 55%)" 
+                    strokeWidth={3}
+                    name="Créditos Simples"
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                )}
+                
+                {tipoGastoFinanciero === "revolvente" && (
+                  <Line 
+                    type="monotone" 
+                    dataKey="revolvente" 
+                    stroke="hsl(180, 45%, 45%)" 
+                    strokeWidth={3}
+                    name="Líneas Revolventes"
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                )}
+                
+                {tipoGastoFinanciero === "tarjeta" && (
+                  <Line 
+                    type="monotone" 
+                    dataKey="tarjeta" 
+                    stroke="hsl(180, 55%, 65%)" 
+                    strokeWidth={3}
+                    name="Tarjetas Corporativas"
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                )}
+                
+                {tipoGastoFinanciero === "combinada" && (
+                  <>
+                    <Line 
+                      type="monotone" 
+                      dataKey="simple" 
+                      stroke="hsl(180, 50%, 55%)" 
+                      strokeWidth={2}
+                      name="Créditos Simples"
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="revolvente" 
+                      stroke="hsl(180, 45%, 45%)" 
+                      strokeWidth={2}
+                      name="Líneas Revolventes"
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="tarjeta" 
+                      stroke="hsl(180, 55%, 65%)" 
+                      strokeWidth={2}
+                      name="Tarjetas Corporativas"
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </>
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
     </div>
