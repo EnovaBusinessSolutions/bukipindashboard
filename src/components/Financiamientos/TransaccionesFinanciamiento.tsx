@@ -16,6 +16,7 @@ interface TransaccionesFinanciamientoProps {
   montoTotal: number;
   saldoActual: number;
   saldoInicial: number;
+  tipoCredito?: string;
 }
 
 const TransaccionesFinanciamiento = ({ 
@@ -23,7 +24,8 @@ const TransaccionesFinanciamiento = ({
   nombreFinanciamiento,
   montoTotal,
   saldoActual,
-  saldoInicial 
+  saldoInicial,
+  tipoCredito = 'simple'
 }: TransaccionesFinanciamientoProps) => {
   const [detalleAsientoOpen, setDetalleAsientoOpen] = useState(false);
   const [asientoSeleccionado, setAsientoSeleccionado] = useState<any>(null);
@@ -84,6 +86,11 @@ const TransaccionesFinanciamiento = ({
   const montoAmortizado = saldoInicial - saldoActual;
   const porcentajePagado = saldoInicial > 0 ? (montoAmortizado / saldoInicial) * 100 : 0;
 
+  // Para líneas revolventes
+  const esRevolvente = tipoCredito === 'revolvente' || tipoCredito === 'tarjeta_corporativa';
+  const saldoDisponible = montoTotal - saldoActual;
+  const porcentajeUtilizado = montoTotal > 0 ? (saldoActual / montoTotal) * 100 : 0;
+
   const getTipoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
       desembolso: "Desembolso Inicial",
@@ -131,59 +138,123 @@ const TransaccionesFinanciamiento = ({
     <div className="space-y-6">
       {/* Tarjetas de resumen */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Monto Original
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${montoTotal.toLocaleString('es-MX')}</div>
-            <p className="text-xs text-muted-foreground mt-1">Préstamo total</p>
-          </CardContent>
-        </Card>
+        {esRevolvente ? (
+          // Tarjetas para Líneas Revolventes y Tarjetas Corporativas
+          <>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Línea Total
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">${montoTotal.toLocaleString('es-MX')}</div>
+                <p className="text-xs text-muted-foreground mt-1">Línea aprobada</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Amortizado
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">${montoAmortizado.toLocaleString('es-MX')}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {porcentajePagado.toFixed(1)}% pagado
-            </p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Monto Utilizado
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">${saldoActual.toLocaleString('es-MX')}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {porcentajeUtilizado.toFixed(1)}% utilizado
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingDown className="h-4 w-4" />
-              Saldo Pendiente
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">${saldoActual.toLocaleString('es-MX')}</div>
-            <p className="text-xs text-muted-foreground mt-1">Por pagar</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4" />
+                  Saldo Disponible
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-success">${saldoDisponible.toLocaleString('es-MX')}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(100 - porcentajeUtilizado).toFixed(1)}% disponible
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Transacciones
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{transacciones?.length || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Registros</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Transacciones
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{transacciones?.length || 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">Registros</p>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          // Tarjetas para Créditos Simples y Arrendamientos
+          <>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Monto Original
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">${montoTotal.toLocaleString('es-MX')}</div>
+                <p className="text-xs text-muted-foreground mt-1">Préstamo total</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Amortizado
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-success">${montoAmortizado.toLocaleString('es-MX')}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {porcentajePagado.toFixed(1)}% pagado
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4" />
+                  Saldo Pendiente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">${saldoActual.toLocaleString('es-MX')}</div>
+                <p className="text-xs text-muted-foreground mt-1">Por pagar</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Transacciones
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{transacciones?.length || 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">Registros</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Tabla de transacciones */}

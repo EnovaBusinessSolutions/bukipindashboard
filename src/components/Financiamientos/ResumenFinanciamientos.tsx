@@ -205,6 +205,7 @@ const ResumenFinanciamientos = () => {
                         montoTotal={financiamiento.monto_total}
                         saldoActual={financiamiento.saldo_actual}
                         saldoInicial={financiamiento.saldo_inicial}
+                        tipoCredito={financiamiento.tipo_credito}
                       />
                     </AccordionContent>
                   </AccordionItem>
@@ -259,6 +260,7 @@ const ResumenFinanciamientos = () => {
                         montoTotal={financiamiento.monto_total}
                         saldoActual={financiamiento.saldo_actual}
                         saldoInicial={financiamiento.saldo_inicial}
+                        tipoCredito={financiamiento.tipo_credito}
                       />
                     </AccordionContent>
                   </AccordionItem>
