@@ -590,10 +590,16 @@ const AnalyticaFinanciamientos = () => {
       
       // Procesar gastosFinancieros y acumular SOLO los del año actual
       gastosFinancieros.forEach(gasto => {
-        const fecha = new Date(gasto.asientos_contables?.fecha);
-        if (fecha.getFullYear() !== añoActual) return; // Ignorar otros años
+        const fechaStr = gasto.asientos_contables?.fecha;
+        if (!fechaStr) return;
         
-        const clave = `${añoActual}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+        // Parsear fecha de forma robusta (formato YYYY-MM-DD)
+        const [año, mes, dia] = fechaStr.split('-').map(Number);
+        
+        // SOLO procesar si es año 2025 (año actual)
+        if (año !== añoActual) return;
+        
+        const clave = `${añoActual}-${String(mes).padStart(2, '0')}`;
         const datos = datosPorPeriodo.get(clave);
         if (!datos) return;
         
@@ -1253,7 +1259,28 @@ const AnalyticaFinanciamientos = () => {
                 textAnchor="end"
                 height={80}
               />
-              <YAxis tickFormatter={(value) => `$${formatearValor(value)}`} />
+              <YAxis 
+                domain={[0, (() => {
+                  if (!dataGastosFinancieros || dataGastosFinancieros.length === 0) return 100;
+                  let maxValor = 0;
+                  if (tipoGastoFinanciero === "total") {
+                    maxValor = Math.max(...dataGastosFinancieros.map(d => d.total || 0));
+                  } else if (tipoGastoFinanciero === "simple") {
+                    maxValor = Math.max(...dataGastosFinancieros.map(d => d.simple || 0));
+                  } else if (tipoGastoFinanciero === "revolvente") {
+                    maxValor = Math.max(...dataGastosFinancieros.map(d => d.revolvente || 0));
+                  } else if (tipoGastoFinanciero === "tarjeta") {
+                    maxValor = Math.max(...dataGastosFinancieros.map(d => d.tarjeta || 0));
+                  } else if (tipoGastoFinanciero === "combinada") {
+                    maxValor = Math.max(...dataGastosFinancieros.map(d => 
+                      Math.max(d.simple || 0, d.revolvente || 0, d.tarjeta || 0)
+                    ));
+                  }
+                  return Math.ceil(maxValor * 1.2);
+                })()]}
+                allowDataOverflow={false}
+                tickFormatter={(value) => `$${formatearValor(value)}`} 
+              />
               <Tooltip
                 formatter={(value: number) => formatearValorCompleto(value)}
                 labelStyle={{ color: '#000' }}
@@ -1270,7 +1297,19 @@ const AnalyticaFinanciamientos = () => {
                   name="Total Intereses"
                   dot={{ r: 4 }}
                   activeDot={{ r: 6 }}
-                />
+                >
+                  <LabelList 
+                    dataKey="total"
+                    position="top"
+                    fill="#000"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: number) => {
+                      if (value === 0) return '';
+                      return `$${formatearValor(value)}`;
+                    }}
+                  />
+                </Line>
               )}
                 
                 {tipoGastoFinanciero === "simple" && (
@@ -1282,7 +1321,19 @@ const AnalyticaFinanciamientos = () => {
                     name="Créditos Simples"
                     dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
-                  />
+                  >
+                    <LabelList 
+                      dataKey="simple"
+                      position="top"
+                      fill="#000"
+                      fontSize={11}
+                      fontWeight="bold"
+                      formatter={(value: number) => {
+                        if (value === 0) return '';
+                        return `$${formatearValor(value)}`;
+                      }}
+                    />
+                  </Line>
                 )}
                 
                 {tipoGastoFinanciero === "revolvente" && (
@@ -1294,7 +1345,19 @@ const AnalyticaFinanciamientos = () => {
                     name="Líneas Revolventes"
                     dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
-                  />
+                  >
+                    <LabelList 
+                      dataKey="revolvente"
+                      position="top"
+                      fill="#000"
+                      fontSize={11}
+                      fontWeight="bold"
+                      formatter={(value: number) => {
+                        if (value === 0) return '';
+                        return `$${formatearValor(value)}`;
+                      }}
+                    />
+                  </Line>
                 )}
                 
                 {tipoGastoFinanciero === "tarjeta" && (
@@ -1306,7 +1369,19 @@ const AnalyticaFinanciamientos = () => {
                     name="Tarjetas Corporativas"
                     dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
-                  />
+                  >
+                    <LabelList 
+                      dataKey="tarjeta"
+                      position="top"
+                      fill="#000"
+                      fontSize={11}
+                      fontWeight="bold"
+                      formatter={(value: number) => {
+                        if (value === 0) return '';
+                        return `$${formatearValor(value)}`;
+                      }}
+                    />
+                  </Line>
                 )}
                 
                 {tipoGastoFinanciero === "combinada" && (
@@ -1319,7 +1394,19 @@ const AnalyticaFinanciamientos = () => {
                       name="Créditos Simples"
                       dot={{ r: 3 }}
                       activeDot={{ r: 5 }}
-                    />
+                    >
+                      <LabelList 
+                        dataKey="simple"
+                        position="top"
+                        fill="#000"
+                        fontSize={10}
+                        fontWeight="bold"
+                        formatter={(value: number) => {
+                          if (value === 0) return '';
+                          return `$${formatearValor(value)}`;
+                        }}
+                      />
+                    </Line>
                     <Line 
                       type="monotone" 
                       dataKey="revolvente" 
@@ -1328,7 +1415,19 @@ const AnalyticaFinanciamientos = () => {
                       name="Líneas Revolventes"
                       dot={{ r: 3 }}
                       activeDot={{ r: 5 }}
-                    />
+                    >
+                      <LabelList 
+                        dataKey="revolvente"
+                        position="top"
+                        fill="#000"
+                        fontSize={10}
+                        fontWeight="bold"
+                        formatter={(value: number) => {
+                          if (value === 0) return '';
+                          return `$${formatearValor(value)}`;
+                        }}
+                      />
+                    </Line>
                     <Line 
                       type="monotone" 
                       dataKey="tarjeta" 
@@ -1337,7 +1436,19 @@ const AnalyticaFinanciamientos = () => {
                       name="Tarjetas Corporativas"
                       dot={{ r: 3 }}
                       activeDot={{ r: 5 }}
-                    />
+                    >
+                      <LabelList 
+                        dataKey="tarjeta"
+                        position="top"
+                        fill="#000"
+                        fontSize={10}
+                        fontWeight="bold"
+                        formatter={(value: number) => {
+                          if (value === 0) return '';
+                          return `$${formatearValor(value)}`;
+                        }}
+                      />
+                    </Line>
                   </>
                 )}
               </LineChart>
