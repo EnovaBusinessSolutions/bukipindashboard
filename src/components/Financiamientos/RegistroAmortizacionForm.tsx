@@ -85,32 +85,23 @@ const RegistroAmortizacionForm = () => {
 
   const { capitalPendiente, interesesPendientes } = calcularSaldosDesglosados();
 
-  // Auto-llenar cuota para créditos simples
+  // Auto-llenar capital para créditos simples
   useEffect(() => {
     if (!financiamientoSeleccionado) return;
     
     // Solo aplicar para créditos simples
     if (financiamientoSeleccionado.tipo_credito === 'simple') {
-      const cuotaMensual = calcularCuotaMensual(
-        financiamientoSeleccionado.monto_total,
-        financiamientoSeleccionado.tasa_interes,
-        financiamientoSeleccionado.plazo_meses
-      );
+      // Cálculo simple: dividir monto total entre plazo
+      const capitalMensual = financiamientoSeleccionado.monto_total / financiamientoSeleccionado.plazo_meses;
       
-      const desglose = desglosarCuota(
-        financiamientoSeleccionado.saldo_actual,
-        cuotaMensual,
-        financiamientoSeleccionado.tasa_interes
-      );
-      
-      // Pre-llenar los campos
-      setCapitalPagado(desglose.capital.toFixed(2));
-      setInteresPagado(desglose.interes.toFixed(2));
+      // Pre-llenar solo el capital
+      setCapitalPagado(capitalMensual.toFixed(2));
+      setInteresPagado("0"); // Los intereses se registran por separado
       
       // Mostrar notificación informativa
       toast({
-        title: "✅ Cuota calculada automáticamente",
-        description: `Cuota mensual: $${formatCurrency(cuotaMensual)} (Capital: $${formatCurrency(desglose.capital)} + Interés: $${formatCurrency(desglose.interes)})`,
+        title: "✅ Capital mensual calculado",
+        description: `Pago mensual de capital: $${formatCurrency(capitalMensual)}. Los intereses se registran por separado.`,
         duration: 5000,
       });
     } else {
@@ -222,7 +213,7 @@ const RegistroAmortizacionForm = () => {
           {financiamientoSeleccionado?.tipo_credito === 'simple' && (
             <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                💡 <strong>Crédito Simple:</strong> La cuota mensual predeterminada se ha calculado automáticamente. Puedes ajustar los montos si es necesario.
+                💡 <strong>Crédito Simple:</strong> El capital mensual se calcula automáticamente (${formatCurrency(financiamientoSeleccionado.monto_total)} ÷ {financiamientoSeleccionado.plazo_meses} meses = ${formatCurrency(financiamientoSeleccionado.monto_total / financiamientoSeleccionado.plazo_meses)}). Los intereses se registran por separado.
               </p>
             </div>
           )}
