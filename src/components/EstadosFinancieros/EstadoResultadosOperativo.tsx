@@ -18,11 +18,32 @@ interface SaldoCuenta {
   saldo: number;
 }
 
-const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOperativoProps) => {
+const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoResultadosOperativoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
 
   // Usar la misma lógica que la balanza
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
+
+  // Función para formatear el período
+  const formatearPeriodo = (startDate: Date, endDate: Date): string => {
+    const formatoFecha = (fecha: Date) => {
+      return fecha.toLocaleDateString('es-ES', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      });
+    };
+    
+    const fechaInicio = formatoFecha(startDate);
+    const fechaFin = formatoFecha(endDate);
+    
+    // Si es el mismo día, mostrar solo una fecha
+    if (startDate.toDateString() === endDate.toDateString()) {
+      return `Estado de Resultados del ${fechaInicio}`;
+    }
+    
+    return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
+  };
 
   if (cuentasLoading || asientosLoading) {
     return (
@@ -192,6 +213,18 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
 
   return (
     <div className="space-y-6">
+      {/* Encabezado con período */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader className="bg-primary/5">
+          <CardTitle className="text-2xl text-center">
+            Estado de Resultados - Formato Operativo
+          </CardTitle>
+          <p className="text-sm text-muted-foreground text-center font-medium mt-2">
+            {formatearPeriodo(startDate, endDate)}
+          </p>
+        </CardHeader>
+      </Card>
+
       {/* Alerta informativa */}
       <Alert>
         <AlertCircle className="h-4 w-4" />

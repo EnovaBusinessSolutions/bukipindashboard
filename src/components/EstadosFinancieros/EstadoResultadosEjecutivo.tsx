@@ -17,11 +17,32 @@ interface SaldoCuenta {
   saldo: number;
 }
 
-const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecutivoProps) => {
+const EstadoResultadosEjecutivo = ({ startDate, endDate, periodType }: EstadoResultadosEjecutivoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
 
   // Usar la misma lógica que la balanza
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
+
+  // Función para formatear el período
+  const formatearPeriodo = (startDate: Date, endDate: Date): string => {
+    const formatoFecha = (fecha: Date) => {
+      return fecha.toLocaleDateString('es-ES', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      });
+    };
+    
+    const fechaInicio = formatoFecha(startDate);
+    const fechaFin = formatoFecha(endDate);
+    
+    // Si es el mismo día, mostrar solo una fecha
+    if (startDate.toDateString() === endDate.toDateString()) {
+      return `Estado de Resultados del ${fechaInicio}`;
+    }
+    
+    return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
+  };
 
   if (cuentasLoading || asientosLoading) {
     return (
@@ -199,6 +220,9 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       <Card className="border-2">
         <CardHeader className="bg-muted/50">
           <CardTitle className="text-2xl">Resumen Financiero</CardTitle>
+          <p className="text-sm text-muted-foreground mt-2 font-medium">
+            {formatearPeriodo(startDate, endDate)}
+          </p>
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-1">
