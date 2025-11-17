@@ -28,11 +28,32 @@ interface WaterfallData {
   isTotal: boolean;
 }
 
-const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnaliticoProps) => {
+const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoResultadosAnaliticoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
 
   // Usar la misma lógica que la balanza
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
+
+  // Función para formatear el período
+  const formatearPeriodo = (startDate: Date, endDate: Date): string => {
+    const formatoFecha = (fecha: Date) => {
+      return fecha.toLocaleDateString('es-ES', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      });
+    };
+    
+    const fechaInicio = formatoFecha(startDate);
+    const fechaFin = formatoFecha(endDate);
+    
+    // Si es el mismo día, mostrar solo una fecha
+    if (startDate.toDateString() === endDate.toDateString()) {
+      return `Estado de Resultados del ${fechaInicio}`;
+    }
+    
+    return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
+  };
 
   if (cuentasLoading || asientosLoading) {
     return (
@@ -282,6 +303,18 @@ const EstadoResultadosAnalitico = ({ startDate, endDate }: EstadoResultadosAnali
 
   return (
     <div className="space-y-8">
+      {/* Encabezado con período */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader className="bg-primary/5">
+          <CardTitle className="text-2xl text-center">
+            Estado de Resultados - Formato Analítico
+          </CardTitle>
+          <p className="text-sm text-muted-foreground text-center font-medium mt-2">
+            {formatearPeriodo(startDate, endDate)}
+          </p>
+        </CardHeader>
+      </Card>
+
       {/* 1. Gráfico de Cascada */}
       <Card className="border-2">
         <CardHeader className="bg-muted/50">
