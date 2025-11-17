@@ -331,10 +331,19 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
           </p>
         </CardHeader>
         <CardContent className="p-6">
-          <ResponsiveContainer width="100%" height={700}>
-            <BarChart
-              data={waterfallData}
-              margin={{ top: 20, right: 30, left: 100, bottom: 120 }}
+          {/* Calcular si hay valores negativos para ajustar el margen inferior */}
+          {(() => {
+            const hayValoresNegativos = waterfallData.some(d => {
+              const valorFinal = d.value + d.start;
+              return valorFinal < 0 || d.value < 0;
+            });
+            const bottomMargin = hayValoresNegativos ? 160 : 120;
+            
+            return (
+              <ResponsiveContainer width="100%" height={700}>
+                <BarChart
+                  data={waterfallData}
+                  margin={{ top: 20, right: 30, left: 100, bottom: bottomMargin }}
               barGap={8}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -415,13 +424,15 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                   <Cell 
                     key={`cell-start-${index}`} 
                     fill={entry.fill}
-                    stroke={entry.isTotal ? "#000" : "transparent"}
-                    strokeWidth={entry.isTotal ? 2 : 0}
+                    stroke="transparent"
+                    strokeWidth={0}
                   />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+            );
+          })()}
           
           {/* Leyenda de colores */}
           <div className="mt-4 flex justify-center gap-6 text-sm">
