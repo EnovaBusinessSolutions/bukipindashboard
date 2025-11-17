@@ -553,8 +553,8 @@ const ResumenEgresos = () => {
     } else if (transaction.metodo_pago === "tarjeta_credito") {
       cuentas.push({
         tipo: "Haber (Abono)",
-        codigo: "2102",
-        nombre: "Tarjetas de Crédito",
+        codigo: "2101",
+        nombre: "Préstamos Bancarios Largo Plazo",
         monto: transaction.monto_pagado
       });
     }

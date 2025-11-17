@@ -235,7 +235,7 @@ serve(async (req) => {
 
         detalles.push({
           asiento_id: asiento.id,
-          cuenta_codigo: '2102',
+          cuenta_codigo: '2101',
           subcuenta_id: null,
           debe: 0,
           haber: montoPagado,
@@ -293,7 +293,7 @@ serve(async (req) => {
 
           detalles.push({
             asiento_id: asiento.id,
-            cuenta_codigo: '2102',
+            cuenta_codigo: '2101',
             subcuenta_id: null,
             debe: 0,
             haber: montoPagado,
