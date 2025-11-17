@@ -388,8 +388,10 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                     
                     // Posicionar dinámicamente según el signo
                     const yPosition = isNegative 
-                      ? Number(y) + 15  // Abajo para negativos (y ya está en la parte baja de la barra)
-                      : Number(y) - 5;  // Arriba para positivos
+                      ? (item.isTotal 
+                          ? Number(y) + 15                      // Subtotales negativos: y ya está en la parte baja
+                          : Number(y) + Number(height) + 15)    // Egresos: necesitan y + height
+                      : Number(y) - 5;                          // Positivos: arriba
                     
                     const baseline = isNegative ? 'top' : 'bottom';
                     
