@@ -77,8 +77,10 @@ const TransaccionesTarjetaCredito = ({
         ...(transaccionesFinanciamiento || []).map(t => ({
           id: t.id,
           fecha: t.fecha,
-          descripcion: t.descripcion || getTipoLabel(t.tipo_transaccion),
-          monto: t.tipo_transaccion === 'amortizacion' ? t.capital_pagado : t.monto,
+          descripcion: t.tipo_transaccion === 'amortizacion' && t.capital_pagado > 0 && t.interes_pagado > 0
+            ? `Pago de Tarjeta: $${t.capital_pagado.toLocaleString('es-MX')} capital + $${t.interes_pagado.toLocaleString('es-MX')} interés`
+            : t.descripcion || getTipoLabel(t.tipo_transaccion),
+          monto: t.monto,
           tipo: t.tipo_transaccion,
           proveedor: null,
           detalle: t,
@@ -329,7 +331,10 @@ const TransaccionesTarjetaCredito = ({
                     <TableRow>
                       <td className="font-medium py-2">{getCuentasAfectadas(selectedTransaction).cargo}</td>
                       <td className="text-right py-2 text-destructive">
-                        ${selectedTransaction.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        ${(selectedTransaction.tipoTransaccion === 'amortizacion' 
+                          ? (selectedTransaction.detalle.capital_pagado || 0) + (selectedTransaction.detalle.interes_pagado || 0)
+                          : selectedTransaction.monto
+                        ).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="text-right py-2">-</td>
                     </TableRow>
@@ -337,7 +342,10 @@ const TransaccionesTarjetaCredito = ({
                       <td className="font-medium py-2">{getCuentasAfectadas(selectedTransaction).abono}</td>
                       <td className="text-right py-2">-</td>
                       <td className="text-right py-2 text-success">
-                        ${selectedTransaction.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        ${(selectedTransaction.tipoTransaccion === 'amortizacion' 
+                          ? (selectedTransaction.detalle.capital_pagado || 0) + (selectedTransaction.detalle.interes_pagado || 0)
+                          : selectedTransaction.monto
+                        ).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                       </td>
                     </TableRow>
                   </TableBody>
