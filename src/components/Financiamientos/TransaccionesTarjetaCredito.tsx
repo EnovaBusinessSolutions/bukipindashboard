@@ -111,19 +111,19 @@ const TransaccionesTarjetaCredito = ({
       // Cargo a la tarjeta (egreso o capex)
       return {
         cargo: transaccion.detalle.cuenta_codigo || "Cuenta de gasto/inversión",
-        abono: `2102 - Tarjeta de Crédito (${nombreTarjeta})`
+        abono: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`
       };
     } else if (transaccion.tipoTransaccion === 'amortizacion') {
       // Pago de tarjeta
       return {
-        cargo: `2102 - Tarjeta de Crédito (${nombreTarjeta})`,
+        cargo: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`,
         abono: transaccion.detalle.metodo_pago === 'efectivo' ? '1001 - Efectivo' : '1002 - Bancos'
       };
     } else if (transaccion.tipoTransaccion === 'cargo_interes') {
       // Cargo por intereses
       return {
         cargo: '5006 - Intereses Pagados',
-        abono: `2102 - Tarjeta de Crédito (${nombreTarjeta})`
+        abono: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`
       };
     }
     return { cargo: 'N/A', abono: 'N/A' };
