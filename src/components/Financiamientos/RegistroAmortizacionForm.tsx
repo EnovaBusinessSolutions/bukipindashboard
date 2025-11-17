@@ -32,6 +32,27 @@ const RegistroAmortizacionForm = () => {
 
   const financiamientoSeleccionado = financiamientos.find(f => f.id === financiamientoId);
 
+  // Función para calcular la cuota mensual de un crédito simple (Amortización Francesa)
+  const calcularCuotaMensual = (monto: number, tasaAnual: number, plazoMeses: number) => {
+    const tasaMensual = tasaAnual / 12 / 100; // Convertir tasa anual a mensual
+    const numerador = tasaMensual * Math.pow(1 + tasaMensual, plazoMeses);
+    const denominador = Math.pow(1 + tasaMensual, plazoMeses) - 1;
+    return monto * (numerador / denominador);
+  };
+
+  // Función para desglosar la cuota en capital e intereses
+  const desglosarCuota = (saldoActual: number, cuotaMensual: number, tasaAnual: number) => {
+    const tasaMensual = tasaAnual / 12 / 100;
+    const interesPeriodo = saldoActual * tasaMensual;
+    const capitalAmortizado = cuotaMensual - interesPeriodo;
+    
+    return {
+      interes: Math.max(0, interesPeriodo),
+      capital: Math.max(0, capitalAmortizado),
+      cuotaTotal: cuotaMensual
+    };
+  };
+
   // Calcular saldos desglosados para el financiamiento seleccionado
   const calcularSaldosDesglosados = () => {
     if (!financiamientoSeleccionado) {
@@ -63,6 +84,41 @@ const RegistroAmortizacionForm = () => {
   };
 
   const { capitalPendiente, interesesPendientes } = calcularSaldosDesglosados();
+
+  // Auto-llenar cuota para créditos simples
+  useEffect(() => {
+    if (!financiamientoSeleccionado) return;
+    
+    // Solo aplicar para créditos simples
+    if (financiamientoSeleccionado.tipo_credito === 'simple') {
+      const cuotaMensual = calcularCuotaMensual(
+        financiamientoSeleccionado.monto_total,
+        financiamientoSeleccionado.tasa_interes,
+        financiamientoSeleccionado.plazo_meses
+      );
+      
+      const desglose = desglosarCuota(
+        financiamientoSeleccionado.saldo_actual,
+        cuotaMensual,
+        financiamientoSeleccionado.tasa_interes
+      );
+      
+      // Pre-llenar los campos
+      setCapitalPagado(desglose.capital.toFixed(2));
+      setInteresPagado(desglose.interes.toFixed(2));
+      
+      // Mostrar notificación informativa
+      toast({
+        title: "✅ Cuota calculada automáticamente",
+        description: `Cuota mensual: $${formatCurrency(cuotaMensual)} (Capital: $${formatCurrency(desglose.capital)} + Interés: $${formatCurrency(desglose.interes)})`,
+        duration: 5000,
+      });
+    } else {
+      // Para créditos revolventes y tarjetas, limpiar los campos
+      setCapitalPagado("");
+      setInteresPagado("");
+    }
+  }, [financiamientoId, financiamientoSeleccionado, toast]);
 
   // Calcular monto total automáticamente
   useEffect(() => {
@@ -162,6 +218,14 @@ const RegistroAmortizacionForm = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {financiamientoSeleccionado?.tipo_credito === 'simple' && (
+            <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                💡 <strong>Crédito Simple:</strong> La cuota mensual predeterminada se ha calculado automáticamente. Puedes ajustar los montos si es necesario.
+              </p>
+            </div>
+          )}
 
           {financiamientoSeleccionado && (
             <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg space-y-3 border border-blue-200 dark:border-blue-800">
