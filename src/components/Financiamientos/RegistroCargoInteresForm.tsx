@@ -18,6 +18,8 @@ const RegistroCargoInteresForm = () => {
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fecha, setFecha] = useState<Date>(new Date());
+  const [tipoPago, setTipoPago] = useState<"pagado" | "pendiente">("pendiente");
+  const [metodoPago, setMetodoPago] = useState("");
 
   const financiamientoSeleccionado = financiamientos.find(f => f.id === financiamientoId);
 
@@ -27,7 +29,12 @@ const RegistroCargoInteresForm = () => {
     if (!financiamientoSeleccionado) return;
 
     const montoInteres = parseFloat(monto);
-    const nuevoSaldo = financiamientoSeleccionado.saldo_actual + montoInteres;
+    
+    // Si es PENDIENTE: aumenta el saldo
+    // Si es PAGADO: NO aumenta el saldo
+    const nuevoSaldo = tipoPago === "pendiente" 
+      ? financiamientoSeleccionado.saldo_actual + montoInteres
+      : financiamientoSeleccionado.saldo_actual;
 
     crearTransaccion.mutate({
       financiamiento_id: financiamientoId,
@@ -35,14 +42,17 @@ const RegistroCargoInteresForm = () => {
       monto: montoInteres,
       fecha: format(fecha, "yyyy-MM-dd"),
       capital_pagado: 0,
-      interes_pagado: 0,
+      interes_pagado: tipoPago === "pagado" ? montoInteres : 0,
       saldo_restante: nuevoSaldo,
-      descripcion,
+      metodo_pago: tipoPago === "pagado" ? metodoPago : null,
+      descripcion: descripcion + (tipoPago === "pagado" ? " (Pagado)" : " (Pendiente)"),
     });
 
     // Reset form
     setFinanciamientoId("");
     setMonto("");
+    setTipoPago("pendiente");
+    setMetodoPago("");
     setDescripcion("");
     setFecha(new Date());
   };
@@ -97,6 +107,34 @@ const RegistroCargoInteresForm = () => {
               required
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tipoPago">Tipo de Pago *</Label>
+            <Select value={tipoPago} onValueChange={(value: "pagado" | "pendiente") => setTipoPago(value)} required>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pendiente">Pendiente (se acumula al saldo)</SelectItem>
+                <SelectItem value="pagado">Pagado (reducir efectivo/bancos)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {tipoPago === "pagado" && (
+            <div className="space-y-2">
+              <Label htmlFor="metodoPago">Método de Pago *</Label>
+              <Select value={metodoPago} onValueChange={setMetodoPago} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Fecha del Cargo *</Label>
