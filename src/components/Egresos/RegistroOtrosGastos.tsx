@@ -72,23 +72,35 @@ const RegistroOtrosGastos = () => {
       const montoTotal = parseFloat(totalAmount);
       const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
 
-      // Validar saldo disponible para efectivo o bancos
-      if (paymentMethod === "efectivo" && saldosDisponibles) {
-        if (montoPagado > saldosDisponibles.efectivo) {
+      // FASE 1: Verificar que los saldos se hayan cargado
+      if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
+        if (!saldosDisponibles) {
           toast({
-            title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Monto solicitado: $${formatCurrency(montoPagado)}`,
+            title: "⚠️ Error de validación",
+            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
             variant: "destructive"
           });
           return;
         }
       }
 
-      if (paymentMethod === "tarjeta-transferencia" && saldosDisponibles) {
+      // FASE 2: Validar saldo disponible para efectivo o bancos
+      if (paymentMethod === "efectivo") {
+        if (montoPagado > saldosDisponibles.efectivo) {
+          toast({
+            title: "💰 Saldo insuficiente en efectivo",
+            description: `Disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Necesitas: $${formatCurrency(montoPagado)}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      if (paymentMethod === "tarjeta-transferencia") {
         if (montoPagado > saldosDisponibles.bancos) {
           toast({
-            title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${formatCurrency(saldosDisponibles.bancos)} | Monto solicitado: $${formatCurrency(montoPagado)}`,
+            title: "🏦 Saldo insuficiente en bancos",
+            description: `Disponible: $${formatCurrency(saldosDisponibles.bancos)} | Necesitas: $${formatCurrency(montoPagado)}`,
             variant: "destructive"
           });
           return;

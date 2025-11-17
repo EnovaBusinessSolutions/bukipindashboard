@@ -37,19 +37,31 @@ const RegistroCargoInteresForm = () => {
     
     // Validar solo si el tipo de pago es "pagado"
     if (tipoPago === "pagado") {
-      // Validar saldo disponible según método de pago
-      if (metodoPago === "efectivo" && montoInteres > (saldos?.efectivo || 0)) {
-        toast.error("Saldo insuficiente en efectivo", {
-          description: `Necesitas $${montoInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })} pero solo tienes $${(saldos?.efectivo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} disponibles en efectivo.`
+      // FASE 1: Verificar que los saldos se hayan cargado
+      if (!saldos) {
+        toast.error("Error de validación", {
+          description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente."
         });
         return;
       }
+
+      // FASE 2: Validar saldo disponible según método de pago
+      if (metodoPago === "efectivo") {
+        if (montoInteres > saldos.efectivo) {
+          toast.error("💰 Saldo insuficiente en efectivo", {
+            description: `Disponible: $${saldos.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2 })} | Necesitas: $${montoInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+          });
+          return;
+        }
+      }
       
-      if (metodoPago === "transferencia" && montoInteres > (saldos?.bancos || 0)) {
-        toast.error("Saldo insuficiente en bancos", {
-          description: `Necesitas $${montoInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })} pero solo tienes $${(saldos?.bancos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} disponibles en bancos.`
-        });
-        return;
+      if (metodoPago === "transferencia") {
+        if (montoInteres > saldos.bancos) {
+          toast.error("🏦 Saldo insuficiente en bancos", {
+            description: `Disponible: $${saldos.bancos.toLocaleString('es-MX', { minimumFractionDigits: 2 })} | Necesitas: $${montoInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+          });
+          return;
+        }
       }
     }
     

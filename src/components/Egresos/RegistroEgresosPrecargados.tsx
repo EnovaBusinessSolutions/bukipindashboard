@@ -223,23 +223,35 @@ const RegistroEgresosPrecargados = () => {
       const montoPagado = paymentType === "contado" ? montoTotal : paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0;
       const montoPendiente = montoTotal - montoPagado;
 
-      // Validar saldo disponible para efectivo o bancos
-      if (paymentMethod === "efectivo" && saldosDisponibles) {
-        if (montoPagado > saldosDisponibles.efectivo) {
+      // FASE 1: Verificar que los saldos se hayan cargado
+      if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
+        if (!saldosDisponibles) {
           toast({
-            title: "⚠️ Saldo insuficiente en efectivo",
-            description: `Saldo disponible: $${saldosDisponibles.efectivo.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+            title: "⚠️ Error de validación",
+            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
             variant: "destructive"
           });
           return;
         }
       }
 
-      if (paymentMethod === "tarjeta-transferencia" && saldosDisponibles) {
+      // FASE 2: Validar saldo disponible para efectivo o bancos
+      if (paymentMethod === "efectivo") {
+        if (montoPagado > saldosDisponibles.efectivo) {
+          toast({
+            title: "💰 Saldo insuficiente en efectivo",
+            description: `Disponible: $${saldosDisponibles.efectivo.toFixed(2)} | Necesitas: $${montoPagado.toFixed(2)}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      if (paymentMethod === "tarjeta-transferencia") {
         if (montoPagado > saldosDisponibles.bancos) {
           toast({
-            title: "⚠️ Saldo insuficiente en bancos",
-            description: `Saldo disponible: $${saldosDisponibles.bancos.toFixed(2)} | Monto solicitado: $${montoPagado.toFixed(2)}`,
+            title: "🏦 Saldo insuficiente en bancos",
+            description: `Disponible: $${saldosDisponibles.bancos.toFixed(2)} | Necesitas: $${montoPagado.toFixed(2)}`,
             variant: "destructive"
           });
           return;
