@@ -373,8 +373,12 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
                     const item = waterfallData[index];
                     if (!item) return null;
                     
-                    // Determinar si es negativo basado en el nombre
-                    const isNegative = item.name.includes("(-)");
+                    // Determinar si es negativo
+                    // Para subtotales, verificar el signo del valor
+                    // Para egresos, verificar si el nombre contiene "(-)"
+                    const isNegative = item.isTotal 
+                      ? item.start < 0          // Subtotales: por signo del valor
+                      : item.name.includes("(-)"); // Egresos: por nombre
                     const displayValue = isNegative ? -item.start : item.start;
                     
                     // Posicionar dinámicamente según el signo
