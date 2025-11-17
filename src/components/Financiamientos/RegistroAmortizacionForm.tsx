@@ -169,7 +169,7 @@ const RegistroAmortizacionForm = () => {
       return;
     }
 
-    const nuevoSaldo = Math.max(0, financiamientoSeleccionado.saldo_actual - capital);
+    const nuevoSaldo = Math.max(0, financiamientoSeleccionado.saldo_actual - capital - interes);
 
     crearTransaccion.mutate({
       financiamiento_id: financiamientoId,
