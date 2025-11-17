@@ -1,8 +1,17 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { Loader2 } from "lucide-react";
 import { PeriodType } from "@/pages/EstadoResultados";
+import { Switch } from "@/components/ui/switch";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from "recharts";
@@ -33,6 +42,10 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
 
   // Usar la misma lógica que la balanza
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
+
+  // Estados para filtros
+  const [mostrarSubtotales, setMostrarSubtotales] = useState(true);
+  const [agrupadorSeleccionado, setAgrupadorSeleccionado] = useState("");
 
   // Función para formatear el período
   const formatearPeriodo = (startDate: Date, endDate: Date): string => {
@@ -143,140 +156,322 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
   const utilidadAntesImpuestos = ebit - costoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
+  // Definir agrupadores con sus cuentas para desglose
+  const agrupadores = [
+    {
+      id: "ventas",
+      nombre: "Ventas",
+      total: totalVentas,
+      cuentas: cuentasVentas.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "otros_ingresos",
+      nombre: "Otros Ingresos",
+      total: totalOtrosIngresos,
+      cuentas: cuentasOtrosIngresos.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "costo_ventas",
+      nombre: "Costo de Ventas",
+      total: costoVentas,
+      cuentas: cuentasCostos.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "gastos_operativos",
+      nombre: "Gastos Operativos",
+      total: gastosOperativos,
+      cuentas: cuentasGastosOperativos.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "otros_gastos",
+      nombre: "Otros Gastos",
+      total: otrosGastos,
+      cuentas: cuentasOtrosGastos.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "depreciaciones",
+      nombre: "Depreciaciones",
+      total: depreciaciones,
+      cuentas: cuentasDepreciaciones.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "costo_financiero",
+      nombre: "Costo Financiero",
+      total: costoFinanciero,
+      cuentas: cuentasCostoFinanciero.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    },
+    {
+      id: "impuestos",
+      nombre: "Impuestos",
+      total: impuestos,
+      cuentas: cuentasImpuestos.map(c => ({
+        codigo: c.codigo,
+        nombre: c.nombre,
+        saldo: obtenerSaldo(c.codigo)
+      })).filter(c => c.saldo !== 0)
+    }
+  ].filter(ag => ag.total !== 0);
+
+  // Inicializar agrupador seleccionado si está vacío
+  if (!agrupadorSeleccionado && agrupadores.length > 0) {
+    setAgrupadorSeleccionado(agrupadores[0].id);
+  }
+
   // Construir datos para waterfall - el "start" es la barra invisible que posiciona cada elemento
   const waterfallData: WaterfallData[] = [];
 
-  // Ventas (inicio - verde brillante)
-  waterfallData.push({
-    name: "Ventas",
-    value: 0, // Transparente (posiciona)
-    start: totalVentas, // Con color (visible)
-    fill: "#10b981", // green-500
-    isTotal: false
-  });
+  if (mostrarSubtotales) {
+    // VERSIÓN COMPLETA - CON SUBTOTALES
+    
+    // Ventas (inicio - verde brillante)
+    waterfallData.push({
+      name: "Ventas",
+      value: 0, // Transparente (posiciona)
+      start: totalVentas, // Con color (visible)
+      fill: "#10b981", // green-500
+      isTotal: false
+    });
 
-  // Otros Ingresos (verde más claro)
-  waterfallData.push({
-    name: "(+) Otros Ingr.",
-    value: totalVentas, // Transparente (posiciona desde ventas)
-    start: totalOtrosIngresos, // Con color (visible)
-    fill: "#34d399", // green-400
-    isTotal: false
-  });
+    // Otros Ingresos (verde más claro)
+    waterfallData.push({
+      name: "(+) Otros Ingr.",
+      value: totalVentas, // Transparente (posiciona desde ventas)
+      start: totalOtrosIngresos, // Con color (visible)
+      fill: "#34d399", // green-400
+      isTotal: false
+    });
 
-  // Total Ingresos (subtotal - azul)
-  waterfallData.push({
-    name: "= Total Ingresos",
-    value: 0, // Transparente (posiciona)
-    start: totalIngresos, // Con color (visible)
-    fill: "#3b82f6", // blue-500
-    isTotal: true
-  });
+    // Total Ingresos (subtotal - azul)
+    waterfallData.push({
+      name: "= Total Ingresos",
+      value: 0, // Transparente (posiciona)
+      start: totalIngresos, // Con color (visible)
+      fill: "#3b82f6", // blue-500
+      isTotal: true
+    });
 
-  // Costo de Ventas (negativo - rojo) - start tiene color, value transparente
-  const despuesCostos = totalIngresos - costoVentas;
-  waterfallData.push({
-    name: "(-) Costo Ventas",
-    value: despuesCostos, // Transparente (posiciona)
-    start: costoVentas, // Con color (visible)
-    fill: "#ef4444", // red-500
-    isTotal: false
-  });
+    // Costo de Ventas (negativo - rojo)
+    const despuesCostos = totalIngresos - costoVentas;
+    waterfallData.push({
+      name: "(-) Costo Ventas",
+      value: despuesCostos, // Transparente (posiciona)
+      start: costoVentas, // Con color (visible)
+      fill: "#ef4444", // red-500
+      isTotal: false
+    });
 
-  // Utilidad Bruta (subtotal - azul)
-  waterfallData.push({
-    name: "= Utilidad Bruta",
-    value: 0, // Transparente (posiciona)
-    start: utilidadBruta, // Con color (visible)
-    fill: "#3b82f6", // blue-500
-    isTotal: true
-  });
+    // Utilidad Bruta (subtotal - azul)
+    waterfallData.push({
+      name: "= Utilidad Bruta",
+      value: 0, // Transparente (posiciona)
+      start: utilidadBruta, // Con color (visible)
+      fill: "#3b82f6", // blue-500
+      isTotal: true
+    });
 
-  // Gastos Operativos (negativo - rojo)
-  const despuesGastos = despuesCostos - gastosOperativos;
-  waterfallData.push({
-    name: "(-) Gastos Op.",
-    value: despuesGastos, // Transparente (posiciona)
-    start: gastosOperativos, // Con color (visible)
-    fill: "#ef4444",
-    isTotal: false
-  });
+    // Gastos Operativos (negativo - rojo)
+    const despuesGastos = despuesCostos - gastosOperativos;
+    waterfallData.push({
+      name: "(-) Gastos Op.",
+      value: despuesGastos, // Transparente (posiciona)
+      start: gastosOperativos, // Con color (visible)
+      fill: "#ef4444",
+      isTotal: false
+    });
 
-  // Otros Gastos (negativo - rojo)
-  const despuesOtrosGastos = despuesGastos - otrosGastos;
-  waterfallData.push({
-    name: "(-) Otros Gastos",
-    value: despuesOtrosGastos, // Transparente (posiciona)
-    start: otrosGastos, // Con color (visible)
-    fill: "#ef4444",
-    isTotal: false
-  });
+    // Otros Gastos (negativo - rojo)
+    const despuesOtrosGastos = despuesGastos - otrosGastos;
+    waterfallData.push({
+      name: "(-) Otros Gastos",
+      value: despuesOtrosGastos, // Transparente (posiciona)
+      start: otrosGastos, // Con color (visible)
+      fill: "#ef4444",
+      isTotal: false
+    });
 
-  // EBITDA (subtotal - azul)
-  waterfallData.push({
-    name: "= EBITDA",
-    value: 0, // Transparente (posiciona)
-    start: ebitda, // Con color (visible)
-    fill: "#3b82f6", // blue-500
-    isTotal: true
-  });
+    // EBITDA (subtotal - azul)
+    waterfallData.push({
+      name: "= EBITDA",
+      value: 0, // Transparente (posiciona)
+      start: ebitda, // Con color (visible)
+      fill: "#3b82f6", // blue-500
+      isTotal: true
+    });
 
-  // Depreciaciones (negativo - rojo)
-  const despuesDepreciaciones = despuesOtrosGastos - depreciaciones;
-  waterfallData.push({
-    name: "(-) Deprec.",
-    value: despuesDepreciaciones, // Transparente (posiciona)
-    start: depreciaciones, // Con color (visible)
-    fill: "#ef4444",
-    isTotal: false
-  });
+    // Depreciaciones (negativo - rojo)
+    const despuesDepreciaciones = despuesOtrosGastos - depreciaciones;
+    waterfallData.push({
+      name: "(-) Deprec.",
+      value: despuesDepreciaciones, // Transparente (posiciona)
+      start: depreciaciones, // Con color (visible)
+      fill: "#ef4444",
+      isTotal: false
+    });
 
-  // EBIT (subtotal - azul)
-  waterfallData.push({
-    name: "= EBIT",
-    value: 0, // Transparente (posiciona)
-    start: ebit, // Con color (visible)
-    fill: "#3b82f6", // blue-500
-    isTotal: true
-  });
+    // EBIT (subtotal - azul)
+    waterfallData.push({
+      name: "= EBIT",
+      value: 0, // Transparente (posiciona)
+      start: ebit, // Con color (visible)
+      fill: "#3b82f6", // blue-500
+      isTotal: true
+    });
 
-  // Costo Financiero (negativo - rojo)
-  const despuesCostoFin = despuesDepreciaciones - costoFinanciero;
-  waterfallData.push({
-    name: "(-) Costo Fin.",
-    value: despuesCostoFin, // Transparente (posiciona)
-    start: costoFinanciero, // Con color (visible)
-    fill: "#ef4444",
-    isTotal: false
-  });
+    // Costo Financiero (negativo - rojo)
+    const despuesCostoFin = despuesDepreciaciones - costoFinanciero;
+    waterfallData.push({
+      name: "(-) Costo Fin.",
+      value: despuesCostoFin, // Transparente (posiciona)
+      start: costoFinanciero, // Con color (visible)
+      fill: "#ef4444",
+      isTotal: false
+    });
 
-  // Utilidad Antes de Impuestos (subtotal - azul)
-  waterfallData.push({
-    name: "= Util. A. Imp.",
-    value: 0, // Transparente (posiciona)
-    start: utilidadAntesImpuestos, // Con color (visible)
-    fill: "#3b82f6", // blue-500
-    isTotal: true
-  });
+    // Utilidad Antes de Impuestos (subtotal - azul)
+    waterfallData.push({
+      name: "= Util. A. Imp.",
+      value: 0, // Transparente (posiciona)
+      start: utilidadAntesImpuestos, // Con color (visible)
+      fill: "#3b82f6", // blue-500
+      isTotal: true
+    });
 
-  // Impuestos (negativo - rojo)
-  const despuesImpuestos = despuesCostoFin - impuestos;
-  waterfallData.push({
-    name: "(-) Impuestos",
-    value: despuesImpuestos, // Transparente (posiciona)
-    start: impuestos, // Con color (visible)
-    fill: "#ef4444",
-    isTotal: false
-  });
+    // Impuestos (negativo - rojo)
+    const despuesImpuestos = despuesCostoFin - impuestos;
+    waterfallData.push({
+      name: "(-) Impuestos",
+      value: despuesImpuestos, // Transparente (posiciona)
+      start: impuestos, // Con color (visible)
+      fill: "#ef4444",
+      isTotal: false
+    });
 
-  // Utilidad Neta (final - verde o rojo según resultado)
-  waterfallData.push({
-    name: "= UTILIDAD NETA",
-    value: 0, // Transparente (posiciona)
-    start: utilidadNeta, // Con color (visible)
-    fill: utilidadNeta >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
-    isTotal: true
-  });
+    // Utilidad Neta (final - verde o rojo según resultado)
+    waterfallData.push({
+      name: "= UTILIDAD NETA",
+      value: 0, // Transparente (posiciona)
+      start: utilidadNeta, // Con color (visible)
+      fill: utilidadNeta >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
+      isTotal: true
+    });
+  } else {
+    // VERSIÓN SIMPLIFICADA - SIN SUBTOTALES
+    
+    // Ventas
+    waterfallData.push({
+      name: "Ventas",
+      value: 0,
+      start: totalVentas,
+      fill: "#10b981",
+      isTotal: false
+    });
+    
+    // Otros Ingresos
+    waterfallData.push({
+      name: "(+) Otros Ingr.",
+      value: totalVentas,
+      start: totalOtrosIngresos,
+      fill: "#34d399",
+      isTotal: false
+    });
+    
+    // Costo de Ventas
+    const despuesCostos = totalIngresos - costoVentas;
+    waterfallData.push({
+      name: "(-) Costo Ventas",
+      value: despuesCostos,
+      start: costoVentas,
+      fill: "#ef4444",
+      isTotal: false
+    });
+    
+    // Gastos Operativos
+    const despuesGastosOp = despuesCostos - gastosOperativos;
+    waterfallData.push({
+      name: "(-) Gastos Op.",
+      value: despuesGastosOp,
+      start: gastosOperativos,
+      fill: "#ef4444",
+      isTotal: false
+    });
+    
+    // Otros Gastos
+    const despuesOtrosGastos = despuesGastosOp - otrosGastos;
+    waterfallData.push({
+      name: "(-) Otros Gastos",
+      value: despuesOtrosGastos,
+      start: otrosGastos,
+      fill: "#ef4444",
+      isTotal: false
+    });
+    
+    // Depreciaciones
+    const despuesDepreciaciones = despuesOtrosGastos - depreciaciones;
+    waterfallData.push({
+      name: "(-) Deprec.",
+      value: despuesDepreciaciones,
+      start: depreciaciones,
+      fill: "#ef4444",
+      isTotal: false
+    });
+    
+    // Costo Financiero
+    const despuesCostoFin = despuesDepreciaciones - costoFinanciero;
+    waterfallData.push({
+      name: "(-) Costo Fin.",
+      value: despuesCostoFin,
+      start: costoFinanciero,
+      fill: "#ef4444",
+      isTotal: false
+    });
+    
+    // Impuestos
+    const despuesImpuestos = despuesCostoFin - impuestos;
+    waterfallData.push({
+      name: "(-) Impuestos",
+      value: despuesImpuestos,
+      start: impuestos,
+      fill: "#ef4444",
+      isTotal: false
+    });
+    
+    // UTILIDAD NETA (único subtotal)
+    waterfallData.push({
+      name: "= UTILIDAD NETA",
+      value: 0,
+      start: utilidadNeta,
+      fill: utilidadNeta >= 0 ? "#059669" : "#dc2626",
+      isTotal: true
+    });
+  }
 
   // Calcular márgenes
   const margenBruto = totalIngresos > 0 ? (utilidadBruta / totalIngresos) * 100 : 0;
@@ -325,10 +520,22 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
       {/* 1. Gráfico de Cascada */}
       <Card className="border-2">
         <CardHeader className="bg-muted/50">
-          <CardTitle className="text-2xl">1. Gráfico de Cascada (Waterfall Chart)</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Visualización del flujo de ingresos a utilidad neta - Formato Ejecutivo
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">1. Gráfico de Cascada (Waterfall Chart)</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Visualización del flujo de ingresos a utilidad neta
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Mostrar subtotales</span>
+              <Switch
+                checked={mostrarSubtotales}
+                onCheckedChange={setMostrarSubtotales}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-6">
           {/* Calcular si hay valores negativos para ajustar el margen inferior */}
@@ -526,6 +733,133 @@ const EstadoResultadosAnalitico = ({ startDate, endDate, periodType }: EstadoRes
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 2. Gráfico de Desglose por Agrupador */}
+      <Card className="border-2">
+        <CardHeader className="bg-muted/50">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <CardTitle className="text-2xl">2. Desglose de Cuentas por Agrupador</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Análisis detallado de las cuentas que componen cada agrupador
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Seleccionar agrupador:</span>
+              <Select 
+                value={agrupadorSeleccionado} 
+                onValueChange={setAgrupadorSeleccionado}
+              >
+                <SelectTrigger className="w-[280px]">
+                  <SelectValue placeholder="Selecciona un agrupador" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agrupadores.map(ag => (
+                    <SelectItem key={ag.id} value={ag.id}>
+                      {ag.nombre} - {formatCurrency(ag.total)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="p-6">
+          {(() => {
+            const agrupador = agrupadores.find(ag => ag.id === agrupadorSeleccionado);
+            
+            if (!agrupador || agrupador.cuentas.length === 0) {
+              return (
+                <div className="text-center py-12 text-muted-foreground">
+                  No hay cuentas con movimientos en este agrupador
+                </div>
+              );
+            }
+            
+            // Datos para gráfica de barras horizontales
+            const datosDesglose = agrupador.cuentas
+              .sort((a, b) => Math.abs(b.saldo) - Math.abs(a.saldo)) // Ordenar por magnitud
+              .map(cuenta => ({
+                nombre: `${cuenta.codigo} - ${cuenta.nombre}`,
+                valor: cuenta.saldo
+              }));
+            
+            return (
+              <>
+                <ResponsiveContainer width="100%" height={Math.max(300, datosDesglose.length * 50)}>
+                  <BarChart 
+                    data={datosDesglose} 
+                    layout="vertical"
+                    margin={{ top: 20, right: 30, left: 200, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      type="number"
+                      tickFormatter={(value) => formatCurrency(value)}
+                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                    />
+                    <YAxis 
+                      type="category" 
+                      dataKey="nombre"
+                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 10 }}
+                      width={190}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--background))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <ReferenceLine x={0} stroke="#374151" strokeWidth={2} />
+                    <Bar 
+                      dataKey="valor" 
+                      radius={[0, 4, 4, 0]}
+                      label={{
+                        position: 'right',
+                        formatter: (value: number) => formatCurrency(value),
+                        fill: 'hsl(var(--foreground))',
+                        fontSize: 10,
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {datosDesglose.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`}
+                          fill={entry.valor >= 0 ? "#10b981" : "#ef4444"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                
+                {/* Resumen del agrupador */}
+                <div className="mt-6 p-4 bg-muted/30 rounded-lg">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Agrupador</p>
+                      <p className="text-lg font-bold">{formatCurrency(agrupador.total)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Número de Cuentas</p>
+                      <p className="text-lg font-bold">{agrupador.cuentas.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cuenta Mayor</p>
+                      <p className="text-lg font-bold">
+                        {formatCurrency(Math.max(...agrupador.cuentas.map(c => Math.abs(c.saldo))))}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
     </div>
