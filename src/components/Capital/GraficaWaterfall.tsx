@@ -14,6 +14,7 @@ interface WaterfallData {
 interface GraficaWaterfallProps {
   data: WaterfallData;
   accionistaId?: string;
+  accionistaNombre?: string;
 }
 
 interface ChartData {
@@ -24,7 +25,7 @@ interface ChartData {
   isTotal: boolean;
 }
 
-export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
+export const GraficaWaterfall = ({ data, accionistaId, accionistaNombre }: GraficaWaterfallProps) => {
   const waterfallData: ChartData[] = [];
   
   // 1. Aportaciones (inicio - verde brillante)
@@ -146,7 +147,15 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
   return (
     <Card className="border-2">
       <CardHeader className="bg-muted/50">
-        <CardTitle className="text-xl">Gráfico de Cascada - Flujo de Capital</CardTitle>
+        <CardTitle className="text-xl">
+          Gráfico de Cascada - {
+            accionistaId && accionistaId !== "all" && accionistaId !== "inactivos"
+              ? `Capital de ${accionistaNombre || "Accionista"}`
+              : accionistaId === "inactivos"
+                ? "Capital de Socios Inactivos"
+                : "Flujo de Capital Consolidado"
+          }
+        </CardTitle>
         <p className="text-sm text-muted-foreground">
           Visualización del flujo de capital desde aportaciones hasta balance final
         </p>

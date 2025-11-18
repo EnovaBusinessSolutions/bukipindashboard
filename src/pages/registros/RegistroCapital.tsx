@@ -654,7 +654,21 @@ const RegistroCapital = () => {
                           .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion" && t.estado === "activo")
                           .reduce((sum, t) => sum + Number(t.monto), 0)
                       : totalAportaciones,
-                utilidadesHistoricas: 0, // TODO: Implementar cálculo de utilidades de años pasados
+                utilidadesHistoricas: 
+                  accionistaSeleccionado === "inactivos"
+                    ? 0 // Inactivos no reciben utilidades proporcionales históricas
+                    : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                      ? (() => {
+                          const accionista = accionistas.find(a => a.id === accionistaSeleccionado);
+                          const porcentaje = accionista?.porcentaje_participacion || 0;
+                          
+                          // Por ahora, empezamos con 0 hasta tener data histórica completa
+                          // TODO: En fase 2, consultar utilidades de años anteriores desde BD
+                          const utilidadesHistoricasTotales = 0; 
+                          
+                          return (utilidadesHistoricasTotales * porcentaje) / 100;
+                        })()
+                      : 0, // Consolidado: mantener en 0 por ahora
                 dividendosHistoricos: 
                   accionistaSeleccionado === "inactivos"
                     ? transacciones
@@ -667,7 +681,16 @@ const RegistroCapital = () => {
                       : transacciones
                           .filter(t => t.tipo_movimiento === "dividendo" && t.estado === "activo" && new Date(t.fecha).getFullYear() < anioActual)
                           .reduce((sum, t) => sum + Number(t.monto), 0),
-                utilidadesAnioActual: utilidadesAnioActual,
+                utilidadesAnioActual: 
+                  accionistaSeleccionado === "inactivos"
+                    ? 0 // Inactivos no reciben utilidades proporcionales
+                    : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                      ? (() => {
+                          const accionista = accionistas.find(a => a.id === accionistaSeleccionado);
+                          const porcentaje = accionista?.porcentaje_participacion || 0;
+                          return (utilidadesAnioActual * porcentaje) / 100;
+                        })()
+                      : utilidadesAnioActual, // Consolidado: total completo
                 dividendosAnioActual: 
                   accionistaSeleccionado === "inactivos"
                     ? transacciones
@@ -682,6 +705,11 @@ const RegistroCapital = () => {
                           .reduce((sum, t) => sum + Number(t.monto), 0),
               }}
               accionistaId={accionistaSeleccionado}
+              accionistaNombre={
+                accionistaSeleccionado === "all" ? undefined :
+                accionistaSeleccionado === "inactivos" ? "Socios Inactivos" :
+                accionistas.find(a => a.id === accionistaSeleccionado)?.nombre
+              }
             />
             
             <GraficaRadialKPI
