@@ -202,7 +202,12 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
                   const esNegativo = item.name.includes("(-)") || 
                                      item.name.includes("Pérdidas") || 
                                      (item.isTotal && item.start < 0);
-                  const displayValue = esNegativo ? -item.start : item.start;
+                  
+                  // Para subtotales, usar el valor tal cual (ya tiene el signo correcto)
+                  // Para barras normales, aplicar signo negativo si corresponde
+                  const displayValue = item.isTotal 
+                    ? item.start 
+                    : (esNegativo ? -item.start : item.start);
                   
                   // Calcular posición Y según si es negativo o positivo
                   const labelY = esNegativo 
