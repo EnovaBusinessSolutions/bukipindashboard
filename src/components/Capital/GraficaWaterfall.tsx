@@ -5,8 +5,10 @@ import {
 
 interface WaterfallData {
   aportaciones: number;
-  utilidades: number;
-  dividendos: number;
+  utilidadesHistoricas: number;
+  dividendosHistoricos: number;
+  utilidadesAnioActual: number;
+  dividendosAnioActual: number;
 }
 
 interface GraficaWaterfallProps {
@@ -23,54 +25,72 @@ interface ChartData {
 }
 
 export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
-  const balanceFinal = data.aportaciones + data.utilidades - data.dividendos;
-
-  // Construir datos para waterfall - igual que EstadoResultadosAnalitico
   const waterfallData: ChartData[] = [];
-
-  // Aportaciones (inicio - verde brillante)
+  
+  // 1. Aportaciones (inicio - verde brillante)
   waterfallData.push({
     name: "Aportaciones",
-    value: 0, // Transparente (posiciona)
-    start: data.aportaciones, // Con color (visible)
+    value: 0,
+    start: data.aportaciones,
     fill: "#10b981", // green-500
     isTotal: false
   });
 
-  // Utilidades (positivo - azul)
+  // 2. Utilidades Netas Años Pasados (azul/rojo según si es positivo o negativo)
+  const utilidadesNetasHistoricas = data.utilidadesHistoricas - data.dividendosHistoricos;
   waterfallData.push({
-    name: "(+) Utilidades",
-    value: data.aportaciones, // Transparente (posiciona)
-    start: data.utilidades, // Con color (visible)
-    fill: "#3b82f6", // blue-500
+    name: utilidadesNetasHistoricas >= 0 ? "(+) Utilidades Netas Históricas" : "(-) Pérdidas Netas Históricas",
+    value: data.aportaciones,
+    start: Math.abs(utilidadesNetasHistoricas),
+    fill: utilidadesNetasHistoricas >= 0 ? "#3b82f6" : "#ef4444", // blue-500 or red-500
     isTotal: false
   });
 
-  // Subtotal (antes de dividendos - azul claro)
-  const subtotal = data.aportaciones + data.utilidades;
+  // 3. Subtotal Histórico
+  const subtotalHistorico = data.aportaciones + utilidadesNetasHistoricas;
   waterfallData.push({
-    name: "= Subtotal",
-    value: 0, // Transparente (posiciona)
-    start: subtotal, // Con color (visible)
+    name: "= Capital Histórico",
+    value: 0,
+    start: subtotalHistorico,
     fill: "#60a5fa", // blue-400
     isTotal: true
   });
 
-  // Dividendos (negativo - rojo)
-  const despuesDividendos = subtotal - data.dividendos;
+  // 4. Utilidades Acumuladas 2025
   waterfallData.push({
-    name: "(-) Dividendos",
-    value: despuesDividendos, // Transparente (posiciona)
-    start: data.dividendos, // Con color (visible)
+    name: "(+) Utilidades 2025",
+    value: subtotalHistorico,
+    start: data.utilidadesAnioActual,
+    fill: "#3b82f6", // blue-500
+    isTotal: false
+  });
+
+  // 5. Subtotal antes de Dividendos 2025
+  const subtotalAntesDividendos = subtotalHistorico + data.utilidadesAnioActual;
+  waterfallData.push({
+    name: "= Subtotal 2025",
+    value: 0,
+    start: subtotalAntesDividendos,
+    fill: "#60a5fa", // blue-400
+    isTotal: true
+  });
+
+  // 6. Dividendos 2025
+  const despuesDividendos2025 = subtotalAntesDividendos - data.dividendosAnioActual;
+  waterfallData.push({
+    name: "(-) Dividendos 2025",
+    value: despuesDividendos2025,
+    start: data.dividendosAnioActual,
     fill: "#ef4444", // red-500
     isTotal: false
   });
 
-  // Balance Final (final - verde o rojo según resultado)
+  // 7. Balance Final
+  const balanceFinal = despuesDividendos2025;
   waterfallData.push({
     name: "= BALANCE FINAL",
-    value: 0, // Transparente (posiciona)
-    start: balanceFinal, // Con color (visible)
+    value: 0,
+    start: balanceFinal,
     fill: balanceFinal >= 0 ? "#059669" : "#dc2626", // green-600 or red-600
     isTotal: true
   });
@@ -82,8 +102,9 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
   const CustomTooltipWaterfall = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const chartData = payload[0].payload;
-      // Para egresos, mostrar el valor como negativo en el tooltip
-      const displayValue = chartData.isTotal ? chartData.start : (chartData.name.includes("(-)") ? -chartData.start : chartData.start);
+      const displayValue = chartData.isTotal 
+        ? chartData.start 
+        : (chartData.name.includes("(-)") || chartData.name.includes("Pérdidas") ? -chartData.start : chartData.start);
       return (
         <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
           <p className="font-semibold text-foreground mb-1">{chartData.name}</p>

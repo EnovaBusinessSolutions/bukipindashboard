@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTransaccionesCapital } from "@/hooks/useTransaccionesCapital";
 import { useAccionistas } from "@/hooks/useAccionistas";
+import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { GraficaWaterfall } from "@/components/Capital/GraficaWaterfall";
 import { GraficaRadialKPI } from "@/components/Capital/GraficaRadialKPI";
 import { FormularioAccionista } from "@/components/Capital/FormularioAccionista";
@@ -42,6 +43,7 @@ const RegistroCapital = () => {
   } = useTransaccionesCapital();
 
   const { accionistas } = useAccionistas();
+  const { data: resultadosMensuales } = useEstadoResultadosMensual();
 
   const [tipoMovimiento, setTipoMovimiento] = useState<"aportacion" | "dividendo">("aportacion");
   const [fecha, setFecha] = useState<Date>(new Date());
@@ -88,8 +90,9 @@ const RegistroCapital = () => {
     });
   };
 
-  // Calcular utilidades (esto debería venir de estado de resultados en producción)
-  const utilidadesAcumuladas = 0; // TODO: Integrar con estado de resultados
+  // Calcular utilidades acumuladas del año actual
+  const anioActual = new Date().getFullYear();
+  const utilidadesAnioActual = resultadosMensuales?.reduce((sum, mes) => sum + mes.utilidadNeta, 0) || 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -651,15 +654,32 @@ const RegistroCapital = () => {
                           .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion" && t.estado === "activo")
                           .reduce((sum, t) => sum + Number(t.monto), 0)
                       : totalAportaciones,
-                utilidades: utilidadesAcumuladas,
-                dividendos: 
+                utilidadesHistoricas: 0, // TODO: Implementar cálculo de utilidades de años pasados
+                dividendosHistoricos: 
                   accionistaSeleccionado === "inactivos"
-                    ? totalDividendosInactivos
+                    ? transacciones
+                        .filter(t => t.tipo_movimiento === "dividendo" && !t.accionistaActivo && t.estado === "activo" && new Date(t.fecha).getFullYear() < anioActual)
+                        .reduce((sum, t) => sum + Number(t.monto), 0)
                     : accionistaSeleccionado && accionistaSeleccionado !== "all"
                       ? transacciones
-                          .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo" && t.estado === "activo")
+                          .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo" && t.estado === "activo" && new Date(t.fecha).getFullYear() < anioActual)
                           .reduce((sum, t) => sum + Number(t.monto), 0)
-                      : totalDividendos,
+                      : transacciones
+                          .filter(t => t.tipo_movimiento === "dividendo" && t.estado === "activo" && new Date(t.fecha).getFullYear() < anioActual)
+                          .reduce((sum, t) => sum + Number(t.monto), 0),
+                utilidadesAnioActual: utilidadesAnioActual,
+                dividendosAnioActual: 
+                  accionistaSeleccionado === "inactivos"
+                    ? transacciones
+                        .filter(t => t.tipo_movimiento === "dividendo" && !t.accionistaActivo && t.estado === "activo" && new Date(t.fecha).getFullYear() === anioActual)
+                        .reduce((sum, t) => sum + Number(t.monto), 0)
+                    : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                      ? transacciones
+                          .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo" && t.estado === "activo" && new Date(t.fecha).getFullYear() === anioActual)
+                          .reduce((sum, t) => sum + Number(t.monto), 0)
+                      : transacciones
+                          .filter(t => t.tipo_movimiento === "dividendo" && t.estado === "activo" && new Date(t.fecha).getFullYear() === anioActual)
+                          .reduce((sum, t) => sum + Number(t.monto), 0),
               }}
               accionistaId={accionistaSeleccionado}
             />
@@ -674,7 +694,7 @@ const RegistroCapital = () => {
                         .reduce((sum, t) => sum + Number(t.monto), 0)
                     : totalAportaciones
               }
-              utilidades={utilidadesAcumuladas}
+              utilidades={utilidadesAnioActual}
               dividendosDistribuidos={
                 accionistaSeleccionado === "inactivos"
                   ? totalDividendosInactivos
