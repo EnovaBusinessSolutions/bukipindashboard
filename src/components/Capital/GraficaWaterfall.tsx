@@ -210,9 +210,18 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
                     : (esNegativo ? -item.start : item.start);
                   
                   // Calcular posición Y según si es negativo o positivo
-                  const labelY = esNegativo 
-                    ? Number(y) + Number(height) + 15  // Debajo de la barra
-                    : Number(y) - 5;                    // Arriba de la barra
+                  // Para subtotales negativos, necesitamos un cálculo especial
+                  let labelY;
+                  if (item.isTotal && item.start < 0) {
+                    // Subtotal negativo: queremos la etiqueta debajo del final de la barra
+                    labelY = Number(y) + Number(height) + 20;
+                  } else if (esNegativo) {
+                    // Barra negativa normal
+                    labelY = Number(y) + Number(height) + 15;
+                  } else {
+                    // Barra positiva: etiqueta arriba
+                    labelY = Number(y) - 5;
+                  }
                   
                   const dominantBaseline = esNegativo ? "hanging" : "bottom";
                   
