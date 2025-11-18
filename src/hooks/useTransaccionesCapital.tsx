@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useAccionistas } from "./useAccionistas";
 
 export interface TransaccionCapital {
   id: string;
@@ -17,12 +18,29 @@ export interface TransaccionCapital {
   fecha_cancelacion?: string;
   motivo_cancelacion?: string;
   transaccion_cancelacion_id?: string;
+  accionistaActivo?: boolean;
+  accionistaNombreActual?: string;
 }
 
 export const useTransaccionesCapital = () => {
   const queryClient = useQueryClient();
+  const { accionistas: accionistasActivos } = useAccionistas();
 
-  const { data: transacciones = [], isLoading } = useQuery({
+  // Obtener TODOS los accionistas (activos e inactivos)
+  const { data: todosAccionistas = [] } = useQuery({
+    queryKey: ["accionistas-todos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accionistas")
+        .select("*")
+        .order("nombre");
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: transaccionesBase = [], isLoading } = useQuery({
     queryKey: ["transacciones-capital"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -33,6 +51,16 @@ export const useTransaccionesCapital = () => {
       if (error) throw error;
       return data as TransaccionCapital[];
     },
+  });
+
+  // Enriquecer transacciones con información de accionista
+  const transacciones = transaccionesBase.map(t => {
+    const accionista = todosAccionistas.find(a => a.id === t.accionista_id);
+    return {
+      ...t,
+      accionistaActivo: accionista?.activo ?? true,
+      accionistaNombreActual: accionista?.nombre ?? t.socio,
+    };
   });
 
   const registrarTransaccion = useMutation({
@@ -80,30 +108,43 @@ export const useTransaccionesCapital = () => {
     },
   });
 
-  // Calcular resúmenes
-  const totalAportaciones = transacciones
+  // Calcular resúmenes (solo transacciones activas)
+  const transaccionesActivas = transacciones.filter(t => t.estado === "activo");
+  
+  const totalAportaciones = transaccionesActivas
     .filter((t) => t.tipo_movimiento === "aportacion")
     .reduce((sum, t) => sum + Number(t.monto), 0);
 
-  const totalDividendos = transacciones
+  const totalDividendos = transaccionesActivas
     .filter((t) => t.tipo_movimiento === "dividendo")
     .reduce((sum, t) => sum + Number(t.monto), 0);
 
   const capitalSocialTotal = totalAportaciones - totalDividendos;
 
-  // Resumen por socio
-  const resumenPorSocio = transacciones.reduce((acc, t) => {
-    if (!acc[t.socio]) {
-      acc[t.socio] = { aportaciones: 0, dividendos: 0, balance: 0 };
+  // Resumen por socio con indicador de activo/inactivo
+  const resumenPorSocio = transaccionesActivas.reduce((acc, t) => {
+    // Usar accionista_id si existe, sino usar el nombre del socio
+    const claveAgrupacion = t.accionista_id 
+      ? `${t.accionista_id}|${t.accionistaNombreActual}|${t.accionistaActivo ? 'activo' : 'inactivo'}`
+      : `sin_id|${t.socio}|activo`;
+    
+    if (!acc[claveAgrupacion]) {
+      acc[claveAgrupacion] = { 
+        aportaciones: 0, 
+        dividendos: 0, 
+        balance: 0,
+        activo: t.accionistaActivo ?? true,
+        nombreMostrar: t.accionistaNombreActual || t.socio
+      };
     }
     if (t.tipo_movimiento === "aportacion") {
-      acc[t.socio].aportaciones += Number(t.monto);
+      acc[claveAgrupacion].aportaciones += Number(t.monto);
     } else {
-      acc[t.socio].dividendos += Number(t.monto);
+      acc[claveAgrupacion].dividendos += Number(t.monto);
     }
-    acc[t.socio].balance = acc[t.socio].aportaciones - acc[t.socio].dividendos;
+    acc[claveAgrupacion].balance = acc[claveAgrupacion].aportaciones - acc[claveAgrupacion].dividendos;
     return acc;
-  }, {} as Record<string, { aportaciones: number; dividendos: number; balance: number }>);
+  }, {} as Record<string, { aportaciones: number; dividendos: number; balance: number; activo: boolean; nombreMostrar: string }>);
 
   return {
     transacciones,

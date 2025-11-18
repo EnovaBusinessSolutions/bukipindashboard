@@ -21,6 +21,7 @@ import { FormularioAccionista } from "@/components/Capital/FormularioAccionista"
 import { DialogDetalleTransaccion } from "@/components/Capital/DialogDetalleTransaccion";
 import { useCancelarTransaccionCapital } from "@/hooks/useCancelarTransaccionCapital";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 // Eliminar FilaTransaccionExpandible - ya no se usa
@@ -44,6 +45,7 @@ const RegistroCapital = () => {
   const [descripcion, setDescripcion] = useState("");
   const [accionistaId, setAccionistaId] = useState("");
   const [accionistaSeleccionado, setAccionistaSeleccionado] = useState<string>("all");
+  const [mostrarInactivos, setMostrarInactivos] = useState(true);
 
   // Estados para diálogos
   const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
@@ -347,7 +349,19 @@ const RegistroCapital = () => {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Resumen de Movimientos de Capital</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Resumen de Movimientos de Capital</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="mostrar-inactivos" className="text-sm">
+                    Mostrar inactivos
+                  </Label>
+                  <Switch
+                    id="mostrar-inactivos"
+                    checked={mostrarInactivos}
+                    onCheckedChange={setMostrarInactivos}
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -428,7 +442,16 @@ const RegistroCapital = () => {
                             <td className="p-3 text-sm">
                               {format(new Date(t.fecha), "dd/MM/yyyy", { locale: es })}
                             </td>
-                            <td className="p-3 text-sm font-medium">{t.socio}</td>
+                            <td className="p-3 text-sm font-medium">
+                              <div className="flex items-center gap-2">
+                                {t.accionistaNombreActual || t.socio}
+                                {!t.accionistaActivo && (
+                                  <Badge variant="outline" className="text-xs border-yellow-600 text-yellow-600">
+                                    ⚠️ Inactivo
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
                             <td className="p-3">
                               {t.tipo_movimiento === "aportacion" ? (
                                 <Badge className="bg-green-500">
@@ -512,10 +535,25 @@ const RegistroCapital = () => {
                   </div>
                 ) : (
                   <div>
-                    {Object.entries(resumenPorSocio).map(([socio, datos]) => (
-                      <div key={socio} className="p-4 border-b last:border-b-0 hover:bg-muted/50">
+                    {Object.entries(resumenPorSocio)
+                      .filter(([_, datos]) => mostrarInactivos || datos.activo)
+                      .map(([clave, datos]) => (
+                      <div 
+                        key={clave} 
+                        className={cn(
+                          "p-4 border-b last:border-b-0 hover:bg-muted/50",
+                          !datos.activo && "bg-yellow-50/50 dark:bg-yellow-900/10"
+                        )}
+                      >
                         <div className="grid grid-cols-4 gap-4 text-sm">
-                          <div className="font-medium">{socio}</div>
+                          <div className="font-medium flex items-center gap-2">
+                            {datos.nombreMostrar}
+                            {!datos.activo && (
+                              <Badge variant="outline" className="text-xs border-yellow-600 text-yellow-600">
+                                ⚠️ Inactivo
+                              </Badge>
+                            )}
+                          </div>
                           <div className="text-right text-green-600">
                             ${datos.aportaciones.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                           </div>
