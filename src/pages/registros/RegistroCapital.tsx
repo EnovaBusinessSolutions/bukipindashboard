@@ -722,7 +722,17 @@ const RegistroCapital = () => {
                         .reduce((sum, t) => sum + Number(t.monto), 0)
                     : totalAportaciones
               }
-              utilidades={utilidadesAnioActual}
+              utilidades={
+                accionistaSeleccionado === "inactivos"
+                  ? 0 // Inactivos no reciben utilidades proporcionales
+                  : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                    ? (() => {
+                        const accionista = accionistas.find(a => a.id === accionistaSeleccionado);
+                        const porcentaje = accionista?.porcentaje_participacion || 0;
+                        return (utilidadesAnioActual * porcentaje) / 100;
+                      })()
+                    : utilidadesAnioActual // Consolidado: total completo
+              }
               dividendosDistribuidos={
                 accionistaSeleccionado === "inactivos"
                   ? totalDividendosInactivos
