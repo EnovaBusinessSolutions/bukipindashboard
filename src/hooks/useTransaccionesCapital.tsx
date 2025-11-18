@@ -13,6 +13,10 @@ export interface TransaccionCapital {
   descripcion: string | null;
   created_at: string;
   updated_at: string;
+  estado: string;
+  fecha_cancelacion?: string;
+  motivo_cancelacion?: string;
+  transaccion_cancelacion_id?: string;
 }
 
 export const useTransaccionesCapital = () => {

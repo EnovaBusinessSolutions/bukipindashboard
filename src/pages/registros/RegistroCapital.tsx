@@ -8,74 +8,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Plus, TrendingUp, TrendingDown, FileText, ChevronDown } from "lucide-react";
+import { CalendarIcon, Plus, TrendingUp, TrendingDown, FileText, Eye, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useTransaccionesCapital } from "@/hooks/useTransaccionesCapital";
 import { useAccionistas } from "@/hooks/useAccionistas";
 import { GraficaWaterfall } from "@/components/Capital/GraficaWaterfall";
 import { GraficaRadialKPI } from "@/components/Capital/GraficaRadialKPI";
 import { FormularioAccionista } from "@/components/Capital/FormularioAccionista";
-import { DetalleAsientoCapital } from "@/components/Capital/DetalleAsientoCapital";
-import { useAsientosCapital } from "@/hooks/useAsientosCapital";
+import { DialogDetalleTransaccion } from "@/components/Capital/DialogDetalleTransaccion";
+import { useCancelarTransaccionCapital } from "@/hooks/useCancelarTransaccionCapital";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-// Componente interno para filas expandibles
-const FilaTransaccionExpandible = ({ transaccion }: { transaccion: any }) => {
-  const { data: asiento, isLoading } = useAsientosCapital(transaccion.id);
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <>
-      <tr className="border-b hover:bg-muted/50">
-        <td className="p-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(!expanded)}
-            className="h-8 w-8 p-0"
-          >
-            <ChevronDown className={cn(
-              "h-4 w-4 transition-transform",
-              expanded && "rotate-180"
-            )} />
-          </Button>
-        </td>
-        <td className="p-3 text-sm">
-          {format(new Date(transaccion.fecha), "dd/MM/yyyy", { locale: es })}
-        </td>
-        <td className="p-3 text-sm font-medium">{transaccion.socio}</td>
-        <td className="p-3">
-          {transaccion.tipo_movimiento === "aportacion" ? (
-            <Badge className="bg-green-500">
-              <TrendingUp className="w-3 h-3 mr-1" />
-              Aportación
-            </Badge>
-          ) : (
-            <Badge className="bg-red-500">
-              <TrendingDown className="w-3 h-3 mr-1" />
-              Dividendo
-            </Badge>
-          )}
-        </td>
-        <td className="p-3 text-right font-mono text-sm">
-          ${Number(transaccion.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-        </td>
-        <td className="p-3 text-sm text-muted-foreground">
-          {transaccion.descripcion || "-"}
-        </td>
-      </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={6} className="p-4 bg-muted/20">
-            <DetalleAsientoCapital asiento={asiento} isLoading={isLoading} />
-          </td>
-        </tr>
-      )}
-    </>
-  );
-};
+// Eliminar FilaTransaccionExpandible - ya no se usa
 
 const RegistroCapital = () => {
   const {
@@ -96,6 +44,43 @@ const RegistroCapital = () => {
   const [descripcion, setDescripcion] = useState("");
   const [accionistaId, setAccionistaId] = useState("");
   const [accionistaSeleccionado, setAccionistaSeleccionado] = useState<string>("all");
+
+  // Estados para diálogos
+  const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
+  const [dialogDetalleOpen, setDialogDetalleOpen] = useState(false);
+  const [dialogCancelarOpen, setDialogCancelarOpen] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
+
+  const { mutate: cancelarTransaccion, isPending: isCancelando } = useCancelarTransaccionCapital();
+
+  const handleVerDetalle = (transaccion: any) => {
+    setTransaccionSeleccionada(transaccion);
+    setDialogDetalleOpen(true);
+  };
+
+  const handleAbrirDialogCancelar = (transaccion: any) => {
+    setTransaccionSeleccionada(transaccion);
+    setDialogCancelarOpen(true);
+    setMotivoCancelacion("");
+  };
+
+  const handleConfirmarCancelacion = () => {
+    if (!transaccionSeleccionada || !motivoCancelacion.trim()) {
+      toast.error("Debes proporcionar un motivo de cancelación");
+      return;
+    }
+
+    cancelarTransaccion({
+      transaccionId: transaccionSeleccionada.id,
+      motivoCancelacion: motivoCancelacion.trim()
+    }, {
+      onSuccess: () => {
+        setDialogCancelarOpen(false);
+        setTransaccionSeleccionada(null);
+        setMotivoCancelacion("");
+      }
+    });
+  };
 
   // Calcular utilidades (esto debería venir de estado de resultados en producción)
   const utilidadesAcumuladas = 0; // TODO: Integrar con estado de resultados
@@ -428,17 +413,75 @@ const RegistroCapital = () => {
                     <table className="w-full">
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="p-3 text-left text-sm font-medium w-10"></th>
                           <th className="p-3 text-left text-sm font-medium">Fecha</th>
                           <th className="p-3 text-left text-sm font-medium">Socio</th>
                           <th className="p-3 text-left text-sm font-medium">Tipo</th>
                           <th className="p-3 text-right text-sm font-medium">Monto</th>
                           <th className="p-3 text-left text-sm font-medium">Descripción</th>
+                          <th className="p-3 text-center text-sm font-medium">Estado</th>
+                          <th className="p-3 text-center text-sm font-medium w-[120px]">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
                         {transacciones.map((t) => (
-                          <FilaTransaccionExpandible key={t.id} transaccion={t} />
+                          <tr key={t.id} className="border-b hover:bg-muted/50">
+                            <td className="p-3 text-sm">
+                              {format(new Date(t.fecha), "dd/MM/yyyy", { locale: es })}
+                            </td>
+                            <td className="p-3 text-sm font-medium">{t.socio}</td>
+                            <td className="p-3">
+                              {t.tipo_movimiento === "aportacion" ? (
+                                <Badge className="bg-green-500">
+                                  <TrendingUp className="w-3 h-3 mr-1" />
+                                  Aportación
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-red-500">
+                                  <TrendingDown className="w-3 h-3 mr-1" />
+                                  Dividendo
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="p-3 text-right font-mono text-sm">
+                              ${Number(t.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-3 text-sm text-muted-foreground">
+                              {t.descripcion || "-"}
+                            </td>
+                            <td className="p-3 text-center">
+                              {t.estado === 'cancelado' ? (
+                                <Badge variant="destructive">Cancelado</Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-950/20 dark:text-green-400">
+                                  Activo
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleVerDetalle(t)}
+                                  className="h-8 w-8 p-0"
+                                  title="Ver detalle"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {t.estado === 'activo' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleAbrirDialogCancelar(t)}
+                                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Cancelar transacción"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         ))}
                       </tbody>
                     </table>
@@ -662,6 +705,58 @@ const RegistroCapital = () => {
         <FormularioAccionista />
       </TabsContent>
     </Tabs>
+
+    {/* Dialog de Detalle */}
+    <DialogDetalleTransaccion
+      open={dialogDetalleOpen}
+      onOpenChange={setDialogDetalleOpen}
+      transaccion={transaccionSeleccionada}
+    />
+
+    {/* Dialog de Confirmación de Cancelación */}
+    <AlertDialog open={dialogCancelarOpen} onOpenChange={setDialogCancelarOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Estás seguro de cancelar esta transacción?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción no se puede deshacer. Se creará un asiento de reversión para mantener
+            la trazabilidad contable.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        
+        <div className="my-4">
+          <label className="text-sm font-medium mb-2 block">
+            Motivo de la cancelación <span className="text-red-500">*</span>
+          </label>
+          <Textarea
+            placeholder="Explica por qué se cancela esta transacción..."
+            value={motivoCancelacion}
+            onChange={(e) => setMotivoCancelacion(e.target.value)}
+            rows={4}
+            className="resize-none"
+          />
+        </div>
+
+        {transaccionSeleccionada && (
+          <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+            <p><strong>Fecha:</strong> {format(new Date(transaccionSeleccionada.fecha), "dd/MM/yyyy", { locale: es })}</p>
+            <p><strong>Socio:</strong> {transaccionSeleccionada.socio}</p>
+            <p><strong>Monto:</strong> ${Number(transaccionSeleccionada.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+          </div>
+        )}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isCancelando}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmarCancelacion}
+            disabled={isCancelando || !motivoCancelacion.trim()}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {isCancelando ? "Cancelando..." : "Confirmar Cancelación"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </div>
   );
 };

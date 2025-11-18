@@ -807,11 +807,15 @@ export type Database = {
           accionista_id: string | null
           created_at: string
           descripcion: string | null
+          estado: string
           fecha: string
+          fecha_cancelacion: string | null
           id: string
           monto: number
+          motivo_cancelacion: string | null
           socio: string
           tipo_movimiento: string
+          transaccion_cancelacion_id: string | null
           updated_at: string
           user_id: string
         }
@@ -819,11 +823,15 @@ export type Database = {
           accionista_id?: string | null
           created_at?: string
           descripcion?: string | null
+          estado?: string
           fecha?: string
+          fecha_cancelacion?: string | null
           id?: string
           monto: number
+          motivo_cancelacion?: string | null
           socio: string
           tipo_movimiento: string
+          transaccion_cancelacion_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -831,11 +839,15 @@ export type Database = {
           accionista_id?: string | null
           created_at?: string
           descripcion?: string | null
+          estado?: string
           fecha?: string
+          fecha_cancelacion?: string | null
           id?: string
           monto?: number
+          motivo_cancelacion?: string | null
           socio?: string
           tipo_movimiento?: string
+          transaccion_cancelacion_id?: string | null
           updated_at?: string
           user_id?: string
         }
