@@ -97,8 +97,10 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
     isTotal: true
   });
 
-  const formatCurrency = (value: number) => {
-    return `$${Math.abs(value).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const formatCurrency = (value: number, showSign: boolean = false) => {
+    const absValue = Math.abs(value);
+    const formatted = `$${absValue.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    return showSign && value < 0 ? `-${formatted}` : formatted;
   };
 
   const CustomTooltipWaterfall = ({ active, payload }: any) => {
@@ -111,7 +113,7 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
         <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
           <p className="font-semibold text-foreground mb-1">{chartData.name}</p>
           <p className={`text-sm ${displayValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {formatCurrency(displayValue)}
+            {formatCurrency(displayValue, true)}
           </p>
         </div>
       );
@@ -169,21 +171,32 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
               radius={[6, 6, 6, 6]}
               label={{
                 position: 'top',
-                content: ({ x, y, width, value, index }: any) => {
+                content: ({ x, y, width, value, index, height }: any) => {
                   const item = waterfallData[index];
                   if (!item) return null;
-                  const displayValue = item.name.includes("(-)") ? -item.start : item.start;
+                  
+                  // Determinar si es negativo basándose en el nombre o tipo
+                  const esNegativo = item.name.includes("(-)") || item.name.includes("Pérdidas");
+                  const displayValue = esNegativo ? -item.start : item.start;
+                  
+                  // Calcular posición Y según si es negativo o positivo
+                  const labelY = esNegativo 
+                    ? Number(y) + Number(height) + 15  // Debajo de la barra
+                    : Number(y) - 5;                    // Arriba de la barra
+                  
+                  const dominantBaseline = esNegativo ? "hanging" : "bottom";
+                  
                   return (
                     <text
                       x={Number(x) + Number(width) / 2}
-                      y={Number(y) - 5}
+                      y={labelY}
                       fill="hsl(var(--foreground))"
                       textAnchor="middle"
-                      dominantBaseline="bottom"
+                      dominantBaseline={dominantBaseline}
                       fontSize={10}
                       fontWeight="bold"
                     >
-                      {formatCurrency(displayValue)}
+                      {formatCurrency(displayValue, true)}
                     </text>
                   );
                 }
