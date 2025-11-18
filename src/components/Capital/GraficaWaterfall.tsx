@@ -36,13 +36,14 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
     isTotal: false
   });
 
-  // 2. Utilidades Netas Años Pasados (azul/rojo según si es positivo o negativo)
+  // 2. Utilidades Netas Años Pasados (verde/rojo según si es positivo o negativo)
   const utilidadesNetasHistoricas = data.utilidadesHistoricas - data.dividendosHistoricos;
+  const esGananciaHistorica = utilidadesNetasHistoricas >= 0;
   waterfallData.push({
-    name: utilidadesNetasHistoricas >= 0 ? "(+) Utilidades Netas Históricas" : "(-) Pérdidas Netas Históricas",
-    value: data.aportaciones,
+    name: esGananciaHistorica ? "(+) Utilidades Netas Históricas" : "(-) Pérdidas Netas Históricas",
+    value: esGananciaHistorica ? data.aportaciones : data.aportaciones + utilidadesNetasHistoricas,
     start: Math.abs(utilidadesNetasHistoricas),
-    fill: utilidadesNetasHistoricas >= 0 ? "#3b82f6" : "#ef4444", // blue-500 or red-500
+    fill: esGananciaHistorica ? "#10b981" : "#ef4444", // green-500 or red-500
     isTotal: false
   });
 
@@ -56,12 +57,13 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
     isTotal: true
   });
 
-  // 4. Utilidades Acumuladas 2025
+  // 4. Utilidades Acumuladas 2025 - Color dinámico según ganancia/pérdida
+  const esGanancia2025 = data.utilidadesAnioActual >= 0;
   waterfallData.push({
-    name: "(+) Utilidades 2025",
-    value: subtotalHistorico,
-    start: data.utilidadesAnioActual,
-    fill: "#3b82f6", // blue-500
+    name: esGanancia2025 ? "(+) Utilidades 2025" : "(-) Pérdidas 2025",
+    value: esGanancia2025 ? subtotalHistorico : subtotalHistorico + data.utilidadesAnioActual,
+    start: Math.abs(data.utilidadesAnioActual),
+    fill: esGanancia2025 ? "#10b981" : "#ef4444", // green-500 si ganancia, red-500 si pérdida
     isTotal: false
   });
 
