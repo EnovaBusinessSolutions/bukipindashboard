@@ -121,6 +121,26 @@ export const useTransaccionesCapital = () => {
 
   const capitalSocialTotal = totalAportaciones - totalDividendos;
 
+  // Totales por tipo de socio (activos vs inactivos)
+  const totalAportacionesActivos = transaccionesActivas
+    .filter((t) => t.tipo_movimiento === "aportacion" && t.accionistaActivo)
+    .reduce((sum, t) => sum + Number(t.monto), 0);
+
+  const totalAportacionesInactivos = transaccionesActivas
+    .filter((t) => t.tipo_movimiento === "aportacion" && !t.accionistaActivo)
+    .reduce((sum, t) => sum + Number(t.monto), 0);
+
+  const totalDividendosActivos = transaccionesActivas
+    .filter((t) => t.tipo_movimiento === "dividendo" && t.accionistaActivo)
+    .reduce((sum, t) => sum + Number(t.monto), 0);
+
+  const totalDividendosInactivos = transaccionesActivas
+    .filter((t) => t.tipo_movimiento === "dividendo" && !t.accionistaActivo)
+    .reduce((sum, t) => sum + Number(t.monto), 0);
+
+  const capitalSocialActivos = totalAportacionesActivos - totalDividendosActivos;
+  const capitalSocialInactivos = totalAportacionesInactivos - totalDividendosInactivos;
+
   // Resumen por socio con indicador de activo/inactivo
   const resumenPorSocio = transaccionesActivas.reduce((acc, t) => {
     // Usar accionista_id si existe, sino usar el nombre del socio
@@ -154,5 +174,11 @@ export const useTransaccionesCapital = () => {
     totalDividendos,
     capitalSocialTotal,
     resumenPorSocio,
+    totalAportacionesActivos,
+    totalAportacionesInactivos,
+    totalDividendosActivos,
+    totalDividendosInactivos,
+    capitalSocialActivos,
+    capitalSocialInactivos,
   };
 };

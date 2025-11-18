@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Plus, TrendingUp, TrendingDown, FileText, Eye, Trash2 } from "lucide-react";
+import { CalendarIcon, Plus, TrendingUp, TrendingDown, FileText, Eye, Trash2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,10 @@ const RegistroCapital = () => {
     totalDividendos,
     capitalSocialTotal,
     resumenPorSocio,
+    totalAportacionesActivos,
+    totalAportacionesInactivos,
+    totalDividendosActivos,
+    totalDividendosInactivos,
   } = useTransaccionesCapital();
 
   const { accionistas } = useAccionistas();
@@ -593,6 +597,9 @@ const RegistroCapital = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Consolidado (Todos los accionistas)</SelectItem>
+                    <SelectItem value="inactivos">
+                      ⚠️ Socios Inactivos (Agrupados)
+                    </SelectItem>
                     {accionistas.map((accionista) => (
                       <SelectItem key={accionista.id} value={accionista.id}>
                         {accionista.nombre}
@@ -607,37 +614,77 @@ const RegistroCapital = () => {
             </CardContent>
           </Card>
 
+          {accionistaSeleccionado === "inactivos" && (
+            <Card className="border-yellow-200 bg-yellow-50/50 dark:bg-yellow-950/20">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-full bg-yellow-100 p-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-700" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                      Vista de Socios Inactivos
+                    </h4>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Estás viendo el análisis consolidado de todos los socios marcados como inactivos. 
+                      Estas transacciones mantienen su trazabilidad completa en el sistema.
+                    </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-2">
+                      <strong>Total en este grupo:</strong> {Object.values(resumenPorSocio)
+                        .filter(s => !s.activo)
+                        .length} socio(s) inactivo(s)
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <GraficaWaterfall 
               data={{
-                aportaciones: accionistaSeleccionado && accionistaSeleccionado !== "all"
-                  ? transacciones
-                      .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion")
-                      .reduce((sum, t) => sum + Number(t.monto), 0)
-                  : totalAportaciones,
+                aportaciones: 
+                  accionistaSeleccionado === "inactivos"
+                    ? totalAportacionesInactivos
+                    : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                      ? transacciones
+                          .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion" && t.estado === "activo")
+                          .reduce((sum, t) => sum + Number(t.monto), 0)
+                      : totalAportaciones,
                 utilidades: utilidadesAcumuladas,
-                dividendos: accionistaSeleccionado && accionistaSeleccionado !== "all"
-                  ? transacciones
-                      .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
-                      .reduce((sum, t) => sum + Number(t.monto), 0)
-                  : totalDividendos,
+                dividendos: 
+                  accionistaSeleccionado === "inactivos"
+                    ? totalDividendosInactivos
+                    : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                      ? transacciones
+                          .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo" && t.estado === "activo")
+                          .reduce((sum, t) => sum + Number(t.monto), 0)
+                      : totalDividendos,
               }}
               accionistaId={accionistaSeleccionado}
             />
             
             <GraficaRadialKPI
-              aportaciones={accionistaSeleccionado && accionistaSeleccionado !== "all"
-                ? transacciones
-                    .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion")
-                    .reduce((sum, t) => sum + Number(t.monto), 0)
-                : totalAportaciones}
+              aportaciones={
+                accionistaSeleccionado === "inactivos"
+                  ? totalAportacionesInactivos
+                  : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                    ? transacciones
+                        .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "aportacion" && t.estado === "activo")
+                        .reduce((sum, t) => sum + Number(t.monto), 0)
+                    : totalAportaciones
+              }
               utilidades={utilidadesAcumuladas}
-              dividendosDistribuidos={accionistaSeleccionado && accionistaSeleccionado !== "all"
-                ? transacciones
-                    .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo")
-                    .reduce((sum, t) => sum + Number(t.monto), 0)
-                : totalDividendos}
-              accionista={accionistaSeleccionado && accionistaSeleccionado !== "all"
+              dividendosDistribuidos={
+                accionistaSeleccionado === "inactivos"
+                  ? totalDividendosInactivos
+                  : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                    ? transacciones
+                        .filter(t => t.accionista_id === accionistaSeleccionado && t.tipo_movimiento === "dividendo" && t.estado === "activo")
+                        .reduce((sum, t) => sum + Number(t.monto), 0)
+                    : totalDividendos
+              }
+              accionista={accionistaSeleccionado && accionistaSeleccionado !== "all" && accionistaSeleccionado !== "inactivos"
                 ? accionistas.find(a => a.id === accionistaSeleccionado)
                 : undefined}
               totalAportaciones={totalAportaciones}
@@ -647,21 +694,31 @@ const RegistroCapital = () => {
           <Card>
             <CardHeader>
               <CardTitle>
-                Indicadores Clave - {accionistaSeleccionado && accionistaSeleccionado !== "all"
-                  ? accionistas.find(a => a.id === accionistaSeleccionado)?.nombre 
-                  : "Consolidado"}
+                Indicadores Clave - {
+                  accionistaSeleccionado === "inactivos"
+                    ? "⚠️ Socios Inactivos"
+                    : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                      ? accionistas.find(a => a.id === accionistaSeleccionado)?.nombre 
+                      : "Consolidado"
+                }
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 border rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">
-                    {accionistaSeleccionado && accionistaSeleccionado !== "all" ? "Transacciones" : "Número de Accionistas"}
+                    {accionistaSeleccionado === "inactivos"
+                      ? "Socios Inactivos"
+                      : accionistaSeleccionado && accionistaSeleccionado !== "all" 
+                        ? "Transacciones" 
+                        : "Número de Accionistas"}
                   </p>
                   <p className="text-2xl font-bold">
-                    {accionistaSeleccionado && accionistaSeleccionado !== "all"
-                      ? transacciones.filter(t => t.accionista_id === accionistaSeleccionado).length
-                      : accionistas.length
+                    {accionistaSeleccionado === "inactivos"
+                      ? Object.values(resumenPorSocio).filter(s => !s.activo).length
+                      : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                        ? transacciones.filter(t => t.accionista_id === accionistaSeleccionado && t.estado === "activo").length
+                        : accionistas.length
                     }
                   </p>
                 </div>
@@ -670,9 +727,11 @@ const RegistroCapital = () => {
                   <p className="text-sm text-muted-foreground mb-1">Última Aportación</p>
                   <p className="text-lg font-semibold">
                     {(() => {
-                      const filtradas = accionistaSeleccionado && accionistaSeleccionado !== "all"
-                        ? transacciones.filter(t => t.tipo_movimiento === "aportacion" && t.accionista_id === accionistaSeleccionado)
-                        : transacciones.filter(t => t.tipo_movimiento === "aportacion");
+                      const filtradas = accionistaSeleccionado === "inactivos"
+                        ? transacciones.filter(t => t.tipo_movimiento === "aportacion" && !t.accionistaActivo && t.estado === "activo")
+                        : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                          ? transacciones.filter(t => t.tipo_movimiento === "aportacion" && t.accionista_id === accionistaSeleccionado && t.estado === "activo")
+                          : transacciones.filter(t => t.tipo_movimiento === "aportacion" && t.estado === "activo");
                       const ultima = filtradas[0];
                       return ultima
                         ? format(new Date(ultima.fecha), "dd/MM/yyyy", { locale: es })
@@ -685,9 +744,11 @@ const RegistroCapital = () => {
                   <p className="text-sm text-muted-foreground mb-1">Último Dividendo</p>
                   <p className="text-lg font-semibold">
                     {(() => {
-                      const filtradas = accionistaSeleccionado && accionistaSeleccionado !== "all"
-                        ? transacciones.filter(t => t.tipo_movimiento === "dividendo" && t.accionista_id === accionistaSeleccionado)
-                        : transacciones.filter(t => t.tipo_movimiento === "dividendo");
+                      const filtradas = accionistaSeleccionado === "inactivos"
+                        ? transacciones.filter(t => t.tipo_movimiento === "dividendo" && !t.accionistaActivo && t.estado === "activo")
+                        : accionistaSeleccionado && accionistaSeleccionado !== "all"
+                          ? transacciones.filter(t => t.tipo_movimiento === "dividendo" && t.accionista_id === accionistaSeleccionado && t.estado === "activo")
+                          : transacciones.filter(t => t.tipo_movimiento === "dividendo" && t.estado === "activo");
                       const ultimo = filtradas[0];
                       return ultimo
                         ? format(new Date(ultimo.fecha), "dd/MM/yyyy", { locale: es })
@@ -698,7 +759,7 @@ const RegistroCapital = () => {
               </div>
 
               {/* Detalles adicionales por accionista */}
-              {accionistaSeleccionado && accionistaSeleccionado !== "all" && (() => {
+              {accionistaSeleccionado && accionistaSeleccionado !== "all" && accionistaSeleccionado !== "inactivos" && (() => {
                 const accionista = accionistas.find(a => a.id === accionistaSeleccionado);
                 if (!accionista) return null;
                 return (
