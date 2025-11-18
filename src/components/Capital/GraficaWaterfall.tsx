@@ -121,6 +121,28 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
     return null;
   };
 
+  // Calcular el valor mínimo para ajustar el eje Y
+  const calcularValorMinimo = () => {
+    const valores: number[] = [];
+    
+    waterfallData.forEach(item => {
+      if (item.isTotal) {
+        valores.push(item.start);
+      } else {
+        valores.push(item.value);
+        valores.push(item.value + item.start);
+      }
+    });
+    
+    return Math.min(...valores, 0);
+  };
+
+  const minValue = calcularValorMinimo();
+  // Si hay valores negativos, agregar 10% de margen inferior
+  const yAxisDomain: [number | 'auto', number | 'auto'] = minValue < 0 
+    ? [minValue * 1.1, 'auto'] 
+    : ['auto', 'auto'];
+
   return (
     <Card className="border-2">
       <CardHeader className="bg-muted/50">
@@ -146,6 +168,7 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
               interval={0}
             />
             <YAxis 
+              domain={yAxisDomain}
               tickFormatter={(value) => formatCurrency(value)}
               tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
               width={80}
@@ -176,7 +199,9 @@ export const GraficaWaterfall = ({ data }: GraficaWaterfallProps) => {
                   if (!item) return null;
                   
                   // Determinar si es negativo basándose en el nombre o tipo
-                  const esNegativo = item.name.includes("(-)") || item.name.includes("Pérdidas");
+                  const esNegativo = item.name.includes("(-)") || 
+                                     item.name.includes("Pérdidas") || 
+                                     (item.isTotal && item.start < 0);
                   const displayValue = esNegativo ? -item.start : item.start;
                   
                   // Calcular posición Y según si es negativo o positivo
