@@ -26,13 +26,15 @@ export const GraficaRadialKPI = ({
   const porcentajeUsado = capitalDisponible > 0 ? (dividendosDistribuidos / capitalDisponible) * 100 : 0;
 
   // Calcular lo que le corresponde al accionista
+  // IMPORTANTE: Los datos (aportaciones y utilidades) ya vienen proporcionales al accionista
+  // No debemos aplicar el porcentaje de nuevo
   let dividendosPermitidos = capitalDisponible;
   let excedente = 0;
   let mostrarWarning = false;
 
   if (accionista && accionista.porcentaje_participacion > 0) {
-    // Si el accionista tiene un porcentaje definido, calculamos su parte
-    dividendosPermitidos = capitalDisponible * (accionista.porcentaje_participacion / 100);
+    // Los datos ya son proporcionales, solo validamos si excedió
+    dividendosPermitidos = capitalDisponible;
     excedente = dividendosDistribuidos - dividendosPermitidos;
     mostrarWarning = excedente > 0;
   } else if (dividendosDistribuidos > capitalDisponible) {
