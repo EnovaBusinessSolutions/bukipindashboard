@@ -67,7 +67,10 @@ export const RegistroImpuestosForm = () => {
   }, [mesSeleccionado, anoSeleccionado, user]);
 
   const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
-  const isrCalculado = (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100;
+  // ✅ Solo calcular ISR si hay utilidad positiva
+  const isrCalculado = utilidadAntesImpuestos > 0 
+    ? (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100 
+    : 0;
 
   const isPeriodoPasado = () => {
     const periodoSeleccionado = new Date(anoSeleccionado, mesSeleccionado - 1);
@@ -485,6 +488,17 @@ export const RegistroImpuestosForm = () => {
         </Alert>
       )}
 
+      {utilidadAntesImpuestos < 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            ⚠️ Este período tiene pérdidas ({formatCurrency(utilidadAntesImpuestos)}). 
+            No se calcula ISR sobre resultados negativos. Puedes registrar un pago de $0.00 
+            para documentar el período, o esperar a tener utilidades positivas.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {registroExistente && (
         <Alert className="border-blue-500 bg-blue-500/10">
           <CheckCircle2 className="h-4 w-4 text-blue-600" />
@@ -614,12 +628,18 @@ export const RegistroImpuestosForm = () => {
               </div>
 
               <div className="p-4 bg-primary/10 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">ISR Calculado:</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {utilidadAntesImpuestos > 0 
+                    ? `ISR Calculado (${tasaISR}%)` 
+                    : 'Sin impuesto (pérdida del período)'}
+                </p>
                 <p className="text-2xl font-bold text-primary">
                   {formatCurrency(isrCalculado)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {tasaISR}% de {formatCurrency(utilidadAntesImpuestos)}
+                  {utilidadAntesImpuestos > 0 
+                    ? `${tasaISR}% de ${formatCurrency(utilidadAntesImpuestos)}`
+                    : 'No se genera ISR con resultados negativos'}
                 </p>
               </div>
             </>
@@ -898,7 +918,12 @@ export const RegistroImpuestosForm = () => {
           <Button 
             className="w-full" 
             onClick={handleGuardarRegistro}
-            disabled={!isrReal || isSaving || isPeriodoPasado()}
+            disabled={
+              !isrReal || 
+              isSaving || 
+              isPeriodoPasado() ||
+              (utilidadAntesImpuestos <= 0 && parseFloat(isrReal || "0") !== 0)
+            }
           >
             {isSaving ? "Guardando..." : "Guardar Nuevo Registro"}
           </Button>
