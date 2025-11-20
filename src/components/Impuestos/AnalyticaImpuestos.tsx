@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
+import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, ChevronDown } from "lucide-react";
 
 interface DatosGrafica {
   periodo: string;
@@ -30,6 +32,9 @@ export const AnalyticaImpuestos = () => {
     tipoVista === "mensual" && anoSeleccionado === currentYear ? mesActual : 0,
     anoSeleccionado
   );
+
+  // Obtener datos del año actual para vista anual
+  const { data: resultadosAnuales } = useEstadoResultadosMensual(currentYear);
 
   useEffect(() => {
     if (!user) return;
@@ -115,20 +120,51 @@ export const AnalyticaImpuestos = () => {
           setDatos(datosCompletos);
         }
       } else {
-        // Datos anuales (últimos 5 años)
-        const { data, error } = await supabase
+        // ========== VISTA ANUAL ==========
+        
+        // CASO 1: Calcular ISR del año actual dinámicamente
+        let isrCalculadoAnoActual = 0;
+        let isrRegistradoAnoActual = 0;
+        
+        if (resultadosAnuales) {
+          // Calcular ISR teórico desde utilidades acumuladas
+          const utilidadAcumuladaAnual = resultadosAnuales
+            .slice(0, mesActual) // Solo hasta el mes actual
+            .reduce((sum, mes) => sum + mes.utilidadAntesImpuestos, 0);
+          
+          isrCalculadoAnoActual = utilidadAcumuladaAnual > 0 
+            ? (utilidadAcumuladaAnual * parseFloat(tasaISR)) / 100 
+            : 0;
+        }
+        
+        // Obtener ISR registrado del año actual
+        const { data: transaccionesAnoActual } = await supabase
+          .from('transacciones_impuestos')
+          .select('isr_real')
+          .eq('user_id', user.id)
+          .eq('ano', currentYear);
+        
+        if (transaccionesAnoActual) {
+          isrRegistradoAnoActual = transaccionesAnoActual.reduce(
+            (sum, t) => sum + Number(t.isr_real), 
+            0
+          );
+        }
+        
+        // CASO 2: Obtener años pasados (históricos cerrados)
+        const { data: anosAnteriores, error } = await supabase
           .from('transacciones_impuestos')
           .select('*')
           .eq('user_id', user.id)
           .gte('ano', currentYear - 4)
-          .lte('ano', currentYear);
-
+          .lt('ano', currentYear); // Solo años anteriores
+        
         if (error) {
           console.error("Error fetching datos:", error);
           setDatos([]);
         } else {
-          // Agrupar por año sin duplicar utilidad base
-          const agrupadoPorAno = (data || []).reduce((acc, t) => {
+          // Agrupar años pasados sin duplicar
+          const agrupadoPorAno = (anosAnteriores || []).reduce((acc, t) => {
             if (!acc[t.ano]) {
               acc[t.ano] = {
                 calculado: 0,
@@ -137,27 +173,36 @@ export const AnalyticaImpuestos = () => {
               };
             }
             
-            // Solo contamos el ISR calculado una vez por mes
             if (!acc[t.ano].mesesContados.has(t.mes)) {
               acc[t.ano].calculado += Number(t.isr_calculado);
               acc[t.ano].mesesContados.add(t.mes);
             }
             
-            // Sumamos todos los pagos realizados
             acc[t.ano].registrado += Number(t.isr_real);
             
             return acc;
           }, {} as Record<number, { calculado: number; registrado: number; mesesContados: Set<number> }>);
-
+          
+          // Convertir a array y agregar año actual
           const datosFormateados = Object.entries(agrupadoPorAno)
             .map(([ano, valores]) => ({
               periodo: ano,
               calculado: valores.calculado,
               registrado: valores.registrado,
               diferencia: valores.registrado - valores.calculado
-            }))
-            .sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
-
+            }));
+          
+          // Agregar año actual al final
+          datosFormateados.push({
+            periodo: currentYear.toString(),
+            calculado: isrCalculadoAnoActual, // ✅ Calculado dinámicamente
+            registrado: isrRegistradoAnoActual,
+            diferencia: isrRegistradoAnoActual - isrCalculadoAnoActual
+          });
+          
+          // Ordenar por año
+          datosFormateados.sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
+          
           setDatos(datosFormateados);
         }
       }
@@ -208,7 +253,7 @@ export const AnalyticaImpuestos = () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(channelAsientos);
     };
-  }, [user, anoSeleccionado, tipoVista, currentYear, mesActual, utilidadMesActual]);
+  }, [user, anoSeleccionado, tipoVista, currentYear, mesActual, utilidadMesActual, resultadosAnuales]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -241,6 +286,12 @@ export const AnalyticaImpuestos = () => {
   const promedioDiferencia = datos.length > 0 
     ? totales.diferencia / datos.length 
     : 0;
+
+  // Calcular límite del eje Y con 20% de margen superior
+  const valorMaximo = datos.length > 0 
+    ? Math.max(...datos.map(d => Math.max(d.calculado, d.registrado, Math.abs(d.diferencia)))) 
+    : 0;
+  const limiteYAxis = Math.ceil(valorMaximo * 1.2);
 
   return (
     <div className="space-y-6">
@@ -353,6 +404,7 @@ export const AnalyticaImpuestos = () => {
                 />
                 <YAxis 
                   className="text-xs"
+                  domain={[0, limiteYAxis]}
                   tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                 />
                 <Tooltip 
@@ -370,11 +422,11 @@ export const AnalyticaImpuestos = () => {
                 <Bar 
                   dataKey="calculado" 
                   name="ISR Calculado" 
-                  fill="hsl(var(--primary))" 
+                  fill="hsl(var(--chart-1))" 
                   radius={[4, 4, 0, 0]}
                   label={{ 
                     position: 'top', 
-                    fill: '#000000', 
+                    fill: 'hsl(var(--foreground))', 
                     fontSize: 12,
                     formatter: (value: number) => `$${formatNumber(value)}`
                   }}
@@ -382,11 +434,11 @@ export const AnalyticaImpuestos = () => {
                 <Bar 
                   dataKey="registrado" 
                   name="ISR Registrado" 
-                  fill="#6366f1"
+                  fill="hsl(var(--chart-2))"
                   radius={[4, 4, 0, 0]}
                   label={{ 
                     position: 'top', 
-                    fill: '#000000', 
+                    fill: 'hsl(var(--foreground))', 
                     fontSize: 12,
                     formatter: (value: number) => `$${formatNumber(value)}`
                   }}
@@ -395,12 +447,12 @@ export const AnalyticaImpuestos = () => {
                   type="monotone"
                   dataKey="diferencia" 
                   name="Diferencia" 
-                  stroke="#ef4444" 
+                  stroke="hsl(var(--destructive))" 
                   strokeWidth={2}
-                  dot={{ fill: '#ef4444', r: 4 }}
+                  dot={{ fill: 'hsl(var(--destructive))', r: 4 }}
                   label={{ 
                     position: 'top', 
-                    fill: '#000000', 
+                    fill: 'hsl(var(--foreground))', 
                     fontSize: 12,
                     formatter: (value: number) => `$${formatNumber(value)}`
                   }}
@@ -411,7 +463,7 @@ export const AnalyticaImpuestos = () => {
         </CardContent>
       </Card>
 
-      {/* Análisis de Diferencias */}
+      {/* Análisis de Diferencias - Collapsible */}
       {datos.length > 0 && (
         <Card>
           <CardHeader>
@@ -421,28 +473,52 @@ export const AnalyticaImpuestos = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {datos.map((d, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <span className="font-medium">{d.periodo}</span>
-                  <div className="flex items-center gap-4">
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <button className="w-full flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors group">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className="font-semibold">Resumen Total:</span>
                     <span className="text-sm text-muted-foreground">
-                      Calculado: {formatCurrency(d.calculado)}
+                      Calculado: {formatCurrency(totales.calculado)}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      Registrado: {formatCurrency(d.registrado)}
+                      Registrado: {formatCurrency(totales.registrado)}
                     </span>
                     <span className={`font-semibold ${
-                      d.diferencia > 0 ? 'text-red-600' : 
-                      d.diferencia < 0 ? 'text-green-600' : ''
+                      totales.diferencia > 0 ? 'text-red-600' : 
+                      totales.diferencia < 0 ? 'text-green-600' : ''
                     }`}>
-                      {d.diferencia > 0 ? '+' : ''}
-                      {formatCurrency(d.diferencia)}
+                      Diferencia: {totales.diferencia > 0 ? '+' : ''}
+                      {formatCurrency(totales.diferencia)}
                     </span>
                   </div>
-                </div>
-              ))}
-            </div>
+                  <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent className="space-y-3 mt-3">
+                {datos.map((d, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <span className="font-medium">{d.periodo}</span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-muted-foreground">
+                        Calculado: {formatCurrency(d.calculado)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        Registrado: {formatCurrency(d.registrado)}
+                      </span>
+                      <span className={`font-semibold ${
+                        d.diferencia > 0 ? 'text-red-600' : 
+                        d.diferencia < 0 ? 'text-green-600' : ''
+                      }`}>
+                        {d.diferencia > 0 ? '+' : ''}
+                        {formatCurrency(d.diferencia)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           </CardContent>
         </Card>
       )}
