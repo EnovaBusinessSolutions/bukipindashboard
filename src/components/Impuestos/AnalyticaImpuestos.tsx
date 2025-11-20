@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp } from "lucide-react";
 
@@ -17,10 +18,18 @@ interface DatosGrafica {
 export const AnalyticaImpuestos = () => {
   const { user } = useAuth();
   const currentYear = new Date().getFullYear();
+  const mesActual = new Date().getMonth() + 1; // 1-12
   const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentYear);
   const [tipoVista, setTipoVista] = useState<"mensual" | "anual">("mensual");
   const [datos, setDatos] = useState<DatosGrafica[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tasaISR] = useState<string>("30"); // Usar la misma tasa que el formulario
+
+  // Solo obtener utilidad del mes en curso si estamos viendo datos mensuales del año actual
+  const { data: utilidadMesActual } = useUtilidadAntesImpuestos(
+    tipoVista === "mensual" && anoSeleccionado === currentYear ? mesActual : 0,
+    anoSeleccionado
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -46,36 +55,60 @@ export const AnalyticaImpuestos = () => {
             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
           ];
 
-          // Crear array con todos los 12 meses, agrupando múltiples registros sin duplicar utilidad base
+          // Crear array con todos los 12 meses
           const datosCompletos = meses.map((mes, index) => {
             const mesNumero = index + 1;
-            // Filtrar TODAS las transacciones del mes (puede haber múltiples pagos)
-            const transaccionesMes = (data || []).filter(t => t.mes === mesNumero);
             
-            if (transaccionesMes.length === 0) {
+            // ✅ CASO 1: Mes en curso (calcular ISR dinámicamente)
+            if (mesNumero === mesActual && anoSeleccionado === currentYear && utilidadMesActual) {
+              const utilidadActual = utilidadMesActual.utilidadAntesImpuestos || 0;
+              const isrCalculadoActual = utilidadActual > 0 
+                ? (utilidadActual * parseFloat(tasaISR)) / 100 
+                : 0;
+              
+              // Obtener ISR registrado (pagos realizados hasta ahora)
+              const transaccionesMes = (data || []).filter(t => t.mes === mesNumero);
+              const isrRegistrado = transaccionesMes.reduce((sum, t) => sum + Number(t.isr_real), 0);
+              
               return {
                 periodo: mes,
-                calculado: 0,
-                registrado: 0,
-                diferencia: 0
+                calculado: isrCalculadoActual, // ✅ Calculado dinámicamente
+                registrado: isrRegistrado,
+                diferencia: isrRegistrado - isrCalculadoActual
               };
             }
-
-            // La utilidad e ISR calculado son únicos por mes (no se suman entre pagos)
-            const utilidadMes = Number(transaccionesMes[0].utilidad_antes_impuestos);
-            const calculadoMes = Number(transaccionesMes[0].isr_calculado);
             
-            // Solo sumamos los ISR reales (pagos realizados)
-            const registradoMes = transaccionesMes.reduce((sum, t) => sum + Number(t.isr_real), 0);
+            // ✅ CASO 2: Meses pasados (usar datos históricos cerrados)
+            if (mesNumero < mesActual || anoSeleccionado < currentYear) {
+              const transaccionesMes = (data || []).filter(t => t.mes === mesNumero);
+              
+              if (transaccionesMes.length === 0) {
+                return {
+                  periodo: mes,
+                  calculado: 0,
+                  registrado: 0,
+                  diferencia: 0
+                };
+              }
+              
+              // Usar datos históricos guardados
+              const calculadoMes = Number(transaccionesMes[0].isr_calculado);
+              const registradoMes = transaccionesMes.reduce((sum, t) => sum + Number(t.isr_real), 0);
+              
+              return {
+                periodo: mes,
+                calculado: calculadoMes, // ✅ Dato histórico cerrado
+                registrado: registradoMes,
+                diferencia: registradoMes - calculadoMes
+              };
+            }
             
-            // La diferencia es ISR registrado - ISR calculado del mes
-            const diferenciaMes = registradoMes - calculadoMes;
-            
+            // ✅ CASO 3: Meses futuros (mostrar $0)
             return {
               periodo: mes,
-              calculado: calculadoMes,
-              registrado: registradoMes,
-              diferencia: Math.abs(diferenciaMes)
+              calculado: 0,
+              registrado: 0,
+              diferencia: 0
             };
           });
 
@@ -121,7 +154,7 @@ export const AnalyticaImpuestos = () => {
               periodo: ano,
               calculado: valores.calculado,
               registrado: valores.registrado,
-              diferencia: Math.abs(valores.registrado - valores.calculado)
+              diferencia: valores.registrado - valores.calculado
             }))
             .sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
 
@@ -151,10 +184,31 @@ export const AnalyticaImpuestos = () => {
       )
       .subscribe();
 
+    // Suscripción adicional para actualizar cuando cambien asientos del mes actual
+    const channelAsientos = supabase
+      .channel('impuestos_asientos_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'asientos_contables',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          // Solo refetch si estamos en el mes actual
+          if (tipoVista === "mensual" && anoSeleccionado === currentYear) {
+            fetchDatos();
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(channelAsientos);
     };
-  }, [user, anoSeleccionado, tipoVista, currentYear]);
+  }, [user, anoSeleccionado, tipoVista, currentYear, mesActual, utilidadMesActual]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', {
