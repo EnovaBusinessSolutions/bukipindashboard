@@ -58,6 +58,15 @@ const RegistroCapital = () => {
   const [dialogDetalleOpen, setDialogDetalleOpen] = useState(false);
   const [dialogCancelarOpen, setDialogCancelarOpen] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  
+  // Estados para validación de dividendos
+  const [dialogValidacionOpen, setDialogValidacionOpen] = useState(false);
+  const [datosValidacion, setDatosValidacion] = useState<{
+    capitalDisponible: number;
+    montoIntentado: number;
+    excedente: number;
+    accionistaNombre: string;
+  } | null>(null);
 
   const { mutate: cancelarTransaccion, isPending: isCancelando } = useCancelarTransaccionCapital();
 
@@ -94,17 +103,35 @@ const RegistroCapital = () => {
   const anioActual = new Date().getFullYear();
   const utilidadesAnioActual = resultadosMensuales?.reduce((sum, mes) => sum + mes.utilidadNeta, 0) || 0;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Función para calcular capital disponible de un accionista
+  const calcularCapitalDisponible = (accionistaIdParam: string) => {
+    const transaccionesActivas = transacciones.filter(t => t.estado === "activo");
     
-    if (!accionistaId) {
-      return;
-    }
+    const aportacionesAccionista = transaccionesActivas
+      .filter(t => t.accionista_id === accionistaIdParam && t.tipo_movimiento === "aportacion")
+      .reduce((sum, t) => sum + Number(t.monto), 0);
+    
+    const dividendosDistribuidosAccionista = transaccionesActivas
+      .filter(t => t.accionista_id === accionistaIdParam && t.tipo_movimiento === "dividendo")
+      .reduce((sum, t) => sum + Number(t.monto), 0);
+    
+    const accionista = accionistas.find(a => a.id === accionistaIdParam);
+    const porcentaje = accionista?.porcentaje_participacion || 0;
+    
+    // Utilidades proporcionales del año actual
+    const utilidadesProporcionales = (utilidadesAnioActual * porcentaje) / 100;
+    
+    const capitalDisponible = aportacionesAccionista + utilidadesProporcionales - dividendosDistribuidosAccionista;
+    
+    return {
+      aportaciones: aportacionesAccionista,
+      utilidades: utilidadesProporcionales,
+      dividendosDistribuidos: dividendosDistribuidosAccionista,
+      disponible: capitalDisponible
+    };
+  };
 
-    if (!monto || parseFloat(monto) <= 0) {
-      return;
-    }
-
+  const procederConRegistro = () => {
     const accionista = accionistas.find(a => a.id === accionistaId);
     if (!accionista) return;
 
@@ -124,6 +151,42 @@ const RegistroCapital = () => {
         setFecha(new Date());
       }
     });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!accionistaId) {
+      return;
+    }
+
+    if (!monto || parseFloat(monto) <= 0) {
+      return;
+    }
+
+    const accionista = accionistas.find(a => a.id === accionistaId);
+    if (!accionista) return;
+
+    // Validar capital disponible solo para dividendos
+    if (tipoMovimiento === "dividendo") {
+      const { disponible } = calcularCapitalDisponible(accionistaId);
+      const montoIntentado = parseFloat(monto);
+      
+      if (montoIntentado > disponible) {
+        // Mostrar diálogo de advertencia
+        setDatosValidacion({
+          capitalDisponible: disponible,
+          montoIntentado: montoIntentado,
+          excedente: montoIntentado - disponible,
+          accionistaNombre: accionista.nombre
+        });
+        setDialogValidacionOpen(true);
+        return;
+      }
+    }
+
+    // Si pasa la validación o es aportación, proceder
+    procederConRegistro();
   };
 
   return (
@@ -230,6 +293,62 @@ const RegistroCapital = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Card Informativo de Capital Disponible (solo para dividendos) */}
+              {tipoMovimiento === "dividendo" && accionistaId && (() => {
+                const { aportaciones, utilidades, dividendosDistribuidos, disponible } = calcularCapitalDisponible(accionistaId);
+                const accionista = accionistas.find(a => a.id === accionistaId);
+                const isNegativo = disponible < 0;
+                
+                return (
+                  <Card className={cn(
+                    "border-2",
+                    isNegativo ? "border-destructive bg-destructive/5" : "border-primary bg-primary/5"
+                  )}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        {isNegativo && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                        Capital Disponible - {accionista?.nombre}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Aportaciones:</span>
+                        <span className="font-medium">
+                          ${aportaciones.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Utilidades {anioActual}:</span>
+                        <span className="font-medium">
+                          ${utilidades.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Distribuido:</span>
+                        <span className="font-medium text-destructive">
+                          -${dividendosDistribuidos.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="border-t pt-2 flex justify-between items-center">
+                        <span className="font-semibold">Disponible:</span>
+                        <span className={cn(
+                          "text-lg font-bold",
+                          isNegativo ? "text-destructive" : "text-primary"
+                        )}>
+                          ${disponible.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      {isNegativo && (
+                        <div className="flex items-start gap-2 mt-2 p-2 bg-destructive/10 rounded text-xs text-destructive">
+                          <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                          <p>Este accionista ya ha recibido más dividendos de lo disponible</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* Monto */}
               <div className="space-y-2">
@@ -910,6 +1029,78 @@ const RegistroCapital = () => {
             className="bg-red-600 hover:bg-red-700"
           >
             {isCancelando ? "Cancelando..." : "Confirmar Cancelación"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* AlertDialog para validación de exceso de dividendos */}
+    <AlertDialog open={dialogValidacionOpen} onOpenChange={setDialogValidacionOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Monto Excede Capital Disponible
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              <p>
+                El monto que intentas distribuir excede el capital disponible del accionista{" "}
+                <strong>{datosValidacion?.accionistaNombre}</strong>:
+              </p>
+              
+              <div className="p-4 bg-muted rounded-lg space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Capital Disponible:</span>
+                  <span className="font-semibold text-primary">
+                    ${datosValidacion?.capitalDisponible.toLocaleString("es-MX", { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Monto a Distribuir:</span>
+                  <span className="font-semibold">
+                    ${datosValidacion?.montoIntentado.toLocaleString("es-MX", { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })}
+                  </span>
+                </div>
+                <div className="border-t pt-2 flex justify-between">
+                  <span>Excedente:</span>
+                  <span className="font-bold text-destructive">
+                    ${datosValidacion?.excedente.toLocaleString("es-MX", { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })}
+                  </span>
+                </div>
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                ¿Deseas continuar con el registro de todos modos?
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => {
+            setDialogValidacionOpen(false);
+            setDatosValidacion(null);
+          }}>
+            Cancelar y Ajustar Monto
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setDialogValidacionOpen(false);
+              setDatosValidacion(null);
+              procederConRegistro();
+            }}
+            className="bg-destructive hover:bg-destructive/90"
+          >
+            Registrar de Todos Modos
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
