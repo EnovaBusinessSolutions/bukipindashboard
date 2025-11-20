@@ -272,6 +272,9 @@ const RegistroIngresos = () => {
     detallesPorPeriodo: []
   });
 
+  // Estado para movimientos de inventario (para analítica de ventas por producto)
+  const [movimientosInventario, setMovimientosInventario] = useState<any[]>([]);
+
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
   const [filtroFechaFin, setFiltroFechaFin] = useState("");
@@ -884,6 +887,60 @@ const RegistroIngresos = () => {
           return { ventasBrutas, descuentos, ventasNetas, otrosIngresos, totalIngresos };
         };
 
+        // Función para cargar movimientos de inventario para analítica
+        const cargarMovimientosInventario = async () => {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            
+            // Calcular rango de fechas según el filtro de período
+            let startDate: Date;
+            let endDate: Date = new Date();
+            
+            if (periodFilter === 'diario') {
+              startDate = new Date(fechaAnalisisDiario);
+              startDate.setHours(0, 0, 0, 0);
+              endDate = new Date(fechaAnalisisDiario);
+              endDate.setHours(23, 59, 59, 999);
+            } else if (periodFilter === 'mensual') {
+              startDate = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth(), 1);
+              endDate = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 0, 23, 59, 59, 999);
+            } else { // anual
+              startDate = new Date(fechaAnalisisMensual.getFullYear(), 0, 1);
+              endDate = new Date(fechaAnalisisMensual.getFullYear(), 11, 31, 23, 59, 59, 999);
+            }
+            
+            // Consultar movimientos de venta con información del producto
+            const { data: movimientos, error } = await supabase
+              .from('movimientos_inventario')
+              .select(`
+                *,
+                productos (
+                  id,
+                  nombre,
+                  precio_venta,
+                  imagen_url
+                )
+              `)
+              .eq('user_id', user.id)
+              .eq('tipo_movimiento', 'venta')
+              .gte('created_at', startDate.toISOString())
+              .lte('created_at', endDate.toISOString())
+              .order('created_at', { ascending: false });
+            
+            if (error) {
+              console.error('Error cargando movimientos:', error);
+              setMovimientosInventario([]);
+              return;
+            }
+            
+            setMovimientosInventario(movimientos || []);
+          } catch (error) {
+            console.error('Error en cargarMovimientosInventario:', error);
+            setMovimientosInventario([]);
+          }
+        };
+
         const [dia, mes, ano] = await Promise.all([
           calcularPeriodo('dia'),
           calcularPeriodo('mes'),
@@ -899,7 +956,63 @@ const RegistroIngresos = () => {
     };
 
     calcularTotales();
-  }, [fechaAnalisisDiario, fechaAnalisisMensual, transacciones]);
+    
+    // Cargar movimientos de inventario para analítica
+    const loadMovimientos = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        // Calcular rango de fechas según el filtro de período
+        let startDate: Date;
+        let endDate: Date = new Date();
+        
+        if (periodFilter === 'diario') {
+          startDate = new Date(fechaAnalisisDiario);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(fechaAnalisisDiario);
+          endDate.setHours(23, 59, 59, 999);
+        } else if (periodFilter === 'mensual') {
+          startDate = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth(), 1);
+          endDate = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 0, 23, 59, 59, 999);
+        } else { // anual
+          startDate = new Date(fechaAnalisisMensual.getFullYear(), 0, 1);
+          endDate = new Date(fechaAnalisisMensual.getFullYear(), 11, 31, 23, 59, 59, 999);
+        }
+        
+        // Consultar movimientos de venta con información del producto
+        const { data: movimientos, error } = await supabase
+          .from('movimientos_inventario')
+          .select(`
+            *,
+            productos (
+              id,
+              nombre,
+              precio_venta,
+              imagen_url
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('tipo_movimiento', 'venta')
+          .gte('created_at', startDate.toISOString())
+          .lte('created_at', endDate.toISOString())
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error cargando movimientos:', error);
+          setMovimientosInventario([]);
+          return;
+        }
+        
+        setMovimientosInventario(movimientos || []);
+      } catch (error) {
+        console.error('Error en loadMovimientos:', error);
+        setMovimientosInventario([]);
+      }
+    };
+    
+    loadMovimientos();
+  }, [fechaAnalisisDiario, fechaAnalisisMensual, periodFilter, transacciones]);
 
   // Función para cargar asientos contables relacionados con una transacción
   const loadAsientosContables = async (transaccionId: string) => {
@@ -4031,36 +4144,60 @@ const RegistroIngresos = () => {
                           );
                         }
                         
-                        // Calcular distribución por producto desde transacciones
-                        const productosVentas = filteredTransactions.reduce((acc, t) => {
-                          // Incluir TODAS las ventas
-                          const descripcionSinPrefijo = t.descripcion.replace('Venta de ', '').replace('Venta: ', '');
-                          const todosProdutos = [...productosServicios, ...productosInventarioData];
-                          const producto = todosProdutos.find(p => 
-                            p.nombre === t.descripcion || 
-                            p.nombre === descripcionSinPrefijo ||
-                            t.descripcion.includes(p.nombre)
-                          );
+                        // Calcular distribución por producto desde movimientos de inventario
+                        const productosVentas = movimientosInventario.reduce((acc, mov) => {
+                          const productoNombre = mov.productos?.nombre || "Producto sin nombre";
+                          const precioVenta = mov.productos?.precio_venta || 0;
+                          const cantidad = Math.abs(mov.cantidad); // Las ventas son negativas
+                          const montoVenta = cantidad * precioVenta;
                           
-                          // Si no tiene producto asignado, agruparlo en "Productos sin asignación"
-                          const productoKey = producto?.nombre || "Productos sin asignación";
-                          const tieneAsignacion = !!producto;
-                          
-                          if (!acc[productoKey]) {
-                            acc[productoKey] = {
-                              nombre: productoKey,
+                          if (!acc[productoNombre]) {
+                            acc[productoNombre] = {
+                              nombre: productoNombre,
                               transacciones: 0,
                               monto: 0,
-                              imagen: producto?.imagen_url,
-                              tieneAsignacion
+                              imagen: mov.productos?.imagen_url,
+                              tieneAsignacion: true
                             };
                           }
-                          acc[productoKey].transacciones += 1;
-                          acc[productoKey].monto += getMetricValue(t, metricType);
+                          
+                          acc[productoNombre].transacciones += 1;
+                          acc[productoNombre].monto += montoVenta;
                           
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
-                        
+
+                        // Agregar también productos precargados (servicios) desde transacciones
+                        filteredTransactions.forEach(t => {
+                          // Solo procesar si es tipo precargados y no está ya en productosVentas
+                          if (t.tipo_ingreso === 'precargados') {
+                            const descripcionSinPrefijo = t.descripcion
+                              .replace('Venta de ', '')
+                              .replace('Venta: ', '')
+                              .replace(/Venta múltiple \(\d+ productos\): /, ''); // Nueva regex
+                            
+                            const producto = productosServicios.find(p => 
+                              p.nombre === descripcionSinPrefijo ||
+                              t.descripcion.includes(p.nombre)
+                            );
+                            
+                            const productoKey = producto?.nombre || descripcionSinPrefijo;
+                            
+                            if (!productosVentas[productoKey]) {
+                              productosVentas[productoKey] = {
+                                nombre: productoKey,
+                                transacciones: 0,
+                                monto: 0,
+                                imagen: producto?.imagen_url,
+                                tieneAsignacion: !!producto
+                              };
+                            }
+                            
+                            productosVentas[productoKey].transacciones += 1;
+                            productosVentas[productoKey].monto += getMetricValue(t, metricType);
+                          }
+                        });
+
                         // Obtener total real desde asientos contables  
                         const totalRealProd = tipoIngresoAnalisis === "ventas"
                           ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
@@ -4070,7 +4207,7 @@ const RegistroIngresos = () => {
                         
                         // Ajustar proporcionalmente cada producto
                         const distribucionProductos: Record<string, number> = {};
-                        Object.entries(productosVentas).forEach(([key, data]) => {
+                        Object.entries(productosVentas).forEach(([key, data]: [string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }]) => {
                           distribucionProductos[key] = data.monto;
                         });
                         const distribucionAjustada = ajustarProporcionalmente(distribucionProductos, totalRealProd);
@@ -4080,7 +4217,7 @@ const RegistroIngresos = () => {
                           productosVentas[key].monto = distribucionAjustada[key] || 0;
                         });
                         
-                        const productosArray = Object.values(productosVentas).sort((a, b) => b.monto - a.monto);
+                        const productosArray = Object.values(productosVentas).sort((a: any, b: any) => b.monto - a.monto) as Array<{ nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>;
                         const totalGeneral = totalRealProd; // Usar el total real de asientos contables
                         const top10 = productosArray.slice(0, 10);
                         
