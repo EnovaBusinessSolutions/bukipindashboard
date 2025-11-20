@@ -4169,32 +4169,93 @@ const RegistroIngresos = () => {
 
                         // Agregar también productos precargados (servicios) desde transacciones
                         filteredTransactions.forEach(t => {
-                          // Solo procesar si es tipo precargados y no está ya en productosVentas
+                          // Solo procesar si es tipo precargados
                           if (t.tipo_ingreso === 'precargados') {
-                            const descripcionSinPrefijo = t.descripcion
-                              .replace('Venta de ', '')
-                              .replace('Venta: ', '')
-                              .replace(/Venta múltiple \(\d+ productos\): /, ''); // Nueva regex
+                            // Parsear la descripción para extraer todos los productos
+                            let productosPorProcesar: Array<{ nombre: string; cantidad: number }> = [];
                             
-                            const producto = productosServicios.find(p => 
-                              p.nombre === descripcionSinPrefijo ||
-                              t.descripcion.includes(p.nombre)
-                            );
-                            
-                            const productoKey = producto?.nombre || descripcionSinPrefijo;
-                            
-                            if (!productosVentas[productoKey]) {
-                              productosVentas[productoKey] = {
-                                nombre: productoKey,
-                                transacciones: 0,
-                                monto: 0,
-                                imagen: producto?.imagen_url,
-                                tieneAsignacion: !!producto
-                              };
+                            // Patrón 1: "Venta: Producto A (x2), Producto B (x1), Producto C (x3)"
+                            if (t.descripcion.startsWith('Venta: ')) {
+                              const productosSplit = t.descripcion.replace('Venta: ', '').split(', ');
+                              productosPorProcesar = productosSplit.map(productoStr => {
+                                const match = productoStr.match(/^(.+?) \(x(\d+)\)$/);
+                                if (match) {
+                                  return {
+                                    nombre: match[1].trim(),
+                                    cantidad: parseInt(match[2])
+                                  };
+                                }
+                                return {
+                                  nombre: productoStr.trim(),
+                                  cantidad: 1
+                                };
+                              });
+                            }
+                            // Patrón 2: "Venta de Producto A" (venta única)
+                            else if (t.descripcion.startsWith('Venta de ')) {
+                              const nombreProducto = t.descripcion.replace('Venta de ', '').trim();
+                              productosPorProcesar = [{
+                                nombre: nombreProducto,
+                                cantidad: 1
+                              }];
+                            }
+                            // Patrón 3: Cualquier otro formato
+                            else {
+                              productosPorProcesar = [{
+                                nombre: t.descripcion,
+                                cantidad: 1
+                              }];
                             }
                             
-                            productosVentas[productoKey].transacciones += 1;
-                            productosVentas[productoKey].monto += getMetricValue(t, metricType);
+                            // Calcular el monto total de esta transacción según la métrica
+                            const montoTransaccion = getMetricValue(t, metricType);
+                            
+                            // Calcular el precio base de cada producto en esta transacción
+                            const preciosProductos: Array<{ nombre: string; cantidad: number; precioBase: number }> = [];
+                            let sumaPreciosCatalogo = 0;
+                            
+                            productosPorProcesar.forEach(({ nombre, cantidad }) => {
+                              const productoEnCatalogo = productosServicios.find(p => 
+                                p.nombre.toLowerCase() === nombre.toLowerCase()
+                              );
+                              
+                              const precioBase = productoEnCatalogo?.precio || 0;
+                              preciosProductos.push({
+                                nombre: nombre,
+                                cantidad: cantidad,
+                                precioBase: precioBase
+                              });
+                              
+                              sumaPreciosCatalogo += precioBase * cantidad;
+                            });
+                            
+                            // Distribuir el monto de la transacción proporcionalmente entre los productos
+                            preciosProductos.forEach(({ nombre, cantidad, precioBase }) => {
+                              const productoEnCatalogo = productosServicios.find(p => 
+                                p.nombre.toLowerCase() === nombre.toLowerCase()
+                              );
+                              
+                              // Calcular proporción de este producto
+                              const subtotalProductoCatalogo = precioBase * cantidad;
+                              const proporcion = sumaPreciosCatalogo > 0 
+                                ? subtotalProductoCatalogo / sumaPreciosCatalogo 
+                                : 1 / preciosProductos.length; // Si no hay precios en catálogo, dividir equitativamente
+                              
+                              const montoProducto = montoTransaccion * proporcion;
+                              
+                              if (!productosVentas[nombre]) {
+                                productosVentas[nombre] = {
+                                  nombre: nombre,
+                                  transacciones: 0,
+                                  monto: 0,
+                                  imagen: productoEnCatalogo?.imagen_url,
+                                  tieneAsignacion: !!productoEnCatalogo
+                                };
+                              }
+                              
+                              productosVentas[nombre].transacciones += 1; // Contar cada producto como transacción
+                              productosVentas[nombre].monto += montoProducto;
+                            });
                           }
                         });
 
