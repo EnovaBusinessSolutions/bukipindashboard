@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 
 interface TransaccionImpuesto {
   id: string;
@@ -39,6 +40,9 @@ export const ResumenImpuestos = () => {
   const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentDate.getFullYear());
   const [detalleAsiento, setDetalleAsiento] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Obtener utilidades REALES del año desde asientos contables
+  const { data: resultadosMensuales } = useEstadoResultadosMensual(anoSeleccionado);
 
   useEffect(() => {
     if (!user) return;
@@ -161,37 +165,41 @@ export const ResumenImpuestos = () => {
     }
   };
 
-  // Agrupar transacciones por mes para evitar duplicar utilidad e ISR calculado
-  const transaccionesPorMes = transacciones.reduce((acc, t) => {
-    const key = `${t.mes}-${t.ano}`;
-    if (!acc[key]) {
-      acc[key] = {
-        utilidad: Number(t.utilidad_antes_impuestos), // Solo una vez por mes
-        calculado: Number(t.isr_calculado), // Solo una vez por mes
-        pagosReales: [],
-        diferencia: Number(t.diferencia)
-      };
-    }
-    acc[key].pagosReales.push(Number(t.isr_real));
-    return acc;
-  }, {} as Record<string, { utilidad: number; calculado: number; pagosReales: number[]; diferencia: number }>);
-
-  // Calcular totales correctamente
-  const totales = Object.values(transaccionesPorMes).reduce(
-    (acc, mes) => {
-      const realMes = mes.pagosReales.reduce((sum, pago) => sum + pago, 0);
-      return {
-        utilidad: acc.utilidad + mes.utilidad,
-        calculado: acc.calculado + mes.calculado,
-        real: acc.real + realMes,
-        diferencia: 0 // Se calcula al final
-      };
-    },
-    { utilidad: 0, calculado: 0, real: 0, diferencia: 0 }
-  );
+  // Calcular utilidad acumulada REAL del año (desde asientos contables)
+  const mesActual = currentDate.getMonth() + 1; // 1-12
+  const añoActual = currentDate.getFullYear();
   
-  // La diferencia total es: ISR registrado total - ISR calculado total
-  totales.diferencia = totales.real - totales.calculado;
+  // Solo acumular hasta el mes actual si estamos en el año actual
+  const mesesParaAcumular = anoSeleccionado === añoActual 
+    ? resultadosMensuales?.slice(0, mesActual) || []
+    : resultadosMensuales || [];
+
+  const utilidadAcumuladaReal = mesesParaAcumular.reduce(
+    (sum, mes) => sum + mes.utilidadAntesImpuestos, 
+    0
+  );
+
+  // ISR teórico que DEBERÍA calcularse (30% por defecto)
+  const tasaISR = 0.30;
+  const isrTeoricoAcumulado = utilidadAcumuladaReal > 0 
+    ? utilidadAcumuladaReal * tasaISR 
+    : 0;
+
+  // ISR registrado (lo que YA pagaste)
+  const isrRegistradoTotal = transacciones.reduce(
+    (sum, t) => sum + Number(t.isr_real), 
+    0
+  );
+
+  // Diferencia (cuánto falta o sobra)
+  const diferencia = isrRegistradoTotal - isrTeoricoAcumulado;
+
+  const totales = {
+    utilidad: utilidadAcumuladaReal,
+    calculado: isrTeoricoAcumulado,
+    real: isrRegistradoTotal,
+    diferencia: diferencia
+  };
 
   return (
     <div className="space-y-6">
@@ -238,19 +246,32 @@ export const ResumenImpuestos = () => {
       </Card>
 
       {/* Resumen General */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Utilidad Total</CardDescription>
+            <CardDescription>
+              Utilidad Acumulada {anoSeleccionado}
+              {anoSeleccionado === añoActual && ` (hasta ${meses[mesActual - 1]})`}
+            </CardDescription>
             <CardTitle className="text-2xl">{formatCurrency(totales.utilidad)}</CardTitle>
           </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              Calculada desde asientos contables
+            </p>
+          </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>ISR Calculado</CardDescription>
+            <CardDescription>ISR Teórico (30%)</CardDescription>
             <CardTitle className="text-2xl">{formatCurrency(totales.calculado)}</CardTitle>
           </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              Sobre utilidad acumulada del año
+            </p>
+          </CardContent>
         </Card>
 
         <Card>
@@ -258,8 +279,36 @@ export const ResumenImpuestos = () => {
             <CardDescription>ISR Registrado</CardDescription>
             <CardTitle className="text-2xl">{formatCurrency(totales.real)}</CardTitle>
           </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              {transacciones.length} pago{transacciones.length !== 1 ? 's' : ''} registrado{transacciones.length !== 1 ? 's' : ''}
+            </p>
+          </CardContent>
         </Card>
 
+        <Card className={`border-2 ${
+          diferencia > 0 ? 'border-amber-500' : 
+          diferencia < 0 ? 'border-red-500' : 
+          'border-green-500'
+        }`}>
+          <CardHeader className="pb-3">
+            <CardDescription>Diferencia</CardDescription>
+            <CardTitle className={`text-2xl ${
+              diferencia > 0 ? 'text-amber-600' : 
+              diferencia < 0 ? 'text-red-600' : 
+              'text-green-600'
+            }`}>
+              {diferencia > 0 ? '+' : ''}{formatCurrency(diferencia)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              {diferencia > 0 && '⚠️ Has pagado más de lo calculado'}
+              {diferencia < 0 && `❌ Falta pagar ${formatCurrency(Math.abs(diferencia))}`}
+              {diferencia === 0 && '✅ Estás al corriente'}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabla de Transacciones */}
