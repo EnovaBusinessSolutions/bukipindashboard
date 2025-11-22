@@ -18,10 +18,12 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Trash2, Plus, Search, Phone, Mail, Upload, Globe } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Building2, Edit, Trash2, Plus, Search, Phone, Mail, Upload, Globe, CreditCard, FileText, Copy } from "lucide-react";
 import { useAutoridadesFiscales, AutoridadFiscal } from "@/hooks/useAutoridadesFiscales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +36,8 @@ export default function CatalogoAutoridadesFiscales() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [selectedAutoridad, setSelectedAutoridad] = useState<AutoridadFiscal | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -53,6 +57,11 @@ export default function CatalogoAutoridadesFiscales() {
     aut.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     aut.pais.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleViewDetails = (autoridad: AutoridadFiscal) => {
+    setSelectedAutoridad(autoridad);
+    setShowDetailsDialog(true);
+  };
 
   const handleOpenDialog = (autoridad?: AutoridadFiscal) => {
     if (autoridad) {
@@ -294,7 +303,11 @@ export default function CatalogoAutoridadesFiscales() {
                 </TableRow>
               ) : (
                 autoridadesFiltradas.map((autoridad) => (
-                  <TableRow key={autoridad.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableRow 
+                    key={autoridad.id} 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleViewDetails(autoridad)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
@@ -549,6 +562,156 @@ export default function CatalogoAutoridadesFiscales() {
               {uploading ? "Guardando..." : "Guardar"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Vista de Detalles */}
+      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          {selectedAutoridad && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-4">
+                  {selectedAutoridad.logo_url ? (
+                    <img 
+                      src={selectedAutoridad.logo_url} 
+                      alt={selectedAutoridad.nombre}
+                      className="w-16 h-16 object-contain rounded-lg border"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
+                      <Building2 className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <DialogTitle className="text-2xl">{selectedAutoridad.nombre}</DialogTitle>
+                    <Badge variant="secondary" className="mt-2">
+                      {selectedAutoridad.pais}
+                    </Badge>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-6 mt-6">
+                {/* Información General */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <FileText className="w-4 h-4" />
+                    Información General
+                  </div>
+                  <div className="h-px bg-border" />
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">RFC/Identificador:</span>
+                      <p className="font-medium mt-1">{selectedAutoridad.rfc || "No especificado"}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">País:</span>
+                      <p className="font-medium mt-1">{selectedAutoridad.pais}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Información de Contacto */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Phone className="w-4 h-4" />
+                    Información de Contacto
+                  </div>
+                  <div className="h-px bg-border" />
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Teléfono:</span>
+                      <p className="font-medium mt-1">{selectedAutoridad.telefono || "No especificado"}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Email:</span>
+                      <p className="font-medium mt-1">{selectedAutoridad.email || "No especificado"}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Sitio Web:</span>
+                      {selectedAutoridad.sitio_web ? (
+                        <a 
+                          href={selectedAutoridad.sitio_web} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="font-medium mt-1 flex items-center gap-2 text-primary hover:underline"
+                        >
+                          <Globe className="w-4 h-4" />
+                          {selectedAutoridad.sitio_web}
+                        </a>
+                      ) : (
+                        <p className="font-medium mt-1">No especificado</p>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Dirección:</span>
+                      <p className="font-medium mt-1">{selectedAutoridad.direccion || "No especificado"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Información Bancaria */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <CreditCard className="w-4 h-4" />
+                    Información Bancaria
+                  </div>
+                  <div className="h-px bg-border" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Cuenta Bancaria / CLABE:</span>
+                    {selectedAutoridad.cuenta_bancaria ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="font-medium font-mono">{selectedAutoridad.cuenta_bancaria}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedAutoridad.cuenta_bancaria || "");
+                            toast({ title: "✅ Cuenta copiada al portapapeles" });
+                          }}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="font-medium mt-1">No especificado</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notas */}
+                {selectedAutoridad.notas && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <FileText className="w-4 h-4" />
+                      Notas
+                    </div>
+                    <div className="h-px bg-border" />
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {selectedAutoridad.notas}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDetailsDialog(false);
+                    handleOpenDialog(selectedAutoridad);
+                  }}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar
+                </Button>
+                <Button onClick={() => setShowDetailsDialog(false)}>
+                  Cerrar
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
