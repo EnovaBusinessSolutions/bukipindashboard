@@ -55,6 +55,7 @@ import {
   AreaChart
 } from "recharts";
 import { useAnalyticsCuentasPorCobrar, useCuentasPorCobrarDetalle } from "@/hooks/useAnalyticsCuentasPorCobrar";
+import { formatCurrency } from "@/lib/utils";
 
 const COLORS = {
   primary: "hsl(var(--chart-1))",
@@ -517,7 +518,7 @@ const CuentasPorCobrar = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    ${totalPorCobrar.toLocaleString('es-CO')}
+                    {formatCurrency(totalPorCobrar)}
                   </div>
                 </CardContent>
               </Card>
@@ -707,14 +708,14 @@ const CuentasPorCobrar = () => {
                               <TableCell>
                                 <div className="space-y-1">
                                   <div className="text-lg font-bold text-primary">
-                                    ${grupo.totalPendiente.toLocaleString('es-CO')}
+                                    {formatCurrency(grupo.totalPendiente)}
                                   </div>
                                   <div className="text-sm text-muted-foreground">
-                                    Total: ${grupo.totalOriginal.toLocaleString('es-CO')}
+                                    Total: {formatCurrency(grupo.totalOriginal)}
                                   </div>
                                   {grupo.totalPagado > 0 && (
                                     <div className="text-sm text-success">
-                                      Pagado: ${grupo.totalPagado.toLocaleString('es-CO')}
+                                      Pagado: {formatCurrency(grupo.totalPagado)}
                                     </div>
                                   )}
                                 </div>
@@ -742,28 +743,28 @@ const CuentasPorCobrar = () => {
                                       </div>
                                       
                                       {/* Desglose de Montos */}
-                                      <div className="col-span-3">
+                                       <div className="col-span-3">
                                         <div className="space-y-1 text-sm">
                                           <div className="flex justify-between">
                                             <span className="text-muted-foreground">Total:</span>
-                                            <span className="font-medium">${cuenta.monto_total.toLocaleString('es-CO')}</span>
+                                            <span className="font-medium">{formatCurrency(cuenta.monto_total)}</span>
                                           </div>
                                           {cuenta.monto_descuento && cuenta.monto_descuento > 0 && (
                                             <div className="flex justify-between">
                                               <span className="text-muted-foreground">Descuento:</span>
-                                              <span className="text-destructive">-${cuenta.monto_descuento.toLocaleString('es-CO')}</span>
+                                              <span className="text-destructive">-{formatCurrency(cuenta.monto_descuento)}</span>
                                             </div>
                                           )}
                                           {cuenta.monto_pagado > 0 && (
                                             <div className="flex justify-between">
                                               <span className="text-muted-foreground">Pagado:</span>
-                                              <span className="text-success">${cuenta.monto_pagado.toLocaleString('es-CO')}</span>
+                                              <span className="text-success">{formatCurrency(cuenta.monto_pagado)}</span>
                                             </div>
                                           )}
                                           <div className="flex justify-between border-t pt-1">
                                             <span className="font-medium">Pendiente:</span>
                                             <span className="font-bold text-primary">
-                                              ${cuenta.monto_pendiente?.toLocaleString('es-CO') || 0}
+                                              {formatCurrency(cuenta.monto_pendiente || 0)}
                                             </span>
                                           </div>
                                         </div>
@@ -1215,29 +1216,29 @@ const CuentasPorCobrar = () => {
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="text-right font-medium">
-                                    ${transaccion.monto_total.toLocaleString('es-CO')}
+                                    {formatCurrency(transaccion.monto_total)}
                                   </TableCell>
                                   <TableCell className="text-right">
                                     {transaccion.monto_descuento > 0 ? (
                                       <span className="text-destructive">
-                                        -${transaccion.monto_descuento.toLocaleString('es-CO')}
+                                        -{formatCurrency(transaccion.monto_descuento)}
                                       </span>
                                     ) : (
                                       <span className="text-muted-foreground">-</span>
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right font-semibold">
-                                    ${transaccion.monto_neto.toLocaleString('es-CO')}
+                                    {formatCurrency(transaccion.monto_neto)}
                                   </TableCell>
                                   <TableCell className="text-right">
                                     <span className="text-success font-semibold">
-                                      ${transaccion.monto_pagado.toLocaleString('es-CO')}
+                                      {formatCurrency(transaccion.monto_pagado)}
                                     </span>
                                   </TableCell>
                                   <TableCell className="text-right">
                                     {transaccion.monto_pendiente > 0 ? (
                                       <span className="text-destructive font-semibold">
-                                        ${transaccion.monto_pendiente.toLocaleString('es-CO')}
+                                        {formatCurrency(transaccion.monto_pendiente)}
                                       </span>
                                     ) : (
                                       <span className="text-muted-foreground">$0</span>
@@ -1342,7 +1343,7 @@ const CuentasPorCobrar = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        ${analytics.totalPendiente.toLocaleString('es-CO')}
+                        {formatCurrency(analytics.totalPendiente)}
                       </div>
                     </CardContent>
                   </Card>
@@ -1412,7 +1413,7 @@ const CuentasPorCobrar = () => {
                             border: '1px solid hsl(var(--border))',
                             borderRadius: '8px'
                           }}
-                          formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Monto']}
+                          formatter={(value: number) => [formatCurrency(value), 'Monto']}
                           labelFormatter={(label) => `${label}`}
                         />
                         <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]} />
@@ -1529,9 +1530,8 @@ const CuentasPorCobrar = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Total Deuda:</span>
                         <Badge variant="default" className="text-lg px-3 py-1">
-                          ${(analytics?.cxcPorClienteApilado || [])
-                            .reduce((sum, c) => sum + c.total, 0)
-                            .toLocaleString('es-CO')}
+                          {formatCurrency((analytics?.cxcPorClienteApilado || [])
+                            .reduce((sum, c) => sum + c.total, 0))}
                         </Badge>
                       </div>
                     </div>
@@ -1607,7 +1607,7 @@ const CuentasPorCobrar = () => {
                               vencido61_90: "Vencido 61-90 días",
                               vencidoMas90: "Vencido +90 días"
                             };
-                            return [`$${value.toLocaleString('es-CO')}`, labels[name] || name];
+                            return [formatCurrency(value), labels[name] || name];
                           }}
                           labelFormatter={(label) => {
                             const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
@@ -1629,13 +1629,13 @@ const CuentasPorCobrar = () => {
                                           />
                                           {entry.name}:
                                         </span>
-                                        <span className="font-medium">${entry.value.toLocaleString('es-CO')}</span>
+                                        <span className="font-medium">{formatCurrency(entry.value)}</span>
                                       </div>
                                     )
                                   ))}
                                   <div className="flex justify-between gap-4 pt-2 mt-2 border-t border-border font-bold text-primary">
                                     <span>TOTAL:</span>
-                                    <span>${cliente?.total.toLocaleString('es-CO') || 0}</span>
+                                    <span>{formatCurrency(cliente?.total || 0)}</span>
                                   </div>
                                 </div>
                               );
@@ -1669,7 +1669,7 @@ const CuentasPorCobrar = () => {
                         <SelectContent>
                           {(analytics?.cxcPorClienteApilado || []).map((cliente) => (
                             <SelectItem key={cliente.cliente} value={cliente.cliente}>
-                              {cliente.cliente} - ${cliente.total.toLocaleString('es-CO')}
+                              {cliente.cliente} - {formatCurrency(cliente.total)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1716,7 +1716,7 @@ const CuentasPorCobrar = () => {
                               border: '1px solid hsl(var(--border))',
                               borderRadius: '8px'
                             }}
-                            formatter={(value: number) => [`$${value.toLocaleString('es-CO')}`, 'Monto']}
+                            formatter={(value: number) => [formatCurrency(value), 'Monto']}
                             labelFormatter={(label) => `${label}`}
                           />
                           <Bar 
@@ -1726,7 +1726,7 @@ const CuentasPorCobrar = () => {
                             label={{
                               position: 'top',
                               fill: 'hsl(var(--foreground))',
-                              formatter: (value: number) => `$${value.toLocaleString('es-CO')}`
+                              formatter: (value: number) => formatCurrency(value)
                             }}
                           />
                         </BarChart>
@@ -1850,7 +1850,7 @@ const CuentasPorCobrar = () => {
                           <TableCell className="text-right">
                             {detalle.debe > 0 ? (
                               <span className="font-semibold text-primary">
-                                ${detalle.debe.toLocaleString('es-CO')}
+                                {formatCurrency(detalle.debe)}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
@@ -1859,7 +1859,7 @@ const CuentasPorCobrar = () => {
                           <TableCell className="text-right">
                             {detalle.haber > 0 ? (
                               <span className="font-semibold text-secondary">
-                                ${detalle.haber.toLocaleString('es-CO')}
+                                {formatCurrency(detalle.haber)}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
@@ -1875,17 +1875,15 @@ const CuentasPorCobrar = () => {
                     <div className="flex justify-between items-center font-semibold">
                       <span>Total Debe:</span>
                       <span className="text-primary">
-                        ${asientosContables.detalle_asientos
-                          ?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0)
-                          .toLocaleString('es-CO')}
+                        {formatCurrency(asientosContables.detalle_asientos
+                          ?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center font-semibold">
                       <span>Total Haber:</span>
                       <span className="text-secondary">
-                        ${asientosContables.detalle_asientos
-                          ?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0)
-                          .toLocaleString('es-CO')}
+                        {formatCurrency(asientosContables.detalle_asientos
+                          ?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center font-bold text-lg pt-2 border-t">
@@ -1896,10 +1894,10 @@ const CuentasPorCobrar = () => {
                           (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
                         ) < 0.01 ? 'text-success' : 'text-destructive'
                       }>
-                        ${(
+                        {formatCurrency((
                           (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
                           (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
-                        ).toLocaleString('es-CO')}
+                        ))}
                       </span>
                     </div>
                     {Math.abs(
@@ -2015,8 +2013,8 @@ const CuentasPorCobrar = () => {
                   <>
                     Cliente: {factura.cliente_nombre || 'Sin especificar'}<br/>
                     Descripción: {factura.descripcion}<br/>
-                    Monto Total: ${factura.monto_total.toLocaleString('es-CO')}<br/>
-                    Monto Pendiente: ${(factura.monto_pendiente || 0).toLocaleString('es-CO')}
+                    Monto Total: {formatCurrency(factura.monto_total)}<br/>
+                    Monto Pendiente: {formatCurrency(factura.monto_pendiente || 0)}
                   </>
                 ) : null;
               })()}
@@ -2051,7 +2049,7 @@ const CuentasPorCobrar = () => {
                             </div>
                             <div>
                               <div className="font-semibold text-lg">
-                                ${pago.monto.toLocaleString('es-CO')}
+                                {formatCurrency(pago.monto)}
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 {format(new Date(pago.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
@@ -2093,7 +2091,7 @@ const CuentasPorCobrar = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Monto total pagado:</span>
                       <span className="text-lg font-bold text-success">
-                        ${historialPagos.reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-CO')}
+                        {formatCurrency(historialPagos.reduce((sum: number, p: any) => sum + p.monto, 0))}
                       </span>
                     </div>
                   </div>

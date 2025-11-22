@@ -198,6 +198,28 @@ serve(async (req) => {
       throw new Error(`Error al crear transacción: ${transaccionError.message}`)
     }
 
+    // 1.1. Registrar el pago inicial si existe
+    if (requestData.montoPagado > 0) {
+      const { error: pagoInicialError } = await supabaseClient
+        .from('transacciones_cobros_pagos')
+        .insert({
+          user_id: userId,
+          tipo_transaccion: 'cobro',
+          referencia_id: transaccion.id,
+          referencia_tabla: 'transacciones_ingresos',
+          monto: requestData.montoPagado,
+          metodo_pago: requestData.metodoPago,
+          fecha: new Date().toISOString().split('T')[0],
+          descripcion: `Pago inicial - ${requestData.descripcion}`
+        })
+      
+      if (pagoInicialError) {
+        console.error('Error al registrar pago inicial:', pagoInicialError.message)
+      } else {
+        console.log(`✅ Pago inicial registrado: $${requestData.montoPagado}`)
+      }
+    }
+
     // 2. Generar número de asiento
     const { data: numeroAsiento, error: numeroError } = await supabaseClient
       .rpc('generate_asiento_number', { p_user_id: userId })

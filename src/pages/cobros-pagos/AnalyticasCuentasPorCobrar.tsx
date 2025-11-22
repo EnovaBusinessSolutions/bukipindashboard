@@ -28,6 +28,7 @@ import {
   BarChart3
 } from "lucide-react";
 import { useAnalyticsCuentasPorCobrar, useCuentasPorCobrarDetalle } from "@/hooks/useAnalyticsCuentasPorCobrar";
+import { formatCurrency } from "@/lib/utils";
 
 const COLORS = {
   primary: "hsl(var(--primary))",
@@ -95,7 +96,7 @@ const AnalyticasCuentasPorCobrar = () => {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${analytics.totalPendiente.toLocaleString()}</div>
+              <div className="text-2xl font-bold">{formatCurrency(analytics.totalPendiente)}</div>
               <p className="text-xs text-muted-foreground">
                 Monto total pendiente
               </p>
@@ -121,7 +122,7 @@ const AnalyticasCuentasPorCobrar = () => {
               <Target className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${analytics.promedioDeuda.toLocaleString()}</div>
+              <div className="text-2xl font-bold">{formatCurrency(analytics.promedioDeuda)}</div>
               <p className="text-xs text-muted-foreground">
                 Deuda promedio
               </p>
@@ -166,7 +167,7 @@ const AnalyticasCuentasPorCobrar = () => {
                     <XAxis type="number" />
                     <YAxis dataKey="cliente" type="category" width={100} />
                     <Tooltip 
-                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
+                      formatter={(value: number) => [formatCurrency(value), 'Monto']}
                       labelFormatter={(label) => `Cliente: ${label}`}
                     />
                     <Bar dataKey="monto" fill={COLORS.primary} />
@@ -207,7 +208,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']} />
+                    <Tooltip formatter={(value: number) => [formatCurrency(value), 'Monto']} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -232,7 +233,7 @@ const AnalyticasCuentasPorCobrar = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="mes" />
                     <YAxis />
-                    <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']} />
+                    <Tooltip formatter={(value: number) => [formatCurrency(value), 'Monto']} />
                     <Area 
                       type="monotone" 
                       dataKey="monto" 
@@ -282,7 +283,7 @@ const AnalyticasCuentasPorCobrar = () => {
                           <span className="text-sm font-medium">{estado}</span>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-semibold">${montoTotal.toLocaleString()}</div>
+                          <div className="text-sm font-semibold">{formatCurrency(montoTotal)}</div>
                           <div className="text-xs text-muted-foreground">{porcentaje}%</div>
                         </div>
                       </div>
@@ -325,7 +326,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold">${cliente.monto.toLocaleString()}</div>
+                        <div className="text-xl font-bold">{formatCurrency(cliente.monto)}</div>
                         <Badge variant="outline">
                           Total adeudado
                         </Badge>
@@ -337,7 +338,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         <div key={cuenta.id} className="bg-muted/50 rounded p-3 text-sm">
                           <div className="font-medium truncate">{cuenta.descripcion}</div>
                           <div className="text-muted-foreground">
-                            ${cuenta.monto_pendiente.toLocaleString()}
+                            {formatCurrency(cuenta.monto_pendiente)}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge 

@@ -6,9 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number | undefined | null, decimals: number = 2): string {
-  if (amount === undefined || amount === null) return "0.00";
+  if (amount === undefined || amount === null) return "$0.00";
   
-  return amount.toLocaleString('en-US', {
+  return "$" + amount.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   });
