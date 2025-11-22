@@ -32,14 +32,14 @@ export const useAutoridadesFiscales = () => {
       if (!user) throw new Error("Usuario no autenticado");
 
       const { data, error } = await supabase
-        .from("autoridades_fiscales")
+        .from("autoridades_fiscales" as any)
         .select("*")
         .eq("user_id", user.id)
         .eq("activo", true)
         .order("nombre", { ascending: true });
 
       if (error) throw error;
-      return data as AutoridadFiscal[];
+      return data as unknown as AutoridadFiscal[];
     },
   });
 
@@ -73,7 +73,7 @@ export const useAutoridadesFiscales = () => {
 
       // Verificar duplicados
       const { data: existente } = await supabase
-        .from("autoridades_fiscales")
+        .from("autoridades_fiscales" as any)
         .select("id")
         .eq("user_id", user.id)
         .eq("nombre", data.nombre)
@@ -85,7 +85,7 @@ export const useAutoridadesFiscales = () => {
       }
 
       const { data: nuevaAutoridad, error } = await supabase
-        .from("autoridades_fiscales")
+        .from("autoridades_fiscales" as any)
         .insert({
           ...data,
           user_id: user.id,
@@ -95,7 +95,7 @@ export const useAutoridadesFiscales = () => {
         .single();
 
       if (error) throw error;
-      return nuevaAutoridad as AutoridadFiscal;
+      return nuevaAutoridad as unknown as AutoridadFiscal;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
@@ -117,7 +117,7 @@ export const useAutoridadesFiscales = () => {
   const actualizarAutoridad = useMutation({
     mutationFn: async ({ id, ...data }: Partial<AutoridadFiscal> & { id: string }) => {
       const { error } = await supabase
-        .from("autoridades_fiscales")
+        .from("autoridades_fiscales" as any)
         .update(data)
         .eq("id", id);
 
@@ -154,7 +154,7 @@ export const useAutoridadesFiscales = () => {
       }
 
       const { error } = await supabase
-        .from("autoridades_fiscales")
+        .from("autoridades_fiscales" as any)
         .update({ activo: false })
         .eq("id", id);
 
