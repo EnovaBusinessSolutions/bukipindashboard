@@ -91,6 +91,57 @@ export type Database = {
           },
         ]
       }
+      autoridades_fiscales: {
+        Row: {
+          activo: boolean
+          created_at: string
+          direccion: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          nombre: string
+          notas: string | null
+          pais: string
+          rfc: string | null
+          sitio_web: string | null
+          telefono: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          nombre: string
+          notas?: string | null
+          pais: string
+          rfc?: string | null
+          sitio_web?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          nombre?: string
+          notas?: string | null
+          pais?: string
+          rfc?: string | null
+          sitio_web?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
           activo: boolean
