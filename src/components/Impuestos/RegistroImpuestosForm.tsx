@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { useAutoridadesFiscales } from "@/hooks/useAutoridadesFiscales";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export const RegistroImpuestosForm = () => {
   const { user } = useAuth();
@@ -25,12 +27,12 @@ export const RegistroImpuestosForm = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [tipoPago, setTipoPago] = useState<string>("total");
   const [fechaVencimiento, setFechaVencimiento] = useState<string>("");
-  const [proveedorNombre, setProveedorNombre] = useState<string>("SAT - Servicio de Administración Tributaria");
-  const [proveedorRfc, setProveedorRfc] = useState<string>("SAT970701NN3");
+  const [autoridadSeleccionada, setAutoridadSeleccionada] = useState<string>("");
   const [metodoPago, setMetodoPago] = useState<string>("transferencia");
   const [montoPagado, setMontoPagado] = useState<string>("");
 
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
+  const { autoridades } = useAutoridadesFiscales();
 
   useEffect(() => {
     const verificarRegistrosExistentes = async () => {
@@ -273,6 +275,11 @@ export const RegistroImpuestosForm = () => {
         montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
         tipoPagoFinal = 'parcial';
       }
+
+      // Obtener datos de la autoridad seleccionada
+      const autoridadData = autoridades.find(a => a.id === autoridadSeleccionada);
+      const proveedorNombre = autoridadData?.nombre || "SAT - Servicio de Administración Tributaria";
+      const proveedorRfc = autoridadData?.rfc || "SAT970701NN3";
 
       const { data: egresoData, error: egresoError } = await supabase
         .from('transacciones_egresos')
@@ -885,23 +892,43 @@ export const RegistroImpuestosForm = () => {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="proveedor-nombre">Proveedor</Label>
-            <Input
-              id="proveedor-nombre"
-              type="text"
-              value={proveedorNombre}
-              onChange={(e) => setProveedorNombre(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="proveedor-rfc">RFC del Proveedor</Label>
-            <Input
-              id="proveedor-rfc"
-              type="text"
-              value={proveedorRfc}
-              onChange={(e) => setProveedorRfc(e.target.value)}
-            />
+            <Label htmlFor="autoridad-fiscal">Autoridad Fiscal *</Label>
+            <Select value={autoridadSeleccionada} onValueChange={setAutoridadSeleccionada}>
+              <SelectTrigger id="autoridad-fiscal">
+                <SelectValue placeholder="Selecciona una autoridad fiscal" />
+              </SelectTrigger>
+              <SelectContent>
+                {autoridades.length === 0 ? (
+                  <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                    No hay autoridades fiscales registradas.
+                    <br />
+                    Ve al tab "Catálogo" para agregar una.
+                  </div>
+                ) : (
+                  autoridades.map((aut) => (
+                    <SelectItem key={aut.id} value={aut.id}>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={aut.logo_url || undefined} />
+                          <AvatarFallback className="text-xs">
+                            {aut.nombre.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{aut.nombre}</span>
+                        {aut.pais !== "México" && (
+                          <span className="text-xs text-muted-foreground">({aut.pais})</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            {autoridadSeleccionada && (
+              <p className="text-xs text-muted-foreground">
+                RFC: {autoridades.find(a => a.id === autoridadSeleccionada)?.rfc || "N/A"}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
