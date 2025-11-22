@@ -45,6 +45,7 @@ export default function CatalogoAutoridadesFiscales() {
     email: "",
     sitio_web: "",
     direccion: "",
+    cuenta_bancaria: "",
     notas: "",
   });
 
@@ -65,6 +66,7 @@ export default function CatalogoAutoridadesFiscales() {
         email: autoridad.email || "",
         sitio_web: autoridad.sitio_web || "",
         direccion: autoridad.direccion || "",
+        cuenta_bancaria: autoridad.cuenta_bancaria || "",
         notas: autoridad.notas || "",
       });
       if (autoridad.logo_url) {
@@ -81,6 +83,7 @@ export default function CatalogoAutoridadesFiscales() {
         email: "",
         sitio_web: "",
         direccion: "",
+        cuenta_bancaria: "",
         notas: "",
       });
       setLogoFile(null);
@@ -513,6 +516,16 @@ export default function CatalogoAutoridadesFiscales() {
                 value={formData.direccion}
                 onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
                 placeholder="Dirección física de la autoridad"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cuenta_bancaria">Cuenta Bancaria / CLABE</Label>
+              <Input
+                id="cuenta_bancaria"
+                value={formData.cuenta_bancaria}
+                onChange={(e) => setFormData({ ...formData, cuenta_bancaria: e.target.value })}
+                placeholder="Ej: 012180001234567890"
               />
             </div>
 

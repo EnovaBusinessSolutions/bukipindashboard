@@ -15,6 +15,7 @@ export interface AutoridadFiscal {
   sitio_web: string | null;
   direccion: string | null;
   notas: string | null;
+  cuenta_bancaria: string | null;
   activo: boolean;
   created_at: string;
   updated_at: string;
