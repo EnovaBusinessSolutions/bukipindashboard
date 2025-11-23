@@ -173,8 +173,8 @@ const Balanza = () => {
           !aDescLower.includes('cancelación de egreso:') &&
           !aDescLower.includes('cancelacion de egreso:')) return false;
       
-      // La reversión contiene "Reversión: " + descripción original (remover todas las variantes)
-      const descripcionOriginal = a.descripcion
+      // Limpiar descripción de reversión: remover prefijos y sufijos
+      const descripcionReversion = a.descripcion
         .replace(/REVERSIÓN:\s*/i, '')
         .replace(/Reversión:\s*/i, '')
         .replace(/REVERSION:\s*/i, '')
@@ -182,10 +182,24 @@ const Balanza = () => {
         .replace(/CANCELACIÓN DE EGRESO:\s*/i, '')
         .replace(/Cancelación de egreso:\s*/i, '')
         .replace(/CANCELACION DE EGRESO:\s*/i, '')
-        .replace(/Cancelacion de egreso:\s*/i, '');
+        .replace(/Cancelacion de egreso:\s*/i, '')
+        .replace(/\s*-\s*Motivo:.*$/i, '')
+        .replace(/\s*\(Cancelado:.*\)$/i, '')
+        .trim();
       
-      return descripcionOriginal.toLowerCase().includes(asiento.descripcion.substring(0, 30).toLowerCase()) ||
-             asiento.descripcion.toLowerCase().includes(descripcionOriginal.substring(0, 30).toLowerCase());
+      // Limpiar descripción del asiento original: remover prefijos de tipo
+      const descripcionAsiento = asiento.descripcion
+        .replace(/^Egreso:\s*/i, '')
+        .replace(/^Ingreso:\s*/i, '')
+        .replace(/^Capital:\s*/i, '')
+        .trim();
+      
+      // Comparar los conceptos limpios (primeros 20 caracteres)
+      const conceptoReversion = descripcionReversion.toLowerCase();
+      const conceptoAsiento = descripcionAsiento.toLowerCase();
+      
+      return conceptoReversion.includes(conceptoAsiento.substring(0, 20)) ||
+             conceptoAsiento.includes(conceptoReversion.substring(0, 20));
     });
     
     return {
