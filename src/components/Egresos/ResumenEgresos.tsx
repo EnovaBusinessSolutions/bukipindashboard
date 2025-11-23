@@ -84,6 +84,9 @@ const ResumenEgresos = () => {
       // Filtrar solo costos y gastos
       if (t.tipo_egreso !== 'costo' && t.tipo_egreso !== 'gasto' && t.tipo_egreso !== 'otro') return false;
       
+      // CRÍTICO: Excluir transacciones canceladas
+      if (t.estado === 'cancelado') return false;
+      
       const fecha = new Date(t.created_at);
       
       // Filtro por búsqueda
@@ -164,6 +167,7 @@ const ResumenEgresos = () => {
       tipo_pago: null,
       monto_pagado: c.monto,
       monto_pendiente: 0,
+      estado: 'activo', // Costos de inventario siempre activos
     })) || [];
 
     // 2. Costos de venta directos (5001, 5003, 5004)
@@ -183,6 +187,7 @@ const ResumenEgresos = () => {
       tipo_pago: cv.tipo_pago,
       monto_pagado: cv.monto_pagado,
       monto_pendiente: cv.monto_pendiente,
+      estado: cv.estado || 'activo',
     }));
 
     // 3. Gastos operativos (5101-5108)
@@ -202,6 +207,7 @@ const ResumenEgresos = () => {
       tipo_pago: g.tipo_pago,
       monto_pagado: g.monto_pagado,
       monto_pendiente: g.monto_pendiente,
+      estado: g.estado || 'activo',
     }));
 
     // 4. Otros gastos (5204)
@@ -221,6 +227,7 @@ const ResumenEgresos = () => {
       tipo_pago: og.tipo_pago,
       monto_pagado: og.monto_pagado,
       monto_pendiente: og.monto_pendiente,
+      estado: og.estado || 'activo',
     }));
 
     // Combinar y ordenar por fecha
@@ -964,7 +971,11 @@ const ResumenEgresos = () => {
                       
                       {/* Estado */}
                       <TableCell>
-                        <Badge variant="outline">✅ Activa</Badge>
+                        {transaccion.estado === 'cancelado' ? (
+                          <Badge variant="destructive">❌ Cancelada</Badge>
+                        ) : (
+                          <Badge variant="outline">✅ Activa</Badge>
+                        )}
                       </TableCell>
                       
                       {/* Acciones */}
@@ -1207,10 +1218,12 @@ const ResumenEgresos = () => {
                             variant="outline"
                             size="sm"
                             className="border-red-300 text-red-600 hover:bg-red-50"
+                            disabled={transaccion.estado === 'cancelado'}
                             onClick={() => {
                               setTransaccionACancelar(transaccion);
                               setIsCancelDialogOpen(true);
                             }}
+                            title={transaccion.estado === 'cancelado' ? 'Transacción ya cancelada' : 'Cancelar transacción'}
                           >
                             ❌
                           </Button>
