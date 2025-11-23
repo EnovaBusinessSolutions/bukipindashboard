@@ -206,7 +206,8 @@ const CuentasPorCobrar = () => {
     queryFn: async () => {
       if (!selectedFacturaId) return [];
       
-      const { data, error } = await supabase
+      // Obtener pagos registrados
+      const { data: pagos, error } = await supabase
         .from("transacciones_cobros_pagos")
         .select("*")
         .eq("referencia_id", selectedFacturaId)
@@ -218,7 +219,39 @@ const CuentasPorCobrar = () => {
         return [];
       }
 
-      return data || [];
+      // Verificar si existe un pago inicial registrado
+      const tienePagoInicial = pagos?.some(p => p.descripcion?.includes("Pago inicial"));
+      
+      // Si no hay pago inicial registrado, obtener de la transacción original
+      if (!tienePagoInicial) {
+        const { data: transaccion, error: transError } = await supabase
+          .from("transacciones_ingresos")
+          .select("*")
+          .eq("id", selectedFacturaId)
+          .single();
+
+        if (!transError && transaccion && transaccion.monto_pagado > 0) {
+          // Agregar el pago inicial al inicio del historial
+          const pagoInicial = {
+            id: `inicial-${selectedFacturaId}`,
+            user_id: transaccion.user_id,
+            tipo_transaccion: 'cobro',
+            referencia_id: selectedFacturaId,
+            referencia_tabla: 'transacciones_ingresos',
+            monto: transaccion.monto_pagado,
+            metodo_pago: transaccion.metodo_pago,
+            fecha: new Date(transaccion.created_at).toISOString().split('T')[0],
+            descripcion: `Pago inicial - ${transaccion.descripcion}`,
+            created_at: transaccion.created_at,
+            updated_at: transaccion.created_at,
+            _es_pago_inicial: true // Marcador especial
+          };
+          
+          return [pagoInicial, ...(pagos || [])];
+        }
+      }
+
+      return pagos || [];
     },
     enabled: !!selectedFacturaId && historialPagosOpen,
   });
@@ -2063,6 +2096,11 @@ const CuentasPorCobrar = () => {
                               <Badge variant="outline">
                                 {pago.metodo_pago === 'efectivo' ? '💵 Efectivo' : '💳 Tarjeta/Banco'}
                               </Badge>
+                              {pago._es_pago_inicial && (
+                                <Badge variant="secondary" className="ml-2">
+                                  ⭐ Pago Inicial
+                                </Badge>
+                              )}
                             </div>
                             
                             {pago.descripcion && (
