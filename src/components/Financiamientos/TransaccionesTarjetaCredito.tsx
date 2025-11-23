@@ -9,7 +9,6 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CreditCard, TrendingUp, Calendar, Eye, AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { Switch } from "@/components/ui/switch";
 
 interface TransaccionesTarjetaCreditoProps {
   financiamientoId: string;
@@ -26,7 +25,6 @@ const TransaccionesTarjetaCredito = ({
 }: TransaccionesTarjetaCreditoProps) => {
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
-  const [mostrarCanceladas, setMostrarCanceladas] = useState(true);
   
   // Obtener todas las transacciones donde se usó esta tarjeta
   const { data: transacciones, isLoading } = useQuery({
@@ -145,15 +143,15 @@ const TransaccionesTarjetaCredito = ({
   const limiteDisponible = limiteCredito - saldoActual;
   const porcentajeUso = (saldoActual / limiteCredito) * 100;
 
-  // Filtrar transacciones según preferencia
-  const transaccionesFiltradas = transacciones?.filter(t => 
-    mostrarCanceladas || t.estado !== 'cancelado'
-  );
+  // Calcular cargos cancelados para el resumen
+  const cargosCancelados = transacciones?.filter(t => 
+    t.estado === 'cancelado' && (t.tipo === 'egreso' || t.tipo === 'capex')
+  ).reduce((sum, t) => sum + t.monto, 0) || 0;
 
   return (
     <div className="space-y-6">
       {/* Tarjetas de resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -175,7 +173,7 @@ const TransaccionesTarjetaCredito = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${saldoActual.toLocaleString('es-MX')}</div>
+            <div className="text-2xl font-bold text-destructive">${saldoActual.toLocaleString('es-MX')}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {porcentajeUso.toFixed(1)}% del límite
             </p>
@@ -194,29 +192,33 @@ const TransaccionesTarjetaCredito = ({
             <p className="text-xs text-muted-foreground mt-1">Puede utilizar</p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Cargos Cancelados
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-muted-foreground">
+              ${cargosCancelados.toLocaleString('es-MX')}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Revertidos (impacto: $0)
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabla de transacciones */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Transacciones de {nombreTarjeta}</CardTitle>
-              <CardDescription>
-                Historial de compras y pagos realizados con esta tarjeta
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch 
-                checked={mostrarCanceladas}
-                onCheckedChange={setMostrarCanceladas}
-              />
-              <span className="text-sm text-muted-foreground">
-                Mostrar canceladas
-              </span>
-            </div>
-          </div>
-        </CardHeader>
+      <CardHeader>
+        <CardTitle>Transacciones de {nombreTarjeta}</CardTitle>
+        <CardDescription>
+          Historial completo de compras, pagos y transacciones canceladas
+        </CardDescription>
+      </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground">Cargando transacciones...</div>
@@ -224,24 +226,21 @@ const TransaccionesTarjetaCredito = ({
             <div className="text-center py-8 text-muted-foreground">
               No hay transacciones registradas con esta tarjeta
             </div>
-          ) : !transaccionesFiltradas || transaccionesFiltradas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay transacciones {mostrarCanceladas ? '' : 'activas'} para mostrar
-            </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead>Proveedor</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead>Proveedor</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead className="text-right">Impacto en Saldo</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+              <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transaccionesFiltradas.map((transaccion) => (
+                {transacciones.map((transaccion) => (
                   <TableRow 
                     key={transaccion.id}
                     className={transaccion.estado === 'cancelado' ? 'bg-red-50 dark:bg-red-950/20' : ''}
@@ -259,26 +258,45 @@ const TransaccionesTarjetaCredito = ({
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{transaccion.proveedor || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        transaccion.estado === 'cancelado' ? 'outline' :
-                        transaccion.tipo === 'egreso' ? 'secondary' : 
-                        transaccion.tipo === 'capex' ? 'default' :
-                        transaccion.tipo === 'amortizacion' ? 'default' :
-                        'destructive'
-                      }>
-                        {transaccion.tipo === 'egreso' ? 'Egreso' : 
-                         transaccion.tipo === 'capex' ? 'CAPEX' :
-                         transaccion.tipo === 'amortizacion' ? 'Pago' :
-                         transaccion.tipo === 'cargo_interes' ? 'Interés' : transaccion.tipo}
+                  <TableCell>{transaccion.proveedor || "-"}</TableCell>
+                  <TableCell>
+                    <Badge variant={
+                      transaccion.estado === 'cancelado' ? 'outline' :
+                      transaccion.tipo === 'egreso' ? 'secondary' : 
+                      transaccion.tipo === 'capex' ? 'default' :
+                      transaccion.tipo === 'amortizacion' ? 'default' :
+                      'destructive'
+                    }>
+                      {transaccion.tipo === 'egreso' ? 'Egreso' : 
+                       transaccion.tipo === 'capex' ? 'CAPEX' :
+                       transaccion.tipo === 'amortizacion' ? 'Pago' :
+                       transaccion.tipo === 'cargo_interes' ? 'Interés' : transaccion.tipo}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {transaccion.estado === 'cancelado' ? (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        $0 (revertido)
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      <span className={transaccion.estado === 'cancelado' ? 'line-through text-muted-foreground' : ''}>
-                        ${transaccion.monto.toLocaleString('es-MX')}
+                    ) : transaccion.tipoTransaccion === 'amortizacion' ? (
+                      <span className="text-green-600 dark:text-green-400 font-medium">
+                        -${transaccion.monto.toLocaleString('es-MX')}
                       </span>
-                    </TableCell>
+                    ) : transaccion.tipoTransaccion === 'cargo_interes' ? (
+                      <span className="text-red-600 dark:text-red-400 font-medium">
+                        +${transaccion.monto.toLocaleString('es-MX')}
+                      </span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400 font-medium">
+                        +${transaccion.monto.toLocaleString('es-MX')}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    <span className={transaccion.estado === 'cancelado' ? 'line-through text-muted-foreground' : ''}>
+                      ${transaccion.monto.toLocaleString('es-MX')}
+                    </span>
+                  </TableCell>
                     <TableCell className="text-center">
                       <Button 
                         variant="ghost" 
