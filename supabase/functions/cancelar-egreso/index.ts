@@ -61,16 +61,26 @@ serve(async (req) => {
       console.warn('No se encontró asiento contable para esta transacción');
     }
 
+    // 2.5 Verificar si ya existe un asiento de cancelación
+    const numeroAsientoReversion = `CANC-EGR-${transaccionId}`;
+    const { data: cancelacionExistente } = await supabase
+      .from('asientos_contables')
+      .select('numero_asiento')
+      .eq('numero_asiento', numeroAsientoReversion)
+      .maybeSingle();
+
+    if (cancelacionExistente) {
+      throw new Error('Esta transacción ya tiene un asiento de cancelación registrado');
+    }
+
     // 3. Crear asiento de reversión si existe asiento original
     if (asientoOriginal) {
-      const numeroAsientoReversion = `CANC-EGR-${transaccionId}`;
-      
       const { data: asientoReversion, error: asientoReversionError } = await supabase
         .from('asientos_contables')
         .insert({
           user_id: user.id,
           numero_asiento: numeroAsientoReversion,
-          descripcion: `Cancelación de egreso: ${transaccion.descripcion} - Motivo: ${motivoCancelacion}`,
+          descripcion: `Reversión: ${transaccion.descripcion} (Cancelado: ${motivoCancelacion})`,
           fecha: new Date().toISOString().split('T')[0]
         })
         .select()
