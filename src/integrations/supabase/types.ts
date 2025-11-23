@@ -965,6 +965,8 @@ export type Database = {
           created_at: string
           cuenta_codigo: string | null
           descripcion: string
+          estado: string
+          fecha_cancelacion: string | null
           fecha_vencimiento: string | null
           id: string
           imagen_comprobante: string | null
@@ -972,6 +974,7 @@ export type Database = {
           monto_pagado: number
           monto_pendiente: number | null
           monto_total: number
+          motivo_cancelacion: string | null
           precio_unitario: number | null
           producto_egreso_id: string | null
           proveedor_email: string | null
@@ -993,6 +996,8 @@ export type Database = {
           created_at?: string
           cuenta_codigo?: string | null
           descripcion: string
+          estado?: string
+          fecha_cancelacion?: string | null
           fecha_vencimiento?: string | null
           id?: string
           imagen_comprobante?: string | null
@@ -1000,6 +1005,7 @@ export type Database = {
           monto_pagado?: number
           monto_pendiente?: number | null
           monto_total: number
+          motivo_cancelacion?: string | null
           precio_unitario?: number | null
           producto_egreso_id?: string | null
           proveedor_email?: string | null
@@ -1021,6 +1027,8 @@ export type Database = {
           created_at?: string
           cuenta_codigo?: string | null
           descripcion?: string
+          estado?: string
+          fecha_cancelacion?: string | null
           fecha_vencimiento?: string | null
           id?: string
           imagen_comprobante?: string | null
@@ -1028,6 +1036,7 @@ export type Database = {
           monto_pagado?: number
           monto_pendiente?: number | null
           monto_total?: number
+          motivo_cancelacion?: string | null
           precio_unitario?: number | null
           producto_egreso_id?: string | null
           proveedor_email?: string | null
