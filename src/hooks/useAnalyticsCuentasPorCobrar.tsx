@@ -172,60 +172,26 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         };
       });
 
-      // Histórico de CxC (basado en asientos contables - movimientos reales)
+      // Histórico de CxC (basado en transacciones reales)
       const historicoCxC = [];
-      const saldoActual = cuentasConDias.reduce((sum, c) => sum + c.monto_pendiente, 0);
       
-      // Obtener user_id de las cuentas disponibles
-      const userId = (cuentasIngresos && cuentasIngresos.length > 0) 
-        ? cuentasIngresos[0].user_id 
-        : (ventasActivos && ventasActivos.length > 0) 
-          ? ventasActivos[0].user_id 
-          : "";
-      
-      // Obtener TODOS los asientos contables de cuenta 1003 desde el inicio
-      const { data: detallesAsientos } = await supabase
-        .from("detalle_asientos")
-        .select(`
-          debe,
-          haber,
-          cuenta_codigo,
-          asientos_contables!inner(
-            fecha,
-            user_id
-          )
-        `)
-        .eq("asientos_contables.user_id", userId)
-        .eq("cuenta_codigo", "1003")
-        .order("asientos_contables(fecha)", { ascending: true });
-      
-      // Función para calcular saldo acumulado de cuenta 1003 hasta una fecha específica
-      const calcularSaldoHastaFecha = (fecha: Date, asientos: any[]): number => {
+      // Función para calcular saldo real desde transacciones hasta una fecha específica
+      const calcularSaldoRealHastaFecha = (fecha: Date): number => {
         const fechaFin = new Date(fecha);
-        fechaFin.setHours(23, 59, 59, 999); // Final del día
+        fechaFin.setHours(23, 59, 59, 999);
         
-        let debeTotales = 0;
-        let haberTotales = 0;
+        // Sumar ingresos pendientes hasta esta fecha
+        const ingresosHastaFecha = todasLasCuentas.filter(cuenta => {
+          const fechaCuenta = new Date(cuenta.created_at);
+          return fechaCuenta <= fechaFin;
+        });
         
-        for (const detalle of asientos || []) {
-          const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-          
-          if (fechaAsiento <= fechaFin) {
-            debeTotales += Number(detalle.debe || 0);
-            haberTotales += Number(detalle.haber || 0);
-          }
-        }
-        
-        // Cuenta 1003 es activo (naturaleza deudora): saldo = debe - haber
-        return debeTotales - haberTotales;
+        return ingresosHastaFecha.reduce((sum, c) => sum + c.monto_pendiente, 0);
       };
-      
+
       if (periodo === "diario") {
-        // Mostrar solo el día de hoy con el saldo de cierre
         const hoy = new Date();
-        hoy.setHours(23, 59, 59, 999);
-        
-        const saldoCierre = calcularSaldoHastaFecha(hoy, detallesAsientos || []);
+        const saldoCierre = calcularSaldoRealHastaFecha(hoy);
         
         historicoCxC.push({
           fecha: hoy.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
@@ -237,10 +203,9 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         const mes = hoy.getMonth();
         const diaActual = hoy.getDate();
         
-        // Calcular saldo de cierre para cada día del mes actual
         for (let dia = 1; dia <= diaActual; dia++) {
           const fechaDia = new Date(anio, mes, dia, 23, 59, 59, 999);
-          const saldoCierre = calcularSaldoHastaFecha(fechaDia, detallesAsientos || []);
+          const saldoCierre = calcularSaldoRealHastaFecha(fechaDia);
           
           historicoCxC.push({
             fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
@@ -252,11 +217,9 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         const anioActual = hoy.getFullYear();
         const mesActual = hoy.getMonth();
         
-        // Calcular saldo de cierre para cada mes del año
         for (let mes = 0; mes <= mesActual; mes++) {
-          // Obtener el último día del mes
           const ultimoDiaMes = new Date(anioActual, mes + 1, 0, 23, 59, 59, 999);
-          const saldoCierre = calcularSaldoHastaFecha(ultimoDiaMes, detallesAsientos || []);
+          const saldoCierre = calcularSaldoRealHastaFecha(ultimoDiaMes);
           
           historicoCxC.push({
             fecha: ultimoDiaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
