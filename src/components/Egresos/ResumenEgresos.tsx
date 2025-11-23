@@ -1355,6 +1355,54 @@ const ResumenEgresos = () => {
                 </div>
               </div>
 
+              {/* Estado e Información de Cancelación */}
+              {selectedTransaction.estado === 'cancelado' && (
+                <div className="border-t border-destructive/20 pt-4 bg-destructive/5 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-3 flex items-center gap-2 text-destructive">
+                    <AlertCircle className="h-5 w-5" />
+                    Transacción Cancelada
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <div className="text-sm text-destructive font-medium">
+                        Estado
+                      </div>
+                      <Badge variant="destructive" className="text-sm">
+                        ❌ CANCELADA
+                      </Badge>
+                    </div>
+                    
+                    {selectedTransaction.fecha_cancelacion && (
+                      <div className="space-y-1">
+                        <div className="text-sm text-destructive font-medium">
+                          Fecha de Cancelación
+                        </div>
+                        <div className="font-medium text-destructive">
+                          {new Date(selectedTransaction.fecha_cancelacion).toLocaleString('es-MX', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {selectedTransaction.motivo_cancelacion && (
+                      <div className="space-y-1">
+                        <div className="text-sm text-destructive font-medium">
+                          Motivo de Cancelación
+                        </div>
+                        <div className="text-sm bg-destructive/10 p-3 rounded-md border border-destructive/20 whitespace-pre-wrap">
+                          {selectedTransaction.motivo_cancelacion}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Descripción */}
               <div className="space-y-1">
                 <div className="text-sm text-muted-foreground">Descripción</div>
