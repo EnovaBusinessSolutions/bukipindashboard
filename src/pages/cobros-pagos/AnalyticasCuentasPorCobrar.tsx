@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BarChart, 
   Bar, 
@@ -15,7 +16,8 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart
+  AreaChart,
+  LabelList
 } from "recharts";
 import { 
   TrendingUp, 
@@ -25,7 +27,8 @@ import {
   AlertTriangle,
   Calendar,
   Target,
-  BarChart3
+  BarChart3,
+  Settings
 } from "lucide-react";
 import { useAnalyticsCuentasPorCobrar, useCuentasPorCobrarDetalle } from "@/hooks/useAnalyticsCuentasPorCobrar";
 import { formatCurrency } from "@/lib/utils";
@@ -44,6 +47,27 @@ const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.dest
 const AnalyticasCuentasPorCobrar = () => {
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar();
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
+  
+  const [formatoNumeros, setFormatoNumeros] = useState<'normal' | 'miles' | 'millones'>('normal');
+  const [decimales, setDecimales] = useState<0 | 1 | 2>(2);
+
+  const formatearConPreferencias = (valor: number) => {
+    let valorFormateado = valor;
+    let sufijo = '';
+    
+    if (formatoNumeros === 'miles') {
+      valorFormateado = valor / 1000;
+      sufijo = 'K';
+    } else if (formatoNumeros === 'millones') {
+      valorFormateado = valor / 1000000;
+      sufijo = 'M';
+    }
+    
+    return `$${valorFormateado.toLocaleString('en-US', {
+      minimumFractionDigits: decimales,
+      maximumFractionDigits: decimales
+    })}${sufijo}`;
+  };
 
   if (loadingAnalytics || loadingDetalles) {
     return (
@@ -89,7 +113,7 @@ const AnalyticasCuentasPorCobrar = () => {
         </div>
 
         {/* KPIs Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total por Cobrar</CardTitle>
@@ -143,6 +167,41 @@ const AnalyticasCuentasPorCobrar = () => {
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Formato</CardTitle>
+              <Settings className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <label className="text-xs font-medium">Escala</label>
+                <Select value={formatoNumeros} onValueChange={(v: 'normal' | 'miles' | 'millones') => setFormatoNumeros(v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="miles">Miles (K)</SelectItem>
+                    <SelectItem value="millones">Millones (M)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium">Decimales</label>
+                <Select value={decimales.toString()} onValueChange={(v) => setDecimales(parseInt(v) as 0 | 1 | 2)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0</SelectItem>
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Charts Grid */}
@@ -162,15 +221,29 @@ const AnalyticasCuentasPorCobrar = () => {
             <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.cuentasPorCliente} layout="horizontal">
+                  <BarChart 
+                    data={analytics.cuentasPorCliente} 
+                    layout="horizontal"
+                    margin={{ top: 5, right: 80, left: 0, bottom: 5 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
+                    <XAxis 
+                      type="number" 
+                      domain={[0, Math.max(...analytics.cuentasPorCliente.map(c => c.monto)) * 1.2]}
+                    />
                     <YAxis dataKey="cliente" type="category" width={100} />
                     <Tooltip 
-                      formatter={(value: number) => [formatCurrency(value), 'Monto']}
+                      formatter={(value: number) => [formatearConPreferencias(value), 'Monto']}
                       labelFormatter={(label) => `Cliente: ${label}`}
                     />
-                    <Bar dataKey="monto" fill={COLORS.primary} />
+                    <Bar dataKey="monto" fill={COLORS.primary}>
+                      <LabelList 
+                        dataKey="monto" 
+                        position="right" 
+                        formatter={(value: number) => formatearConPreferencias(value)}
+                        style={{ fontSize: '12px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -197,7 +270,7 @@ const AnalyticasCuentasPorCobrar = () => {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ rango, porcentaje }) => 
+                      label={({ rango }) => 
                         `${rango}: ${((analytics.agingAnalysis.find(a => a.rango === rango)?.monto || 0) / analytics.totalPendiente * 100).toFixed(1)}%`
                       }
                       outerRadius={80}
@@ -208,7 +281,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => [formatCurrency(value), 'Monto']} />
+                    <Tooltip formatter={(value: number) => [formatearConPreferencias(value), 'Monto']} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -229,18 +302,30 @@ const AnalyticasCuentasPorCobrar = () => {
             <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analytics.tendenciaMensual}>
+                  <AreaChart 
+                    data={analytics.tendenciaMensual}
+                    margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="mes" />
-                    <YAxis />
-                    <Tooltip formatter={(value: number) => [formatCurrency(value), 'Monto']} />
+                    <YAxis 
+                      domain={[0, Math.max(...analytics.tendenciaMensual.map(t => t.monto)) * 1.2]}
+                    />
+                    <Tooltip formatter={(value: number) => [formatearConPreferencias(value), 'Monto']} />
                     <Area 
                       type="monotone" 
                       dataKey="monto" 
                       stroke={COLORS.primary} 
                       fill={COLORS.primary} 
-                      fillOpacity={0.3} 
-                    />
+                      fillOpacity={0.3}
+                    >
+                      <LabelList 
+                        dataKey="monto" 
+                        position="top" 
+                        formatter={(value: number) => formatearConPreferencias(value)}
+                        style={{ fontSize: '11px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                      />
+                    </Area>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -283,7 +368,7 @@ const AnalyticasCuentasPorCobrar = () => {
                           <span className="text-sm font-medium">{estado}</span>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-semibold">{formatCurrency(montoTotal)}</div>
+                          <div className="text-sm font-semibold">{formatearConPreferencias(montoTotal)}</div>
                           <div className="text-xs text-muted-foreground">{porcentaje}%</div>
                         </div>
                       </div>
@@ -326,7 +411,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold">{formatCurrency(cliente.monto)}</div>
+                        <div className="text-xl font-bold">{formatearConPreferencias(cliente.monto)}</div>
                         <Badge variant="outline">
                           Total adeudado
                         </Badge>
@@ -338,7 +423,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         <div key={cuenta.id} className="bg-muted/50 rounded p-3 text-sm">
                           <div className="font-medium truncate">{cuenta.descripcion}</div>
                           <div className="text-muted-foreground">
-                            {formatCurrency(cuenta.monto_pendiente)}
+                            {formatearConPreferencias(cuenta.monto_pendiente)}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge 
