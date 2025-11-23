@@ -84,9 +84,6 @@ const ResumenEgresos = () => {
       // Filtrar solo costos y gastos
       if (t.tipo_egreso !== 'costo' && t.tipo_egreso !== 'gasto' && t.tipo_egreso !== 'otro') return false;
       
-      // CRÍTICO: Excluir transacciones canceladas
-      if (t.estado === 'cancelado') return false;
-      
       const fecha = new Date(t.created_at);
       
       // Filtro por búsqueda
