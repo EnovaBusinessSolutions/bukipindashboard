@@ -1215,7 +1215,7 @@ const ResumenEgresos = () => {
                             variant="outline"
                             size="sm"
                             className="border-red-300 text-red-600 hover:bg-red-50"
-                            disabled={transaccion.estado === 'cancelado'}
+                            disabled={transaccion.estado === 'cancelado' || isCanceling}
                             onClick={() => {
                               setTransaccionACancelar(transaccion);
                               setIsCancelDialogOpen(true);
