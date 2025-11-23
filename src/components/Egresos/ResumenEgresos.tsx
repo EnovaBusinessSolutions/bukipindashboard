@@ -480,7 +480,7 @@ const ResumenEgresos = () => {
       const { data, error } = await supabase.functions.invoke('cancelar-egreso', {
         body: {
           transaccionId: transaccionACancelar.id,
-          motivo: motivoCancelacion
+          motivoCancelacion: motivoCancelacion
         }
       });
 
