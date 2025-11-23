@@ -78,7 +78,8 @@ const CuentasPorCobrar = () => {
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
   const [filtroAntiguedad, setFiltroAntiguedad] = useState<string>("todos");
-  const [periodoCxC, setPeriodoCxC] = useState<"diario" | "mensual" | "anual">("mensual");
+  const [periodoCxC, setPeriodoCxC] = useState<"mensual" | "anual">("mensual");
+  const [filtroClienteAnalitica, setFiltroClienteAnalitica] = useState<string>("todos");
   const [selectedCliente, setSelectedCliente] = useState<string>("");
   const [filtroCliente, setFiltroCliente] = useState<string>("todos");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
@@ -185,8 +186,17 @@ const CuentasPorCobrar = () => {
   }, [queryClient]);
 
   // Hooks para analíticas
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC);
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC, filtroClienteAnalitica);
   const { data: cuentasPorCobrar, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
+  
+  // Obtener lista única de clientes para el filtro de analíticas
+  const clientesUnicos = Array.from(
+    new Set(
+      cuentasPorCobrar
+        ?.map(c => c.cliente_nombre || 'Sin nombre')
+        .filter(Boolean) || []
+    )
+  ).sort();
 
   // Query para obtener asientos contables de una transacción
   const { data: asientosContables, isLoading: loadingAsientos } = useQuery({
@@ -1392,6 +1402,28 @@ const CuentasPorCobrar = () => {
               </Card>
             ) : (
               <>
+                {/* Filtro de Cliente para Analíticas */}
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-4">
+                      <Label className="text-sm font-medium whitespace-nowrap">Filtrar por Cliente:</Label>
+                      <Select value={filtroClienteAnalitica} onValueChange={setFiltroClienteAnalitica}>
+                        <SelectTrigger className="w-[300px]">
+                          <SelectValue placeholder="Todos los clientes" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="todos">Todos los clientes</SelectItem>
+                          {clientesUnicos.map(cliente => (
+                            <SelectItem key={cliente} value={cliente}>
+                              {cliente}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* KPIs Principales */}
                 <div className="grid gap-4 md:grid-cols-5">
                   <Card>
@@ -1551,7 +1583,6 @@ const CuentasPorCobrar = () => {
                             <SelectValue placeholder="Selecciona período" />
                           </SelectTrigger>
                           <SelectContent className="bg-background z-50">
-                            <SelectItem value="diario">Diario (Hoy)</SelectItem>
                             <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
                             <SelectItem value="anual">Anual (Año actual)</SelectItem>
                           </SelectContent>
