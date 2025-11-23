@@ -155,7 +155,10 @@ const Balanza = () => {
   // Identificar y asociar asientos de reversión con sus originales
   const asientosConReversion = asientosArray.map(asiento => {
     const descripcionLower = asiento.descripcion.toLowerCase();
-    const esReversion = descripcionLower.includes('reversión:') || descripcionLower.includes('reversion:');
+    const esReversion = descripcionLower.includes('reversión:') || 
+                        descripcionLower.includes('reversion:') ||
+                        descripcionLower.includes('cancelación de egreso:') ||
+                        descripcionLower.includes('cancelacion de egreso:');
     
     // Si es un asiento de reversión, no lo mostramos directamente
     if (esReversion) {
@@ -165,14 +168,21 @@ const Balanza = () => {
     // Buscar si este asiento tiene una reversión asociada (case-insensitive)
     const asientoReversion = asientosArray.find(a => {
       const aDescLower = a.descripcion.toLowerCase();
-      if (!aDescLower.includes('reversión:') && !aDescLower.includes('reversion:')) return false;
+      if (!aDescLower.includes('reversión:') && 
+          !aDescLower.includes('reversion:') && 
+          !aDescLower.includes('cancelación de egreso:') &&
+          !aDescLower.includes('cancelacion de egreso:')) return false;
       
-      // La reversión contiene "Reversión: " + descripción original (remover ambas variantes)
+      // La reversión contiene "Reversión: " + descripción original (remover todas las variantes)
       const descripcionOriginal = a.descripcion
         .replace(/REVERSIÓN:\s*/i, '')
         .replace(/Reversión:\s*/i, '')
         .replace(/REVERSION:\s*/i, '')
-        .replace(/Reversion:\s*/i, '');
+        .replace(/Reversion:\s*/i, '')
+        .replace(/CANCELACIÓN DE EGRESO:\s*/i, '')
+        .replace(/Cancelación de egreso:\s*/i, '')
+        .replace(/CANCELACION DE EGRESO:\s*/i, '')
+        .replace(/Cancelacion de egreso:\s*/i, '');
       
       return descripcionOriginal.toLowerCase().includes(asiento.descripcion.substring(0, 30).toLowerCase()) ||
              asiento.descripcion.toLowerCase().includes(descripcionOriginal.substring(0, 30).toLowerCase());
