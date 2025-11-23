@@ -28,18 +28,18 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { transaccion_id, motivo } = await req.json();
-    console.log('Cancelando egreso:', transaccion_id);
+    const { transaccionId, motivoCancelacion } = await req.json();
+    console.log('Cancelando egreso:', transaccionId);
 
-    if (!transaccion_id || !motivo) {
-      throw new Error('Se requiere transaccion_id y motivo');
+    if (!transaccionId || !motivoCancelacion) {
+      throw new Error('Se requiere transaccionId y motivoCancelacion');
     }
 
     // 1. Obtener la transacción original
     const { data: transaccion, error: transaccionError } = await supabase
       .from('transacciones_egresos')
       .select('*')
-      .eq('id', transaccion_id)
+      .eq('id', transaccionId)
       .single();
 
     if (transaccionError || !transaccion) {
@@ -54,7 +54,7 @@ serve(async (req) => {
     const { data: asientoOriginal, error: asientoError } = await supabase
       .from('asientos_contables')
       .select('*, detalle_asientos(*)')
-      .eq('numero_asiento', `EGR-${transaccion_id}`)
+      .eq('numero_asiento', `EGR-${transaccionId}`)
       .single();
 
     if (asientoError) {
@@ -63,14 +63,14 @@ serve(async (req) => {
 
     // 3. Crear asiento de reversión si existe asiento original
     if (asientoOriginal) {
-      const numeroAsientoReversion = `CANC-EGR-${transaccion_id}`;
+      const numeroAsientoReversion = `CANC-EGR-${transaccionId}`;
       
       const { data: asientoReversion, error: asientoReversionError } = await supabase
         .from('asientos_contables')
         .insert({
           user_id: user.id,
           numero_asiento: numeroAsientoReversion,
-          descripcion: `Cancelación de egreso: ${transaccion.descripcion} - Motivo: ${motivo}`,
+          descripcion: `Cancelación de egreso: ${transaccion.descripcion} - Motivo: ${motivoCancelacion}`,
           fecha: new Date().toISOString().split('T')[0]
         })
         .select()
@@ -128,10 +128,10 @@ serve(async (req) => {
       .from('transacciones_egresos')
       .update({
         estado: 'cancelado',
-        motivo_cancelacion: motivo,
+        motivo_cancelacion: motivoCancelacion,
         fecha_cancelacion: new Date().toISOString()
       })
-      .eq('id', transaccion_id);
+      .eq('id', transaccionId);
 
     if (updateError) {
       throw updateError;
@@ -143,8 +143,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         mensaje: 'Egreso cancelado exitosamente',
-        transaccion_id,
-        asiento_reversion: asientoOriginal ? `CANC-EGR-${transaccion_id}` : null
+        transaccionId,
+        asiento_reversion: asientoOriginal ? `CANC-EGR-${transaccionId}` : null
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
