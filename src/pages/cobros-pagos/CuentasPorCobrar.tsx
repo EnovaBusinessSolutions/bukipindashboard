@@ -93,7 +93,6 @@ const CuentasPorCobrar = () => {
   const [filtroTipoIngreso, setFiltroTipoIngreso] = useState<string>("todos");
   const [filtroClienteTransaccion, setFiltroClienteTransaccion] = useState<string>("todos");
   const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
-  const [escalaHistorico, setEscalaHistorico] = useState<"normal" | "miles" | "millones">("normal");
   
   // Estados para modal de detalle contable
   const [detalleContableOpen, setDetalleContableOpen] = useState(false);
@@ -1567,31 +1566,24 @@ const CuentasPorCobrar = () => {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>Histórico de Cuentas por Cobrar</CardTitle>
-                      <div className="flex items-center gap-4">
-                        <Select value={escalaHistorico} onValueChange={(value: any) => setEscalaHistorico(value)}>
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue placeholder="Escala" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            <SelectItem value="normal">Normal</SelectItem>
-                            <SelectItem value="miles">Miles</SelectItem>
-                            <SelectItem value="millones">Millones</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select value={periodoCxC} onValueChange={(value: any) => setPeriodoCxC(value)}>
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Selecciona período" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
-                            <SelectItem value="anual">Anual (Año actual)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <Select value={periodoCxC} onValueChange={(value: any) => setPeriodoCxC(value)}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Selecciona período" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
+                          <SelectItem value="anual">Anual (Año actual)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
+                    {(() => {
+                      const maxSaldoHistorico = Math.max(...(analytics?.historicoCxC || []).map(h => h.saldo), 1);
+                      const dominioYHistorico = [0, maxSaldoHistorico * 1.2];
+                      
+                      return (
+                        <ResponsiveContainer width="100%" height={350}>
                       <LineChart data={analytics?.historicoCxC || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis 
@@ -1600,16 +1592,10 @@ const CuentasPorCobrar = () => {
                           tick={{ fill: 'hsl(var(--foreground))' }}
                         />
                         <YAxis 
+                          domain={dominioYHistorico}
                           stroke="hsl(var(--foreground))"
                           tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => {
-                            if (escalaHistorico === "miles") {
-                              return `$${(value / 1000).toFixed(0)}k`;
-                            } else if (escalaHistorico === "millones") {
-                              return `$${(value / 1000000).toFixed(2)}M`;
-                            }
-                            return `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
-                          }}
+                          tickFormatter={(value) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
                         />
                         <Tooltip
                           contentStyle={{
@@ -1618,22 +1604,10 @@ const CuentasPorCobrar = () => {
                             borderRadius: '8px',
                             color: 'hsl(var(--foreground))'
                           }}
-                          formatter={(value: number) => {
-                            let formatted = '';
-                            let label = 'Saldo CxC';
-                            
-                            if (escalaHistorico === "miles") {
-                              formatted = `$${(value / 1000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}k`;
-                              label = 'Saldo CxC (Miles)';
-                            } else if (escalaHistorico === "millones") {
-                              formatted = `$${(value / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M`;
-                              label = 'Saldo CxC (Millones)';
-                            } else {
-                              formatted = `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-                            }
-                            
-                            return [formatted, label];
-                          }}
+                          formatter={(value: number) => [
+                            `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+                            'Saldo CxC'
+                          ]}
                           labelStyle={{ color: 'hsl(var(--foreground))' }}
                         />
                         <Line 
@@ -1646,18 +1620,13 @@ const CuentasPorCobrar = () => {
                             position: 'top',
                             fill: 'hsl(var(--foreground))',
                             fontSize: 12,
-                            formatter: (value: number) => {
-                              if (escalaHistorico === "miles") {
-                                return `$${(value / 1000).toFixed(0)}k`;
-                              } else if (escalaHistorico === "millones") {
-                                return `$${(value / 1000000).toFixed(1)}M`;
-                              }
-                              return `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`;
-                            }
+                            formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
                           }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
