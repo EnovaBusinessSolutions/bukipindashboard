@@ -41,9 +41,12 @@ interface AnalyticsCuentasPorCobrar {
   }[];
 }
 
-export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "anual" = "mensual") => {
+export const useAnalyticsCuentasPorCobrar = (
+  periodo: "mensual" | "anual" = "mensual",
+  filtroCliente?: string
+) => {
   return useQuery({
-    queryKey: ["analytics-cuentas-por-cobrar", periodo],
+    queryKey: ["analytics-cuentas-por-cobrar", periodo, filtroCliente],
     queryFn: async (): Promise<AnalyticsCuentasPorCobrar> => {
       // Consultar transacciones de ingresos normales
       const { data: cuentasIngresos, error: errorIngresos } = await supabase
@@ -79,10 +82,17 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
       }));
 
       // Combinar ambas fuentes de cuentas por cobrar
-      const todasLasCuentas = [
+      let todasLasCuentas = [
         ...(cuentasIngresos || []),
         ...cuentasDeVentas
       ];
+      
+      // Aplicar filtro de cliente si no es "todos"
+      if (filtroCliente && filtroCliente !== "todos") {
+        todasLasCuentas = todasLasCuentas.filter(cuenta => 
+          (cuenta.cliente_nombre || 'Sin nombre') === filtroCliente
+        );
+      }
 
       const today = new Date();
       
@@ -189,15 +199,7 @@ export const useAnalyticsCuentasPorCobrar = (periodo: "diario" | "mensual" | "an
         return ingresosHastaFecha.reduce((sum, c) => sum + c.monto_pendiente, 0);
       };
 
-      if (periodo === "diario") {
-        const hoy = new Date();
-        const saldoCierre = calcularSaldoRealHastaFecha(hoy);
-        
-        historicoCxC.push({
-          fecha: hoy.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-          saldo: Math.max(0, saldoCierre)
-        });
-      } else if (periodo === "mensual") {
+      if (periodo === "mensual") {
         const hoy = new Date();
         const anio = hoy.getFullYear();
         const mes = hoy.getMonth();
