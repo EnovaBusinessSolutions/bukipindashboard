@@ -36,7 +36,8 @@ import {
   Eye,
   ChevronDown,
   ChevronRight,
-  History
+  History,
+  Settings
 } from "lucide-react";
 import { 
   BarChart, 
@@ -52,7 +53,8 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart
+  AreaChart,
+  LabelList
 } from "recharts";
 import { useAnalyticsCuentasPorCobrar, useCuentasPorCobrarDetalle } from "@/hooks/useAnalyticsCuentasPorCobrar";
 import { formatCurrency } from "@/lib/utils";
@@ -100,6 +102,29 @@ const CuentasPorCobrar = () => {
   const [expandedClientes, setExpandedClientes] = useState<Set<string>>(new Set());
   const [historialPagosOpen, setHistorialPagosOpen] = useState(false);
   const [selectedFacturaId, setSelectedFacturaId] = useState<string | null>(null);
+  
+  // Estados para formato de números en analíticas
+  const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
+  const [decimalesAnalitica, setDecimalesAnalitica] = useState<0 | 1 | 2>(2);
+  
+  // Función para formatear números según preferencias del usuario
+  const formatearConPreferenciasAnalitica = (valor: number) => {
+    let valorFormateado = valor;
+    let sufijo = '';
+    
+    if (formatoNumerosAnalitica === 'miles') {
+      valorFormateado = valor / 1000;
+      sufijo = 'K';
+    } else if (formatoNumerosAnalitica === 'millones') {
+      valorFormateado = valor / 1000000;
+      sufijo = 'M';
+    }
+    
+    return `$${valorFormateado.toLocaleString('en-US', {
+      minimumFractionDigits: decimalesAnalitica,
+      maximumFractionDigits: decimalesAnalitica
+    })}${sufijo}`;
+  };
 
 
   // Query para todas las transacciones (incluyendo pagadas) para ver trazabilidad
@@ -1368,7 +1393,7 @@ const CuentasPorCobrar = () => {
             ) : (
               <>
                 {/* KPIs Principales */}
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-5">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Total por Cobrar</CardTitle>
@@ -1416,6 +1441,41 @@ const CuentasPorCobrar = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Formato Números</CardTitle>
+                      <Settings className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Escala</Label>
+                        <Select value={formatoNumerosAnalitica} onValueChange={(v: 'normal' | 'miles' | 'millones') => setFormatoNumerosAnalitica(v)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="miles">Miles (K)</SelectItem>
+                            <SelectItem value="millones">Millones (M)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Decimales</Label>
+                        <Select value={decimalesAnalitica.toString()} onValueChange={(v) => setDecimalesAnalitica(parseInt(v) as 0 | 1 | 2)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">0</SelectItem>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="2">2</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Gráfico A: Análisis de Antigüedad (Barras Verticales) */}
@@ -1424,34 +1484,49 @@ const CuentasPorCobrar = () => {
                     <CardTitle>Análisis de Antigüedad de Cuentas por Cobrar</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
-                      <BarChart data={analytics?.agingAnalysisDetailed || []}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          dataKey="rango" 
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={100}
-                        />
-                        <YAxis 
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--background))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }}
-                          formatter={(value: number) => [formatCurrency(value), 'Monto']}
-                          labelFormatter={(label) => `${label}`}
-                        />
-                        <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {(() => {
+                      const maxMontoAntiguedad = Math.max(...(analytics?.agingAnalysisDetailed || []).map(a => a.monto), 1);
+                      const dominioYAntiguedad = [0, maxMontoAntiguedad * 1.2];
+                      
+                      return (
+                        <ResponsiveContainer width="100%" height={350}>
+                          <BarChart data={analytics?.agingAnalysisDetailed || []}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis 
+                              dataKey="rango" 
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              angle={-45}
+                              textAnchor="end"
+                              height={100}
+                            />
+                            <YAxis 
+                              domain={dominioYAntiguedad}
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px'
+                              }}
+                              formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto']}
+                              labelFormatter={(label) => `${label}`}
+                            />
+                            <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]}>
+                              <LabelList 
+                                dataKey="monto" 
+                                position="top" 
+                                formatter={(value: number) => formatearConPreferenciasAnalitica(value)}
+                                style={{ fontSize: '11px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
@@ -1563,7 +1638,7 @@ const CuentasPorCobrar = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Total Deuda:</span>
                         <Badge variant="default" className="text-lg px-3 py-1">
-                          {formatCurrency((analytics?.cxcPorClienteApilado || [])
+                          {formatearConPreferenciasAnalitica((analytics?.cxcPorClienteApilado || [])
                             .reduce((sum, c) => sum + c.total, 0))}
                         </Badge>
                       </div>
@@ -1589,101 +1664,145 @@ const CuentasPorCobrar = () => {
                       </Select>
                     </div>
 
-                    <ResponsiveContainer 
-                      width="100%" 
-                      height={Math.max(
-                        400, 
-                        (filtroAntiguedad === "todos" 
-                          ? (analytics?.cxcPorClienteApilado || [])
-                          : (analytics?.cxcPorClienteApilado || []).filter(c => (c as any)[filtroAntiguedad] > 0)
-                        ).length * 40
-                      )}
-                    >
-                      <BarChart 
-                        data={
-                          filtroAntiguedad === "todos" 
-                            ? (analytics?.cxcPorClienteApilado || [])
-                            : (analytics?.cxcPorClienteApilado || [])
-                                .filter(c => (c as any)[filtroAntiguedad] > 0)
-                                .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0))
-                        }
-                        layout="vertical"
-                        margin={{ left: 100 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          type="number"
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                        />
-                        <YAxis 
-                          type="category"
-                          dataKey="cliente" 
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                          width={90}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--background))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            padding: '12px'
-                          }}
-                          formatter={(value: number, name: string) => {
-                            const labels: Record<string, string> = {
-                              sinVencimiento: "Sin vencimiento",
-                              vencido1_15: "Vencido 1-15 días",
-                              vencido16_30: "Vencido 16-30 días",
-                              vencido31_60: "Vencido 31-60 días",
-                              vencido61_90: "Vencido 61-90 días",
-                              vencidoMas90: "Vencido +90 días"
-                            };
-                            return [formatCurrency(value), labels[name] || name];
-                          }}
-                          labelFormatter={(label) => {
-                            const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
-                            return label;
-                          }}
-                          content={({ active, payload, label }) => {
-                            if (active && payload && payload.length) {
-                              const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
-                              return (
-                                <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                                  <div className="font-bold mb-2 pb-2 border-b border-border">{label}</div>
-                                  {payload.map((entry: any, index: number) => (
-                                    entry.value > 0 && (
-                                      <div key={index} className="flex justify-between gap-4 py-1">
-                                        <span className="flex items-center gap-2">
-                                          <div 
-                                            className="w-3 h-3 rounded-sm" 
-                                            style={{ backgroundColor: entry.color }}
-                                          />
-                                          {entry.name}:
-                                        </span>
-                                        <span className="font-medium">{formatCurrency(entry.value)}</span>
+                    {(() => {
+                      const dataFiltradaCliente = filtroAntiguedad === "todos" 
+                        ? (analytics?.cxcPorClienteApilado || [])
+                        : (analytics?.cxcPorClienteApilado || [])
+                            .filter(c => (c as any)[filtroAntiguedad] > 0)
+                            .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0));
+                      
+                      const maxMontoCliente = Math.max(...dataFiltradaCliente.map(c => c.total), 1);
+                      const dominioXCliente = [0, maxMontoCliente * 1.2];
+                      
+                      return (
+                        <ResponsiveContainer 
+                          width="100%" 
+                          height={Math.max(400, dataFiltradaCliente.length * 40)}
+                        >
+                          <BarChart 
+                            data={dataFiltradaCliente}
+                            layout="vertical"
+                            margin={{ left: 100 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis 
+                              type="number"
+                              domain={dominioXCliente}
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
+                            />
+                            <YAxis 
+                              type="category"
+                              dataKey="cliente" 
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              width={90}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px',
+                                padding: '12px'
+                              }}
+                              formatter={(value: number, name: string) => {
+                                const labels: Record<string, string> = {
+                                  sinVencimiento: "Sin vencimiento",
+                                  vencido1_15: "Vencido 1-15 días",
+                                  vencido16_30: "Vencido 16-30 días",
+                                  vencido31_60: "Vencido 31-60 días",
+                                  vencido61_90: "Vencido 61-90 días",
+                                  vencidoMas90: "Vencido +90 días"
+                                };
+                                return [formatearConPreferenciasAnalitica(value), labels[name] || name];
+                              }}
+                              labelFormatter={(label) => {
+                                const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
+                                return label;
+                              }}
+                              content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                  const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
+                                  return (
+                                    <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                                      <div className="font-bold mb-2 pb-2 border-b border-border">{label}</div>
+                                      {payload.map((entry: any, index: number) => (
+                                        entry.value > 0 && (
+                                          <div key={index} className="flex justify-between gap-4 py-1">
+                                            <span className="flex items-center gap-2">
+                                              <div 
+                                                className="w-3 h-3 rounded-sm" 
+                                                style={{ backgroundColor: entry.color }}
+                                              />
+                                              {entry.name}:
+                                            </span>
+                                            <span className="font-medium">{formatearConPreferenciasAnalitica(entry.value)}</span>
+                                          </div>
+                                        )
+                                      ))}
+                                      <div className="flex justify-between gap-4 pt-2 mt-2 border-t border-border font-bold text-primary">
+                                        <span>TOTAL:</span>
+                                        <span>{formatearConPreferenciasAnalitica(cliente?.total || 0)}</span>
                                       </div>
-                                    )
-                                  ))}
-                                  <div className="flex justify-between gap-4 pt-2 mt-2 border-t border-border font-bold text-primary">
-                                    <span>TOTAL:</span>
-                                    <span>{formatCurrency(cliente?.total || 0)}</span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--chart-1))" name="Sin vencimiento" />
-                        <Bar dataKey="vencido1_15" stackId="a" fill="hsl(var(--chart-2))" name="Vencido 1-15 días" />
-                        <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días" />
-                        <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días" />
-                        <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días" />
-                        <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--chart-1))" name="Sin vencimiento">
+                              <LabelList 
+                                dataKey="sinVencimiento"
+                                position="right"
+                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
+                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                            <Bar dataKey="vencido1_15" stackId="a" fill="hsl(var(--chart-2))" name="Vencido 1-15 días">
+                              <LabelList 
+                                dataKey="vencido1_15"
+                                position="right"
+                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
+                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                            <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días">
+                              <LabelList 
+                                dataKey="vencido16_30"
+                                position="right"
+                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
+                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                            <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días">
+                              <LabelList 
+                                dataKey="vencido31_60"
+                                position="right"
+                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
+                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                            <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días">
+                              <LabelList 
+                                dataKey="vencido61_90"
+                                position="right"
+                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
+                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                            <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días">
+                              <LabelList 
+                                dataKey="vencidoMas90"
+                                position="right"
+                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
+                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
