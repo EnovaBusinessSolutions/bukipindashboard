@@ -173,33 +173,18 @@ const Balanza = () => {
           !aDescLower.includes('cancelación de egreso:') &&
           !aDescLower.includes('cancelacion de egreso:')) return false;
       
-      // Limpiar descripción de reversión: remover prefijos y sufijos
-      const descripcionReversion = a.descripcion
-        .replace(/REVERSIÓN:\s*/i, '')
-        .replace(/Reversión:\s*/i, '')
-        .replace(/REVERSION:\s*/i, '')
-        .replace(/Reversion:\s*/i, '')
-        .replace(/CANCELACIÓN DE EGRESO:\s*/i, '')
-        .replace(/Cancelación de egreso:\s*/i, '')
-        .replace(/CANCELACION DE EGRESO:\s*/i, '')
-        .replace(/Cancelacion de egreso:\s*/i, '')
-        .replace(/\s*-\s*Motivo:.*$/i, '')
-        .replace(/\s*\(Cancelado:.*\)$/i, '')
-        .trim();
+      // Comparar por número de asiento (ID único) en lugar de descripción
+      // La reversión tiene formato CANC-EGR-{id} o CANC-ING-{id}
+      // El asiento original tiene formato EGR-{id} o ING-{id}
       
-      // Limpiar descripción del asiento original: remover prefijos de tipo
-      const descripcionAsiento = asiento.descripcion
-        .replace(/^Egreso:\s*/i, '')
-        .replace(/^Ingreso:\s*/i, '')
-        .replace(/^Capital:\s*/i, '')
-        .trim();
+      // Extraer el ID del asiento original
+      const matchOriginal = asiento.referencia.match(/^([A-Z]+)-(.+)$/);
+      if (!matchOriginal) return false;
       
-      // Comparar los conceptos limpios (primeros 20 caracteres)
-      const conceptoReversion = descripcionReversion.toLowerCase();
-      const conceptoAsiento = descripcionAsiento.toLowerCase();
+      const idOriginal = matchOriginal[2]; // Ejemplo: "b4087dfc-9d59-4de5-923a-1265004c0ec2"
       
-      return conceptoReversion.includes(conceptoAsiento.substring(0, 20)) ||
-             conceptoAsiento.includes(conceptoReversion.substring(0, 20));
+      // Verificar si el número de asiento de reversión contiene este ID
+      return a.referencia.includes(idOriginal);
     });
     
     return {
