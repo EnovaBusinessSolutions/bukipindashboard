@@ -7,8 +7,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CreditCard, TrendingUp, Calendar, Eye } from "lucide-react";
+import { CreditCard, TrendingUp, Calendar, Eye, AlertCircle } from "lucide-react";
 import { useState } from "react";
+import { Switch } from "@/components/ui/switch";
 
 interface TransaccionesTarjetaCreditoProps {
   financiamientoId: string;
@@ -25,6 +26,7 @@ const TransaccionesTarjetaCredito = ({
 }: TransaccionesTarjetaCreditoProps) => {
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
+  const [mostrarCanceladas, setMostrarCanceladas] = useState(true);
   
   // Obtener todas las transacciones donde se usó esta tarjeta
   const { data: transacciones, isLoading } = useQuery({
@@ -62,7 +64,10 @@ const TransaccionesTarjetaCredito = ({
           tipo: 'egreso' as const,
           proveedor: e.proveedor_nombre,
           detalle: e,
-          tipoTransaccion: 'cargo'
+          tipoTransaccion: 'cargo',
+          estado: e.estado,
+          fechaCancelacion: e.fecha_cancelacion,
+          motivoCancelacion: e.motivo_cancelacion
         })),
         ...(inversiones || []).map(i => ({
           id: i.id,
@@ -72,7 +77,10 @@ const TransaccionesTarjetaCredito = ({
           tipo: 'capex' as const,
           proveedor: i.proveedor_nombre,
           detalle: i,
-          tipoTransaccion: 'cargo'
+          tipoTransaccion: 'cargo',
+          estado: i.estado,
+          fechaCancelacion: i.fecha_baja,
+          motivoCancelacion: i.motivo_baja
         })),
         ...(transaccionesFinanciamiento || []).map(t => ({
           id: t.id,
@@ -84,7 +92,10 @@ const TransaccionesTarjetaCredito = ({
           tipo: t.tipo_transaccion,
           proveedor: null,
           detalle: t,
-          tipoTransaccion: t.tipo_transaccion
+          tipoTransaccion: t.tipo_transaccion,
+          estado: 'activo',
+          fechaCancelacion: null,
+          motivoCancelacion: null
         }))
       ];
 
@@ -133,6 +144,11 @@ const TransaccionesTarjetaCredito = ({
 
   const limiteDisponible = limiteCredito - saldoActual;
   const porcentajeUso = (saldoActual / limiteCredito) * 100;
+
+  // Filtrar transacciones según preferencia
+  const transaccionesFiltradas = transacciones?.filter(t => 
+    mostrarCanceladas || t.estado !== 'cancelado'
+  );
 
   return (
     <div className="space-y-6">
@@ -183,10 +199,23 @@ const TransaccionesTarjetaCredito = ({
       {/* Tabla de transacciones */}
       <Card>
         <CardHeader>
-          <CardTitle>Transacciones de {nombreTarjeta}</CardTitle>
-          <CardDescription>
-            Historial de compras y pagos realizados con esta tarjeta
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Transacciones de {nombreTarjeta}</CardTitle>
+              <CardDescription>
+                Historial de compras y pagos realizados con esta tarjeta
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch 
+                checked={mostrarCanceladas}
+                onCheckedChange={setMostrarCanceladas}
+              />
+              <span className="text-sm text-muted-foreground">
+                Mostrar canceladas
+              </span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -194,6 +223,10 @@ const TransaccionesTarjetaCredito = ({
           ) : !transacciones || transacciones.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No hay transacciones registradas con esta tarjeta
+            </div>
+          ) : !transaccionesFiltradas || transaccionesFiltradas.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No hay transacciones {mostrarCanceladas ? '' : 'activas'} para mostrar
             </div>
           ) : (
             <Table>
@@ -208,15 +241,28 @@ const TransaccionesTarjetaCredito = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transacciones.map((transaccion) => (
-                  <TableRow key={transaccion.id}>
+                {transaccionesFiltradas.map((transaccion) => (
+                  <TableRow 
+                    key={transaccion.id}
+                    className={transaccion.estado === 'cancelado' ? 'bg-red-50 dark:bg-red-950/20' : ''}
+                  >
                     <TableCell>
                       {format(new Date(transaccion.fecha), "dd MMM yyyy", { locale: es })}
                     </TableCell>
-                    <TableCell>{transaccion.descripcion}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span>{transaccion.descripcion}</span>
+                        {transaccion.estado === 'cancelado' && (
+                          <Badge variant="destructive" className="w-fit text-xs">
+                            CANCELADO
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{transaccion.proveedor || "-"}</TableCell>
                     <TableCell>
                       <Badge variant={
+                        transaccion.estado === 'cancelado' ? 'outline' :
                         transaccion.tipo === 'egreso' ? 'secondary' : 
                         transaccion.tipo === 'capex' ? 'default' :
                         transaccion.tipo === 'amortizacion' ? 'default' :
@@ -229,7 +275,9 @@ const TransaccionesTarjetaCredito = ({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      ${transaccion.monto.toLocaleString('es-MX')}
+                      <span className={transaccion.estado === 'cancelado' ? 'line-through text-muted-foreground' : ''}>
+                        ${transaccion.monto.toLocaleString('es-MX')}
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       <Button 
@@ -256,6 +304,32 @@ const TransaccionesTarjetaCredito = ({
           </DialogHeader>
           {selectedTransaction && (
             <div className="space-y-4">
+              {/* Indicador de cancelación prominente */}
+              {selectedTransaction.estado === 'cancelado' && (
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-red-900 dark:text-red-100">
+                        Transacción Cancelada
+                      </h4>
+                      <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                        Esta transacción fue cancelada el{' '}
+                        {format(new Date(selectedTransaction.fechaCancelacion), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                      </p>
+                      {selectedTransaction.motivoCancelacion && (
+                        <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                          <strong>Motivo:</strong> {selectedTransaction.motivoCancelacion}
+                        </p>
+                      )}
+                      <p className="text-sm text-muted-foreground mt-2">
+                        El saldo de la tarjeta fue revertido automáticamente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha</p>
