@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -11,10 +11,12 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { useCuentas } from "@/hooks/useCuentas";
 import { Badge } from "@/components/ui/badge";
+import { CardDescription } from "@/components/ui/card";
 
 interface BalanzaEntry {
   fecha: string;
@@ -46,6 +48,11 @@ const Balanza = () => {
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
   const [filtroEstadoFinanciero, setFiltroEstadoFinanciero] = useState<string>("todos");
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
+  
+  // Filtros jerárquicos
+  const [grupoSeleccionado, setGrupoSeleccionado] = useState<string>("todos");
+  const [subgrupoSeleccionado, setSubgrupoSeleccionado] = useState<string>("todos");
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState<string>("todos");
 
   // Para Balance General, ajustar startDate a 10 años atrás para acumular todo
   const startDateAjustado = pestanaActiva === "balance" 
@@ -55,6 +62,65 @@ const Balanza = () => {
   // Usar el hook simplificado que lee de detalle_asientos
   const { data: balanzaData, isLoading } = useAsientosBalanza(startDateAjustado, endDate);
   const { data: cuentasData } = useCuentas();
+
+  // Extraer grupos disponibles según pestaña activa
+  const gruposDisponibles = useMemo(() => {
+    if (!cuentasData?.estadosFinancieros) return [];
+    
+    const estadoKey = pestanaActiva === "balance" ? "Balance General" : 
+                      pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+    
+    if (!estadoKey) {
+      // Para "todos", combinar ambos estados financieros
+      return [
+        ...Object.keys(cuentasData.estadosFinancieros["Balance General"] || {}),
+        ...Object.keys(cuentasData.estadosFinancieros["Estado de Resultados"] || {})
+      ].filter((v, i, a) => a.indexOf(v) === i); // unique
+    }
+    
+    return Object.keys(cuentasData.estadosFinancieros[estadoKey] || {});
+  }, [cuentasData, pestanaActiva]);
+
+  // Extraer subgrupos según grupo seleccionado
+  const subgruposDisponibles = useMemo(() => {
+    if (grupoSeleccionado === "todos" || !cuentasData?.estadosFinancieros) return [];
+    
+    const estadoKey = pestanaActiva === "balance" ? "Balance General" : 
+                      pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+    
+    if (!estadoKey) {
+      // Para "todos", buscar en ambos estados
+      const subgruposBG = Object.keys(cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {});
+      const subgruposER = Object.keys(cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {});
+      return [...subgruposBG, ...subgruposER].filter((v, i, a) => a.indexOf(v) === i);
+    }
+    
+    return Object.keys(cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {});
+  }, [cuentasData, grupoSeleccionado, pestanaActiva]);
+
+  // Extraer cuentas según subgrupo seleccionado
+  const cuentasDisponibles = useMemo(() => {
+    if (subgrupoSeleccionado === "todos" || !cuentasData?.estadosFinancieros) return [];
+    
+    const estadoKey = pestanaActiva === "balance" ? "Balance General" : 
+                      pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+    
+    if (!estadoKey) {
+      // Para "todos", buscar en ambos estados
+      const cuentasBG = cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
+      const cuentasER = cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
+      return [...cuentasBG, ...cuentasER];
+    }
+    
+    return cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
+  }, [cuentasData, grupoSeleccionado, subgrupoSeleccionado, pestanaActiva]);
+
+  // Limpiar filtros jerárquicos al cambiar de pestaña
+  useEffect(() => {
+    setGrupoSeleccionado("todos");
+    setSubgrupoSeleccionado("todos");
+    setCuentaSeleccionada("todos");
+  }, [pestanaActiva]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -102,6 +168,46 @@ const Balanza = () => {
     );
   }
 
+  // Aplicar filtros jerárquicos
+  if (cuentaSeleccionada !== "todos") {
+    // Si hay cuenta específica, solo mostrar esa
+    movimientosFiltrados = movimientosFiltrados.filter(mov => 
+      mov.cuenta_codigo === cuentaSeleccionada
+    );
+  } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
+    // Si hay subgrupo, filtrar por cuentas de ese subgrupo
+    const codigosCuentas = cuentasDisponibles.map(c => c.codigo);
+    movimientosFiltrados = movimientosFiltrados.filter(mov => 
+      codigosCuentas.includes(mov.cuenta_codigo)
+    );
+  } else if (grupoSeleccionado !== "todos" && cuentasData?.estadosFinancieros) {
+    // Si hay grupo, filtrar por cuentas de ese grupo
+    const estadoKey = pestanaActiva === "balance" ? "Balance General" : 
+                      pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+    
+    if (estadoKey) {
+      const todasCuentasGrupo = Object.values(
+        cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}
+      ).flat();
+      const codigosCuentas = todasCuentasGrupo.map((c: any) => c.codigo);
+      movimientosFiltrados = movimientosFiltrados.filter(mov => 
+        codigosCuentas.includes(mov.cuenta_codigo)
+      );
+    } else {
+      // Para "todos", buscar en ambos estados
+      const todasCuentasBG = Object.values(
+        cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}
+      ).flat();
+      const todasCuentasER = Object.values(
+        cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}
+      ).flat();
+      const codigosCuentas = [...todasCuentasBG, ...todasCuentasER].map((c: any) => c.codigo);
+      movimientosFiltrados = movimientosFiltrados.filter(mov => 
+        codigosCuentas.includes(mov.cuenta_codigo)
+      );
+    }
+  }
+
   // Filtrar saldos según pestaña activa
   let saldosPorCuentaFiltrados = saldosPorCuenta;
   if (pestanaActiva === "resultados") {
@@ -118,6 +224,48 @@ const Balanza = () => {
     saldosPorCuentaFiltrados = Object.fromEntries(
       codigosBalance.map(codigo => [codigo, saldosPorCuenta[codigo]])
     );
+  }
+
+  // Aplicar filtros jerárquicos a saldos
+  if (cuentaSeleccionada !== "todos") {
+    const codigo = cuentaSeleccionada;
+    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[codigo] ? 
+      { [codigo]: saldosPorCuentaFiltrados[codigo] } : {};
+  } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
+    const codigosCuentas = cuentasDisponibles.map(c => c.codigo);
+    saldosPorCuentaFiltrados = Object.fromEntries(
+      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => 
+        codigosCuentas.includes(codigo)
+      )
+    );
+  } else if (grupoSeleccionado !== "todos" && cuentasData?.estadosFinancieros) {
+    const estadoKey = pestanaActiva === "balance" ? "Balance General" : 
+                      pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+    
+    if (estadoKey) {
+      const todasCuentasGrupo = Object.values(
+        cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}
+      ).flat();
+      const codigosCuentas = todasCuentasGrupo.map((c: any) => c.codigo);
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => 
+          codigosCuentas.includes(codigo)
+        )
+      );
+    } else {
+      const todasCuentasBG = Object.values(
+        cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}
+      ).flat();
+      const todasCuentasER = Object.values(
+        cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}
+      ).flat();
+      const codigosCuentas = [...todasCuentasBG, ...todasCuentasER].map((c: any) => c.codigo);
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => 
+          codigosCuentas.includes(codigo)
+        )
+      );
+    }
   }
 
   // Crear Map con toda la información de las cuentas
@@ -344,17 +492,24 @@ const Balanza = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filtros y Rango de Fechas
+            Filtros de Análisis
           </CardTitle>
+          <CardDescription>
+            {pestanaActiva === "balance" 
+              ? "Navega desde grupos hasta cuentas específicas para analizar tu posición financiera"
+              : "Filtra por grupos, subgrupos y cuentas para análisis detallado"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Selectores de Fecha */}
             {pestanaActiva !== "balance" && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Fecha Inicio</label>
+                <Label htmlFor="start-date">Fecha Inicio</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
+                      id="start-date"
                       variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal",
@@ -379,12 +534,13 @@ const Balanza = () => {
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">
+              <Label htmlFor="end-date">
                 {pestanaActiva === "balance" ? "Fecha de Corte" : "Fecha Fin"}
-              </label>
+              </Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
+                    id="end-date"
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal",
@@ -406,105 +562,101 @@ const Balanza = () => {
                 </PopoverContent>
               </Popover>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Filtro de Grupo */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo de Transacción</label>
-              <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+              <Label>Grupo</Label>
+              <Select 
+                value={grupoSeleccionado} 
+                onValueChange={(value) => {
+                  setGrupoSeleccionado(value);
+                  setSubgrupoSeleccionado("todos");
+                  setCuentaSeleccionada("todos");
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue placeholder="Todos los Grupos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {tiposUnicos.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
+                  <SelectItem value="todos">Todos los Grupos</SelectItem>
+                  {gruposDisponibles.map(grupo => (
+                    <SelectItem key={grupo} value={grupo}>{grupo}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Filtro de Subgrupo */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Estado del Asiento</label>
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="cuadrado">Cuadrado</SelectItem>
-                  <SelectItem value="descuadrado">Descuadrado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Estado Financiero</label>
-              <Select
-                value={filtroEstadoFinanciero}
-                onValueChange={setFiltroEstadoFinanciero}
+              <Label>Subgrupo</Label>
+              <Select 
+                value={subgrupoSeleccionado} 
+                onValueChange={(value) => {
+                  setSubgrupoSeleccionado(value);
+                  setCuentaSeleccionada("todos");
+                }}
+                disabled={grupoSeleccionado === "todos"}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue placeholder="Todos los Subgrupos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="balance">Balance General</SelectItem>
-                  <SelectItem value="resultados">Estado de Resultados</SelectItem>
+                  <SelectItem value="todos">Todos los Subgrupos</SelectItem>
+                  {subgruposDisponibles.map(subgrupo => (
+                    <SelectItem key={subgrupo} value={subgrupo}>{subgrupo}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Filtro de Cuenta */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Búsqueda</label>
-              <Input
-                placeholder="Buscar..."
-                value={filtroBusqueda}
-                onChange={(e) => setFiltroBusqueda(e.target.value)}
-              />
+              <Label>Cuenta</Label>
+              <Select 
+                value={cuentaSeleccionada} 
+                onValueChange={setCuentaSeleccionada}
+                disabled={subgrupoSeleccionado === "todos"}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas las Cuentas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas las Cuentas</SelectItem>
+                  {cuentasDisponibles.map(cuenta => (
+                    <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                      {cuenta.codigo} - {cuenta.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Total Debe</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalDebe)}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Total Haber</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalHaber)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className={cuadra ? "border-green-500" : "border-red-500"}>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Estado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-bold ${cuadra ? "text-green-600" : "text-red-600"}`}>
-              {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
-            </p>
-            {!cuadra && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Diferencia: {formatCurrency(diferencia)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Indicador de filtros activos */}
+      {(grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos") && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <Filter className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <span className="text-sm text-blue-600 dark:text-blue-400 flex-1">
+            Filtros activos: {grupoSeleccionado !== "todos" && grupoSeleccionado}
+            {subgrupoSeleccionado !== "todos" && ` > ${subgrupoSeleccionado}`}
+            {cuentaSeleccionada !== "todos" && ` > ${cuentaSeleccionada}`}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setGrupoSeleccionado("todos");
+              setSubgrupoSeleccionado("todos");
+              setCuentaSeleccionada("todos");
+            }}
+            className="h-7 text-xs"
+          >
+            Limpiar filtros
+          </Button>
+        </div>
+      )}
 
       {/* Tabla de Asientos */}
       <Card>
