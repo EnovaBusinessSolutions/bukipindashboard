@@ -35,8 +35,10 @@ import {
   DollarSign, 
   Building2, 
   AlertCircle,
+  AlertTriangle,
   BarChart3,
   TrendingUp, 
+  Target,
   Clock,
   ChevronRight,
   ChevronDown,
@@ -1263,7 +1265,7 @@ const CuentasPorPagar = () => {
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">{analytics.totalProveedores}</div>
@@ -1275,8 +1277,8 @@ const CuentasPorPagar = () => {
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Promedio Deuda</CardTitle>
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Promedio por Proveedor</CardTitle>
+                      <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">{formatCurrency(analytics.promedioDeuda)}</div>
@@ -1289,7 +1291,7 @@ const CuentasPorPagar = () => {
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
-                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-destructive">
@@ -1303,12 +1305,12 @@ const CuentasPorPagar = () => {
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Configuración</CardTitle>
+                      <CardTitle className="text-sm font-medium">Formato</CardTitle>
                       <Settings className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div>
-                        <label className="text-xs font-medium">Formato</label>
+                        <label className="text-xs font-medium">Escala</label>
                         <Select 
                           value={formatoNumerosAnalitica} 
                           onValueChange={(v: 'normal' | 'miles' | 'millones') => setFormatoNumerosAnalitica(v)}
@@ -1350,7 +1352,7 @@ const CuentasPorPagar = () => {
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <Building2 className="h-5 w-5" />
+                        <Users className="h-5 w-5" />
                         Top Proveedores por Deuda
                       </CardTitle>
                       <CardDescription>
