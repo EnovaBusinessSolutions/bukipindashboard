@@ -1751,54 +1751,12 @@ const CuentasPorCobrar = () => {
                                 return null;
                               }}
                             />
-                            <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--chart-1))" name="Sin vencimiento">
-                              <LabelList 
-                                dataKey="sinVencimiento"
-                                position="right"
-                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
-                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                              />
-                            </Bar>
-                            <Bar dataKey="vencido1_15" stackId="a" fill="hsl(var(--chart-2))" name="Vencido 1-15 días">
-                              <LabelList 
-                                dataKey="vencido1_15"
-                                position="right"
-                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
-                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                              />
-                            </Bar>
-                            <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días">
-                              <LabelList 
-                                dataKey="vencido16_30"
-                                position="right"
-                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
-                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                              />
-                            </Bar>
-                            <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días">
-                              <LabelList 
-                                dataKey="vencido31_60"
-                                position="right"
-                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
-                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                              />
-                            </Bar>
-                            <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días">
-                              <LabelList 
-                                dataKey="vencido61_90"
-                                position="right"
-                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
-                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                              />
-                            </Bar>
-                            <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días">
-                              <LabelList 
-                                dataKey="vencidoMas90"
-                                position="right"
-                                formatter={(value: number) => value > 0 ? formatearConPreferenciasAnalitica(value) : ''}
-                                style={{ fontSize: '10px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                              />
-                            </Bar>
+                            <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--chart-1))" name="Sin vencimiento" />
+                            <Bar dataKey="vencido1_15" stackId="a" fill="hsl(var(--chart-2))" name="Vencido 1-15 días" />
+                            <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días" />
+                            <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días" />
+                            <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días" />
+                            <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días" />
                           </BarChart>
                         </ResponsiveContainer>
                       );
