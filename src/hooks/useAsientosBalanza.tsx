@@ -70,6 +70,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         else if (numeroAsiento.startsWith("FIN-")) tipo = "Financiamiento";
         else if (numeroAsiento.startsWith("IMP-") || numeroAsiento.startsWith("ISR-")) tipo = "Impuesto";
         else if (numeroAsiento.startsWith("COB-")) tipo = "Cobro";
+        else if (numeroAsiento.startsWith("PAG-CXP-")) tipo = "Pago CxP";
         else if (numeroAsiento.startsWith("PAG-")) tipo = "Pago";
         else if (numeroAsiento.startsWith("DEP-")) tipo = "Depreciación";
 
