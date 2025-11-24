@@ -85,7 +85,7 @@ const CuentasPorPagar = () => {
   const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
   const [detalleContableOpen, setDetalleContableOpen] = useState(false);
   const [selectedTransaccionId, setSelectedTransaccionId] = useState<string | null>(null);
-  const [fuenteTransaccion, setFuenteTransaccion] = useState<'egreso' | 'capex' | null>(null);
+  const [fuenteTransaccion, setFuenteTransaccion] = useState<'egreso' | 'capex' | 'pago_cxp' | null>(null);
 
   // Estados para analíticas
   const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
@@ -105,6 +105,7 @@ const CuentasPorPagar = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
+      // 1. Obtener transacciones de egresos
       const { data: egresos, error: egresosError } = await supabase
         .from("transacciones_egresos")
         .select("*")
@@ -114,6 +115,7 @@ const CuentasPorPagar = () => {
 
       if (egresosError) throw egresosError;
 
+      // 2. Obtener inversiones CAPEX
       const { data: inversiones, error: inversionesError } = await supabase
         .from("inversiones_capex")
         .select("*")
@@ -122,6 +124,16 @@ const CuentasPorPagar = () => {
         .order("created_at", { ascending: false });
 
       if (inversionesError) throw inversionesError;
+
+      // 3. Obtener pagos realizados de CxP
+      const { data: pagos, error: pagosError } = await supabase
+        .from("transacciones_cobros_pagos")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("tipo_transaccion", "pago")
+        .order("created_at", { ascending: false });
+
+      if (pagosError) throw pagosError;
 
       const egresosNormalizados = (egresos || []).map((e: any) => ({
         id: e.id,
@@ -159,7 +171,26 @@ const CuentasPorPagar = () => {
         fuente: 'capex' as const
       }));
 
-      return [...egresosNormalizados, ...inversionesNormalizadas]
+      // Normalizar pagos de CxP
+      const pagosNormalizados = (pagos || []).map((p: any) => ({
+        id: p.id,
+        created_at: p.created_at,
+        fecha: p.fecha,
+        proveedor_nombre: p.descripcion?.split(': ')[1] || p.descripcion?.replace('Pago a ', '') || "Pago CxP",
+        descripcion: p.descripcion || "Pago a proveedor",
+        tipo: 'Pago CxP',
+        subtipo: 'Pago posterior',
+        monto_total: p.monto,
+        monto_pagado: p.monto,
+        monto_pendiente: 0,
+        tipo_pago: 'pago',
+        metodo_pago: p.metodo_pago || "-",
+        fecha_vencimiento: null,
+        estado: 'activo',
+        fuente: 'pago_cxp' as const
+      }));
+
+      return [...egresosNormalizados, ...inversionesNormalizadas, ...pagosNormalizados]
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     },
   });
@@ -170,12 +201,43 @@ const CuentasPorPagar = () => {
     queryFn: async () => {
       if (!selectedTransaccionId || !fuenteTransaccion) return null;
 
-    let numeroAsiento = '';
-    if (fuenteTransaccion === 'egreso') {
-      numeroAsiento = `EGR-${selectedTransaccionId}`;
-    } else {
-      numeroAsiento = `INV-${selectedTransaccionId}`;
-    }
+      let numeroAsiento = '';
+      if (fuenteTransaccion === 'egreso') {
+        numeroAsiento = `EGR-${selectedTransaccionId}`;
+      } else if (fuenteTransaccion === 'capex') {
+        numeroAsiento = `INV-${selectedTransaccionId}`;
+      } else if (fuenteTransaccion === 'pago_cxp') {
+        // Para pagos, buscar el asiento PAG-CXP asociado
+        const { data: pago } = await supabase
+          .from("transacciones_cobros_pagos")
+          .select("created_at")
+          .eq("id", selectedTransaccionId)
+          .single();
+        
+        if (!pago) return null;
+        
+        // Buscar asientos que contengan el ID del pago en su número
+        const { data: asientos } = await supabase
+          .from("asientos_contables")
+          .select(`
+            *,
+            detalle_asientos (
+              *,
+              cuentas:cuenta_codigo (nombre)
+            )
+          `)
+          .ilike("numero_asiento", "PAG-CXP-%")
+          .order("created_at", { ascending: false })
+          .limit(100);
+        
+        // Buscar el asiento más cercano a la fecha de creación del pago
+        const asientoEncontrado = asientos?.find(a => {
+          const diff = Math.abs(new Date(a.created_at).getTime() - new Date(pago.created_at).getTime());
+          return diff < 5000; // Menos de 5 segundos de diferencia
+        });
+        
+        return asientoEncontrado || null;
+      }
 
       const { data: asiento, error } = await supabase
         .from("asientos_contables")
@@ -205,6 +267,11 @@ const CuentasPorPagar = () => {
         queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inversiones_capex' }, () => {
+        queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
+        queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
+        queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transacciones_cobros_pagos' }, () => {
         queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
         queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
         queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
@@ -590,7 +657,12 @@ const CuentasPorPagar = () => {
   const tiposUnicos = useMemo(() => {
     if (!todasTransaccionesCxP) return [];
     const tipos = new Set(todasTransaccionesCxP.map(t => t.tipo));
-    return Array.from(tipos).sort();
+    return Array.from(tipos).sort((a, b) => {
+      // Poner "Pago CxP" al principio
+      if (a === 'Pago CxP') return -1;
+      if (b === 'Pago CxP') return 1;
+      return a.localeCompare(b);
+    });
   }, [todasTransaccionesCxP]);
 
   const limpiarFiltrosTransacciones = () => {
@@ -982,50 +1054,69 @@ const CuentasPorPagar = () => {
           {/* Tab: Resumen de Transacciones */}
           <TabsContent value="transacciones" className="space-y-6">
             {/* KPIs de Transacciones */}
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card>
+            <div className="grid gap-4 md:grid-cols-5">
+              <Card className="bg-card/50 backdrop-blur">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Transacciones</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{todasTransaccionesCxP?.length || 0}</div>
+                  <p className="text-xs text-muted-foreground">Facturas y pagos</p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Completamente Pagadas</CardTitle>
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
-                    {todasTransaccionesCxP?.filter(t => t.monto_pendiente === 0).length || 0}
+                    {todasTransaccionesCxP?.filter(t => t.monto_pendiente === 0 && t.fuente !== 'pago_cxp').length || 0}
                   </div>
+                  <p className="text-xs text-muted-foreground">Facturas completadas</p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Pagos Parciales</CardTitle>
                   <Clock className="h-4 w-4 text-yellow-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-yellow-600">
-                    {todasTransaccionesCxP?.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0}
+                    {todasTransaccionesCxP?.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0 && t.fuente !== 'pago_cxp').length || 0}
                   </div>
+                  <p className="text-xs text-muted-foreground">En progreso</p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Sin Pagar</CardTitle>
                   <AlertCircle className="h-4 w-4 text-destructive" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-destructive">
-                    {todasTransaccionesCxP?.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0}
+                    {todasTransaccionesCxP?.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0 && t.fuente !== 'pago_cxp').length || 0}
                   </div>
+                  <p className="text-xs text-muted-foreground">Pendientes</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-primary/10 backdrop-blur border-primary/20">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pagos CxP</CardTitle>
+                  <Banknote className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">
+                    {todasTransaccionesCxP?.filter(t => t.fuente === 'pago_cxp').length || 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(todasTransaccionesCxP?.filter(t => t.fuente === 'pago_cxp').reduce((sum, t) => sum + t.monto_total, 0) || 0)}
+                  </p>
                 </CardContent>
               </Card>
             </div>
