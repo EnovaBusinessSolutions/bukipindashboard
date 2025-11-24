@@ -54,8 +54,8 @@ const Balanza = () => {
   const [subgrupoSeleccionado, setSubgrupoSeleccionado] = useState<string>("todos");
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState<string>("todos");
 
-  // Para Balance General, ajustar startDate a 10 años atrás para acumular todo
-  const startDateAjustado = pestanaActiva === "balance" 
+  // Para Balanza de Comprobación y Balance General, ajustar startDate a 10 años atrás para acumular todo
+  const startDateAjustado = (pestanaActiva === "balance" || pestanaActiva === "todos")
     ? new Date(endDate.getFullYear() - 10, 0, 1) 
     : startDate;
 
@@ -440,6 +440,8 @@ const Balanza = () => {
   // Textos según pestaña activa
   const getDescripcionPestana = () => {
     switch (pestanaActiva) {
+      case "todos":
+        return `Vista completa de todas las cuentas al corte del ${format(endDate, "dd/MM/yyyy")}. Muestra el saldo acumulado desde el inicio de operaciones.`;
       case "resultados":
         return "Cuentas de ingresos, costos y gastos del período seleccionado (Cuentas 4xxx, 5xxx, 6xxx)";
       case "balance":
@@ -492,7 +494,7 @@ const Balanza = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            {pestanaActiva === "todos" ? "Filtros y Rango de Fechas" : "Filtros de Análisis"}
+            {pestanaActiva === "todos" ? "Fecha de Corte" : "Filtros de Análisis"}
           </CardTitle>
           {pestanaActiva !== "todos" && (
             <CardDescription>
@@ -508,34 +510,7 @@ const Balanza = () => {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Fecha Inicio</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !startDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={(date) => date && setStartDate(date)}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Fecha Fin</label>
+                  <label className="text-sm font-medium">Fecha de Corte</label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
