@@ -198,26 +198,30 @@ serve(async (req) => {
       throw new Error(`Error al crear transacción: ${transaccionError.message}`)
     }
 
-    // 1.1. Registrar el pago inicial si existe
-    if (requestData.montoPagado > 0) {
-      const { error: pagoInicialError } = await supabaseClient
+    // 1.1. Registrar cobros pendientes solo para crédito/parcial
+    // IMPORTANTE: NO crear registro para ventas de CONTADO
+    // El pago de contado ya se registra en detalle_asientos como DEBE Caja/Bancos
+    if (montoPendiente > 0 && (requestData.tipoPago === 'credito' || requestData.tipoPago === 'parcial')) {
+      const { error: cobroError } = await supabaseClient
         .from('transacciones_cobros_pagos')
         .insert({
           user_id: userId,
           tipo_transaccion: 'cobro',
           referencia_id: transaccion.id,
           referencia_tabla: 'transacciones_ingresos',
-          monto: requestData.montoPagado,
-          metodo_pago: requestData.metodoPago,
-          fecha: new Date().toISOString().split('T')[0],
-          descripcion: `Pago inicial - ${requestData.descripcion}`
+          monto: montoPendiente,
+          metodo_pago: 'pendiente',
+          fecha: requestData.fechaVencimiento || new Date().toISOString().split('T')[0],
+          descripcion: `Cuenta por cobrar - ${requestData.clienteNombre || 'Cliente'} - ${requestData.descripcion}`
         })
       
-      if (pagoInicialError) {
-        console.error('Error al registrar pago inicial:', pagoInicialError.message)
+      if (cobroError) {
+        console.error('Error al registrar cuenta por cobrar:', cobroError.message)
       } else {
-        console.log(`✅ Pago inicial registrado: $${requestData.montoPagado}`)
+        console.log(`✅ Cuenta por cobrar registrada: $${montoPendiente}`)
       }
+    } else if (requestData.tipoPago === 'contado') {
+      console.log(`✅ Venta de contado - No se crea registro de cobro (ya registrado en asientos)`)
     }
 
     // 2. Generar número de asiento
