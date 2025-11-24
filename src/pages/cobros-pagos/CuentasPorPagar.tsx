@@ -1430,25 +1430,37 @@ const CuentasPorPagar = () => {
                     <CardContent>
                       <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={analytics.agingAnalysis}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={({ rango }) => 
-                                `${rango}: ${((analytics.agingAnalysis.find(a => a.rango === rango)?.monto || 0) / analytics.totalPendiente * 100).toFixed(1)}%`
-                              }
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="monto"
-                            >
-                              {analytics.agingAnalysis.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto']} />
-                          </PieChart>
+                          <BarChart 
+                            data={analytics.agingAnalysis}
+                            margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis 
+                              dataKey="rango" 
+                              angle={-45}
+                              textAnchor="end"
+                              height={100}
+                              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            />
+                            <YAxis 
+                              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                            />
+                            <Tooltip 
+                              formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto por Pagar']}
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--popover))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                fontSize: '14px'
+                              }}
+                            />
+                            <Bar 
+                              dataKey="monto" 
+                              fill={COLORS.primary}
+                              radius={[4, 4, 0, 0]}
+                            />
+                          </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </CardContent>
