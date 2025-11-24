@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarIcon, ChevronDown, ChevronRight, Filter, AlertTriangle } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
@@ -38,6 +39,7 @@ interface AsientoAgrupado {
 }
 
 const Balanza = () => {
+  const [pestanaActiva, setPestanaActiva] = useState<string>("todos");
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()));
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
@@ -45,8 +47,13 @@ const Balanza = () => {
   const [filtroEstadoFinanciero, setFiltroEstadoFinanciero] = useState<string>("todos");
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
+  // Para Balance General, ajustar startDate a 10 años atrás para acumular todo
+  const startDateAjustado = pestanaActiva === "balance" 
+    ? new Date(endDate.getFullYear() - 10, 0, 1) 
+    : startDate;
+
   // Usar el hook simplificado que lee de detalle_asientos
-  const { data: balanzaData, isLoading } = useAsientosBalanza(startDate, endDate);
+  const { data: balanzaData, isLoading } = useAsientosBalanza(startDateAjustado, endDate);
   const { data: cuentasData } = useCuentas();
 
   const formatCurrency = (value: number) => {
@@ -83,6 +90,36 @@ const Balanza = () => {
 
   const { movimientos, saldosPorCuenta } = balanzaData;
 
+  // Filtrar movimientos según pestaña activa
+  let movimientosFiltrados = movimientos;
+  if (pestanaActiva === "resultados") {
+    movimientosFiltrados = movimientos.filter(mov => 
+      ["4", "5", "6"].includes(mov.cuenta_codigo.charAt(0))
+    );
+  } else if (pestanaActiva === "balance") {
+    movimientosFiltrados = movimientos.filter(mov => 
+      ["1", "2", "3"].includes(mov.cuenta_codigo.charAt(0))
+    );
+  }
+
+  // Filtrar saldos según pestaña activa
+  let saldosPorCuentaFiltrados = saldosPorCuenta;
+  if (pestanaActiva === "resultados") {
+    const codigosResultados = Object.keys(saldosPorCuenta).filter(codigo => 
+      ["4", "5", "6"].includes(codigo.charAt(0))
+    );
+    saldosPorCuentaFiltrados = Object.fromEntries(
+      codigosResultados.map(codigo => [codigo, saldosPorCuenta[codigo]])
+    );
+  } else if (pestanaActiva === "balance") {
+    const codigosBalance = Object.keys(saldosPorCuenta).filter(codigo => 
+      ["1", "2", "3"].includes(codigo.charAt(0))
+    );
+    saldosPorCuentaFiltrados = Object.fromEntries(
+      codigosBalance.map(codigo => [codigo, saldosPorCuenta[codigo]])
+    );
+  }
+
   // Crear Map con toda la información de las cuentas
   const cuentasInfoMap = new Map(
     cuentasData?.cuentasFlat?.map(cuenta => [
@@ -97,14 +134,14 @@ const Balanza = () => {
   // Detectar si hay movimientos con fechas futuras
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const tieneFechasFuturas = movimientos.some(mov => {
+  const tieneFechasFuturas = movimientosFiltrados.some(mov => {
     const [dia, mes, ano] = mov.fecha.split('/');
     const fechaMov = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
     return fechaMov > today;
   });
 
   // Si no hay movimientos, mostrar mensaje
-  if (!movimientos || movimientos.length === 0) {
+  if (!movimientosFiltrados || movimientosFiltrados.length === 0) {
     return (
       <div className="container mx-auto p-6">
         <div>
@@ -132,7 +169,7 @@ const Balanza = () => {
   // Agrupar movimientos por referencia (asiento)
   const asientosAgrupados: Record<string, AsientoAgrupado> = {};
 
-  movimientos.forEach((mov) => {
+  movimientosFiltrados.forEach((mov) => {
     if (!asientosAgrupados[mov.referencia]) {
       asientosAgrupados[mov.referencia] = {
         referencia: mov.referencia,
@@ -238,12 +275,12 @@ const Balanza = () => {
     );
   }
 
-  // Calcular totales
-  const totalDebe = Object.values(saldosPorCuenta).reduce(
+  // Calcular totales basados en saldos filtrados
+  const totalDebe = Object.values(saldosPorCuentaFiltrados).reduce(
     (sum, cuenta) => sum + cuenta.debe_total,
     0
   );
-  const totalHaber = Object.values(saldosPorCuenta).reduce(
+  const totalHaber = Object.values(saldosPorCuentaFiltrados).reduce(
     (sum, cuenta) => sum + cuenta.haber_total,
     0
   );
@@ -252,15 +289,37 @@ const Balanza = () => {
 
   const tiposUnicos = Array.from(new Set(asientosConReversion.map((a) => a.tipo))).sort();
 
+  // Textos según pestaña activa
+  const getDescripcionPestana = () => {
+    switch (pestanaActiva) {
+      case "resultados":
+        return "Cuentas de ingresos, costos y gastos del período seleccionado (Cuentas 4xxx, 5xxx, 6xxx)";
+      case "balance":
+        return `Cuentas de activos, pasivos y capital al corte de ${format(endDate, "PPP", { locale: es })} (Cuentas 1xxx, 2xxx, 3xxx)`;
+      default:
+        return "Vista detallada de todos los movimientos contables del periodo";
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Balanza de Comprobación</h1>
         <p className="text-muted-foreground mt-2">
-          Vista detallada de todos los movimientos contables del periodo
+          {getDescripcionPestana()}
         </p>
       </div>
+
+      {/* Tabs */}
+      <Tabs value={pestanaActiva} onValueChange={setPestanaActiva}>
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsTrigger value="todos">Todos</TabsTrigger>
+          <TabsTrigger value="resultados">Estado de Resultados</TabsTrigger>
+          <TabsTrigger value="balance">Balance General</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={pestanaActiva} className="space-y-6 mt-6">
 
       {/* Alerta de fechas futuras */}
       {tieneFechasFuturas && (
@@ -290,34 +349,39 @@ const Balanza = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Fecha Inicio</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => date && setStartDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            {pestanaActiva !== "balance" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Fecha Inicio</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={(date) => date && setStartDate(date)}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Fecha Fin</label>
+              <label className="text-sm font-medium">
+                {pestanaActiva === "balance" ? "Fecha de Corte" : "Fecha Fin"}
+              </label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -337,6 +401,7 @@ const Balanza = () => {
                     selected={endDate}
                     onSelect={(date) => date && setEndDate(date)}
                     initialFocus
+                    className="pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
@@ -666,7 +731,7 @@ const Balanza = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Object.values(saldosPorCuenta)
+              {Object.values(saldosPorCuentaFiltrados)
                 .sort((a, b) => a.cuenta_codigo.localeCompare(b.cuenta_codigo))
                 .map((cuenta) => {
                   const infoCompleta = cuentasInfoMap.get(cuenta.cuenta_codigo);
@@ -707,6 +772,8 @@ const Balanza = () => {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
