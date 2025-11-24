@@ -21,6 +21,7 @@ interface TransaccionEgreso {
   imagen_comprobante: string | null;
   cuenta_codigo: string | null;
   subcuenta_id: string | null;
+  estado: string;
 }
 
 export const useTransaccionesEgresos = (
@@ -35,6 +36,7 @@ export const useTransaccionesEgresos = (
       let query = supabase
         .from('transacciones_egresos')
         .select('*')
+        .eq('estado', 'activo')
         .order('created_at', { ascending: false });
 
       // Aplicar filtros de fecha según período

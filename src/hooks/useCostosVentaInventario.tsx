@@ -157,7 +157,8 @@ export const useCostosVentaInventario = (
             .from('transacciones_egresos')
             .select('producto_egreso_id, cantidad, precio_unitario, monto_total')
             .eq('descripcion', descripcionBusqueda)
-            .eq('user_id', asiento.user_id);
+            .eq('user_id', asiento.user_id)
+            .eq('estado', 'activo');
           
           // Filtrar por monto redondeado
           const transaccionEgreso = transaccionesEgresos?.find(te =>
