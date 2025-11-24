@@ -817,7 +817,7 @@ const Balanza = () => {
                   <Card className={
                     asientoItem.esCancelado 
                       ? "border-red-300 bg-red-50 dark:bg-red-950/20" 
-                      : cuadrado ? "" : "border-red-300"
+                      : (cuadrado || pestanaActiva !== "todos") ? "" : "border-red-300"
                   }>
                     <CollapsibleTrigger asChild>
                       <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -872,7 +872,7 @@ const Balanza = () => {
                                 <p className="text-xs text-muted-foreground">Haber</p>
                               </div>
                             </div>
-                            {!cuadrado && !asientoItem.esCancelado && (
+                            {!cuadrado && !asientoItem.esCancelado && pestanaActiva === "todos" && (
                               <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
                                 Descuadrado
                               </span>
