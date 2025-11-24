@@ -66,9 +66,11 @@ import {
   Cell,
   LineChart,
   Line,
+  Area,
+  AreaChart
 } from "recharts";
 import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
-import { useAnalyticsCuentasPorPagarConsolidadas } from "@/hooks/useCuentasPorPagarConsolidadas";
+import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
 import { formatCurrency } from "@/lib/utils";
 
 const COLORS = {
@@ -109,13 +111,13 @@ const CuentasPorPagar = () => {
   const [fuenteTransaccion, setFuenteTransaccion] = useState<'egreso' | 'capex' | null>(null);
 
   // Estados para analíticas
-  const [periodoCxP, setPeriodoCxP] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
   const [decimalesAnalitica, setDecimalesAnalitica] = useState<0 | 1 | 2>(2);
 
   // Hooks de datos
   const { data: tiposCxP, isLoading } = useCuentasPorPagarAgrupadas();
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagarConsolidadas(periodoCxP);
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
+  const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
   const queryClient = useQueryClient();
 
   // Query para todas las transacciones (incluye pagadas)
@@ -1233,50 +1235,83 @@ const CuentasPorPagar = () => {
 
           {/* Tab: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
-            {loadingAnalytics ? (
+            {loadingAnalytics || loadingDetalles ? (
               <div className="flex items-center justify-center h-64">
                 <div className="text-muted-foreground">Cargando analíticas...</div>
               </div>
+            ) : !analytics || !detalles ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-muted-foreground">No hay datos de cuentas por pagar disponibles</div>
+              </div>
             ) : (
               <>
-                {/* Filtros y Configuración */}
-                <div className="grid gap-4 md:grid-cols-2">
-                  {/* Filtros de Período */}
+                {/* KPIs Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                   <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Período de Análisis
-                      </CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <Select value={periodoCxP} onValueChange={(val: any) => setPeriodoCxP(val)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="diario">Diario</SelectItem>
-                          <SelectItem value="mensual">Mensual</SelectItem>
-                          <SelectItem value="anual">Anual</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="text-2xl font-bold">{formatCurrency(analytics.totalPendiente)}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Monto total pendiente
+                      </p>
                     </CardContent>
                   </Card>
 
-                  {/* Configuración de Formato */}
                   <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Configuración
-                      </CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analytics.totalProveedores}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Proveedores con deudas
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Promedio Deuda</CardTitle>
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{formatCurrency(analytics.promedioDeuda)}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Deuda promedio
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-destructive">
+                        {detalles.filter(d => d.estado === 'Vencida' || d.estado === 'Muy vencida').length}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Requieren atención
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Configuración</CardTitle>
+                      <Settings className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Label className="text-sm min-w-[80px]">Formato:</Label>
+                      <div>
+                        <label className="text-xs font-medium">Formato</label>
                         <Select 
                           value={formatoNumerosAnalitica} 
-                          onValueChange={(val: any) => setFormatoNumerosAnalitica(val)}
+                          onValueChange={(v: 'normal' | 'miles' | 'millones') => setFormatoNumerosAnalitica(v)}
                         >
                           <SelectTrigger className="h-8">
                             <SelectValue />
@@ -1288,19 +1323,19 @@ const CuentasPorPagar = () => {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Label className="text-sm min-w-[80px]">Decimales:</Label>
+                      <div>
+                        <label className="text-xs font-medium">Decimales</label>
                         <Select 
                           value={decimalesAnalitica.toString()} 
-                          onValueChange={(val) => setDecimalesAnalitica(parseInt(val) as 0 | 1 | 2)}
+                          onValueChange={(v) => setDecimalesAnalitica(parseInt(v) as 0 | 1 | 2)}
                         >
                           <SelectTrigger className="h-8">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="0">0 decimales</SelectItem>
-                            <SelectItem value="1">1 decimal</SelectItem>
-                            <SelectItem value="2">2 decimales</SelectItem>
+                            <SelectItem value="0">0</SelectItem>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="2">2</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1308,101 +1343,65 @@ const CuentasPorPagar = () => {
                   </Card>
                 </div>
 
-                {/* KPIs Principales */}
-                <div className="grid gap-4 md:grid-cols-4">
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {formatCurrency(analytics?.totalPendiente || 0)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {analytics?.totalProveedores || 0}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Promedio Deuda</CardTitle>
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {formatCurrency(analytics?.promedioDeuda || 0)}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Facturas Pendientes</CardTitle>
-                      <AlertCircle className="h-4 w-4 text-destructive" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-destructive">
-                        {analytics?.todasCuentas?.length || 0}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Gráficas */}
-                <div className="grid gap-6 md:grid-cols-2">
-                  {/* Distribución por Tipo */}
+                {/* Charts Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  
+                  {/* Top Proveedores */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <BarChart3 className="h-5 w-5" />
-                        Distribución por Tipo
+                        <Building2 className="h-5 w-5" />
+                        Top Proveedores por Deuda
                       </CardTitle>
                       <CardDescription>
-                        Cuentas por pagar agrupadas por categoría
+                        Los 10 proveedores con mayor monto pendiente
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                          <Pie
-                            data={analytics?.distribucionPorTipo || []}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ tipo, monto }) => `${tipo}: ${formatearConPreferenciasAnalitica(monto)}`}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="monto"
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart 
+                            data={analytics.cuentasPorProveedor} 
+                            layout="vertical"
+                            margin={{ top: 10, right: 30, left: 150, bottom: 10 }}
                           >
-                            {(analytics?.distribucionPorTipo || []).map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(value: number) => formatearConPreferenciasAnalitica(value)}
-                            contentStyle={{
-                              backgroundColor: 'hsl(var(--popover))',
-                              border: '1px solid hsl(var(--border))',
-                              borderRadius: '8px'
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                            <XAxis 
+                              type="number" 
+                              stroke="hsl(var(--muted-foreground))"
+                              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                            />
+                            <YAxis 
+                              dataKey="proveedor" 
+                              type="category" 
+                              width={140}
+                              stroke="hsl(var(--muted-foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
+                            />
+                            <Tooltip 
+                              formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto por Pagar']}
+                              labelFormatter={(label) => `Proveedor: ${label}`}
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--popover))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                fontSize: '14px'
+                              }}
+                              labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
+                            />
+                            <Bar 
+                              dataKey="monto" 
+                              fill={COLORS.primary} 
+                              radius={[0, 4, 4, 0]}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </CardContent>
                   </Card>
 
-                  {/* Análisis de Antigüedad */}
+                  {/* Aging Analysis */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
@@ -1410,92 +1409,186 @@ const CuentasPorPagar = () => {
                         Análisis de Antigüedad
                       </CardTitle>
                       <CardDescription>
-                        Distribución de cuentas por días de vencimiento
+                        Distribución por días de vencimiento
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={analytics?.agingAnalysisDetailed || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis 
-                            dataKey="rango" 
-                            stroke="hsl(var(--foreground))"
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                          />
-                          <YAxis 
-                            stroke="hsl(var(--foreground))"
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                            tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
-                          />
-                          <Tooltip
-                            formatter={(value: number) => formatearConPreferenciasAnalitica(value)}
-                            contentStyle={{
-                              backgroundColor: 'hsl(var(--popover))',
-                              border: '1px solid hsl(var(--border))',
-                              borderRadius: '8px',
-                              color: 'hsl(var(--foreground))'
-                            }}
-                          />
-                          <Bar dataKey="monto" fill={COLORS.primary} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={analytics.agingAnalysis}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ rango }) => 
+                                `${rango}: ${((analytics.agingAnalysis.find(a => a.rango === rango)?.monto || 0) / analytics.totalPendiente * 100).toFixed(1)}%`
+                              }
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="monto"
+                            >
+                              {analytics.agingAnalysis.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto']} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Tendencia Mensual */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Tendencia de Cuentas por Pagar
+                      </CardTitle>
+                      <CardDescription>
+                        Evolución mensual de nuevas cuentas por pagar
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart 
+                            data={analytics.tendenciaMensual}
+                            margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="mes" />
+                            <YAxis 
+                              domain={[0, Math.max(...analytics.tendenciaMensual.map((t: any) => t.monto)) * 1.2]}
+                            />
+                            <Tooltip formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto']} />
+                            <Area 
+                              type="monotone" 
+                              dataKey="monto" 
+                              stroke={COLORS.primary} 
+                              fill={COLORS.primary} 
+                              fillOpacity={0.3}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Estado de Cuentas */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Estado de Cuentas
+                      </CardTitle>
+                      <CardDescription>
+                        Clasificación por estado de vencimiento
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {['Al día', 'Por vencer', 'Vencida', 'Muy vencida', 'Sin fecha límite'].map((estado) => {
+                          const cuentasEstado = detalles.filter(d => d.estado === estado);
+                          const montoTotal = cuentasEstado.reduce((sum, c) => sum + c.monto_pendiente, 0);
+                          const porcentaje = (montoTotal / analytics.totalPendiente * 100).toFixed(1);
+                          
+                          const getColorByEstado = (estado: string) => {
+                            switch (estado) {
+                              case 'Al día': return 'bg-green-500';
+                              case 'Por vencer': return 'bg-yellow-500';
+                              case 'Vencida': return 'bg-orange-500';
+                              case 'Muy vencida': return 'bg-red-500';
+                              default: return 'bg-gray-500';
+                            }
+                          };
+
+                          return (
+                            <div key={estado} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-full ${getColorByEstado(estado)}`} />
+                                  <span className="text-sm font-medium">{estado}</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold">{formatearConPreferenciasAnalitica(montoTotal)}</div>
+                                  <div className="text-xs text-muted-foreground">{porcentaje}%</div>
+                                </div>
+                              </div>
+                              <div className="w-full bg-muted rounded-full h-2">
+                                <div 
+                                  className={`h-2 rounded-full ${getColorByEstado(estado)}`}
+                                  style={{ width: `${porcentaje}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Histórico de CxP */}
+                {/* Detalles por Proveedor */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5" />
-                      Histórico de Cuentas por Pagar
-                    </CardTitle>
+                    <CardTitle>Detalle de Cuentas por Proveedor</CardTitle>
                     <CardDescription>
-                      Evolución del saldo de CxP en el tiempo
+                      Lista completa de cuentas por pagar con información de vencimiento
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={analytics?.historicoCxP || []}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          dataKey="fecha" 
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                        />
-                        <YAxis 
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--popover))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            color: 'hsl(var(--foreground))'
-                          }}
-                          formatter={(value: number) => [
-                            formatearConPreferenciasAnalitica(value),
-                            'Saldo CxP'
-                          ]}
-                          labelStyle={{ color: 'hsl(var(--foreground))' }}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="saldo" 
-                          stroke={COLORS.primary} 
-                          strokeWidth={2}
-                          dot={{ fill: COLORS.primary, r: 4 }}
-                          label={{
-                            position: 'top',
-                            fill: 'hsl(var(--foreground))',
-                            fontSize: 12,
-                            formatter: (value: number) => formatearConPreferenciasAnalitica(value)
-                          }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <div className="space-y-4">
+                      {analytics.cuentasPorProveedor.slice(0, 5).map((proveedor: any) => {
+                        const cuentasProveedor = detalles.filter(d => 
+                          (d.proveedor_nombre || 'Sin nombre') === proveedor.proveedor
+                        );
+                        
+                        return (
+                          <div key={proveedor.proveedor} className="border rounded-lg p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold text-lg">{proveedor.proveedor}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {proveedor.cantidad} cuenta(s) pendiente(s)
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xl font-bold">{formatearConPreferenciasAnalitica(proveedor.monto)}</div>
+                                <Badge variant="outline">
+                                  Total adeudado
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {cuentasProveedor.map((cuenta: any) => (
+                                <div key={cuenta.id} className="bg-muted/50 rounded p-3 text-sm">
+                                  <div className="font-medium truncate">{cuenta.descripcion}</div>
+                                  <div className="text-muted-foreground">
+                                    {formatearConPreferenciasAnalitica(cuenta.monto_pendiente)}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Badge 
+                                      variant={cuenta.estado === 'Vencida' || cuenta.estado === 'Muy vencida' ? 'destructive' : 'secondary'}
+                                      className="text-xs"
+                                    >
+                                      {cuenta.estado}
+                                    </Badge>
+                                    {cuenta.diasVencimiento !== null && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {cuenta.diasVencimiento > 0 ? `${cuenta.diasVencimiento}d` : `En ${Math.abs(cuenta.diasVencimiento)}d`}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </CardContent>
                 </Card>
               </>
