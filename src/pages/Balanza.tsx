@@ -39,6 +39,13 @@ interface AsientoAgrupado {
   totalDebe: number;
   totalHaber: number;
   categoriaFlujo?: string;
+  efectoNetoCuentaFiltrada?: {
+    debe: number;
+    haber: number;
+    neto: number;
+    esAumento: boolean;
+    codigoCuenta?: string;
+  };
 }
 
 const Balanza = () => {
@@ -355,18 +362,47 @@ const Balanza = () => {
           .map(m => m.cuenta_codigo)
       );
       
-      asientosAgrupados[referencia] = {
-        referencia,
-        fecha: movimientosCompletos[0].fecha,
-        tipo: movimientosCompletos[0].tipo,
-        descripcion: movimientosCompletos[0].descripcion,
-        movimientos: movimientosCompletos.map(mov => ({
-          ...mov,
-          esCuentaFiltrada: codigosFiltrados.has(mov.cuenta_codigo)
-        })),
-        totalDebe: movimientosCompletos.reduce((sum, m) => sum + m.debe, 0),
-        totalHaber: movimientosCompletos.reduce((sum, m) => sum + m.haber, 0),
-      };
+        // Calcular efecto neto en cuentas filtradas
+        const movimientosFiltradosAsiento = movimientosCompletos.filter(m => 
+          codigosFiltrados.has(m.cuenta_codigo)
+        );
+
+        let efectoNetoCuentaFiltrada = undefined;
+        if (movimientosFiltradosAsiento.length > 0) {
+          const debeFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + m.debe, 0);
+          const haberFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + m.haber, 0);
+          
+          // Determinar naturaleza de la cuenta por el primer dígito
+          const primerDigito = movimientosFiltradosAsiento[0].cuenta_codigo.charAt(0);
+          const esDeudora = ["1", "5", "6"].includes(primerDigito);
+          
+          // Calcular efecto neto según naturaleza
+          const efectoNeto = esDeudora 
+            ? debeFiltrado - haberFiltrado  // Deudora: debe aumenta
+            : haberFiltrado - debeFiltrado; // Acreedora: haber aumenta
+          
+          efectoNetoCuentaFiltrada = {
+            debe: debeFiltrado,
+            haber: haberFiltrado,
+            neto: efectoNeto,
+            esAumento: efectoNeto > 0,
+            codigoCuenta: movimientosFiltradosAsiento[0].cuenta_codigo,
+          };
+        }
+
+        asientosAgrupados[referencia] = {
+          referencia,
+          fecha: movimientosCompletos[0].fecha,
+          tipo: movimientosCompletos[0].tipo,
+          descripcion: movimientosCompletos[0].descripcion,
+          movimientos: movimientosCompletos.map(mov => ({
+            ...mov,
+            esCuentaFiltrada: codigosFiltrados.has(mov.cuenta_codigo)
+          })),
+          totalDebe: movimientosCompletos.reduce((sum, m) => sum + m.debe, 0),
+          totalHaber: movimientosCompletos.reduce((sum, m) => sum + m.haber, 0),
+          efectoNetoCuentaFiltrada,
+        };
     });
   }
 
@@ -859,7 +895,7 @@ const Balanza = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4 flex-1">
                             <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 flex-1">
                               <div className="flex items-center gap-2">
                                 {asientoItem.esCancelado && (
                                   <span className="text-lg">❌</span>
@@ -900,13 +936,37 @@ const Balanza = () => {
                                 </p>
                                 <p className="text-xs text-muted-foreground">Debe</p>
                               </div>
-                              <div className="text-right">
-                                <p className="text-sm font-medium text-red-600">
-                                  {formatCurrency(asiento.totalHaber)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">Haber</p>
-                              </div>
-                            </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-red-600">
+                    {formatCurrency(asiento.totalHaber)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Haber</p>
+                </div>
+
+                {/* Efecto Neto en Cuenta Filtrada */}
+                {pestanaActiva !== "todos" && asiento.efectoNetoCuentaFiltrada && (
+                  <div className="text-right">
+                    <div className={`flex items-center justify-end gap-1 text-sm font-bold ${
+                      asiento.efectoNetoCuentaFiltrada.esAumento 
+                        ? "text-green-600" 
+                        : "text-red-600"
+                    }`}>
+                      {asiento.efectoNetoCuentaFiltrada.esAumento ? (
+                        <>
+                          <span>↑</span>
+                          <span>+{formatCurrency(Math.abs(asiento.efectoNetoCuentaFiltrada.neto))}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>↓</span>
+                          <span>-{formatCurrency(Math.abs(asiento.efectoNetoCuentaFiltrada.neto))}</span>
+                        </>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Efecto Neto</p>
+                  </div>
+                )}
+              </div>
                             {!cuadrado && !asientoItem.esCancelado && pestanaActiva === "todos" && (
                               <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
                                 Descuadrado
