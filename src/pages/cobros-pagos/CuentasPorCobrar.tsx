@@ -1701,7 +1701,9 @@ const CuentasPorCobrar = () => {
                             .filter(c => (c as any)[filtroAntiguedad] > 0)
                             .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0));
                       
-                      const maxMontoCliente = Math.max(...dataFiltradaCliente.map(c => c.total), 1);
+                      const maxMontoCliente = filtroAntiguedad === "todos"
+                        ? Math.max(...dataFiltradaCliente.map(c => c.total), 1)
+                        : Math.max(...dataFiltradaCliente.map(c => (c as any)[filtroAntiguedad] || 0), 1);
                       const dominioXCliente = [0, maxMontoCliente * 1.2];
                       
                       return (
@@ -1781,24 +1783,77 @@ const CuentasPorCobrar = () => {
                                 return null;
                               }}
                             />
-                            <Bar dataKey="sinVencimiento" stackId="a" fill="hsl(var(--chart-1))" name="Sin vencimiento" />
-                            <Bar dataKey="vencido1_15" stackId="a" fill="hsl(var(--chart-2))" name="Vencido 1-15 días" />
-                            <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días" />
-                            <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días" />
-                            <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días" />
-                            <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días">
-                              <LabelList 
-                                position="right"
-                                content={(props) => (
-                                  <CustomTotalLabel 
-                                    {...props} 
-                                    filtroAntiguedad={filtroAntiguedad}
-                                    dataFiltradaCliente={dataFiltradaCliente}
-                                    formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+                            {(() => {
+                              const barConfig = {
+                                sinVencimiento: { 
+                                  fill: "hsl(var(--chart-1))", 
+                                  name: "Sin vencimiento" 
+                                },
+                                vencido1_15: { 
+                                  fill: "hsl(var(--chart-2))", 
+                                  name: "Vencido 1-15 días" 
+                                },
+                                vencido16_30: { 
+                                  fill: "hsl(var(--chart-3))", 
+                                  name: "Vencido 16-30 días" 
+                                },
+                                vencido31_60: { 
+                                  fill: "hsl(var(--warning))", 
+                                  name: "Vencido 31-60 días" 
+                                },
+                                vencido61_90: { 
+                                  fill: "hsl(222 47% 55%)", 
+                                  name: "Vencido 61-90 días" 
+                                },
+                                vencidoMas90: { 
+                                  fill: "hsl(var(--destructive))", 
+                                  name: "Vencido +90 días" 
+                                }
+                              };
+
+                              return filtroAntiguedad === "todos" ? (
+                                // Modo "Todos": Mostrar todas las barras apiladas
+                                <>
+                                  <Bar dataKey="sinVencimiento" stackId="a" fill={barConfig.sinVencimiento.fill} name={barConfig.sinVencimiento.name} />
+                                  <Bar dataKey="vencido1_15" stackId="a" fill={barConfig.vencido1_15.fill} name={barConfig.vencido1_15.name} />
+                                  <Bar dataKey="vencido16_30" stackId="a" fill={barConfig.vencido16_30.fill} name={barConfig.vencido16_30.name} />
+                                  <Bar dataKey="vencido31_60" stackId="a" fill={barConfig.vencido31_60.fill} name={barConfig.vencido31_60.name} />
+                                  <Bar dataKey="vencido61_90" stackId="a" fill={barConfig.vencido61_90.fill} name={barConfig.vencido61_90.name} />
+                                  <Bar dataKey="vencidoMas90" stackId="a" fill={barConfig.vencidoMas90.fill} name={barConfig.vencidoMas90.name}>
+                                    <LabelList 
+                                      position="right"
+                                      content={(props) => (
+                                        <CustomTotalLabel 
+                                          {...props} 
+                                          filtroAntiguedad={filtroAntiguedad}
+                                          dataFiltradaCliente={dataFiltradaCliente}
+                                          formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+                                        />
+                                      )}
+                                    />
+                                  </Bar>
+                                </>
+                              ) : (
+                                // Modo filtro específico: Mostrar SOLO la barra correspondiente
+                                <Bar 
+                                  dataKey={filtroAntiguedad} 
+                                  fill={barConfig[filtroAntiguedad as keyof typeof barConfig].fill} 
+                                  name={barConfig[filtroAntiguedad as keyof typeof barConfig].name}
+                                >
+                                  <LabelList 
+                                    position="right"
+                                    content={(props) => (
+                                      <CustomTotalLabel 
+                                        {...props} 
+                                        filtroAntiguedad={filtroAntiguedad}
+                                        dataFiltradaCliente={dataFiltradaCliente}
+                                        formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+                                      />
+                                    )}
                                   />
-                                )}
-                              />
-                            </Bar>
+                                </Bar>
+                              );
+                            })()}
                           </BarChart>
                         </ResponsiveContainer>
                       );
