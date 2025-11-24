@@ -224,14 +224,14 @@ const AnalyticasCuentasPorCobrar = () => {
                   <BarChart 
                     data={analytics.cuentasPorCliente} 
                     layout="horizontal"
-                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                    margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
                       type="number" 
-                      domain={[0, Math.max(...analytics.cuentasPorCliente.map(c => c.monto)) * 1.2]}
+                      domain={[0, Math.max(...analytics.cuentasPorCliente.map(c => c.monto)) * 1.1]}
                     />
-                    <YAxis dataKey="cliente" type="category" width={100} />
+                    <YAxis dataKey="cliente" type="category" width={120} />
                     <Tooltip 
                       formatter={(value: number) => [formatearConPreferencias(value), 'Monto por Cobrar']}
                       labelFormatter={(label) => `Cliente: ${label}`}
@@ -242,7 +242,7 @@ const AnalyticasCuentasPorCobrar = () => {
                         padding: '12px'
                       }}
                     />
-                    <Bar dataKey="monto" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="monto" fill={COLORS.primary} radius={[0, 4, 4, 0]} isAnimationActive={false} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
