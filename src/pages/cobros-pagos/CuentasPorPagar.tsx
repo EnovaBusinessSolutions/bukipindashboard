@@ -317,7 +317,7 @@ const CuentasPorPagar = () => {
       if (insertError) throw insertError;
 
       // Generar asiento contable para el pago
-      const numeroAsiento = `PAGO-CXP-${Date.now()}`;
+      const numeroAsiento = `PAG-CXP-${Date.now()}`;
       const { data: asiento, error: asientoError } = await supabase
         .from('asientos_contables')
         .insert({
@@ -363,6 +363,8 @@ const CuentasPorPagar = () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-detalle"] });
       queryClient.invalidateQueries({ queryKey: ['historial-pagos-cxp'] });
       queryClient.invalidateQueries({ queryKey: ["saldos-disponibles"] });
+      queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
+      queryClient.invalidateQueries({ queryKey: ["resumen-transacciones"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();

@@ -204,7 +204,7 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
             });
             clasificado = true;
           }
-          // Pagos a proveedores y pasivos (2001-2006)
+          // Pagos a proveedores y pasivos (2001-2006) - DETECTAR PRIMERO
           else if (["2001", "2002", "2003", "2004", "2005", "2006"].includes(codigo) && montoTotal < 0) {
             egresos.push({
               ...transaccion,
@@ -222,8 +222,9 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
             });
             clasificado = true;
           }
-          // Financiamientos
-          else if (codigo.startsWith("20") || codigo.startsWith("21")) {
+          // Financiamientos (excluir CxP 2001-2006)
+          else if ((codigo.startsWith("20") || codigo.startsWith("21")) && 
+                   !["2001", "2002", "2003", "2004", "2005", "2006"].includes(codigo)) {
             if (montoTotal > 0) {
               financiamientos.push({
                 ...transaccion,
