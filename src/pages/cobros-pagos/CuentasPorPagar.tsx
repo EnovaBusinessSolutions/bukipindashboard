@@ -218,14 +218,40 @@ const CuentasPorPagar = () => {
     queryFn: async () => {
       if (!selectedFactura) return [];
       
-      const { data } = await supabase
+      // 1. Obtener pagos posteriores de transacciones_cobros_pagos
+      const { data: pagosPosteriores } = await supabase
         .from('transacciones_cobros_pagos')
         .select('*')
         .eq('referencia_id', selectedFactura.id)
         .eq('tipo_transaccion', 'pago')
         .order('fecha', { ascending: false });
       
-      return data || [];
+      // 2. Calcular suma de pagos posteriores
+      const sumaPagosPosteriores = (pagosPosteriores || []).reduce(
+        (sum, p) => sum + (p.monto || 0), 0
+      );
+      
+      // 3. Calcular pago inicial (anticipo)
+      const pagoInicial = selectedFactura.monto_pagado - sumaPagosPosteriores;
+      
+      // 4. Si hay pago inicial, agregarlo al historial
+      const historialCompleto: any[] = [...(pagosPosteriores || [])];
+      
+      if (pagoInicial > 0.01) {
+        historialCompleto.push({
+          id: 'pago-inicial',
+          fecha: selectedFactura.created_at,
+          monto: pagoInicial,
+          metodo_pago: selectedFactura.metodo_pago || 'N/A',
+          descripcion: 'Pago inicial / Anticipo',
+          es_pago_inicial: true
+        } as any);
+      }
+      
+      // 5. Ordenar por fecha descendente
+      return historialCompleto.sort(
+        (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      );
     },
     enabled: !!selectedFactura && historialDialogOpen
   });
@@ -1302,23 +1328,48 @@ const CuentasPorPagar = () => {
             </DialogHeader>
 
             <div className="space-y-4">
+              {/* Resumen */}
+              {selectedFactura && (
+                <div className="p-4 bg-muted rounded-lg grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Monto Total</p>
+                    <p className="font-bold">{formatCurrency(selectedFactura.monto_total)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Total Pagado</p>
+                    <p className="font-bold text-green-600">{formatCurrency(selectedFactura.monto_pagado)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Pendiente</p>
+                    <p className="font-bold text-destructive">{formatCurrency(selectedFactura.monto_pendiente || 0)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de pagos */}
               {historialPagos && historialPagos.length > 0 ? (
                 <div className="space-y-2">
-                  {historialPagos.map((pago: any) => (
-                    <div key={pago.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  {historialPagos.map((pago: any, index: number) => (
+                    <div key={pago.id || index} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm">
                             {format(new Date(pago.fecha), "d 'de' MMMM, yyyy", { locale: es })}
                           </span>
+                          {pago.es_pago_inicial && (
+                            <Badge variant="secondary" className="ml-2">Anticipo</Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <CreditCard className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm text-muted-foreground capitalize">
-                            {pago.metodo_pago}
+                            {pago.metodo_pago?.replace('_', ' ').replace('-', ' ')}
                           </span>
                         </div>
+                        {pago.descripcion && (
+                          <p className="text-xs text-muted-foreground">{pago.descripcion}</p>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg text-green-600">
