@@ -462,9 +462,9 @@ const Balanza = () => {
       {/* Tabs */}
       <Tabs value={pestanaActiva} onValueChange={setPestanaActiva}>
         <TabsList className="grid w-full max-w-2xl grid-cols-3">
-          <TabsTrigger value="todos">Todos</TabsTrigger>
-          <TabsTrigger value="resultados">Estado de Resultados</TabsTrigger>
-          <TabsTrigger value="balance">Balance General</TabsTrigger>
+          <TabsTrigger value="todos">Balanza de Comprobación</TabsTrigger>
+          <TabsTrigger value="resultados">Balanza de Resultados</TabsTrigger>
+          <TabsTrigger value="balance">Balanza de Balance</TabsTrigger>
         </TabsList>
 
         <TabsContent value={pestanaActiva} className="space-y-6 mt-6">
@@ -492,169 +492,333 @@ const Balanza = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filtros de Análisis
+            {pestanaActiva === "todos" ? "Filtros y Rango de Fechas" : "Filtros de Análisis"}
           </CardTitle>
-          <CardDescription>
-            {pestanaActiva === "balance" 
-              ? "Navega desde grupos hasta cuentas específicas para analizar tu posición financiera"
-              : "Filtra por grupos, subgrupos y cuentas para análisis detallado"}
-          </CardDescription>
+          {pestanaActiva !== "todos" && (
+            <CardDescription>
+              {pestanaActiva === "balance" 
+                ? "Navega desde grupos hasta cuentas específicas para analizar tu posición financiera"
+                : "Filtra por grupos, subgrupos y cuentas para análisis detallado"}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Selectores de Fecha */}
-            {pestanaActiva !== "balance" && (
-              <div className="space-y-2">
-                <Label htmlFor="start-date">Fecha Inicio</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="start-date"
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !startDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={(date) => date && setStartDate(date)}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
+          {/* Para Balanza de Comprobación (todos) - Filtros originales */}
+          {pestanaActiva === "todos" ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha Inicio</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={(date) => date && setStartDate(date)}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha Fin</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={(date) => date && setEndDate(date)}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="end-date">
-                {pestanaActiva === "balance" ? "Fecha de Corte" : "Fecha Fin"}
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="end-date"
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Tipo de Transacción</label>
+                  <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {tiposUnicos.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {tipo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Estado del Asiento</label>
+                  <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="cuadrado">Cuadrado</SelectItem>
+                      <SelectItem value="descuadrado">Descuadrado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Estado Financiero</label>
+                  <Select
+                    value={filtroEstadoFinanciero}
+                    onValueChange={setFiltroEstadoFinanciero}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(date) => date && setEndDate(date)}
-                    initialFocus
-                    className="pointer-events-auto"
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="balance">Balance General</SelectItem>
+                      <SelectItem value="resultados">Estado de Resultados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Búsqueda</label>
+                  <Input
+                    placeholder="Buscar..."
+                    value={filtroBusqueda}
+                    onChange={(e) => setFiltroBusqueda(e.target.value)}
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Para Balanza de Resultados y Balance - Filtros jerárquicos */
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Selectores de Fecha */}
+                {pestanaActiva !== "balance" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="start-date">Fecha Inicio</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="start-date"
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !startDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {startDate ? format(startDate, "PPP", { locale: es }) : "Seleccionar"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={(date) => date && setStartDate(date)}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
 
-            {/* Filtro de Grupo */}
-            <div className="space-y-2">
-              <Label>Grupo</Label>
-              <Select 
-                value={grupoSeleccionado} 
-                onValueChange={(value) => {
-                  setGrupoSeleccionado(value);
-                  setSubgrupoSeleccionado("todos");
-                  setCuentaSeleccionada("todos");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los Grupos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos los Grupos</SelectItem>
-                  {gruposDisponibles.map(grupo => (
-                    <SelectItem key={grupo} value={grupo}>{grupo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="end-date">
+                    {pestanaActiva === "balance" ? "Fecha de Corte" : "Fecha Fin"}
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="end-date"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={(date) => date && setEndDate(date)}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-            {/* Filtro de Subgrupo */}
-            <div className="space-y-2">
-              <Label>Subgrupo</Label>
-              <Select 
-                value={subgrupoSeleccionado} 
-                onValueChange={(value) => {
-                  setSubgrupoSeleccionado(value);
-                  setCuentaSeleccionada("todos");
-                }}
-                disabled={grupoSeleccionado === "todos"}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los Subgrupos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos los Subgrupos</SelectItem>
-                  {subgruposDisponibles.map(subgrupo => (
-                    <SelectItem key={subgrupo} value={subgrupo}>{subgrupo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                {/* Filtro de Grupo */}
+                <div className="space-y-2">
+                  <Label>Grupo</Label>
+                  <Select 
+                    value={grupoSeleccionado} 
+                    onValueChange={(value) => {
+                      setGrupoSeleccionado(value);
+                      setSubgrupoSeleccionado("todos");
+                      setCuentaSeleccionada("todos");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los Grupos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los Grupos</SelectItem>
+                      {gruposDisponibles.map(grupo => (
+                        <SelectItem key={grupo} value={grupo}>{grupo}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {/* Filtro de Cuenta */}
-            <div className="space-y-2">
-              <Label>Cuenta</Label>
-              <Select 
-                value={cuentaSeleccionada} 
-                onValueChange={setCuentaSeleccionada}
-                disabled={subgrupoSeleccionado === "todos"}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas las Cuentas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todas las Cuentas</SelectItem>
-                  {cuentasDisponibles.map(cuenta => (
-                    <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+                {/* Filtro de Subgrupo */}
+                <div className="space-y-2">
+                  <Label>Subgrupo</Label>
+                  <Select 
+                    value={subgrupoSeleccionado} 
+                    onValueChange={(value) => {
+                      setSubgrupoSeleccionado(value);
+                      setCuentaSeleccionada("todos");
+                    }}
+                    disabled={grupoSeleccionado === "todos"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los Subgrupos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los Subgrupos</SelectItem>
+                      {subgruposDisponibles.map(subgrupo => (
+                        <SelectItem key={subgrupo} value={subgrupo}>{subgrupo}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro de Cuenta */}
+                <div className="space-y-2">
+                  <Label>Cuenta</Label>
+                  <Select 
+                    value={cuentaSeleccionada} 
+                    onValueChange={setCuentaSeleccionada}
+                    disabled={subgrupoSeleccionado === "todos"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todas las Cuentas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas las Cuentas</SelectItem>
+                      {cuentasDisponibles.map(cuenta => (
+                        <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                          {cuenta.codigo} - {cuenta.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Indicador de filtros activos */}
+              {(grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos") && (
+                <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <Filter className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm text-blue-600 dark:text-blue-400 flex-1">
+                    Filtros activos: {grupoSeleccionado !== "todos" && grupoSeleccionado}
+                    {subgrupoSeleccionado !== "todos" && ` > ${subgrupoSeleccionado}`}
+                    {cuentaSeleccionada !== "todos" && ` > ${cuentaSeleccionada}`}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setGrupoSeleccionado("todos");
+                      setSubgrupoSeleccionado("todos");
+                      setCuentaSeleccionada("todos");
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    Limpiar filtros
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {/* Indicador de filtros activos */}
-      {(grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos") && (
-        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <Filter className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          <span className="text-sm text-blue-600 dark:text-blue-400 flex-1">
-            Filtros activos: {grupoSeleccionado !== "todos" && grupoSeleccionado}
-            {subgrupoSeleccionado !== "todos" && ` > ${subgrupoSeleccionado}`}
-            {cuentaSeleccionada !== "todos" && ` > ${cuentaSeleccionada}`}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setGrupoSeleccionado("todos");
-              setSubgrupoSeleccionado("todos");
-              setCuentaSeleccionada("todos");
-            }}
-            className="h-7 text-xs"
-          >
-            Limpiar filtros
-          </Button>
+      {/* Resumen - Solo para Balanza de Comprobación */}
+      {pestanaActiva === "todos" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Total Debe</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalDebe)}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Total Haber</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(totalHaber)}</p>
+            </CardContent>
+          </Card>
+
+          <Card className={cuadra ? "border-green-500" : "border-red-500"}>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Estado</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className={`text-2xl font-bold ${cuadra ? "text-green-600" : "text-red-600"}`}>
+                {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
+              </p>
+              {!cuadra && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Diferencia: {formatCurrency(diferencia)}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
