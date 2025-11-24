@@ -31,7 +31,8 @@ import {
   Users, 
   Clock, 
   Target,
-  CheckCircle2
+  CheckCircle2,
+  Settings
 } from "lucide-react";
 import { 
   BarChart, 
@@ -65,6 +66,36 @@ const COLORS = {
 
 const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.destructive];
 
+// Componente personalizado para mostrar el total a la derecha de las barras apiladas
+const CustomTotalLabel = (props: any) => {
+  const { x, y, width, height, index, filtroAntiguedad, dataFiltradaProveedor, formatearConPreferenciasAnalitica } = props;
+  
+  if (!dataFiltradaProveedor || !dataFiltradaProveedor[index]) return null;
+  
+  const proveedor = dataFiltradaProveedor[index];
+  const total = filtroAntiguedad === "todos" 
+    ? proveedor.total 
+    : proveedor[filtroAntiguedad] || 0;
+  
+  // Posicionar el texto a la derecha de la barra con un pequeño offset
+  const labelX = x + width + 8;
+  const labelY = y + height / 2;
+  
+  return (
+    <text 
+      x={labelX} 
+      y={labelY}
+      fill="hsl(var(--foreground))"
+      fontSize="11"
+      fontWeight="600"
+      textAnchor="start"
+      dominantBaseline="middle"
+    >
+      {formatearConPreferenciasAnalitica(total)}
+    </text>
+  );
+};
+
 const CuentasPorPagar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("lista");
@@ -83,9 +114,31 @@ const CuentasPorPagar = () => {
   
   // Estados para analíticas
   const [periodoCxP, setPeriodoCxP] = useState<"diario" | "mensual" | "anual">("mensual");
-  const [escalaHistorico, setEscalaHistorico] = useState("normal");
   const [filtroAntiguedad, setFiltroAntiguedad] = useState("todos");
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("todos");
+  
+  // Estados para formato de números en analíticas
+  const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
+  const [decimalesAnalitica, setDecimalesAnalitica] = useState<0 | 1 | 2>(2);
+  
+  // Función para formatear números según preferencias del usuario
+  const formatearConPreferenciasAnalitica = (valor: number) => {
+    let valorFormateado = valor;
+    let sufijo = '';
+    
+    if (formatoNumerosAnalitica === 'miles') {
+      valorFormateado = valor / 1000;
+      sufijo = 'K';
+    } else if (formatoNumerosAnalitica === 'millones') {
+      valorFormateado = valor / 1000000;
+      sufijo = 'M';
+    }
+    
+    return `$${valorFormateado.toLocaleString('en-US', {
+      minimumFractionDigits: decimalesAnalitica,
+      maximumFractionDigits: decimalesAnalitica
+    })}${sufijo}`;
+  };
 
   const { data: cuentasPorPagar, isLoading } = useCuentasPorPagarConsolidadas();
 
@@ -975,7 +1028,7 @@ const CuentasPorPagar = () => {
             ) : analytics ? (
               <>
                 {/* Métricas Principales */}
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-5">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
@@ -1023,21 +1076,91 @@ const CuentasPorPagar = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Card de Configuración */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Configuración</CardTitle>
+                      <Settings className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <Label className="text-xs">Formato</Label>
+                        <Select value={formatoNumerosAnalitica} onValueChange={(value: any) => setFormatoNumerosAnalitica(value)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="miles">Miles (K)</SelectItem>
+                            <SelectItem value="millones">Millones (M)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Decimales</Label>
+                        <Select value={decimalesAnalitica.toString()} onValueChange={(value: any) => setDecimalesAnalitica(parseInt(value) as 0 | 1 | 2)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">0</SelectItem>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="2">2</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Gráfico 1: Análisis de Antigüedad */}
                 <Card>
                   <CardHeader><CardTitle>Análisis de Antigüedad de Cuentas por Pagar</CardTitle></CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
-                      <BarChart data={analytics?.agingAnalysisDetailed || []}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="rango" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} angle={-45} textAnchor="end" height={100} />
-                        <YAxis stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, 'Monto']} />
-                        <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {(() => {
+                      const maxMontoAntiguedad = Math.max(...(analytics?.agingAnalysisDetailed || []).map(a => a.monto), 1);
+                      const dominioYAntiguedad = [0, maxMontoAntiguedad * 1.2];
+                      
+                      return (
+                        <ResponsiveContainer width="100%" height={350}>
+                          <BarChart data={analytics?.agingAnalysisDetailed || []}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis 
+                              dataKey="rango" 
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              angle={-45}
+                              textAnchor="end"
+                              height={100}
+                            />
+                            <YAxis 
+                              domain={dominioYAntiguedad}
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px'
+                              }}
+                              formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto']}
+                              labelFormatter={(label) => `${label}`}
+                            />
+                            <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]}>
+                              <LabelList 
+                                dataKey="monto" 
+                                position="top" 
+                                formatter={(value: number) => formatearConPreferenciasAnalitica(value)}
+                                style={{ fontSize: '11px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
@@ -1046,104 +1169,358 @@ const CuentasPorPagar = () => {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>Histórico de Cuentas por Pagar</CardTitle>
-                      <div className="flex gap-4">
-                        <Select value={escalaHistorico} onValueChange={setEscalaHistorico}>
-                          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            <SelectItem value="normal">Normal</SelectItem>
-                            <SelectItem value="miles">Miles</SelectItem>
-                            <SelectItem value="millones">Millones</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select value={periodoCxP} onValueChange={(value) => setPeriodoCxP(value as "diario" | "mensual" | "anual")}>
-                          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            <SelectItem value="diario">Diario (Hoy)</SelectItem>
-                            <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
-                            <SelectItem value="anual">Anual (Año actual)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <Select value={periodoCxP} onValueChange={(value: any) => setPeriodoCxP(value)}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Selecciona período" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="mensual">Mensual (Mes actual)</SelectItem>
+                          <SelectItem value="anual">Anual (Año actual)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={350}>
+                    {(() => {
+                      const maxSaldoHistorico = Math.max(...(analytics?.historicoCxP || []).map(h => h.saldo), 1);
+                      const dominioYHistorico = [0, maxSaldoHistorico * 1.2];
+                      
+                      return (
+                        <ResponsiveContainer width="100%" height={350}>
                       <LineChart data={analytics?.historicoCxP || []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="fecha" stroke="#000" tick={{ fill: '#000', fontSize: 12, fontWeight: 500 }} />
-                        <YAxis stroke="#000" tick={{ fill: '#000', fontSize: 12, fontWeight: 500 }} tickFormatter={(value) => escalaHistorico === "miles" ? `$${(value / 1000).toFixed(0)}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toFixed(2)}M` : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} formatter={(value: number) => [escalaHistorico === "miles" ? `$${(value / 1000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}k` : escalaHistorico === "millones" ? `$${(value / 1000000).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M` : `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Saldo CxP']} labelStyle={{ color: 'hsl(var(--foreground))' }} labelFormatter={(label) => label} />
-                        <Line type="monotone" dataKey="saldo" stroke={COLORS.primary} strokeWidth={3} dot={{ fill: COLORS.primary, r: 5 }}>
-                          <LabelList 
-                            dataKey="saldo" 
-                            position="top"
-                            style={{ fill: '#000', fontSize: '11px', fontWeight: 600 }}
-                            formatter={(value: number) => 
-                              escalaHistorico === "miles" 
-                                ? `$${(value / 1000).toFixed(1)}k` 
-                                : escalaHistorico === "millones" 
-                                ? `$${(value / 1000000).toFixed(2)}M` 
-                                : `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
-                            }
-                          />
-                        </Line>
+                        <XAxis 
+                          dataKey="fecha" 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                        />
+                        <YAxis 
+                          domain={dominioYHistorico}
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          tickFormatter={(value) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--background))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            color: 'hsl(var(--foreground))'
+                          }}
+                          formatter={(value: number) => [
+                            `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+                            'Saldo CxP'
+                          ]}
+                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="saldo" 
+                          stroke={COLORS.primary}
+                          strokeWidth={3}
+                          dot={{ fill: COLORS.primary, r: 4 }}
+                          label={{
+                            position: 'top',
+                            fill: 'hsl(var(--foreground))',
+                            fontSize: 12,
+                            formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                          }}
+                        />
                       </LineChart>
                     </ResponsiveContainer>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
                 {/* Gráfico 3: CxP por Proveedor Apilado */}
                 <Card>
-                  <CardHeader><CardTitle>Cuentas por Pagar por Proveedor (Apilado por Antigüedad)</CardTitle></CardHeader>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Cuentas por Pagar por Proveedor (Apilado por Antigüedad)</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Total Deuda:</span>
+                        <Badge variant="default" className="text-lg px-3 py-1">
+                          {formatearConPreferenciasAnalitica((analytics?.cxpPorProveedorApilado || [])
+                            .reduce((sum, p) => sum + p.total, 0))}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
                   <CardContent className="space-y-4">
-                    <Select value={filtroAntiguedad} onValueChange={setFiltroAntiguedad}>
-                      <SelectTrigger className="w-[240px]"><SelectValue placeholder="Filtrar por antigüedad" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
-                        <SelectItem value="vencido1_15">Vencido 1-15 días</SelectItem>
-                        <SelectItem value="vencido16_30">Vencido 16-30 días</SelectItem>
-                        <SelectItem value="vencido31_60">Vencido 31-60 días</SelectItem>
-                        <SelectItem value="vencido61_90">Vencido 61-90 días</SelectItem>
-                        <SelectItem value="vencidoMas90">Vencido +90 días</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <ResponsiveContainer width="100%" height={400}>
-                      <BarChart data={filtroAntiguedad === "todos" ? (analytics?.cxpPorProveedorApilado || []) : (analytics?.cxpPorProveedorApilado || []).filter(c => (c as any)[filtroAntiguedad] > 0)} layout="vertical" margin={{ left: 100 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis type="number" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                        <YAxis type="category" dataKey="proveedor" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} width={90} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, 'Monto']} />
-                        {filtroAntiguedad === "todos" ? (<><Bar dataKey="sinVencimiento" stackId="a" fill="#10b981" /><Bar dataKey="vencido1_15" stackId="a" fill="#fbbf24" /><Bar dataKey="vencido16_30" stackId="a" fill="#f97316" /><Bar dataKey="vencido31_60" stackId="a" fill="#ef4444" /><Bar dataKey="vencido61_90" stackId="a" fill="#dc2626" /><Bar dataKey="vencidoMas90" stackId="a" fill="#991b1b" /></>) : (<Bar dataKey={filtroAntiguedad} fill={COLORS.primary} />)}
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {/* Filtro de antigüedad */}
+                    <div className="flex items-center gap-4">
+                      <Label htmlFor="filtro-antiguedad">Filtrar por antigüedad:</Label>
+                      <Select value={filtroAntiguedad} onValueChange={setFiltroAntiguedad}>
+                        <SelectTrigger id="filtro-antiguedad" className="w-[240px]">
+                          <SelectValue placeholder="Selecciona categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
+                          <SelectItem value="vencido1_15">Vencido 1-15 días</SelectItem>
+                          <SelectItem value="vencido16_30">Vencido 16-30 días</SelectItem>
+                          <SelectItem value="vencido31_60">Vencido 31-60 días</SelectItem>
+                          <SelectItem value="vencido61_90">Vencido 61-90 días</SelectItem>
+                          <SelectItem value="vencidoMas90">Vencido +90 días</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {(() => {
+                      const dataFiltradaProveedor = filtroAntiguedad === "todos" 
+                        ? (analytics?.cxpPorProveedorApilado || [])
+                        : (analytics?.cxpPorProveedorApilado || [])
+                            .filter(p => (p as any)[filtroAntiguedad] > 0)
+                            .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0));
+                      
+                      const maxMontoProveedor = filtroAntiguedad === "todos"
+                        ? Math.max(...dataFiltradaProveedor.map(p => p.total), 1)
+                        : Math.max(...dataFiltradaProveedor.map(p => (p as any)[filtroAntiguedad] || 0), 1);
+                      const dominioXProveedor = [0, maxMontoProveedor * 1.2];
+                      
+                      return (
+                        <ResponsiveContainer 
+                          width="100%" 
+                          height={Math.max(400, dataFiltradaProveedor.length * 40)}
+                        >
+                          <BarChart 
+                            data={dataFiltradaProveedor}
+                            layout="vertical"
+                            margin={{ left: 100, right: 80 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis 
+                              type="number"
+                              domain={dominioXProveedor}
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
+                            />
+                            <YAxis 
+                              type="category"
+                              dataKey="proveedor" 
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              width={90}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px',
+                                padding: '12px'
+                              }}
+                              formatter={(value: number, name: string) => {
+                                const labels: Record<string, string> = {
+                                  sinVencimiento: "Sin vencimiento",
+                                  vencido1_15: "Vencido 1-15 días",
+                                  vencido16_30: "Vencido 16-30 días",
+                                  vencido31_60: "Vencido 31-60 días",
+                                  vencido61_90: "Vencido 61-90 días",
+                                  vencidoMas90: "Vencido +90 días"
+                                };
+                                return [formatearConPreferenciasAnalitica(value), labels[name] || name];
+                              }}
+                              labelFormatter={(label) => {
+                                const proveedor = (analytics?.cxpPorProveedorApilado || []).find(p => p.proveedor === label);
+                                return label;
+                              }}
+                              content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                  const proveedor = (analytics?.cxpPorProveedorApilado || []).find(p => p.proveedor === label);
+                                  return (
+                                    <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                                      <div className="font-bold mb-2 pb-2 border-b border-border">{label}</div>
+                                      {payload.map((entry: any, index: number) => (
+                                        entry.value > 0 && (
+                                          <div key={index} className="flex justify-between gap-4 py-1">
+                                            <span className="flex items-center gap-2">
+                                              <div 
+                                                className="w-3 h-3 rounded-sm" 
+                                                style={{ backgroundColor: entry.color }}
+                                              />
+                                              {entry.name}:
+                                            </span>
+                                            <span className="font-medium">{formatearConPreferenciasAnalitica(entry.value)}</span>
+                                          </div>
+                                        )
+                                      ))}
+                                      <div className="flex justify-between gap-4 pt-2 mt-2 border-t border-border font-bold text-primary">
+                                        <span>TOTAL:</span>
+                                        <span>{formatearConPreferenciasAnalitica(proveedor?.total || 0)}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            {(() => {
+                              const barConfig = {
+                                sinVencimiento: { 
+                                  fill: "hsl(var(--chart-1))", 
+                                  name: "Sin vencimiento" 
+                                },
+                                vencido1_15: { 
+                                  fill: "hsl(var(--chart-2))", 
+                                  name: "Vencido 1-15 días" 
+                                },
+                                vencido16_30: { 
+                                  fill: "hsl(var(--chart-3))", 
+                                  name: "Vencido 16-30 días" 
+                                },
+                                vencido31_60: { 
+                                  fill: "hsl(var(--warning))", 
+                                  name: "Vencido 31-60 días" 
+                                },
+                                vencido61_90: { 
+                                  fill: "hsl(222 47% 55%)", 
+                                  name: "Vencido 61-90 días" 
+                                },
+                                vencidoMas90: { 
+                                  fill: "hsl(var(--destructive))", 
+                                  name: "Vencido +90 días" 
+                                }
+                              };
+
+                              return filtroAntiguedad === "todos" ? (
+                                // Modo "Todos": Mostrar todas las barras apiladas
+                                <>
+                                  <Bar dataKey="sinVencimiento" stackId="a" fill={barConfig.sinVencimiento.fill} name={barConfig.sinVencimiento.name} />
+                                  <Bar dataKey="vencido1_15" stackId="a" fill={barConfig.vencido1_15.fill} name={barConfig.vencido1_15.name} />
+                                  <Bar dataKey="vencido16_30" stackId="a" fill={barConfig.vencido16_30.fill} name={barConfig.vencido16_30.name} />
+                                  <Bar dataKey="vencido31_60" stackId="a" fill={barConfig.vencido31_60.fill} name={barConfig.vencido31_60.name} />
+                                  <Bar dataKey="vencido61_90" stackId="a" fill={barConfig.vencido61_90.fill} name={barConfig.vencido61_90.name} />
+                                  <Bar dataKey="vencidoMas90" stackId="a" fill={barConfig.vencidoMas90.fill} name={barConfig.vencidoMas90.name}>
+                                    <LabelList 
+                                      position="right"
+                                      content={(props) => (
+                                        <CustomTotalLabel 
+                                          {...props} 
+                                          filtroAntiguedad={filtroAntiguedad}
+                                          dataFiltradaProveedor={dataFiltradaProveedor}
+                                          formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+                                        />
+                                      )}
+                                    />
+                                  </Bar>
+                                </>
+                              ) : (
+                                // Modo filtro específico: Mostrar SOLO la barra correspondiente
+                                <Bar 
+                                  dataKey={filtroAntiguedad} 
+                                  fill={barConfig[filtroAntiguedad as keyof typeof barConfig].fill} 
+                                  name={barConfig[filtroAntiguedad as keyof typeof barConfig].name}
+                                >
+                                  <LabelList 
+                                    position="right"
+                                    content={(props) => (
+                                      <CustomTotalLabel 
+                                        {...props} 
+                                        filtroAntiguedad={filtroAntiguedad}
+                                        dataFiltradaProveedor={dataFiltradaProveedor}
+                                        formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+                                      />
+                                    )}
+                                  />
+                                </Bar>
+                              );
+                            })()}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
                 {/* Gráfico 4: Vencimientos por Proveedor */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Vencimientos por Proveedor</CardTitle>
-                    <Select value={proveedorSeleccionado} onValueChange={setProveedorSeleccionado}>
-                      <SelectTrigger className="w-[240px]"><SelectValue placeholder="Selecciona proveedor" /></SelectTrigger>
-                      <SelectContent className="bg-background z-50">
-                        <SelectItem value="todos">Todos</SelectItem>
-                        {(analytics?.proveedoresLista || []).map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Vencimientos por Proveedor</CardTitle>
+                      <Select 
+                        value={proveedorSeleccionado} 
+                        onValueChange={setProveedorSeleccionado}
+                      >
+                        <SelectTrigger className="w-[300px]">
+                          <SelectValue placeholder="Selecciona un proveedor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(analytics?.cxpPorProveedorApilado || []).map((proveedor) => (
+                            <SelectItem key={proveedor.proveedor} value={proveedor.proveedor}>
+                              {proveedor.proveedor} - {formatearConPreferenciasAnalitica(proveedor.total)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    {proveedorSeleccionado !== "todos" ? (
+                    {proveedorSeleccionado && proveedorSeleccionado !== "todos" ? (
                       <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={(() => { const pd = (analytics?.cxpPorProveedorApilado || []).find(c => c.proveedor === proveedorSeleccionado); if (!pd) return []; return [{ categoria: 'Sin vencimiento', monto: pd.sinVencimiento }, { categoria: 'Vencido 1-15 días', monto: pd.vencido1_15 }, { categoria: 'Vencido 16-30 días', monto: pd.vencido16_30 }, { categoria: 'Vencido 31-60 días', monto: pd.vencido31_60 }, { categoria: 'Vencido 61-90 días', monto: pd.vencido61_90 }, { categoria: 'Vencido +90 días', monto: pd.vencidoMas90 }].filter(item => item.monto > 0); })()}>
+                        <BarChart 
+                          data={(() => {
+                            const proveedorData = (analytics?.cxpPorProveedorApilado || []).find(
+                              p => p.proveedor === proveedorSeleccionado
+                            );
+                            if (!proveedorData) return [];
+                            
+                            return [
+                              { rango: 'Sin vencimiento', monto: proveedorData.sinVencimiento || 0 },
+                              { rango: 'Vencido 1-15 días', monto: proveedorData.vencido1_15 || 0 },
+                              { rango: 'Vencido 16-30 días', monto: proveedorData.vencido16_30 || 0 },
+                              { rango: 'Vencido 31-60 días', monto: proveedorData.vencido31_60 || 0 },
+                              { rango: 'Vencido 61-90 días', monto: proveedorData.vencido61_90 || 0 },
+                              { rango: 'Vencido +90 días', monto: proveedorData.vencidoMas90 || 0 }
+                            ];
+                          })()}
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis dataKey="categoria" stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} angle={-45} textAnchor="end" height={100} />
-                          <YAxis stroke="hsl(var(--foreground))" tick={{ fill: 'hsl(var(--foreground))' }} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                          <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, 'Monto']} />
-                          <Bar dataKey="monto" fill={COLORS.accent} radius={[8, 8, 0, 0]} />
+                          <XAxis 
+                            dataKey="rango" 
+                            stroke="hsl(var(--foreground))"
+                            tick={{ fill: 'hsl(var(--foreground))' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={100}
+                          />
+                          <YAxis 
+                            stroke="hsl(var(--foreground))"
+                            tick={{ fill: 'hsl(var(--foreground))' }}
+                            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'hsl(var(--background))',
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                            formatter={(value: number) => [formatearConPreferenciasAnalitica(value), 'Monto']}
+                            labelFormatter={(label) => `${label}`}
+                          />
+                          <Bar 
+                            dataKey="monto" 
+                            fill={COLORS.primary} 
+                            radius={[8, 8, 0, 0]}
+                            label={{
+                              position: 'top',
+                              fill: 'hsl(var(--foreground))',
+                              formatter: (value: number) => formatearConPreferenciasAnalitica(value)
+                            }}
+                          />
                         </BarChart>
                       </ResponsiveContainer>
-                    ) : (<div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Selecciona un proveedor</p></div>)}
+                    ) : (
+                      <div className="flex items-center justify-center h-[350px]">
+                        <div className="text-center space-y-2">
+                          <Building2 className="h-12 w-12 mx-auto text-muted-foreground" />
+                          <p className="text-muted-foreground">
+                            Selecciona un proveedor para ver el desglose de sus vencimientos
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </>
