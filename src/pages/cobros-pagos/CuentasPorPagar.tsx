@@ -1247,6 +1247,19 @@ const CuentasPorPagar = () => {
               </div>
             ) : (
               <>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h1 className="text-3xl font-bold">Analíticas de Cuentas por Pagar</h1>
+                    <p className="text-muted-foreground mt-2">
+                      Análisis detallado de proveedores, vencimientos y tendencias
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+
                 {/* KPIs Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                   <Card>
