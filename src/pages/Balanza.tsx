@@ -27,6 +27,7 @@ interface BalanzaEntry {
   debe: number;
   haber: number;
   referencia: string;
+  esCuentaFiltrada?: boolean;
 }
 
 interface AsientoAgrupado {
@@ -315,25 +316,59 @@ const Balanza = () => {
   }
 
   // Agrupar movimientos por referencia (asiento)
+  // Para pestañas filtradas (resultados/balance), incluir TODOS los movimientos del asiento completo
   const asientosAgrupados: Record<string, AsientoAgrupado> = {};
 
-  movimientosFiltrados.forEach((mov) => {
-    if (!asientosAgrupados[mov.referencia]) {
-      asientosAgrupados[mov.referencia] = {
-        referencia: mov.referencia,
-        fecha: mov.fecha,
-        tipo: mov.tipo,
-        descripcion: mov.descripcion,
-        movimientos: [],
-        totalDebe: 0,
-        totalHaber: 0,
-      };
-    }
+  if (pestanaActiva === "todos") {
+    // En "Balanza de Comprobación", mantener comportamiento original
+    movimientosFiltrados.forEach((mov) => {
+      if (!asientosAgrupados[mov.referencia]) {
+        asientosAgrupados[mov.referencia] = {
+          referencia: mov.referencia,
+          fecha: mov.fecha,
+          tipo: mov.tipo,
+          descripcion: mov.descripcion,
+          movimientos: [],
+          totalDebe: 0,
+          totalHaber: 0,
+        };
+      }
 
-    asientosAgrupados[mov.referencia].movimientos.push(mov);
-    asientosAgrupados[mov.referencia].totalDebe += mov.debe;
-    asientosAgrupados[mov.referencia].totalHaber += mov.haber;
-  });
+      asientosAgrupados[mov.referencia].movimientos.push(mov);
+      asientosAgrupados[mov.referencia].totalDebe += mov.debe;
+      asientosAgrupados[mov.referencia].totalHaber += mov.haber;
+    });
+  } else {
+    // En pestañas filtradas, mostrar asiento completo con todas sus cuentas
+    // 1. Obtener referencias únicas de asientos que pasaron el filtro
+    const referenciasRelevantes = new Set(movimientosFiltrados.map(m => m.referencia));
+    
+    // 2. Para cada referencia, incluir TODOS sus movimientos (sin filtro de cuenta)
+    referenciasRelevantes.forEach(referencia => {
+      // Obtener TODOS los movimientos de este asiento (sin filtro de cuenta)
+      const movimientosCompletos = movimientos.filter(m => m.referencia === referencia);
+      
+      // Identificar cuáles movimientos cumplieron el filtro (para resaltarlos)
+      const codigosFiltrados = new Set(
+        movimientosFiltrados
+          .filter(m => m.referencia === referencia)
+          .map(m => m.cuenta_codigo)
+      );
+      
+      asientosAgrupados[referencia] = {
+        referencia,
+        fecha: movimientosCompletos[0].fecha,
+        tipo: movimientosCompletos[0].tipo,
+        descripcion: movimientosCompletos[0].descripcion,
+        movimientos: movimientosCompletos.map(mov => ({
+          ...mov,
+          esCuentaFiltrada: codigosFiltrados.has(mov.cuenta_codigo)
+        })),
+        totalDebe: movimientosCompletos.reduce((sum, m) => sum + m.debe, 0),
+        totalHaber: movimientosCompletos.reduce((sum, m) => sum + m.haber, 0),
+      };
+    });
+  }
 
   const asientosArray = Object.values(asientosAgrupados);
   
@@ -894,13 +929,21 @@ const Balanza = () => {
                           </TableHeader>
                           <TableBody>
                             {asiento.movimientos.map((mov, idx) => (
-                              <TableRow key={idx}>
+                              <TableRow 
+                                key={idx}
+                                className={mov.esCuentaFiltrada ? "bg-blue-50 dark:bg-blue-950/30" : ""}
+                              >
                                 <TableCell>
-                                  <div>
-                                    <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {mov.cuenta_nombre}
-                                    </p>
+                                  <div className="flex items-center gap-2">
+                                    {mov.esCuentaFiltrada && (
+                                      <span className="text-blue-600 dark:text-blue-400 font-bold">●</span>
+                                    )}
+                                    <div>
+                                      <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {mov.cuenta_nombre}
+                                      </p>
+                                    </div>
                                   </div>
                                 </TableCell>
                                 <TableCell>{mov.descripcion}</TableCell>
@@ -931,6 +974,16 @@ const Balanza = () => {
                             </TableRow>
                           </TableBody>
                         </Table>
+                        
+                        {/* Leyenda solo en pestañas filtradas */}
+                        {pestanaActiva !== "todos" && asiento.movimientos.some(m => m.esCuentaFiltrada) && (
+                          <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-950/30 rounded border border-blue-200 dark:border-blue-800">
+                            <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                              <span className="text-blue-600 dark:text-blue-400 font-bold">●</span>
+                              Las filas resaltadas son las cuentas que coinciden con tu filtro actual
+                            </p>
+                          </div>
+                        )}
                         
                         {/* Mostrar asiento de reversión si existe */}
                         {asientoItem.asientoReversion && (
