@@ -1682,7 +1682,7 @@ const CuentasPorCobrar = () => {
                           <BarChart 
                             data={dataFiltradaCliente}
                             layout="vertical"
-                            margin={{ left: 100 }}
+                            margin={{ left: 100, right: 80 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                             <XAxis 
@@ -1756,7 +1756,26 @@ const CuentasPorCobrar = () => {
                             <Bar dataKey="vencido16_30" stackId="a" fill="hsl(var(--chart-3))" name="Vencido 16-30 días" />
                             <Bar dataKey="vencido31_60" stackId="a" fill="hsl(var(--warning))" name="Vencido 31-60 días" />
                             <Bar dataKey="vencido61_90" stackId="a" fill="hsl(222 47% 55%)" name="Vencido 61-90 días" />
-                            <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días" />
+                            <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días">
+                              <LabelList 
+                                position="right"
+                                formatter={(value: number, entry: any, index: number) => {
+                                  const cliente = dataFiltradaCliente[index];
+                                  if (!cliente) return '';
+                                  
+                                  const total = filtroAntiguedad === "todos" 
+                                    ? cliente.total 
+                                    : (cliente as any)[filtroAntiguedad] || 0;
+                                  
+                                  return formatearConPreferenciasAnalitica(total);
+                                }}
+                                style={{ 
+                                  fontSize: '11px', 
+                                  fontWeight: '600',
+                                  fill: 'hsl(var(--foreground))'
+                                }}
+                              />
+                            </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       );
