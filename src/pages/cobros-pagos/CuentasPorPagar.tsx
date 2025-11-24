@@ -1251,7 +1251,7 @@ const CuentasPorPagar = () => {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Total Pendiente</CardTitle>
+                      <CardTitle className="text-sm font-medium">Total por Pagar</CardTitle>
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
@@ -1578,9 +1578,9 @@ const CuentasPorPagar = () => {
                                     >
                                       {cuenta.estado}
                                     </Badge>
-                                    {cuenta.diasVencimiento !== null && (
+                                    {cuenta.diasVencimiento > 0 && (
                                       <span className="text-xs text-muted-foreground">
-                                        {cuenta.diasVencimiento > 0 ? `${cuenta.diasVencimiento}d` : `En ${Math.abs(cuenta.diasVencimiento)}d`}
+                                        {cuenta.diasVencimiento} días
                                       </span>
                                     )}
                                   </div>
