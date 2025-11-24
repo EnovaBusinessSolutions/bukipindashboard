@@ -16,8 +16,7 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart,
-  LabelList
+  AreaChart
 } from "recharts";
 import { 
   TrendingUp, 
@@ -223,20 +222,21 @@ const AnalyticasCuentasPorCobrar = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart 
                     data={analytics.cuentasPorCliente} 
-                    layout="horizontal"
-                    margin={{ top: 5, right: 80, left: 0, bottom: 5 }}
+                    layout="vertical"
+                    margin={{ top: 10, right: 30, left: 150, bottom: 10 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                     <XAxis 
                       type="number" 
-                      domain={[0, (dataMax: number) => dataMax * 1.1]}
-                      hide={true}
+                      stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                     />
                     <YAxis 
                       dataKey="cliente" 
                       type="category" 
-                      width={120}
-                      tick={{ fontSize: 12 }}
+                      width={140}
+                      stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
                     />
                     <Tooltip 
                       formatter={(value: number) => [formatearConPreferencias(value), 'Monto por Cobrar']}
@@ -245,26 +245,16 @@ const AnalyticasCuentasPorCobrar = () => {
                         backgroundColor: 'hsl(var(--popover))',
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
-                        padding: '12px'
+                        padding: '12px',
+                        fontSize: '14px'
                       }}
+                      labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                     />
                     <Bar 
                       dataKey="monto" 
                       fill={COLORS.primary} 
                       radius={[0, 4, 4, 0]}
-                      isAnimationActive={false}
-                    >
-                      <LabelList 
-                        dataKey="monto" 
-                        position="right"
-                        formatter={(value: number) => formatearConPreferencias(value)}
-                        style={{ 
-                          fontSize: '11px', 
-                          fontWeight: '600',
-                          fill: 'hsl(var(--foreground))'
-                        }}
-                      />
-                    </Bar>
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
