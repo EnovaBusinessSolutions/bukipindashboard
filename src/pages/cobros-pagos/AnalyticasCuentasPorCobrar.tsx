@@ -16,7 +16,8 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart
+  AreaChart,
+  LabelList
 } from "recharts";
 import { 
   TrendingUp, 
@@ -223,14 +224,20 @@ const AnalyticasCuentasPorCobrar = () => {
                   <BarChart 
                     data={analytics.cuentasPorCliente} 
                     layout="horizontal"
-                    margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                    margin={{ top: 5, right: 80, left: 0, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
                       type="number" 
-                      domain={[0, Math.max(...analytics.cuentasPorCliente.map(c => c.monto)) * 1.1]}
+                      domain={[0, (dataMax: number) => dataMax * 1.1]}
+                      hide={true}
                     />
-                    <YAxis dataKey="cliente" type="category" width={120} />
+                    <YAxis 
+                      dataKey="cliente" 
+                      type="category" 
+                      width={120}
+                      tick={{ fontSize: 12 }}
+                    />
                     <Tooltip 
                       formatter={(value: number) => [formatearConPreferencias(value), 'Monto por Cobrar']}
                       labelFormatter={(label) => `Cliente: ${label}`}
@@ -241,7 +248,23 @@ const AnalyticasCuentasPorCobrar = () => {
                         padding: '12px'
                       }}
                     />
-                    <Bar dataKey="monto" fill={COLORS.primary} radius={[0, 4, 4, 0]} isAnimationActive={false} />
+                    <Bar 
+                      dataKey="monto" 
+                      fill={COLORS.primary} 
+                      radius={[0, 4, 4, 0]}
+                      isAnimationActive={false}
+                    >
+                      <LabelList 
+                        dataKey="monto" 
+                        position="right"
+                        formatter={(value: number) => formatearConPreferencias(value)}
+                        style={{ 
+                          fontSize: '11px', 
+                          fontWeight: '600',
+                          fill: 'hsl(var(--foreground))'
+                        }}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
