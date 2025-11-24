@@ -56,6 +56,7 @@ import {
 import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
 import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
 import { formatCurrency } from "@/lib/utils";
+import AnalyticasCxP from "@/components/CuentasPorPagar/AnalyticasCxP";
 
 const CuentasPorPagar = () => {
   // Estados principales
@@ -566,7 +567,7 @@ const CuentasPorPagar = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="lista" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               Lista de Cuentas
@@ -574,6 +575,10 @@ const CuentasPorPagar = () => {
             <TabsTrigger value="transacciones" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Resumen de Transacciones
+            </TabsTrigger>
+            <TabsTrigger value="analiticas" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Analíticas
             </TabsTrigger>
           </TabsList>
 
@@ -1200,6 +1205,11 @@ const CuentasPorPagar = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Tab: Analíticas */}
+          <TabsContent value="analiticas" className="space-y-6">
+            <AnalyticasCxP />
           </TabsContent>
 
         </Tabs>
