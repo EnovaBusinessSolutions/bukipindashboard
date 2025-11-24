@@ -67,6 +67,19 @@ export const useAnalyticsCuentasPorCobrar = (
 
       if (errorVentas) throw errorVentas;
 
+      // Consultar asientos contables de CxC para histórico preciso
+      const { data: asientosCxC, error: errorAsientos } = await supabase
+        .from("detalle_asientos")
+        .select(`
+          debe,
+          haber,
+          asientos_contables!inner(fecha)
+        `)
+        .eq("cuenta_codigo", "1003")
+        .order("asientos_contables(fecha)", { ascending: true });
+
+      if (errorAsientos) throw errorAsientos;
+
       // Transformar ventas de activos al formato CuentaPorCobrar
       const cuentasDeVentas: CuentaPorCobrar[] = (ventasActivos || []).map(venta => ({
         id: venta.id,
@@ -182,21 +195,26 @@ export const useAnalyticsCuentasPorCobrar = (
         };
       });
 
-      // Histórico de CxC (basado en transacciones reales)
+      // Histórico de CxC (basado en asientos contables reales)
       const historicoCxC = [];
       
-      // Función para calcular saldo real desde transacciones hasta una fecha específica
+      // Función para calcular saldo contable real hasta una fecha específica
       const calcularSaldoRealHastaFecha = (fecha: Date): number => {
         const fechaFin = new Date(fecha);
         fechaFin.setHours(23, 59, 59, 999);
         
-        // Sumar ingresos pendientes hasta esta fecha
-        const ingresosHastaFecha = todasLasCuentas.filter(cuenta => {
-          const fechaCuenta = new Date(cuenta.created_at);
-          return fechaCuenta <= fechaFin;
+        // Filtrar asientos hasta la fecha
+        const asientosHastaFecha = (asientosCxC || []).filter(asiento => {
+          const fechaAsiento = new Date(asiento.asientos_contables.fecha);
+          return fechaAsiento <= fechaFin;
         });
         
-        return ingresosHastaFecha.reduce((sum, c) => sum + c.monto_pendiente, 0);
+        // Calcular saldo real (DEBE - HABER)
+        const saldo = asientosHastaFecha.reduce((sum, a) => 
+          sum + (a.debe - a.haber), 0
+        );
+        
+        return Math.max(0, saldo);
       };
 
       if (periodo === "mensual") {
