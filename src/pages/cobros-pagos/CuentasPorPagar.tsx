@@ -1198,7 +1198,7 @@ const CuentasPorPagar = () => {
                           domain={dominioYHistorico}
                           stroke="hsl(var(--foreground))"
                           tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                          tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
                         />
                         <Tooltip
                           contentStyle={{
@@ -1208,7 +1208,7 @@ const CuentasPorPagar = () => {
                             color: 'hsl(var(--foreground))'
                           }}
                           formatter={(value: number) => [
-                            `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+                            formatearConPreferenciasAnalitica(value),
                             'Saldo CxP'
                           ]}
                           labelStyle={{ color: 'hsl(var(--foreground))' }}
@@ -1223,7 +1223,7 @@ const CuentasPorPagar = () => {
                             position: 'top',
                             fill: 'hsl(var(--foreground))',
                             fontSize: 12,
-                            formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+                            formatter: (value: number) => formatearConPreferenciasAnalitica(value)
                           }}
                         />
                       </LineChart>
