@@ -52,11 +52,14 @@ import {
   CheckCircle2,
   Eye,
   X,
+  Banknote,
 } from "lucide-react";
 import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
 import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
-import { formatCurrency } from "@/lib/utils";
+import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
+import { formatCurrency, cn } from "@/lib/utils";
 import AnalyticasCxP from "@/components/CuentasPorPagar/AnalyticasCxP";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const CuentasPorPagar = () => {
   // Estados principales
@@ -92,6 +95,7 @@ const CuentasPorPagar = () => {
   const { data: tiposCxP, isLoading } = useCuentasPorPagarAgrupadas();
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
+  const { data: saldos } = useSaldosDisponibles();
   const queryClient = useQueryClient();
 
   // Query para todas las transacciones (incluye pagadas)
@@ -1280,19 +1284,46 @@ const CuentasPorPagar = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="metodo">Método de pago</Label>
-                  <Select value={metodoPago} onValueChange={setMetodoPago}>
-                    <SelectTrigger id="metodo">
-                      <SelectValue placeholder="Selecciona un método" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="efectivo">Efectivo</SelectItem>
-                      <SelectItem value="transferencia">Transferencia</SelectItem>
-                      <SelectItem value="tarjeta_debito">Tarjeta de débito</SelectItem>
-                      <SelectItem value="tarjeta_credito">Tarjeta de crédito</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Método de pago</Label>
+                  <RadioGroup value={metodoPago} onValueChange={setMetodoPago} className="space-y-2">
+                    {/* Opción Efectivo */}
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <RadioGroupItem value="efectivo" id="efectivo" />
+                        <Label htmlFor="efectivo" className="cursor-pointer flex items-center gap-2">
+                          <Banknote className="h-4 w-4" />
+                          <span>Efectivo</span>
+                        </Label>
+                      </div>
+                      <span className={cn(
+                        "font-medium text-sm",
+                        saldos?.efectivo && saldos.efectivo >= Number(montoPago || 0) 
+                          ? "text-green-600" 
+                          : "text-destructive"
+                      )}>
+                        Disponible: {formatCurrency(saldos?.efectivo || 0)}
+                      </span>
+                    </div>
+
+                    {/* Opción Transferencia/Bancos */}
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <RadioGroupItem value="transferencia" id="transferencia" />
+                        <Label htmlFor="transferencia" className="cursor-pointer flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          <span>Transferencia / Bancos</span>
+                        </Label>
+                      </div>
+                      <span className={cn(
+                        "font-medium text-sm",
+                        saldos?.bancos && saldos.bancos >= Number(montoPago || 0) 
+                          ? "text-green-600" 
+                          : "text-destructive"
+                      )}>
+                        Disponible: {formatCurrency(saldos?.bancos || 0)}
+                      </span>
+                    </div>
+                  </RadioGroup>
                 </div>
 
                 <div className="flex gap-2 justify-end pt-4">
