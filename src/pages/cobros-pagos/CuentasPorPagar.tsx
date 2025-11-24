@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -44,7 +45,13 @@ import {
   FileText,
   Mail,
   Phone,
-  Settings
+  Settings,
+  Package,
+  Receipt,
+  Users,
+  CheckCircle2,
+  Eye,
+  X,
 } from "lucide-react";
 import { 
   BarChart, 
@@ -59,11 +66,8 @@ import {
   Cell,
   LineChart,
   Line,
-  Area,
-  AreaChart,
-  LabelList
 } from "recharts";
-import { useCuentasPorPagarAgrupadas, TipoCxP, ProveedorAgrupado, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
+import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
 import { useAnalyticsCuentasPorPagarConsolidadas } from "@/hooks/useCuentasPorPagarConsolidadas";
 import { formatCurrency } from "@/lib/utils";
 
@@ -77,35 +81,6 @@ const COLORS = {
 };
 
 const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.destructive];
-
-// Componente para labels personalizados
-const CustomTotalLabel = (props: any) => {
-  const { x, y, width, height, index, filtroAntiguedad, dataFiltradaProveedor, formatearConPreferenciasAnalitica } = props;
-  
-  if (!dataFiltradaProveedor || !dataFiltradaProveedor[index]) return null;
-  
-  const proveedor = dataFiltradaProveedor[index];
-  const total = filtroAntiguedad === "todos" 
-    ? proveedor.total 
-    : proveedor[filtroAntiguedad] || 0;
-  
-  const labelX = x + width + 8;
-  const labelY = y + height / 2;
-  
-  return (
-    <text 
-      x={labelX} 
-      y={labelY}
-      fill="hsl(var(--foreground))"
-      fontSize="11"
-      fontWeight="600"
-      textAnchor="start"
-      dominantBaseline="middle"
-    >
-      {formatearConPreferenciasAnalitica(total)}
-    </text>
-  );
-};
 
 const CuentasPorPagar = () => {
   // Estados principales
@@ -121,10 +96,20 @@ const CuentasPorPagar = () => {
   const [metodoPago, setMetodoPago] = useState("");
   const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
 
+  // Estados para Resumen de Transacciones
+  const [filtroMesTransaccion, setFiltroMesTransaccion] = useState<string>("todos");
+  const [filtroAnoTransaccion, setFiltroAnoTransaccion] = useState<string>("todos");
+  const [filtroProveedorTransaccion, setFiltroProveedorTransaccion] = useState<string>("todos");
+  const [filtroTipoEgreso, setFiltroTipoEgreso] = useState<string>("todos");
+  const [filtroEstadoTransaccion, setFiltroEstadoTransaccion] = useState<string>("todos");
+  const [filtroMetodoPago, setFiltroMetodoPago] = useState<string>("todos");
+  const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
+  const [detalleContableOpen, setDetalleContableOpen] = useState(false);
+  const [selectedTransaccionId, setSelectedTransaccionId] = useState<string | null>(null);
+  const [fuenteTransaccion, setFuenteTransaccion] = useState<'egreso' | 'capex' | null>(null);
+
   // Estados para analíticas
   const [periodoCxP, setPeriodoCxP] = useState<"diario" | "mensual" | "anual">("mensual");
-  const [filtroAntiguedad, setFiltroAntiguedad] = useState("todos");
-  const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("todos");
   const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
   const [decimalesAnalitica, setDecimalesAnalitica] = useState<0 | 1 | 2>(2);
 
@@ -133,16 +118,115 @@ const CuentasPorPagar = () => {
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagarConsolidadas(periodoCxP);
   const queryClient = useQueryClient();
 
+  // Query para todas las transacciones (incluye pagadas)
+  const { data: todasTransaccionesCxP, isLoading: loadingTransaccionesCxP } = useQuery({
+    queryKey: ["todas-transacciones-cxp"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      const { data: egresos, error: egresosError } = await supabase
+        .from("transacciones_egresos")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("estado", "activo")
+        .order("created_at", { ascending: false });
+
+      if (egresosError) throw egresosError;
+
+      const { data: inversiones, error: inversionesError } = await supabase
+        .from("inversiones_capex")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("estado", "activo")
+        .order("created_at", { ascending: false });
+
+      if (inversionesError) throw inversionesError;
+
+      const egresosNormalizados = (egresos || []).map((e: any) => ({
+        id: e.id,
+        created_at: e.created_at,
+        fecha: e.created_at,
+        proveedor_nombre: e.proveedor_nombre || "Sin especificar",
+        descripcion: e.descripcion,
+        tipo: e.tipo_egreso,
+        subtipo: e.subtipo_egreso || "-",
+        monto_total: e.monto_total,
+        monto_pagado: e.monto_pagado,
+        monto_pendiente: e.monto_pendiente || 0,
+        tipo_pago: e.tipo_pago,
+        metodo_pago: e.metodo_pago || "-",
+        fecha_vencimiento: e.fecha_vencimiento,
+        estado: e.estado,
+        fuente: 'egreso' as const
+      }));
+
+      const inversionesNormalizadas = (inversiones || []).map((inv: any) => ({
+        id: inv.id,
+        created_at: inv.created_at,
+        fecha: inv.fecha_adquisicion,
+        proveedor_nombre: inv.proveedor_nombre || "Sin especificar",
+        descripcion: inv.producto_nombre + (inv.descripcion ? ` - ${inv.descripcion}` : ''),
+        tipo: 'Inversión CAPEX',
+        subtipo: inv.categoria_activo,
+        monto_total: inv.valor_total,
+        monto_pagado: inv.monto_pagado,
+        monto_pendiente: inv.monto_pendiente || 0,
+        tipo_pago: inv.tipo_pago,
+        metodo_pago: inv.metodo_pago || "-",
+        fecha_vencimiento: inv.fecha_vencimiento,
+        estado: inv.estado,
+        fuente: 'capex' as const
+      }));
+
+      return [...egresosNormalizados, ...inversionesNormalizadas]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    },
+  });
+
+  // Query para asiento contable
+  const { data: asientoContable, isLoading: loadingAsiento } = useQuery({
+    queryKey: ["asiento-contable-cxp", selectedTransaccionId, fuenteTransaccion],
+    queryFn: async () => {
+      if (!selectedTransaccionId || !fuenteTransaccion) return null;
+
+      let numeroAsiento = '';
+      if (fuenteTransaccion === 'egreso') {
+        numeroAsiento = `COMP-INV-${selectedTransaccionId}`;
+      } else {
+        numeroAsiento = `INV-${selectedTransaccionId}`;
+      }
+
+      const { data: asiento, error } = await supabase
+        .from("asientos_contables")
+        .select(`
+          *,
+          detalle_asientos (
+            *,
+            cuentas:cuenta_codigo (nombre)
+          )
+        `)
+        .eq("numero_asiento", numeroAsiento)
+        .single();
+
+      if (error) return null;
+      return asiento;
+    },
+    enabled: !!selectedTransaccionId && !!fuenteTransaccion && detalleContableOpen,
+  });
+
   // Real-time updates
   useEffect(() => {
     const channel = supabase
       .channel('cuentas-por-pagar-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transacciones_egresos' }, () => {
         queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
+        queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
         queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inversiones_capex' }, () => {
         queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
+        queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
         queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
       })
       .subscribe();
@@ -230,6 +314,7 @@ const CuentasPorPagar = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
+      queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
       queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
       queryClient.invalidateQueries({ queryKey: ['historial-pagos-cxp'] });
       toast.success("Pago registrado exitosamente");
@@ -381,6 +466,106 @@ const CuentasPorPagar = () => {
     prov.rfc?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
+  // Calcular KPIs generales
+  const totalFacturas = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalFacturas, 0) || 0;
+  const totalPendiente = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalPendiente, 0) || 0;
+  
+  const todasFacturas = tiposCxP?.flatMap(tipo => 
+    tipo.proveedores.flatMap(prov => prov.facturas)
+  ) || [];
+  
+  const hoy = new Date();
+  const totalVencidas = todasFacturas.filter(f => 
+    f.fecha_vencimiento && new Date(f.fecha_vencimiento) < hoy
+  ).length;
+  
+  const totalPorVencer = todasFacturas.filter(f => 
+    f.fecha_vencimiento && new Date(f.fecha_vencimiento) >= hoy
+  ).length;
+
+  // Filtros para Resumen de Transacciones
+  const transaccionesFiltradas = useMemo(() => {
+    if (!todasTransaccionesCxP) return [];
+
+    let resultado = [...todasTransaccionesCxP];
+
+    if (filtroMesTransaccion !== "todos") {
+      resultado = resultado.filter(t => 
+        new Date(t.created_at).getMonth() + 1 === parseInt(filtroMesTransaccion)
+      );
+    }
+
+    if (filtroAnoTransaccion !== "todos") {
+      resultado = resultado.filter(t => 
+        new Date(t.created_at).getFullYear() === parseInt(filtroAnoTransaccion)
+      );
+    }
+
+    if (filtroProveedorTransaccion !== "todos") {
+      resultado = resultado.filter(t => t.proveedor_nombre === filtroProveedorTransaccion);
+    }
+
+    if (filtroTipoEgreso !== "todos") {
+      resultado = resultado.filter(t => t.tipo === filtroTipoEgreso);
+    }
+
+    if (filtroEstadoTransaccion !== "todos") {
+      if (filtroEstadoTransaccion === "completado") {
+        resultado = resultado.filter(t => t.monto_pendiente === 0);
+      } else if (filtroEstadoTransaccion === "enProgreso") {
+        resultado = resultado.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0);
+      } else if (filtroEstadoTransaccion === "sinPagar") {
+        resultado = resultado.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0);
+      }
+    }
+
+    if (filtroMetodoPago !== "todos") {
+      resultado = resultado.filter(t => t.metodo_pago === filtroMetodoPago);
+    }
+
+    if (ordenMontoTransaccion === "menor") {
+      resultado.sort((a, b) => a.monto_total - b.monto_total);
+    } else if (ordenMontoTransaccion === "mayor") {
+      resultado.sort((a, b) => b.monto_total - a.monto_total);
+    }
+
+    return resultado;
+  }, [todasTransaccionesCxP, filtroMesTransaccion, filtroAnoTransaccion, filtroProveedorTransaccion, filtroTipoEgreso, filtroEstadoTransaccion, filtroMetodoPago, ordenMontoTransaccion]);
+
+  // Listas únicas para filtros
+  const proveedoresUnicos = useMemo(() => {
+    if (!todasTransaccionesCxP) return [];
+    const nombres = new Set(todasTransaccionesCxP.map(t => t.proveedor_nombre));
+    return Array.from(nombres).sort();
+  }, [todasTransaccionesCxP]);
+
+  const tiposUnicos = useMemo(() => {
+    if (!todasTransaccionesCxP) return [];
+    const tipos = new Set(todasTransaccionesCxP.map(t => t.tipo));
+    return Array.from(tipos).sort();
+  }, [todasTransaccionesCxP]);
+
+  const limpiarFiltrosTransacciones = () => {
+    setFiltroMesTransaccion("todos");
+    setFiltroAnoTransaccion("todos");
+    setFiltroProveedorTransaccion("todos");
+    setFiltroTipoEgreso("todos");
+    setFiltroEstadoTransaccion("todos");
+    setFiltroMetodoPago("todos");
+    setOrdenMontoTransaccion("ninguno");
+  };
+
+  const getEstadoTransaccion = (transaccion: any) => {
+    if (transaccion.monto_pendiente === 0) return "completado";
+    if (transaccion.monto_pagado > 0) return "enProgreso";
+    return "sinPagar";
+  };
+
+  const getPorcentajePagado = (transaccion: any) => {
+    if (transaccion.monto_total === 0) return 0;
+    return (transaccion.monto_pagado / transaccion.monto_total) * 100;
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 overflow-auto p-6">
@@ -406,10 +591,14 @@ const CuentasPorPagar = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="lista" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               Lista de Cuentas
+            </TabsTrigger>
+            <TabsTrigger value="transacciones" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Resumen de Transacciones
             </TabsTrigger>
             <TabsTrigger value="analiticas" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -447,6 +636,51 @@ const CuentasPorPagar = () => {
                 </BreadcrumbList>
               </Breadcrumb>
             )}
+
+            {/* KPIs Generales */}
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total por Pagar</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(totalPendiente)}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Cuentas Vencidas</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">{totalVencidas}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalPorVencer}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Cuentas</CardTitle>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalFacturas}</div>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Vista Nivel 1: Cards de Tipos */}
             {!tipoSeleccionado && (
@@ -697,6 +931,306 @@ const CuentasPorPagar = () => {
             )}
           </TabsContent>
 
+          {/* Tab: Resumen de Transacciones */}
+          <TabsContent value="transacciones" className="space-y-6">
+            {/* KPIs de Transacciones */}
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Transacciones</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{todasTransaccionesCxP?.length || 0}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Completamente Pagadas</CardTitle>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">
+                    {todasTransaccionesCxP?.filter(t => t.monto_pendiente === 0).length || 0}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pagos Parciales</CardTitle>
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-yellow-600">
+                    {todasTransaccionesCxP?.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Sin Pagar</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">
+                    {todasTransaccionesCxP?.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Filtros */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Filtros</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Mes */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Mes</label>
+                    <Select value={filtroMesTransaccion} onValueChange={setFiltroMesTransaccion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los meses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los meses</SelectItem>
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>
+                            {new Date(2024, i, 1).toLocaleDateString('es-MX', { month: 'long' })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Año */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Año</label>
+                    <Select value={filtroAnoTransaccion} onValueChange={setFiltroAnoTransaccion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los años" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los años</SelectItem>
+                        {Array.from({ length: 5 }, (_, i) => {
+                          const year = new Date().getFullYear() - i;
+                          return <SelectItem key={year} value={String(year)}>{year}</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Proveedor */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Proveedor</label>
+                    <Select value={filtroProveedorTransaccion} onValueChange={setFiltroProveedorTransaccion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los proveedores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los proveedores</SelectItem>
+                        {proveedoresUnicos.map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Tipo */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Tipo</label>
+                    <Select value={filtroTipoEgreso} onValueChange={setFiltroTipoEgreso}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los tipos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los tipos</SelectItem>
+                        {tiposUnicos.map(t => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Estado */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Estado</label>
+                    <Select value={filtroEstadoTransaccion} onValueChange={setFiltroEstadoTransaccion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los estados" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los estados</SelectItem>
+                        <SelectItem value="completado">Completado</SelectItem>
+                        <SelectItem value="enProgreso">En Progreso</SelectItem>
+                        <SelectItem value="sinPagar">Sin Pagar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Método de Pago */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Método de Pago</label>
+                    <Select value={filtroMetodoPago} onValueChange={setFiltroMetodoPago}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los métodos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los métodos</SelectItem>
+                        <SelectItem value="efectivo">Efectivo</SelectItem>
+                        <SelectItem value="transferencia">Transferencia</SelectItem>
+                        <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                        <SelectItem value="-">No especificado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Ordenar */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Ordenar por Monto</label>
+                    <Select value={ordenMontoTransaccion} onValueChange={setOrdenMontoTransaccion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sin orden" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ninguno">Sin orden</SelectItem>
+                        <SelectItem value="menor">Menor a Mayor</SelectItem>
+                        <SelectItem value="mayor">Mayor a Menor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Botón Limpiar */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">&nbsp;</label>
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={limpiarFiltrosTransacciones}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Limpiar Filtros
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tabla de Transacciones */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Transacciones ({transaccionesFiltradas.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingTransaccionesCxP ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Cargando transacciones...</p>
+                  </div>
+                ) : transaccionesFiltradas.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No hay transacciones que coincidan con los filtros</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead>Proveedor</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Subtipo</TableHead>
+                          <TableHead className="text-right">Monto Total</TableHead>
+                          <TableHead className="text-right">Pagado</TableHead>
+                          <TableHead className="text-right">Pendiente</TableHead>
+                          <TableHead>Tipo Pago</TableHead>
+                          <TableHead>Método</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Progreso</TableHead>
+                          <TableHead className="text-center">Detalle</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {transaccionesFiltradas.map((transaccion) => {
+                          const estado = getEstadoTransaccion(transaccion);
+                          const porcentaje = getPorcentajePagado(transaccion);
+                          
+                          return (
+                            <TableRow key={transaccion.id}>
+                              <TableCell className="whitespace-nowrap">
+                                {format(new Date(transaccion.created_at), "dd MMM yyyy HH:mm", { locale: es })}
+                              </TableCell>
+                              <TableCell>{transaccion.proveedor_nombre}</TableCell>
+                              <TableCell className="max-w-xs truncate">
+                                {transaccion.descripcion}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{transaccion.tipo}</Badge>
+                              </TableCell>
+                              <TableCell>{transaccion.subtipo}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(transaccion.monto_total)}
+                              </TableCell>
+                              <TableCell className="text-right text-green-600">
+                                {formatCurrency(transaccion.monto_pagado)}
+                              </TableCell>
+                              <TableCell className="text-right text-destructive">
+                                {formatCurrency(transaccion.monto_pendiente)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={
+                                  transaccion.tipo_pago === 'contado' ? 'default' : 
+                                  transaccion.tipo_pago === 'credito' ? 'secondary' : 'outline'
+                                }>
+                                  {transaccion.tipo_pago}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="capitalize">{transaccion.metodo_pago}</TableCell>
+                              <TableCell>
+                                <Badge variant={
+                                  estado === 'completado' ? 'default' :
+                                  estado === 'enProgreso' ? 'secondary' : 'destructive'
+                                }>
+                                  {estado === 'completado' ? 'Completado' :
+                                   estado === 'enProgreso' ? 'En Progreso' : 'Sin Pagar'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Progress value={porcentaje} className="w-16" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {porcentaje.toFixed(0)}%
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedTransaccionId(transaccion.id);
+                                    setFuenteTransaccion(transaccion.fuente);
+                                    setDetalleContableOpen(true);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Tab: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
             {loadingAnalytics ? (
@@ -920,49 +1454,49 @@ const CuentasPorPagar = () => {
                       Evolución del saldo de CxP en el tiempo
                     </CardDescription>
                   </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={analytics?.historicoCxP || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis 
-                            dataKey="fecha" 
-                            stroke="hsl(var(--foreground))"
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                          />
-                          <YAxis 
-                            stroke="hsl(var(--foreground))"
-                            tick={{ fill: 'hsl(var(--foreground))' }}
-                            tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: 'hsl(var(--popover))',
-                              border: '1px solid hsl(var(--border))',
-                              borderRadius: '8px',
-                              color: 'hsl(var(--foreground))'
-                            }}
-                            formatter={(value: number) => [
-                              formatearConPreferenciasAnalitica(value),
-                              'Saldo CxP'
-                            ]}
-                            labelStyle={{ color: 'hsl(var(--foreground))' }}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="saldo" 
-                            stroke={COLORS.primary} 
-                            strokeWidth={2}
-                            dot={{ fill: COLORS.primary, r: 4 }}
-                            label={{
-                              position: 'top',
-                              fill: 'hsl(var(--foreground))',
-                              fontSize: 12,
-                              formatter: (value: number) => formatearConPreferenciasAnalitica(value)
-                            }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </CardContent>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={analytics?.historicoCxP || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="fecha" 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--foreground))"
+                          tick={{ fill: 'hsl(var(--foreground))' }}
+                          tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            color: 'hsl(var(--foreground))'
+                          }}
+                          formatter={(value: number) => [
+                            formatearConPreferenciasAnalitica(value),
+                            'Saldo CxP'
+                          ]}
+                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="saldo" 
+                          stroke={COLORS.primary} 
+                          strokeWidth={2}
+                          dot={{ fill: COLORS.primary, r: 4 }}
+                          label={{
+                            position: 'top',
+                            fill: 'hsl(var(--foreground))',
+                            fontSize: 12,
+                            formatter: (value: number) => formatearConPreferenciasAnalitica(value)
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
                 </Card>
               </>
             )}
@@ -1071,12 +1605,12 @@ const CuentasPorPagar = () => {
                         <div className="flex items-center gap-2">
                           <CreditCard className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm text-muted-foreground capitalize">
-                            {pago.metodo_pago.replace('_', ' ')}
+                            {pago.metodo_pago}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-success">
+                        <div className="font-bold text-lg text-green-600">
                           {formatCurrency(pago.monto)}
                         </div>
                       </div>
@@ -1089,6 +1623,90 @@ const CuentasPorPagar = () => {
                 </div>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog: Detalle Contable */}
+        <Dialog open={detalleContableOpen} onOpenChange={setDetalleContableOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Detalle Contable</DialogTitle>
+            </DialogHeader>
+            
+            {loadingAsiento ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Cargando detalle contable...</p>
+              </div>
+            ) : !asientoContable ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No se encontró asiento contable para esta transacción</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Número de Asiento</p>
+                    <p className="text-sm text-muted-foreground">{asientoContable.numero_asiento}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Fecha</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(asientoContable.fecha), "dd MMM yyyy", { locale: es })}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium">Descripción</p>
+                  <p className="text-sm text-muted-foreground">{asientoContable.descripcion}</p>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cuenta</TableHead>
+                        <TableHead className="text-right">Debe</TableHead>
+                        <TableHead className="text-right">Haber</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {asientoContable.detalle_asientos?.map((detalle: any) => (
+                        <TableRow key={detalle.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{detalle.cuenta_codigo}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {detalle.cuentas?.nombre || detalle.descripcion}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {detalle.debe > 0 ? formatCurrency(detalle.debe) : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {detalle.haber > 0 ? formatCurrency(detalle.haber) : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="font-bold bg-muted/50">
+                        <TableCell>Total</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(
+                            asientoContable.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(
+                            asientoContable.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
