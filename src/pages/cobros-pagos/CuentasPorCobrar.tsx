@@ -70,6 +70,36 @@ const COLORS = {
 
 const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.destructive];
 
+// Componente personalizado para mostrar el total a la derecha de las barras apiladas
+const CustomTotalLabel = (props: any) => {
+  const { x, y, width, height, index, filtroAntiguedad, dataFiltradaCliente, formatearConPreferenciasAnalitica } = props;
+  
+  if (!dataFiltradaCliente || !dataFiltradaCliente[index]) return null;
+  
+  const cliente = dataFiltradaCliente[index];
+  const total = filtroAntiguedad === "todos" 
+    ? cliente.total 
+    : cliente[filtroAntiguedad] || 0;
+  
+  // Posicionar el texto a la derecha de la barra con un pequeño offset
+  const labelX = x + width + 8;
+  const labelY = y + height / 2;
+  
+  return (
+    <text 
+      x={labelX} 
+      y={labelY}
+      fill="hsl(var(--foreground))"
+      fontSize="11"
+      fontWeight="600"
+      textAnchor="start"
+      dominantBaseline="middle"
+    >
+      {formatearConPreferenciasAnalitica(total)}
+    </text>
+  );
+};
+
 const CuentasPorCobrar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("lista");
@@ -1759,21 +1789,14 @@ const CuentasPorCobrar = () => {
                             <Bar dataKey="vencidoMas90" stackId="a" fill="hsl(var(--destructive))" name="Vencido +90 días">
                               <LabelList 
                                 position="right"
-                                formatter={(value: number, entry: any, index: number) => {
-                                  const cliente = dataFiltradaCliente[index];
-                                  if (!cliente) return '';
-                                  
-                                  const total = filtroAntiguedad === "todos" 
-                                    ? cliente.total 
-                                    : (cliente as any)[filtroAntiguedad] || 0;
-                                  
-                                  return formatearConPreferenciasAnalitica(total);
-                                }}
-                                style={{ 
-                                  fontSize: '11px', 
-                                  fontWeight: '600',
-                                  fill: 'hsl(var(--foreground))'
-                                }}
+                                content={(props) => (
+                                  <CustomTotalLabel 
+                                    {...props} 
+                                    filtroAntiguedad={filtroAntiguedad}
+                                    dataFiltradaCliente={dataFiltradaCliente}
+                                    formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+                                  />
+                                )}
                               />
                             </Bar>
                           </BarChart>
