@@ -315,14 +315,54 @@ const CuentasPorPagar = () => {
         });
 
       if (insertError) throw insertError;
+
+      // Generar asiento contable para el pago
+      const numeroAsiento = `PAGO-CXP-${Date.now()}`;
+      const { data: asiento, error: asientoError } = await supabase
+        .from('asientos_contables')
+        .insert({
+          user_id: user.id,
+          numero_asiento: numeroAsiento,
+          descripcion: `Pago a ${factura.proveedor_nombre || 'Proveedor'}: ${factura.descripcion}`,
+          fecha: new Date().toISOString().split('T')[0]
+        })
+        .select()
+        .single();
+
+      if (asientoError) throw asientoError;
+
+      // Insertar detalles del asiento
+      const { error: detallesError } = await supabase
+        .from('detalle_asientos')
+        .insert([
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: '2001', // Proveedores (DEBE - disminuye deuda)
+            debe: monto,
+            haber: 0,
+            descripcion: `Pago a ${factura.proveedor_nombre || 'Proveedor'}`
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_codigo: metodo === 'efectivo' ? '1001' : '1002', // Caja o Bancos
+            debe: 0,
+            haber: monto, // (HABER - sale dinero)
+            descripcion: `Pago en ${metodo === 'efectivo' ? 'efectivo' : 'transferencia/bancos'}`
+          }
+        ]);
+
+      if (detallesError) throw detallesError;
       
       return { facturaId, monto, metodo, tipo };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
       queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar"] });
       queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-detalle"] });
       queryClient.invalidateQueries({ queryKey: ['historial-pagos-cxp'] });
+      queryClient.invalidateQueries({ queryKey: ["saldos-disponibles"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();

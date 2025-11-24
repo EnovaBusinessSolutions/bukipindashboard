@@ -45,18 +45,44 @@ export const useAnalyticsCuentasPorPagar = (
   return useQuery({
     queryKey: ["analytics-cuentas-por-pagar", periodo, filtroProveedor],
     queryFn: async (): Promise<AnalyticsCuentasPorPagar> => {
-      const { data: cuentas, error } = await supabase
+      // Obtener CxP de transacciones_egresos
+      const { data: cuentasEgresos, error: errorEgresos } = await supabase
         .from("transacciones_egresos")
         .select("*")
         .gt("monto_pendiente", 0)
+        .eq("estado", "activo")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (errorEgresos) throw errorEgresos;
+
+      // Obtener CxP de inversiones_capex (activos comprados a crédito)
+      const { data: cuentasInversiones, error: errorInversiones } = await supabase
+        .from("inversiones_capex")
+        .select("*")
+        .gt("monto_pendiente", 0)
+        .in("estado", ["activo", "vendido"])
+        .order("created_at", { ascending: false });
+
+      if (errorInversiones) throw errorInversiones;
+
+      // Unificar ambas fuentes en un formato común
+      const cuentas = [
+        ...(cuentasEgresos || []),
+        ...(cuentasInversiones || []).map(inv => ({
+          id: inv.id,
+          proveedor_nombre: inv.proveedor_nombre,
+          monto_pendiente: inv.monto_pendiente || 0,
+          fecha_vencimiento: inv.fecha_vencimiento,
+          created_at: inv.created_at,
+          descripcion: inv.producto_nombre,
+          user_id: inv.user_id
+        }))
+      ];
 
       const today = new Date();
       
       // Calcular días de vencimiento
-      const cuentasConDias: CuentaPorPagar[] = (cuentas || []).map(cuenta => {
+      const cuentasConDias: CuentaPorPagar[] = cuentas.map(cuenta => {
         let diasVencimiento = 0;
         if (cuenta.fecha_vencimiento) {
           const fechaVenc = new Date(cuenta.fecha_vencimiento);
@@ -161,11 +187,11 @@ export const useAnalyticsCuentasPorPagar = (
         };
       });
 
-      // Histórico de CxP (basado en periodo)
+      // Histórico de CxP (basado en periodo) - Incluir cuentas 2001 y 2002
       const { data: asientos } = await supabase
         .from("detalle_asientos")
         .select("*, asientos_contables!inner(fecha)")
-        .eq("cuenta_codigo", "2001")
+        .in("cuenta_codigo", ["2001", "2002"])
         .order("asientos_contables(fecha)", { ascending: true });
 
       const historicoCxP: { fecha: string; saldo: number }[] = [];
