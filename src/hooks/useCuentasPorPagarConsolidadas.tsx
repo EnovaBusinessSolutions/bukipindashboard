@@ -264,7 +264,7 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
         };
       });
 
-      // Histórico de CxP (basado en asientos contables - cuenta 2101)
+      // Histórico de CxP (basado en asientos contables - cuenta 2001 Proveedores)
       const historicoCxP = [];
       const saldoActual = totalPendiente;
       
@@ -280,7 +280,7 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
           )
         `)
         .eq("asientos_contables.user_id", (egresos && egresos.length > 0) ? egresos[0].user_id : "")
-        .eq("cuenta_codigo", "2101")
+        .eq("cuenta_codigo", "2001")
         .order("asientos_contables(fecha)", { ascending: true });
       
       if (periodo === "diario") {

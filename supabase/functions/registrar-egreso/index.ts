@@ -244,13 +244,20 @@ serve(async (req) => {
       }
     } else if (tipo_pago === 'credito') {
       // Todo a crédito
+      let cuentaCxP = '2001'; // Por defecto: Proveedores
+      if (tipo_egreso === 'otro' || subtipo_egreso === 'otros_gastos') {
+        cuentaCxP = '2003'; // Otros gastos → Acreedores Diversos
+      }
+      
       detalles.push({
         asiento_id: asiento.id,
-        cuenta_codigo: subtipo_egreso === 'compra_inventario' ? '2002' : '2001',
+        cuenta_codigo: cuentaCxP,
         subcuenta_id: null,
         debe: 0,
         haber: montoTotal,
-        descripcion: `Cuenta por pagar${proveedor_nombre ? ' - ' + proveedor_nombre : ''}`
+        descripcion: cuentaCxP === '2003' 
+          ? 'Acreedor diverso por pagar'
+          : `Cuenta por pagar${proveedor_nombre ? ' - ' + proveedor_nombre : ''}`
       });
     } else if (tipo_pago === 'parcial') {
       // Pago parcial
@@ -304,13 +311,20 @@ serve(async (req) => {
 
       // Saldo pendiente a cuentas por pagar
       if (montoPendiente > 0) {
+        let cuentaCxP = '2001'; // Por defecto: Proveedores
+        if (tipo_egreso === 'otro' || subtipo_egreso === 'otros_gastos') {
+          cuentaCxP = '2003'; // Otros gastos → Acreedores Diversos
+        }
+        
         detalles.push({
           asiento_id: asiento.id,
-          cuenta_codigo: subtipo_egreso === 'compra_inventario' ? '2002' : '2001',
+          cuenta_codigo: cuentaCxP,
           subcuenta_id: null,
           debe: 0,
           haber: montoPendiente,
-          descripcion: `Saldo pendiente por pagar${proveedor_nombre ? ' - ' + proveedor_nombre : ''}`
+          descripcion: cuentaCxP === '2003'
+            ? 'Acreedor diverso - Saldo pendiente'
+            : `Saldo pendiente por pagar${proveedor_nombre ? ' - ' + proveedor_nombre : ''}`
         });
       }
     }
