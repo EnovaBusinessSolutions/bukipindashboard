@@ -190,12 +190,12 @@ const CuentasPorPagar = () => {
     queryFn: async () => {
       if (!selectedTransaccionId || !fuenteTransaccion) return null;
 
-      let numeroAsiento = '';
-      if (fuenteTransaccion === 'egreso') {
-        numeroAsiento = `COMP-INV-${selectedTransaccionId}`;
-      } else {
-        numeroAsiento = `INV-${selectedTransaccionId}`;
-      }
+    let numeroAsiento = '';
+    if (fuenteTransaccion === 'egreso') {
+      numeroAsiento = `EGR-${selectedTransaccionId}`;
+    } else {
+      numeroAsiento = `INV-${selectedTransaccionId}`;
+    }
 
       const { data: asiento, error } = await supabase
         .from("asientos_contables")
