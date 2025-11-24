@@ -16,8 +16,7 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart,
-  LabelList
+  AreaChart
 } from "recharts";
 import { 
   TrendingUp, 
@@ -317,14 +316,7 @@ const AnalyticasCuentasPorCobrar = () => {
                       stroke={COLORS.primary} 
                       fill={COLORS.primary} 
                       fillOpacity={0.3}
-                    >
-                      <LabelList 
-                        dataKey="monto" 
-                        position="top" 
-                        formatter={(value: number) => formatearConPreferencias(value)}
-                        style={{ fontSize: '11px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
-                      />
-                    </Area>
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
