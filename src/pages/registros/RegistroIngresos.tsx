@@ -281,8 +281,8 @@ const RegistroIngresos = () => {
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
   const [filtroFechaFin, setFiltroFechaFin] = useState("");
-  const [filtroTipoIngreso, setFiltroTipoIngreso] = useState("");
-  const [filtroCuenta, setFiltroCuenta] = useState("");
+  const [filtroTipoIngreso, setFiltroTipoIngreso] = useState("todos");
+  const [filtroCuenta, setFiltroCuenta] = useState("todas");
   const [filtroSubcuenta, setFiltroSubcuenta] = useState("");
   
   // Estado para asientos contables en diálogo
@@ -2855,7 +2855,10 @@ const RegistroIngresos = () => {
                         <SelectContent>
                           <SelectItem value="todas">Todas</SelectItem>
                           <SelectItem value="4001">4001 - Ventas</SelectItem>
-                          <SelectItem value="4004">4004 - Otros Ingresos</SelectItem>
+                          <SelectItem value="4004">4004 - Ventas Inventarios</SelectItem>
+                          <SelectItem value="4101">4101 - Productos Financieros</SelectItem>
+                          <SelectItem value="4102">4102 - Otros Productos</SelectItem>
+                          <SelectItem value="4103">4103 - Ganancia en Venta de Activos</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2882,8 +2885,8 @@ const RegistroIngresos = () => {
                       onClick={() => {
                         setFiltroFechaInicio("");
                         setFiltroFechaFin("");
-                        setFiltroTipoIngreso("");
-                        setFiltroCuenta("");
+                        setFiltroTipoIngreso("todos");
+                        setFiltroCuenta("todas");
                         setFiltroSubcuenta("");
                       }}
                     >
