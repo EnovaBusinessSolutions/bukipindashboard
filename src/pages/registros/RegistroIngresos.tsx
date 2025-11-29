@@ -181,7 +181,7 @@ const RegistroIngresos = () => {
     transacciones,
     loading: loadingTransacciones,
     refetch: refetchTransacciones
-  } = useTransaccionesRecientes(10);
+  } = useTransaccionesRecientes(1000);
   const {
     data: subcuentas = []
   } = useSubcuentas();
