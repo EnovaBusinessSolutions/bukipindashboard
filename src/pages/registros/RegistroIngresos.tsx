@@ -275,6 +275,9 @@ const RegistroIngresos = () => {
   // Estado para movimientos de inventario (para analítica de ventas por producto)
   const [movimientosInventario, setMovimientosInventario] = useState<any[]>([]);
 
+  // Estado para asientos de ingresos directos (sin transacción asociada)
+  const [asientosIngresosDirectos, setAsientosIngresosDirectos] = useState<any[]>([]);
+
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
   const [filtroFechaFin, setFiltroFechaFin] = useState("");
@@ -631,6 +634,52 @@ const RegistroIngresos = () => {
       setDuplicateWarnings([]);
     }
   }, [clienteTelefono, clienteEmail, clienteRFC, tipoCliente, clientes]);
+
+  // useEffect para cargar asientos de ingresos directos (sin transacción asociada)
+  useEffect(() => {
+    const cargarAsientosDirectos = async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user?.user?.id) return;
+
+      try {
+        // Obtener asientos contables que NO tienen transaccion_ingreso_id
+        const { data: asientos, error: asientosError } = await supabase
+          .from('asientos_contables')
+          .select(`
+            id,
+            fecha,
+            descripcion,
+            numero_asiento,
+            detalle_asientos!inner(
+              cuenta_codigo,
+              haber,
+              debe,
+              subcuenta_id
+            )
+          `)
+          .eq('user_id', user.user.id)
+          .is('transaccion_ingreso_id', null);
+
+        if (asientosError) throw asientosError;
+        if (!asientos) return;
+
+        // Filtrar solo los que tienen cuentas de ingresos (4XXX excepto 4003) con HABER
+        const asientosIngresos = asientos.filter(asiento => 
+          asiento.detalle_asientos.some((d: any) => 
+            d.cuenta_codigo.startsWith('4') && 
+            d.cuenta_codigo !== '4003' && 
+            Number(d.haber) > 0
+          )
+        );
+
+        setAsientosIngresosDirectos(asientosIngresos);
+      } catch (error) {
+        console.error('Error al cargar asientos directos:', error);
+      }
+    };
+
+    cargarAsientosDirectos();
+  }, []);
 
   // useEffect para calcular analíticas desde asientos contables
   useEffect(() => {
@@ -2793,6 +2842,7 @@ const RegistroIngresos = () => {
                           <SelectItem value="inventariados">Inventariados</SelectItem>
                           <SelectItem value="general">General</SelectItem>
                           <SelectItem value="otros">Otros</SelectItem>
+                          <SelectItem value="asiento_directo">Asientos Directos</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2842,7 +2892,25 @@ const RegistroIngresos = () => {
                     <div className="text-right">
                       <p className="text-sm text-muted-foreground">
                         Resultados: {(() => {
-                          const filtered = transacciones.filter(t => {
+                          // Transformar asientos directos a formato de transacción (para contar)
+                          const asientosComoTransacciones = asientosIngresosDirectos.map(asiento => {
+                            const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
+                              d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
+                            );
+                            return {
+                              created_at: asiento.fecha,
+                              tipo_ingreso: 'asiento_directo',
+                              cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || '',
+                              subcuenta_id: detalleIngreso?.subcuenta_id
+                            };
+                          });
+
+                          const todasLasTransacciones = [
+                            ...transacciones,
+                            ...asientosComoTransacciones
+                          ];
+
+                          const filtered = todasLasTransacciones.filter(t => {
                             const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
                                              (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
                             const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
@@ -2857,12 +2925,31 @@ const RegistroIngresos = () => {
                       </p>
                       <p className="text-lg font-bold text-primary">
                         Total: ${(() => {
-                          const filtered = transacciones.filter(t => {
+                          // Transformar asientos directos a formato de transacción (para sumar)
+                          const asientosComoTransacciones = asientosIngresosDirectos.map(asiento => {
+                            const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
+                              d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
+                            );
+                            return {
+                              created_at: asiento.fecha,
+                              tipo_ingreso: 'asiento_directo',
+                              cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || '',
+                              subcuenta_id: detalleIngreso?.subcuenta_id,
+                              monto_total: Number(detalleIngreso?.haber) || 0
+                            };
+                          });
+
+                          const todasLasTransacciones = [
+                            ...transacciones,
+                            ...asientosComoTransacciones
+                          ];
+
+                          const filtered = todasLasTransacciones.filter(t => {
                             const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
                                              (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
                             const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
                             const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
-                            const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
+                            const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' ||
                                                  (filtroSubcuenta === 'sin-subcuenta' && !t.subcuenta_id) ||
                                                  t.subcuenta_id === filtroSubcuenta;
                             return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
@@ -2872,7 +2959,26 @@ const RegistroIngresos = () => {
                       </p>
                       <p className="text-sm font-medium text-green-600">
                         Neto: ${(() => {
-                          const filtered = transacciones.filter(t => {
+                          // Transformar asientos directos a formato de transacción (para neto)
+                          const asientosComoTransacciones = asientosIngresosDirectos.map(asiento => {
+                            const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
+                              d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
+                            );
+                            return {
+                              created_at: asiento.fecha,
+                              tipo_ingreso: 'asiento_directo',
+                              cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || '',
+                              subcuenta_id: detalleIngreso?.subcuenta_id,
+                              monto_neto: Number(detalleIngreso?.haber) || 0
+                            };
+                          });
+
+                          const todasLasTransacciones = [
+                            ...transacciones,
+                            ...asientosComoTransacciones
+                          ];
+
+                          const filtered = todasLasTransacciones.filter(t => {
                             const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
                                              (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
                             const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
@@ -2892,7 +2998,39 @@ const RegistroIngresos = () => {
                 {loadingTransacciones ? <div className="text-center py-8 text-muted-foreground">
                     Cargando transacciones...
                   </div> : (() => {
-                    const transaccionesFiltradas = transacciones.filter(t => {
+                    // Transformar asientos directos a formato de transacción
+                    const asientosComoTransacciones = asientosIngresosDirectos.map(asiento => {
+                      const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
+                        d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
+                      );
+                      
+                      return {
+                        id: asiento.id,
+                        descripcion: asiento.descripcion,
+                        monto_total: Number(detalleIngreso?.haber) || 0,
+                        monto_neto: Number(detalleIngreso?.haber) || 0,
+                        monto_descuento: 0,
+                        monto_pagado: Number(detalleIngreso?.haber) || 0,
+                        monto_pendiente: 0,
+                        tipo_ingreso: 'asiento_directo',
+                        metodo_pago: 'N/A',
+                        tipo_pago: 'contado',
+                        cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || '',
+                        subcuenta_id: detalleIngreso?.subcuenta_id,
+                        created_at: asiento.fecha,
+                        asiento_fecha: asiento.fecha,
+                        es_asiento_directo: true,
+                        estado: 'activo'
+                      };
+                    });
+
+                    // Combinar transacciones normales + asientos directos
+                    const todasLasTransacciones = [
+                      ...transacciones,
+                      ...asientosComoTransacciones
+                    ];
+
+                    const transaccionesFiltradas = todasLasTransacciones.filter(t => {
                       const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
                                        (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
                       const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
@@ -2946,9 +3084,16 @@ const RegistroIngresos = () => {
                                    'hover:bg-muted/50'
                                  }`}
                                >
-                           <div className="flex items-start gap-3 mb-2">
-                              {/* Imagen del producto si es precargado o inventariado */}
-                              {(transaccion.tipo_ingreso === 'precargados' || transaccion.tipo_ingreso === 'inventariados') && (() => {
+                                  <div className="flex items-start gap-3 mb-2">
+                               {/* Icono especial para asientos directos */}
+                               {(transaccion as any).es_asiento_directo && (
+                                 <div className="w-12 h-12 rounded-md overflow-hidden bg-purple-100 dark:bg-purple-900/30 flex-shrink-0 flex items-center justify-center">
+                                   <FileText className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                                 </div>
+                               )}
+                               
+                               {/* Imagen del producto si es precargado o inventariado */}
+                               {!((transaccion as any).es_asiento_directo) && (transaccion.tipo_ingreso === 'precargados' || transaccion.tipo_ingreso === 'inventariados') && (() => {
                           // Buscar producto en la lista combinada (servicios + inventario)
                           const descripcionSinPrefijo = transaccion.descripcion.replace('Venta de ', '').replace('Venta: ', '');
                           const todosProdutos = [...productosServicios, ...productosInventarioData];
@@ -2970,6 +3115,13 @@ const RegistroIngresos = () => {
                                 <div className="flex-1">
                                    <div className="flex items-center gap-2 flex-wrap">
                                      <p className="font-medium">{transaccion.descripcion}</p>
+                                     
+                                     {/* Badge para Asiento Directo */}
+                                     {(transaccion as any).es_asiento_directo && (
+                                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200">
+                                         📋 Asiento Directo
+                                       </span>
+                                     )}
                                      
                                      {/* Badge de estado */}
                                      {esCancelada && (
