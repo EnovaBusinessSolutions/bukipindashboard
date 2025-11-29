@@ -55,8 +55,9 @@ export const useResumenEgresosPorPeriodo = () => {
           } else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
             // Solo gastos operativos 51XX, EXCLUYENDO depreciaciones (5109, 5110)
             gastos += monto;
-          } else if (codigo.startsWith('52') || codigo.startsWith('6')) {
-            // Otros Gastos: 52XX (Intereses, Comisiones, Pérdidas, Otros) + 6XXX
+          } else if (codigo === '5202' || codigo === '5203' || codigo === '5204') {
+            // Otros Gastos: Solo cuentas de resultados no operativos y otros gastos
+            // EXCLUYE: 5201 (Costo Financiero) y 6XXX (Impuestos)
             otrosGastos += monto;
           }
         });
