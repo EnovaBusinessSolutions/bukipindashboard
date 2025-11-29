@@ -4175,19 +4175,31 @@ const RegistroIngresos = () => {
                             const ingresosPorOrigen: Record<string, number> = {};
                             
                             asientosIngresosDirectos.forEach(asiento => {
+                              // Extraer el detalle de ingreso (cuenta 4XXX con HABER)
+                              const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
+                                d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
+                              );
+                              if (!detalleIngreso) return;
+                              
+                              const monto = Number(detalleIngreso.haber) || 0;
+                              const cuentaCodigo = detalleIngreso.cuenta_codigo;
+                              const cuentaInfo = cuentas.find(c => c.codigo === cuentaCodigo);
+                              const cuentaNombre = cuentaInfo?.nombre || "Otros ingresos";
+                              
                               let origen: string;
-                              if (asiento.numero_asiento?.startsWith('BAJA-')) {
-                                // Viene del módulo de Bajas/Ventas de Activos
-                                origen = vistaGraficaBarras === "cuenta" 
-                                  ? `${asiento.cuenta_codigo} - ${asiento.cuenta_nombre}`
-                                  : "Venta de Activos (Inversiones)";
+                              if (vistaGraficaBarras === "cuenta") {
+                                origen = `${cuentaCodigo} - ${cuentaNombre}`;
+                              } else if (vistaGraficaBarras === "subcuenta") {
+                                // Buscar subcuenta si existe
+                                const subcuentaId = detalleIngreso.subcuenta_id;
+                                const subcuentaInfo = subcuentas.find(s => s.id === subcuentaId);
+                                origen = subcuentaInfo?.nombre || "Sin subcuenta asignada";
                               } else {
-                                origen = vistaGraficaBarras === "cuenta"
-                                  ? `${asiento.cuenta_codigo} - ${asiento.cuenta_nombre}`
-                                  : asiento.cuenta_nombre || "Otros ingresos";
+                                // Vista por tipo de ingreso
+                                origen = cuentaNombre;
                               }
                               
-                              ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + asiento.monto;
+                              ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + monto;
                             });
                             
                             // Agregar cada origen como entrada separada en chartData
@@ -4520,18 +4532,28 @@ const RegistroIngresos = () => {
                             const ingresosPorOrigen: Record<string, { monto: number; count: number }> = {};
                             
                             asientosIngresosDirectos.forEach(asiento => {
-                              // Identificar origen real
+                              // Extraer el detalle de ingreso (cuenta 4XXX con HABER)
+                              const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
+                                d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
+                              );
+                              if (!detalleIngreso) return;
+                              
+                              const monto = Number(detalleIngreso.haber) || 0;
+                              const cuentaCodigo = detalleIngreso.cuenta_codigo;
+                              const cuentaInfo = cuentas.find(c => c.codigo === cuentaCodigo);
+                              
+                              // Usar el nombre de la cuenta como identificador del "producto/concepto"
                               let nombre: string;
                               if (asiento.numero_asiento?.startsWith('BAJA-')) {
-                                nombre = "Ganancia en Venta de Activos";
+                                nombre = cuentaInfo?.nombre || "Ganancia en Venta de Activos";
                               } else {
-                                nombre = asiento.descripcion || asiento.cuenta_nombre || "Otros ingresos";
+                                nombre = asiento.descripcion || cuentaInfo?.nombre || "Otros ingresos";
                               }
                               
                               if (!ingresosPorOrigen[nombre]) {
                                 ingresosPorOrigen[nombre] = { monto: 0, count: 0 };
                               }
-                              ingresosPorOrigen[nombre].monto += asiento.monto;
+                              ingresosPorOrigen[nombre].monto += monto;
                               ingresosPorOrigen[nombre].count += 1;
                             });
                             
