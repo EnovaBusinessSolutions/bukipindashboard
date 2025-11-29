@@ -4493,10 +4493,11 @@ const RegistroIngresos = () => {
                         
                         const top10 = productosArray.slice(0, 10);
                         
-                        return (
+                          return (
                           <>
                             {top10.map((producto) => {
-                              const porcentaje = totalGeneralProductos > 0 ? ((producto.monto / totalGeneralProductos) * 100).toFixed(1) : '0.0';
+                              const totalConAsientos = productosArray.reduce((sum, p) => sum + p.monto, 0);
+                              const porcentaje = totalConAsientos > 0 ? ((producto.monto / totalConAsientos) * 100).toFixed(1) : '0.0';
                               return (
                                 <div key={producto.nombre} className={`flex items-center gap-3 p-3 border rounded-lg ${!producto.tieneAsignacion ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
                                   {producto.imagen ? (
@@ -4553,7 +4554,7 @@ const RegistroIngresos = () => {
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                       <p className="font-bold text-lg text-primary">
-                                        ${formatCifra(totalGeneralProductos, scaleFormat)}
+                                        ${formatCifra(totalGeneralMonto, scaleFormat)}
                                       </p>
                                     </div>
                                     <div className="flex-shrink-0">
@@ -4699,10 +4700,11 @@ const RegistroIngresos = () => {
                         
                         const top10 = clientesArray.slice(0, 10);
                         
-                        return (
+                          return (
                           <>
                             {top10.map((cliente) => {
-                              const porcentaje = totalGeneralClientes > 0 ? ((cliente.monto / totalGeneralClientes) * 100).toFixed(1) : '0.0';
+                              const totalConAsientos = clientesArray.reduce((sum, c) => sum + c.monto, 0);
+                              const porcentaje = totalConAsientos > 0 ? ((cliente.monto / totalConAsientos) * 100).toFixed(1) : '0.0';
                               return (
                                 <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
                                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -4746,7 +4748,7 @@ const RegistroIngresos = () => {
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                       <p className="font-bold text-lg text-primary">
-                                        ${formatCifra(totalGeneralClientes, scaleFormat)}
+                                        ${formatCifra(totalGeneralMonto, scaleFormat)}
                                       </p>
                                     </div>
                                     <div className="flex-shrink-0">
