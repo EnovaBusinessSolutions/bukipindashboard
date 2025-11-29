@@ -4260,29 +4260,27 @@ const RegistroIngresos = () => {
                               productosVentas[nombre].monto += montoProducto;
                             });
                           }
-                        });
-
-                        // Obtener total real desde asientos contables  
-                        const totalRealProd = tipoIngresoAnalisis === "ventas"
-                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                             : datosAnaliticas.ventasNetas)
-                          : datosAnaliticas.otrosIngresos;
-                        
-                        // Ajustar proporcionalmente cada producto
-                        const distribucionProductos: Record<string, number> = {};
-                        Object.entries(productosVentas).forEach(([key, data]: [string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }]) => {
-                          distribucionProductos[key] = data.monto;
-                        });
-                        const distribucionAjustada = ajustarProporcionalmente(distribucionProductos, totalRealProd);
-                        
-                        // Actualizar montos ajustados
-                        Object.keys(productosVentas).forEach(key => {
-                          productosVentas[key].monto = distribucionAjustada[key] || 0;
+                          
+                          // Agregar transacciones tipo 'general' e 'inventariados' sin producto específico
+                          if (t.tipo_ingreso === 'general' || 
+                              (t.tipo_ingreso === 'inventariados' && !t.descripcion.startsWith('Venta de'))) {
+                            const nombre = "Ingresos sin producto asignado";
+                            if (!productosVentas[nombre]) {
+                              productosVentas[nombre] = {
+                                nombre,
+                                transacciones: 0,
+                                monto: 0,
+                                tieneAsignacion: false
+                              };
+                            }
+                            productosVentas[nombre].transacciones += 1;
+                            productosVentas[nombre].monto += getMetricValue(t, metricType);
+                          }
                         });
                         
+                        // Usar montos reales sin ajuste proporcional
                         const productosArray = Object.values(productosVentas).sort((a: any, b: any) => b.monto - a.monto) as Array<{ nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>;
-                        const totalGeneral = totalRealProd; // Usar el total real de asientos contables
+                        const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
                         const top10 = productosArray.slice(0, 10);
                         
                         return (
@@ -4464,27 +4462,9 @@ const RegistroIngresos = () => {
                           return acc;
                         }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
                         
-                        // Obtener total real desde asientos contables
-                        const totalRealCli = tipoIngresoAnalisis === "ventas"
-                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                             : datosAnaliticas.ventasNetas)
-                          : datosAnaliticas.otrosIngresos;
-                        
-                        // Ajustar proporcionalmente cada cliente
-                        const distribucionClientes: Record<string, number> = {};
-                        Object.entries(clientesVentas).forEach(([key, data]) => {
-                          distribucionClientes[key] = data.monto;
-                        });
-                        const distribucionAjustada = ajustarProporcionalmente(distribucionClientes, totalRealCli);
-                        
-                        // Actualizar montos ajustados
-                        Object.keys(clientesVentas).forEach(key => {
-                          clientesVentas[key].monto = distribucionAjustada[key] || 0;
-                        });
-                        
+                        // Usar montos reales sin ajuste proporcional
                         const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneral = totalRealCli; // Usar el total real de asientos contables
+                        const totalGeneral = clientesArray.reduce((sum, c) => sum + c.monto, 0);
                         const top10 = clientesArray.slice(0, 10);
                         
                         return (
