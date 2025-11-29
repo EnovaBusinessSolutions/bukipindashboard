@@ -4167,14 +4167,33 @@ const RegistroIngresos = () => {
                             return acc;
                           }, {} as Record<string, number>);
                           
-                          // Calcular diferencia de asientos directos y agregarla
+                          // Agregar ingresos de otros módulos (identificar origen real)
                           const totalTransacciones = Object.values(chartData).reduce((sum, v) => sum + v, 0);
                           const diferencia = totalRealBarSub - totalTransacciones;
                           if (diferencia > 0.01) {
-                            const keyAsientos = vistaGraficaBarras === "subcuenta" 
-                              ? "Asientos directos (sin subcuenta)"
-                              : "Asientos directos";
-                            chartData[keyAsientos] = diferencia;
+                            // Identificar el origen real de los ingresos
+                            const ingresosPorOrigen: Record<string, number> = {};
+                            
+                            asientosIngresosDirectos.forEach(asiento => {
+                              let origen: string;
+                              if (asiento.numero_asiento?.startsWith('BAJA-')) {
+                                // Viene del módulo de Bajas/Ventas de Activos
+                                origen = vistaGraficaBarras === "cuenta" 
+                                  ? `${asiento.cuenta_codigo} - ${asiento.cuenta_nombre}`
+                                  : "Venta de Activos (Inversiones)";
+                              } else {
+                                origen = vistaGraficaBarras === "cuenta"
+                                  ? `${asiento.cuenta_codigo} - ${asiento.cuenta_nombre}`
+                                  : asiento.cuenta_nombre || "Otros ingresos";
+                              }
+                              
+                              ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + asiento.monto;
+                            });
+                            
+                            // Agregar cada origen como entrada separada en chartData
+                            Object.entries(ingresosPorOrigen).forEach(([origen, monto]) => {
+                              chartData[origen] = (chartData[origen] || 0) + monto;
+                            });
                           }
                           
                           return Object.entries(chartData).map(([subcuenta, monto]) => ({
@@ -4492,16 +4511,40 @@ const RegistroIngresos = () => {
                         const productosArray = Object.values(productosVentas).sort((a: any, b: any) => b.monto - a.monto) as Array<{ nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>;
                         const totalGeneralProductos = productosArray.reduce((sum, p) => sum + p.monto, 0);
                         
-                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar la diferencia
+                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar por origen real
                         if (tipoIngresoAnalisis === "otros") {
                           const totalTransaccionesOtros = filteredTransactions.filter(t => t.tipo_ingreso === 'otros').reduce((sum, t) => sum + getMetricValue(t, metricType), 0);
                           const diferencia = totalRealProductos - totalTransaccionesOtros;
                           if (diferencia > 0.01) {
-                            productosArray.push({
-                              nombre: "Otros ingresos (asientos directos)",
-                              transacciones: asientosIngresosDirectos.length,
-                              monto: diferencia,
-                              tieneAsignacion: false
+                            // Agrupar asientos sin transacción por su origen real
+                            const ingresosPorOrigen: Record<string, { monto: number; count: number }> = {};
+                            
+                            asientosIngresosDirectos.forEach(asiento => {
+                              // Identificar origen real
+                              let nombre: string;
+                              if (asiento.numero_asiento?.startsWith('BAJA-')) {
+                                nombre = "Ganancia en Venta de Activos";
+                              } else {
+                                nombre = asiento.descripcion || asiento.cuenta_nombre || "Otros ingresos";
+                              }
+                              
+                              if (!ingresosPorOrigen[nombre]) {
+                                ingresosPorOrigen[nombre] = { monto: 0, count: 0 };
+                              }
+                              ingresosPorOrigen[nombre].monto += asiento.monto;
+                              ingresosPorOrigen[nombre].count += 1;
+                            });
+                            
+                            // Agregar cada origen como entrada separada
+                            Object.entries(ingresosPorOrigen).forEach(([nombre, data]) => {
+                              if (data.monto > 0.01) {
+                                productosArray.push({
+                                  nombre,
+                                  transacciones: data.count,
+                                  monto: data.monto,
+                                  tieneAsignacion: false
+                                });
+                              }
                             });
                           }
                         }
