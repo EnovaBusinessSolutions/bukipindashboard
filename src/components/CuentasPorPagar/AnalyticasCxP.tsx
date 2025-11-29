@@ -92,15 +92,21 @@ export default function AnalyticasCxP() {
   };
 
   const dataProveedorFiltrada = categoriasVisibles.includes('all') 
-    ? analytics.cxpPorProveedorApilado 
+    ? analytics.cxpPorProveedorApilado.map(p => ({
+        ...p,
+        total: (p.sinVencimiento || 0) + (p.vencido1_15 || 0) + (p.vencido16_30 || 0) + 
+               (p.vencido31_60 || 0) + (p.vencido61_90 || 0) + (p.vencidoMas90 || 0)
+      }))
     : analytics.cxpPorProveedorApilado.map(p => {
         const filtered: any = { proveedor: p.proveedor };
-        if (categoriasVisibles.includes('sinVencimiento')) filtered.sinVencimiento = p.sinVencimiento;
-        if (categoriasVisibles.includes('vencido1_15')) filtered.vencido1_15 = p.vencido1_15;
-        if (categoriasVisibles.includes('vencido16_30')) filtered.vencido16_30 = p.vencido16_30;
-        if (categoriasVisibles.includes('vencido31_60')) filtered.vencido31_60 = p.vencido31_60;
-        if (categoriasVisibles.includes('vencido61_90')) filtered.vencido61_90 = p.vencido61_90;
-        if (categoriasVisibles.includes('vencidoMas90')) filtered.vencidoMas90 = p.vencidoMas90;
+        let total = 0;
+        if (categoriasVisibles.includes('sinVencimiento')) { filtered.sinVencimiento = p.sinVencimiento; total += p.sinVencimiento || 0; }
+        if (categoriasVisibles.includes('vencido1_15')) { filtered.vencido1_15 = p.vencido1_15; total += p.vencido1_15 || 0; }
+        if (categoriasVisibles.includes('vencido16_30')) { filtered.vencido16_30 = p.vencido16_30; total += p.vencido16_30 || 0; }
+        if (categoriasVisibles.includes('vencido31_60')) { filtered.vencido31_60 = p.vencido31_60; total += p.vencido31_60 || 0; }
+        if (categoriasVisibles.includes('vencido61_90')) { filtered.vencido61_90 = p.vencido61_90; total += p.vencido61_90 || 0; }
+        if (categoriasVisibles.includes('vencidoMas90')) { filtered.vencidoMas90 = p.vencidoMas90; total += p.vencidoMas90 || 0; }
+        filtered.total = total;
         return filtered;
       });
 
@@ -419,6 +425,22 @@ export default function AnalyticasCxP() {
               {(categoriasVisibles.includes('all') || categoriasVisibles.includes('vencidoMas90')) && (
                 <Bar dataKey="vencidoMas90" stackId="a" fill={COLORS.vencidoMas90} name="+90 días" />
               )}
+              {/* Barra invisible para mostrar etiqueta de total */}
+              <Bar 
+                dataKey="total" 
+                stackId="a" 
+                fill="transparent" 
+                name="Total"
+                legendType="none"
+              >
+                <LabelList 
+                  dataKey="total" 
+                  position="right" 
+                  formatter={(value: number) => formatearConPreferencias(value)}
+                  className="text-xs fill-foreground font-semibold"
+                  offset={10}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
