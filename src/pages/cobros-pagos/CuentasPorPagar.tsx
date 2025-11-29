@@ -53,6 +53,7 @@ import {
   Eye,
   X,
   Banknote,
+  ArrowLeft,
 } from "lucide-react";
 import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
 import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
@@ -728,33 +729,26 @@ const CuentasPorPagar = () => {
 
           {/* Tab: Lista de Cuentas */}
           <TabsContent value="lista" className="space-y-6">
-            {/* Breadcrumb de navegación */}
+            {/* Botón de regreso al menú principal */}
             {tipoSeleccionado && (
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink asChild>
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => {
-                          setTipoSeleccionado(null);
-                          setExpandedProveedores(new Set());
-                          setSearchTerm("");
-                        }}
-                        className="h-auto p-0"
-                      >
-                        Todos los tipos
-                      </Button>
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator>
-                    <ChevronRight className="h-4 w-4" />
-                  </BreadcrumbSeparator>
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>{tipoActual?.nombre}</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
+              <div className="flex items-center gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setTipoSeleccionado(null);
+                    setExpandedProveedores(new Set());
+                    setSearchTerm("");
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Regresar al menú
+                </Button>
+                
+                <span className="text-sm text-muted-foreground">
+                  / {tipoActual?.nombre}
+                </span>
+              </div>
             )}
 
             {/* KPIs Generales */}
