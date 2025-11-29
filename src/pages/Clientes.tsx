@@ -9,10 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { AlertCircle, Edit, Plus, Search, Trash2, Users, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Switch } from "@/components/ui/switch";
+import ResumenTransaccionesClientes from "@/components/Clientes/ResumenTransaccionesClientes";
+import AnalyticaClientesNueva from "@/components/Clientes/AnalyticaClientesNueva";
 
 interface Cliente {
   id: string;
@@ -438,158 +441,170 @@ const Clientes = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        <div className="space-y-6">
-          {/* Search and Stats */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Buscar por nombre, email, teléfono o RFC..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            <div className="flex gap-4">
-              <Link to="/clientes/analiticas">
-                <Button variant="outline" className="gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Ver Analíticas
-                </Button>
-              </Link>
-              <Card className="p-3">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">{clientes.length}</div>
-                  <div className="text-xs text-muted-foreground">Total Clientes</div>
-                </div>
-              </Card>
-              <Card className="p-3">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
-                    {clientes.filter(c => c.source === 'dedicated').length}
-                  </div>
-                  <div className="text-xs text-muted-foreground">En Base de Datos</div>
-                </div>
-              </Card>
-              <Card className="p-3">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {clientes.filter(c => c.source === 'transaction').length}
-                  </div>
-                  <div className="text-xs text-muted-foreground">De Ventas</div>
-                </div>
-              </Card>
-            </div>
-          </div>
+        <Tabs defaultValue="base-datos" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="base-datos">Base de Datos</TabsTrigger>
+            <TabsTrigger value="transacciones">Transacciones</TabsTrigger>
+            <TabsTrigger value="analitica">Analítica</TabsTrigger>
+          </TabsList>
 
-          {/* Clients Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Lista de Clientes</CardTitle>
-              <CardDescription>
-                Administra todos los clientes registrados. Los clientes de "Ventas" provienen de transacciones registradas y pueden ser convertidos a registros permanentes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filteredClients.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchTerm ? "No se encontraron clientes con ese criterio" : "No hay clientes registrados"}
+          <TabsContent value="base-datos">
+            <div className="space-y-6">
+              {/* Search and Stats */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-between">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Buscar por nombre, email, teléfono o RFC..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Teléfono</TableHead>
-                        <TableHead>RFC</TableHead>
-                        <TableHead>Origen</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredClients.map((client) => (
-                        <TableRow key={client.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{client.nombre}</span>
-                              {!client.activo && (
-                                <Badge variant="secondary">Inactivo</Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{client.email || "-"}</TableCell>
-                          <TableCell>{client.telefono || "-"}</TableCell>
-                          <TableCell>{client.rfc || "-"}</TableCell>
-                          <TableCell>
-                            <Badge variant={client.source === 'dedicated' ? "default" : "outline"}>
-                              {client.source === 'dedicated' ? "Base de Datos" : "Ventas"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={client.activo ? "default" : "secondary"}>
-                              {client.activo ? "Activo" : "Inactivo"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              {client.source === 'dedicated' ? (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openEditDialog(client)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleDelete(client.id, client.nombre)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setFormData({
-                                      nombre: client.nombre,
-                                      email: client.email || "",
-                                      telefono: client.telefono || "",
-                                      rfc: client.rfc || "",
-                                      direccion: "",
-                                      ciudad: "",
-                                      estado: "",
-                                      codigo_postal: "",
-                                      activo: true
-                                    });
-                                    setEditingClient(null);
-                                    setIsDialogOpen(true);
-                                  }}
-                                  className="text-green-600 hover:text-green-700"
-                                >
-                                  <Edit className="h-4 w-4 mr-1" />
-                                  Editar
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                
+                <div className="flex gap-4">
+                  <Card className="p-3">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-primary">{clientes.length}</div>
+                      <div className="text-xs text-muted-foreground">Total Clientes</div>
+                    </div>
+                  </Card>
+                  <Card className="p-3">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {clientes.filter(c => c.source === 'dedicated').length}
+                      </div>
+                      <div className="text-xs text-muted-foreground">En Base de Datos</div>
+                    </div>
+                  </Card>
+                  <Card className="p-3">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {clientes.filter(c => c.source === 'transaction').length}
+                      </div>
+                      <div className="text-xs text-muted-foreground">De Ventas</div>
+                    </div>
+                  </Card>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+
+              {/* Clients Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Lista de Clientes</CardTitle>
+                  <CardDescription>
+                    Administra todos los clientes registrados. Los clientes de "Ventas" provienen de transacciones registradas y pueden ser convertidos a registros permanentes.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {filteredClients.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {searchTerm ? "No se encontraron clientes con ese criterio" : "No hay clientes registrados"}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Teléfono</TableHead>
+                            <TableHead>RFC</TableHead>
+                            <TableHead>Origen</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead>Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredClients.map((client) => (
+                            <TableRow key={client.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{client.nombre}</span>
+                                  {!client.activo && (
+                                    <Badge variant="secondary">Inactivo</Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>{client.email || "-"}</TableCell>
+                              <TableCell>{client.telefono || "-"}</TableCell>
+                              <TableCell>{client.rfc || "-"}</TableCell>
+                              <TableCell>
+                                <Badge variant={client.source === 'dedicated' ? "default" : "outline"}>
+                                  {client.source === 'dedicated' ? "Base de Datos" : "Ventas"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={client.activo ? "default" : "secondary"}>
+                                  {client.activo ? "Activo" : "Inactivo"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  {client.source === 'dedicated' ? (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => openEditDialog(client)}
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleDelete(client.id, client.nombre)}
+                                        className="text-destructive hover:text-destructive"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setFormData({
+                                          nombre: client.nombre,
+                                          email: client.email || "",
+                                          telefono: client.telefono || "",
+                                          rfc: client.rfc || "",
+                                          direccion: "",
+                                          ciudad: "",
+                                          estado: "",
+                                          codigo_postal: "",
+                                          activo: true
+                                        });
+                                        setEditingClient(null);
+                                        setIsDialogOpen(true);
+                                      }}
+                                      className="text-green-600 hover:text-green-700"
+                                    >
+                                      <Edit className="h-4 w-4 mr-1" />
+                                      Editar
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="transacciones">
+            <ResumenTransaccionesClientes />
+          </TabsContent>
+
+          <TabsContent value="analitica">
+            <AnalyticaClientesNueva />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

@@ -25,7 +25,6 @@ import RegistroImpuestos from "./pages/registros/RegistroImpuestos";
 import CuentasPorCobrar from "./pages/cobros-pagos/CuentasPorCobrar";
 import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
 import Clientes from "./pages/Clientes";
-import AnalyticasClientes from "./pages/clientes/AnalyticasClientes";
 import Proveedores from "./pages/Proveedores";
 import AnalisisResultados from "./pages/analisis/AnalisisResultados";
 import AnalisisBalance from "./pages/analisis/AnalisisBalance";
@@ -68,7 +67,6 @@ const App = () => (
                         <Route path="/cobros-pagos/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
                         <Route path="/cobros-pagos/cuentas-por-pagar" element={<CuentasPorPagar />} />
                         <Route path="/clientes" element={<Clientes />} />
-                        <Route path="/clientes/analiticas" element={<AnalyticasClientes />} />
                         <Route path="/proveedores" element={<Proveedores />} />
                         <Route path="/configuracion" element={<Configuracion />} />
                         <Route path="*" element={<NotFound />} />
