@@ -428,7 +428,6 @@ export default function AnalyticasCxP() {
               {/* Barra invisible para mostrar etiqueta de total */}
               <Bar 
                 dataKey="total" 
-                stackId="a" 
                 fill="transparent" 
                 name="Total"
                 legendType="none"
@@ -438,7 +437,7 @@ export default function AnalyticasCxP() {
                   position="right" 
                   formatter={(value: number) => formatearConPreferencias(value)}
                   className="text-xs fill-foreground font-semibold"
-                  offset={10}
+                  offset={5}
                 />
               </Bar>
             </BarChart>
