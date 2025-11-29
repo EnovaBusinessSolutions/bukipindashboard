@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { Loader2 } from "lucide-react";
-import { PieChart, Pie, Cell, Treemap, ResponsiveContainer, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 
 interface BalanceGeneralAnaliticoProps {
   cutoffDate: Date;
@@ -210,48 +210,16 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
-  const CustomTreemapContent = ({ x, y, width, height, name, size, color }: any) => {
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          style={{
-            fill: color,
-            stroke: "hsl(var(--background))",
-            strokeWidth: 2,
-          }}
-        />
-        {width > 60 && height > 40 && (
-          <>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 - 10}
-              textAnchor="middle"
-              fill="#000000"
-              stroke="none"
-              fontSize={14}
-              fontWeight="bold"
-            >
-              {name}
-            </text>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 + 10}
-              textAnchor="middle"
-              fill="#000000"
-              stroke="none"
-              fontSize={12}
-              fontWeight="600"
-            >
-              {formatCurrency(size)}
-            </text>
-          </>
-        )}
-      </g>
-    );
+  const CustomBarTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background border border-border p-3 rounded-lg shadow-lg">
+          <p className="font-semibold text-foreground">{payload[0].payload.name}</p>
+          <p className="text-primary font-bold">{formatCurrency(payload[0].value)}</p>
+        </div>
+      );
+    }
+    return null;
   };
 
   const CustomDonutTooltip = ({ active, payload, data }: any) => {
@@ -381,15 +349,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición de Activos Circulantes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <Treemap
-                      data={activosCirculantesData}
-                      dataKey="size"
-                      aspectRatio={4 / 3}
-                      stroke="hsl(var(--background))"
-                      fill="hsl(var(--chart-1))"
-                      content={<CustomTreemapContent />}
-                    />
+                  <ResponsiveContainer width="100%" height={Math.max(200, activosCirculantesData.length * 60)}>
+                    <BarChart 
+                      data={activosCirculantesData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Bar 
+                        dataKey="size" 
+                        radius={[0, 4, 4, 0]}
+                      >
+                        {activosCirculantesData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {activosCirculantesData.map((item, index) => (
@@ -414,15 +396,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición de Activos Fijos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <Treemap
-                      data={activosFijosData}
-                      dataKey="size"
-                      aspectRatio={4 / 3}
-                      stroke="hsl(var(--background))"
-                      fill="hsl(var(--chart-3))"
-                      content={<CustomTreemapContent />}
-                    />
+                  <ResponsiveContainer width="100%" height={Math.max(200, activosFijosData.length * 60)}>
+                    <BarChart 
+                      data={activosFijosData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Bar 
+                        dataKey="size" 
+                        radius={[0, 4, 4, 0]}
+                      >
+                        {activosFijosData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {activosFijosData.map((item, index) => (
@@ -447,15 +443,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición de Activos Diferidos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <Treemap
-                      data={activosDiferidosData}
-                      dataKey="size"
-                      aspectRatio={4 / 3}
-                      stroke="hsl(var(--background))"
-                      fill="hsl(var(--chart-4))"
-                      content={<CustomTreemapContent />}
-                    />
+                  <ResponsiveContainer width="100%" height={Math.max(200, activosDiferidosData.length * 60)}>
+                    <BarChart 
+                      data={activosDiferidosData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Bar 
+                        dataKey="size" 
+                        radius={[0, 4, 4, 0]}
+                      >
+                        {activosDiferidosData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {activosDiferidosData.map((item, index) => (
@@ -527,15 +537,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición de Pasivos Circulantes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <Treemap
-                      data={pasivosCirculantesData}
-                      dataKey="size"
-                      aspectRatio={4 / 3}
-                      stroke="hsl(var(--background))"
-                      fill="hsl(var(--chart-5))"
-                      content={<CustomTreemapContent />}
-                    />
+                  <ResponsiveContainer width="100%" height={Math.max(200, pasivosCirculantesData.length * 60)}>
+                    <BarChart 
+                      data={pasivosCirculantesData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Bar 
+                        dataKey="size" 
+                        radius={[0, 4, 4, 0]}
+                      >
+                        {pasivosCirculantesData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {pasivosCirculantesData.map((item, index) => (
@@ -560,15 +584,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición de Pasivos a Largo Plazo</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <Treemap
-                      data={pasivosLargoPlazoData}
-                      dataKey="size"
-                      aspectRatio={4 / 3}
-                      stroke="hsl(var(--background))"
-                      fill="hsl(var(--chart-4))"
-                      content={<CustomTreemapContent />}
-                    />
+                  <ResponsiveContainer width="100%" height={Math.max(200, pasivosLargoPlazoData.length * 60)}>
+                    <BarChart 
+                      data={pasivosLargoPlazoData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Bar 
+                        dataKey="size" 
+                        radius={[0, 4, 4, 0]}
+                      >
+                        {pasivosLargoPlazoData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {pasivosLargoPlazoData.map((item, index) => (
@@ -622,15 +660,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
                   <CardTitle>Composición del Capital Contable</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <Treemap
-                      data={capitalData}
-                      dataKey="size"
-                      aspectRatio={4 / 3}
-                      stroke="hsl(var(--background))"
-                      fill="hsl(var(--chart-2))"
-                      content={<CustomTreemapContent />}
-                    />
+                  <ResponsiveContainer width="100%" height={Math.max(200, capitalData.length * 60)}>
+                    <BarChart 
+                      data={capitalData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Bar 
+                        dataKey="size" 
+                        radius={[0, 4, 4, 0]}
+                      >
+                        {capitalData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {capitalData.map((item, index) => (
