@@ -288,13 +288,15 @@ export const useUpdateProducto = () => {
       nombre, 
       descripcion, 
       precio, 
-      imagen 
+      imagen,
+      subcuentaId 
     }: { 
       id: string; 
       nombre?: string; 
       descripcion?: string; 
       precio?: number; 
-      imagen?: File 
+      imagen?: File;
+      subcuentaId?: string | null;
     }) => {
       let imagenUrl: string | undefined;
 
@@ -331,6 +333,7 @@ export const useUpdateProducto = () => {
         updateData.precio_venta = precio;
       }
       if (imagenUrl !== undefined) updateData.imagen_url = imagenUrl;
+      if (subcuentaId !== undefined) updateData.subcuenta_id = subcuentaId || null;
 
       const { data, error } = await supabase
         .from("productos")

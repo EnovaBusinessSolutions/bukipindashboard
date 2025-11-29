@@ -349,6 +349,7 @@ const RegistroIngresos = () => {
   const [editProductDescription, setEditProductDescription] = useState("");
   const [editProductImage, setEditProductImage] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [editProductSubcuenta, setEditProductSubcuenta] = useState<string>("");
 
   // Productos de inventario ya vienen filtrados y calculados desde useInventarioConMovimientos
   const productosInventario = productosInventarioData || [];
@@ -2102,6 +2103,7 @@ const RegistroIngresos = () => {
     setEditProductDescription(producto.descripcion || "");
     setEditImagePreview(producto.imagen_url || null);
     setEditProductImage(null);
+    setEditProductSubcuenta(producto.subcuenta_id || "");
     setIsEditDialogOpen(true);
   };
 
@@ -2134,7 +2136,8 @@ const RegistroIngresos = () => {
         nombre: editProductName.trim(),
         precio: parseFloat(editProductPrice),
         descripcion: editProductDescription.trim() || undefined,
-        imagen: editProductImage || undefined
+        imagen: editProductImage || undefined,
+        subcuentaId: editProductSubcuenta || null
       });
 
       setIsEditDialogOpen(false);
@@ -4727,6 +4730,30 @@ const RegistroIngresos = () => {
                             placeholder="Descripción opcional del producto" 
                             rows={3} 
                           />
+                        </div>
+                        {/* Selector de Subcuenta */}
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-product-subcuenta" className="text-right">
+                            Subcuenta
+                          </Label>
+                          <Select 
+                            value={editProductSubcuenta || "none"} 
+                            onValueChange={v => setEditProductSubcuenta(v === "none" ? "" : v)}
+                          >
+                            <SelectTrigger className="col-span-3">
+                              <SelectValue placeholder="Sin subcuenta (usar cuenta principal)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sin subcuenta (usar cuenta principal)</SelectItem>
+                              {subcuentas
+                                .filter(subcuenta => subcuenta.cuenta_madre_codigo === "4001")
+                                .map(subcuenta => (
+                                  <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                                    {subcuenta.nombre}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       <DialogFooter>
