@@ -56,11 +56,10 @@ export const useCuentasPorPagarAgrupadas = () => {
 
       if (egresosError) throw egresosError;
 
-      // 2. Obtener inversiones CAPEX con monto pendiente
+      // 2. Obtener inversiones CAPEX con monto pendiente (incluye activos vendidos/dados de baja con deuda)
       const { data: inversiones, error: inversionesError } = await supabase
         .from('inversiones_capex')
         .select('*')
-        .eq('estado', 'activo')
         .gt('monto_pendiente', 0);
 
       if (inversionesError) throw inversionesError;
