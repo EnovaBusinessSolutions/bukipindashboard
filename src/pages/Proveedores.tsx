@@ -25,6 +25,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ResumenTransaccionesProveedores from "@/components/Proveedores/ResumenTransaccionesProveedores";
+import AnalyticaProveedoresNueva from "@/components/Proveedores/AnalyticaProveedoresNueva";
 
 const Proveedores = () => {
   const { proveedores, loading, createProveedor, updateProveedor, deleteProveedor } = useProveedores();
@@ -164,13 +167,154 @@ const Proveedores = () => {
   return (
     <div className="w-full">
       <div className="p-6 border-b bg-background">
-        <h1 className="text-3xl font-bold text-foreground">Base de Datos Proveedores</h1>
-        <p className="text-muted-foreground mt-2">
-          Gestiona la información de tus proveedores
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Base de Datos Proveedores</h1>
+            <p className="text-muted-foreground mt-2">
+              Gestiona la información de tus proveedores
+            </p>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Nuevo Proveedor
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingProveedor ? "Editar Proveedor" : "Registrar Nuevo Proveedor"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingProveedor 
+                    ? "Actualiza la información del proveedor" 
+                    : "Completa los datos del nuevo proveedor"}
+                </DialogDescription>
+              </DialogHeader>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="nombre">Nombre / Razón Social *</Label>
+                    <Input
+                      id="nombre"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="Nombre completo o razón social"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="telefono">Teléfono</Label>
+                    <Input
+                      id="telefono"
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      placeholder="Número de teléfono"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="correo@ejemplo.com"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="rfc">RFC</Label>
+                    <Input
+                      id="rfc"
+                      value={rfc}
+                      onChange={(e) => setRfc(e.target.value.toUpperCase())}
+                      placeholder="RFC del proveedor"
+                      maxLength={13}
+                    />
+                  </div>
+
+                  <Separator className="md:col-span-2" />
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="direccion">Dirección</Label>
+                    <Input
+                      id="direccion"
+                      value={direccion}
+                      onChange={(e) => setDireccion(e.target.value)}
+                      placeholder="Calle y número"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ciudad">Ciudad</Label>
+                    <Input
+                      id="ciudad"
+                      value={ciudad}
+                      onChange={(e) => setCiudad(e.target.value)}
+                      placeholder="Ciudad"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="estado">Estado</Label>
+                    <Input
+                      id="estado"
+                      value={estado}
+                      onChange={(e) => setEstado(e.target.value)}
+                      placeholder="Estado"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="codigo-postal">Código Postal</Label>
+                    <Input
+                      id="codigo-postal"
+                      value={codigoPostal}
+                      onChange={(e) => setCodigoPostal(e.target.value)}
+                      placeholder="00000"
+                      maxLength={5}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetForm();
+                      setIsDialogOpen(false);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit">
+                    {editingProveedor ? "Actualizar" : "Registrar"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="p-6 space-y-6">
+        <Tabs defaultValue="base-datos" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="base-datos">Base de Datos</TabsTrigger>
+            <TabsTrigger value="transacciones">Transacciones</TabsTrigger>
+            <TabsTrigger value="analitica">Analítica</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="base-datos" className="space-y-6">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
@@ -291,147 +435,13 @@ const Proveedores = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Proveedores Registrados
-                </CardTitle>
-                <CardDescription>
-                  Lista completa de proveedores y su información de contacto
-                </CardDescription>
-              </div>
-              
-              <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                setIsDialogOpen(open);
-                if (!open) resetForm();
-              }}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Nuevo Proveedor
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingProveedor ? "Editar Proveedor" : "Registrar Nuevo Proveedor"}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {editingProveedor 
-                        ? "Actualiza la información del proveedor" 
-                        : "Completa los datos del nuevo proveedor"}
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="nombre">Nombre / Razón Social *</Label>
-                        <Input
-                          id="nombre"
-                          value={nombre}
-                          onChange={(e) => setNombre(e.target.value)}
-                          placeholder="Nombre completo o razón social"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="telefono">Teléfono</Label>
-                        <Input
-                          id="telefono"
-                          value={telefono}
-                          onChange={(e) => setTelefono(e.target.value)}
-                          placeholder="Número de teléfono"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="correo@ejemplo.com"
-                        />
-                      </div>
-
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="rfc">RFC</Label>
-                        <Input
-                          id="rfc"
-                          value={rfc}
-                          onChange={(e) => setRfc(e.target.value.toUpperCase())}
-                          placeholder="RFC del proveedor"
-                          maxLength={13}
-                        />
-                      </div>
-
-                      <Separator className="md:col-span-2" />
-
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="direccion">Dirección</Label>
-                        <Input
-                          id="direccion"
-                          value={direccion}
-                          onChange={(e) => setDireccion(e.target.value)}
-                          placeholder="Calle y número"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="ciudad">Ciudad</Label>
-                        <Input
-                          id="ciudad"
-                          value={ciudad}
-                          onChange={(e) => setCiudad(e.target.value)}
-                          placeholder="Ciudad"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="estado">Estado</Label>
-                        <Input
-                          id="estado"
-                          value={estado}
-                          onChange={(e) => setEstado(e.target.value)}
-                          placeholder="Estado"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="codigo-postal">Código Postal</Label>
-                        <Input
-                          id="codigo-postal"
-                          value={codigoPostal}
-                          onChange={(e) => setCodigoPostal(e.target.value)}
-                          placeholder="00000"
-                          maxLength={5}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          resetForm();
-                          setIsDialogOpen(false);
-                        }}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button type="submit">
-                        {editingProveedor ? "Actualizar" : "Registrar"}
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Proveedores Registrados
+            </CardTitle>
+            <CardDescription>
+              Lista completa de proveedores y su información de contacto
+            </CardDescription>
           </CardHeader>
 
           <CardContent>
@@ -520,6 +530,16 @@ const Proveedores = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="transacciones">
+            <ResumenTransaccionesProveedores />
+          </TabsContent>
+
+          <TabsContent value="analitica">
+            <AnalyticaProveedoresNueva />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
