@@ -196,6 +196,15 @@ export default function AnalyticaClientesNueva() {
       .slice(0, 10);
   }, [transacciones, ventasPeriodo, clienteSeleccionado, tipoVisualizacion]);
 
+  const maxVentasProducto = useMemo(() => {
+    if (datosVentasPorProducto.length === 0) return 10;
+    const valores = datosVentasPorProducto.map(d => 
+      tipoVisualizacion === "ventas" ? d.total : d.unidades
+    );
+    const max = Math.max(...valores);
+    return Math.ceil(max * 1.2);
+  }, [datosVentasPorProducto, tipoVisualizacion]);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -404,6 +413,7 @@ export default function AnalyticaClientesNueva() {
               <XAxis dataKey="producto" className="text-xs" angle={-45} textAnchor="end" height={120} />
               <YAxis 
                 className="text-xs" 
+                domain={[0, maxVentasProducto]}
                 tickFormatter={(value) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()} 
               />
               <Tooltip 
