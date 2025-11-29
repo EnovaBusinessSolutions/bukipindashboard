@@ -4,9 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { TrendingUp, Users, Package } from "lucide-react";
-import { format, startOfMonth, startOfYear, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
+import { Users, Package } from "lucide-react";
+import { format, startOfMonth, startOfYear, endOfMonth, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface TransaccionIngreso {
@@ -94,9 +94,10 @@ export default function AnalyticaClientesNueva() {
       const mesesDelAño = eachMonthOfInterval({ start: inicioAño, end: hoy });
       
       return mesesDelAño.map(mes => {
+        const finDeMes = endOfMonth(mes);
         const transaccionesMes = transacciones.filter(t => {
           const fechaT = new Date(t.created_at);
-          return fechaT <= mes && fechaT >= inicioAño;
+          return fechaT <= finDeMes && fechaT >= inicioAño;
         });
         const clientesUnicos = new Set(transaccionesMes.map(t => t.cliente_nombre));
         
@@ -107,6 +108,13 @@ export default function AnalyticaClientesNueva() {
       });
     }
   }, [transacciones, evolucionPeriodo]);
+
+  // Calcular máximo para eje Y (120% del valor máximo)
+  const maxClientes = useMemo(() => {
+    if (datosEvolucion.length === 0) return 10;
+    const max = Math.max(...datosEvolucion.map(d => d.clientes));
+    return Math.ceil(max * 1.2);
+  }, [datosEvolucion]);
 
   // ============ SECCIÓN 3: BARRAS HORIZONTALES - CLIENTES POR COMPRAS ============
   const datosClientesPorCompras = useMemo(() => {
@@ -201,7 +209,7 @@ export default function AnalyticaClientesNueva() {
   return (
     <div className="space-y-6">
       {/* SECCIÓN 1: HIGHLIGHTS */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Clientes Únicos</CardTitle>
@@ -247,23 +255,6 @@ export default function AnalyticaClientesNueva() {
             </div>
           </CardContent>
         </Card>
-
-        <Card className="md:col-span-2 lg:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tendencia</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">
-                Crecimiento del mes
-              </div>
-              <div className="text-2xl font-bold">
-                {kpis.mes.clientes > 0 ? `+${((kpis.mes.clientes / Math.max(kpis.año.clientes, 1)) * 100).toFixed(0)}%` : "0%"}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* SECCIÓN 2: EVOLUCIÓN DE CLIENTES */}
@@ -287,7 +278,7 @@ export default function AnalyticaClientesNueva() {
             <LineChart data={datosEvolucion}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="fecha" className="text-xs" />
-              <YAxis className="text-xs" />
+              <YAxis className="text-xs" domain={[0, maxClientes]} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: "hsl(var(--background))",
@@ -303,7 +294,14 @@ export default function AnalyticaClientesNueva() {
                 strokeWidth={2}
                 name="Clientes"
                 dot={{ fill: "hsl(var(--primary))" }}
-              />
+              >
+                <LabelList 
+                  dataKey="clientes" 
+                  position="top" 
+                  className="text-xs fill-foreground font-medium"
+                  offset={8}
+                />
+              </Line>
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
@@ -342,7 +340,14 @@ export default function AnalyticaClientesNueva() {
                   borderRadius: "6px"
                 }}
               />
-              <Bar dataKey="compras" fill="hsl(var(--primary))" name="Compras" />
+              <Bar dataKey="compras" fill="hsl(var(--primary))" name="Compras">
+                <LabelList 
+                  dataKey="compras" 
+                  position="right" 
+                  className="text-xs fill-foreground font-medium"
+                  offset={5}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -394,7 +399,15 @@ export default function AnalyticaClientesNueva() {
                   borderRadius: "6px"
                 }}
               />
-              <Bar dataKey="total" fill="hsl(var(--primary))" name="Total Ventas" />
+              <Bar dataKey="total" fill="hsl(var(--primary))" name="Total Ventas">
+                <LabelList 
+                  dataKey="total" 
+                  position="top" 
+                  formatter={(value: number) => formatCurrency(value)}
+                  className="text-xs fill-foreground font-medium"
+                  offset={5}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
