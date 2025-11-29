@@ -128,6 +128,12 @@ export default function AnalyticaProveedoresNueva() {
       .slice(0, 10);
   }, [transacciones, periodoCompras]);
 
+  const maxComprasProveedores = useMemo(() => {
+    if (datosProveedoresPorCompras.length === 0) return 10;
+    const max = Math.max(...datosProveedoresPorCompras.map(d => d.compras));
+    return Math.ceil(max * 1.2);
+  }, [datosProveedoresPorCompras]);
+
   const proveedoresUnicos = useMemo(() => {
     if (!transacciones) return [];
     return Array.from(new Set(transacciones.map(t => t.proveedor_nombre).filter(Boolean))).sort();
@@ -304,7 +310,7 @@ export default function AnalyticaProveedoresNueva() {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={datosProveedoresPorCompras} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" className="text-xs" />
+              <XAxis type="number" className="text-xs" domain={[0, maxComprasProveedores]} />
               <YAxis dataKey="proveedor" type="category" width={150} className="text-xs" />
               <Tooltip />
               <Bar dataKey="compras" fill="hsl(var(--primary))">
