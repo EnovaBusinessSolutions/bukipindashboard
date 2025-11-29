@@ -4282,6 +4282,20 @@ const RegistroIngresos = () => {
                         // Usar montos reales sin ajuste proporcional
                         const productosArray = Object.values(productosVentas).sort((a: any, b: any) => b.monto - a.monto) as Array<{ nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>;
                         const totalGeneralProductos = productosArray.reduce((sum, p) => sum + p.monto, 0);
+                        
+                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar la diferencia
+                        if (tipoIngresoAnalisis === "otros") {
+                          const diferencia = totalRealProductos - totalGeneralProductos;
+                          if (diferencia > 0.01) {
+                            productosArray.push({
+                              nombre: "Otros ingresos (asientos directos)",
+                              transacciones: 0,
+                              monto: diferencia,
+                              tieneAsignacion: false
+                            });
+                          }
+                        }
+                        
                         const top10 = productosArray.slice(0, 10);
                         
                         return (
@@ -4466,6 +4480,19 @@ const RegistroIngresos = () => {
                         // Usar montos reales sin ajuste proporcional
                         const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
                         const totalGeneralClientes = clientesArray.reduce((sum, c) => sum + c.monto, 0);
+                        
+                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar la diferencia
+                        if (tipoIngresoAnalisis === "otros") {
+                          const diferencia = totalRealClientes - totalGeneralClientes;
+                          if (diferencia > 0.01) {
+                            clientesArray.push({
+                              nombre: "Sin cliente asignado (asientos)",
+                              transacciones: 0,
+                              monto: diferencia
+                            });
+                          }
+                        }
+                        
                         const top10 = clientesArray.slice(0, 10);
                         
                         return (
