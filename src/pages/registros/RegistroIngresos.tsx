@@ -23,6 +23,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
+import { useCuentas } from "@/hooks/useCuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useUpdateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
@@ -186,6 +187,10 @@ const RegistroIngresos = () => {
     data: subcuentas = []
   } = useSubcuentas();
   const {
+    data: cuentasData
+  } = useCuentas();
+  const cuentas = cuentasData?.cuentasFlat || [];
+  const {
     data: productosInventarioData = [],
     isLoading: loadingProductosInventario,
     refetch: refetchProductosInventario
@@ -284,6 +289,7 @@ const RegistroIngresos = () => {
   const [filtroTipoIngreso, setFiltroTipoIngreso] = useState("todos");
   const [filtroCuenta, setFiltroCuenta] = useState("todas");
   const [filtroSubcuenta, setFiltroSubcuenta] = useState("");
+  const [vistaGraficaBarras, setVistaGraficaBarras] = useState<"subcuenta" | "cuenta">("subcuenta");
   
   // Estado para asientos contables en diálogo
   const [currentAsientos, setCurrentAsientos] = useState<any>(null);
@@ -4102,11 +4108,22 @@ const RegistroIngresos = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico por Subcuenta Contable */}
+              {/* Gráfico por Subcuenta/Cuenta Contable */}
               <Card>
-                <CardHeader>
-                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Subcuenta</CardTitle>
-                  <CardDescription>Distribución por subcuentas contables</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div className="space-y-1">
+                    <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por {vistaGraficaBarras === "subcuenta" ? "Subcuenta" : "Cuenta"}</CardTitle>
+                    <CardDescription>Distribución por {vistaGraficaBarras === "subcuenta" ? "subcuentas" : "cuentas"} contables</CardDescription>
+                  </div>
+                  <Select value={vistaGraficaBarras} onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}>
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
+                      <SelectItem value="cuenta">Por Cuenta</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </CardHeader>
                 <CardContent>
                   {loadingTransacciones ? (
@@ -4135,15 +4152,22 @@ const RegistroIngresos = () => {
                             return [{subcuenta: "Sin detalle", monto: totalRealBarSub}];
                           }
                           
-                          const subcuentaData = filteredTransactions.reduce((acc, t) => {
-                            const subcuentaNombre = t.subcuenta_id 
-                              ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
-                              : "Sin subcuenta asignada";
-                            acc[subcuentaNombre] = (acc[subcuentaNombre] || 0) + getMetricValue(t, metricType);
+                          const chartData = filteredTransactions.reduce((acc, t) => {
+                            let key: string;
+                            if (vistaGraficaBarras === "subcuenta") {
+                              key = t.subcuenta_id 
+                                ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
+                                : "Sin subcuenta asignada";
+                            } else {
+                              // Agrupar por cuenta contable
+                              const cuenta = cuentas.find(c => c.codigo === t.cuenta_principal_codigo);
+                              key = cuenta ? `${t.cuenta_principal_codigo} - ${cuenta.nombre}` : t.cuenta_principal_codigo || "Sin cuenta";
+                            }
+                            acc[key] = (acc[key] || 0) + getMetricValue(t, metricType);
                             return acc;
                           }, {} as Record<string, number>);
                           
-                          return Object.entries(subcuentaData).map(([subcuenta, monto]) => ({
+                          return Object.entries(chartData).map(([subcuenta, monto]) => ({
                             subcuenta,
                             monto
                           }));
@@ -4432,6 +4456,21 @@ const RegistroIngresos = () => {
                             productosVentas[nombre].transacciones += 1;
                             productosVentas[nombre].monto += getMetricValue(t, metricType);
                           }
+                          
+                          // Agregar transacciones tipo 'otros'
+                          if (t.tipo_ingreso === 'otros') {
+                            const nombre = t.descripcion || "Otros ingresos";
+                            if (!productosVentas[nombre]) {
+                              productosVentas[nombre] = {
+                                nombre,
+                                transacciones: 0,
+                                monto: 0,
+                                tieneAsignacion: false
+                              };
+                            }
+                            productosVentas[nombre].transacciones += 1;
+                            productosVentas[nombre].monto += getMetricValue(t, metricType);
+                          }
                         });
                         
                         // Usar montos reales sin ajuste proporcional
@@ -4440,11 +4479,12 @@ const RegistroIngresos = () => {
                         
                         // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar la diferencia
                         if (tipoIngresoAnalisis === "otros") {
-                          const diferencia = totalRealProductos - totalGeneralProductos;
+                          const totalTransaccionesOtros = filteredTransactions.filter(t => t.tipo_ingreso === 'otros').reduce((sum, t) => sum + getMetricValue(t, metricType), 0);
+                          const diferencia = totalRealProductos - totalTransaccionesOtros;
                           if (diferencia > 0.01) {
                             productosArray.push({
                               nombre: "Otros ingresos (asientos directos)",
-                              transacciones: 0,
+                              transacciones: asientosIngresosDirectos.length,
                               monto: diferencia,
                               tieneAsignacion: false
                             });
@@ -4636,15 +4676,24 @@ const RegistroIngresos = () => {
                         const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
                         const totalGeneralClientes = clientesArray.reduce((sum, c) => sum + c.monto, 0);
                         
-                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar la diferencia
+                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, consolidar en "Sin cliente asignado"
                         if (tipoIngresoAnalisis === "otros") {
                           const diferencia = totalRealClientes - totalGeneralClientes;
                           if (diferencia > 0.01) {
-                            clientesArray.push({
-                              nombre: "Sin cliente asignado (asientos)",
-                              transacciones: 0,
-                              monto: diferencia
-                            });
+                            // Buscar si ya existe "Sin cliente asignado" y sumarle
+                            const existente = clientesArray.find(c => c.nombre === "Sin cliente asignado");
+                            if (existente) {
+                              existente.monto += diferencia;
+                              existente.transacciones += asientosIngresosDirectos.length;
+                            } else {
+                              clientesArray.push({
+                                nombre: "Sin cliente asignado",
+                                transacciones: asientosIngresosDirectos.length,
+                                monto: diferencia
+                              });
+                            }
+                            // Re-ordenar después de agregar
+                            clientesArray.sort((a, b) => b.monto - a.monto);
                           }
                         }
                         
