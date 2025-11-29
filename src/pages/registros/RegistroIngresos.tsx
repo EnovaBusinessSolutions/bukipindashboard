@@ -3813,13 +3813,12 @@ const RegistroIngresos = () => {
                                 return acc;
                               }, {} as Record<string, number>);
                               
-                              // Ajustar proporcionalmente
-                              const distribucionAjustada = ajustarProporcionalmente(distribucionTransacciones, totalRealPie);
+                              const totalTransacciones = Object.values(distribucionTransacciones).reduce((sum, val) => sum + val, 0);
                               
-                              return Object.entries(distribucionAjustada).map(([tipo, monto]) => ({
+                              return Object.entries(distribucionTransacciones).map(([tipo, monto]) => ({
                                 tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
                                 monto,
-                                porcentaje: totalRealPie > 0 ? ((monto / totalRealPie) * 100).toFixed(1) : '0.0'
+                                porcentaje: totalTransacciones > 0 ? ((monto / totalTransacciones) * 100).toFixed(1) : '0.0'
                               }));
                             })()}
                             cx="50%"
@@ -3911,13 +3910,12 @@ const RegistroIngresos = () => {
                                 return acc;
                               }, {} as Record<string, number>);
                               
-                              // Ajustar proporcionalmente
-                              const estadoPagosAjustado = ajustarProporcionalmente(estadoPagos, totalRealEstado);
+                              const totalEstadoPagos = Object.values(estadoPagos).reduce((sum, val) => sum + val, 0);
                               
-                              return Object.entries(estadoPagosAjustado).map(([estado, monto]) => ({
+                              return Object.entries(estadoPagos).map(([estado, monto]) => ({
                                 estado,
                                 monto,
-                                porcentaje: totalRealEstado > 0 ? ((monto / totalRealEstado) * 100).toFixed(1) : '0.0'
+                                porcentaje: totalEstadoPagos > 0 ? ((monto / totalEstadoPagos) * 100).toFixed(1) : '0.0'
                               }));
                             })()}
                             cx="50%"
@@ -3990,9 +3988,7 @@ const RegistroIngresos = () => {
                             return acc;
                           }, {} as Record<string, number>);
                           
-                          const subcuentaDataAjustada = ajustarProporcionalmente(subcuentaData, totalRealBarSub);
-                          
-                          return Object.entries(subcuentaDataAjustada).map(([subcuenta, monto]) => ({
+                          return Object.entries(subcuentaData).map(([subcuenta, monto]) => ({
                             subcuenta,
                             monto
                           }));
@@ -4147,28 +4143,33 @@ const RegistroIngresos = () => {
                           );
                         }
                         
-                        // Calcular distribución por producto desde movimientos de inventario
-                        const productosVentas = movimientosInventario.reduce((acc, mov) => {
-                          const productoNombre = mov.productos?.nombre || "Producto sin nombre";
-                          const precioVenta = mov.productos?.precio_venta || 0;
-                          const cantidad = Math.abs(mov.cantidad); // Las ventas son negativas
-                          const montoVenta = cantidad * precioVenta;
-                          
-                          if (!acc[productoNombre]) {
-                            acc[productoNombre] = {
-                              nombre: productoNombre,
-                              transacciones: 0,
-                              monto: 0,
-                              imagen: mov.productos?.imagen_url,
-                              tieneAsignacion: true
-                            };
+                        // Calcular distribución por producto desde transacciones
+                        const productosVentas: Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }> = {};
+                        
+                        // Procesar transacciones tipo 'inventariados' directamente
+                        filteredTransactions.forEach(t => {
+                          if (t.tipo_ingreso === 'inventariados' && t.descripcion.startsWith('Venta de ')) {
+                            const productoNombre = t.descripcion.replace('Venta de ', '').trim();
+                            
+                            // Buscar imagen del producto en catálogo
+                            const productoEnCatalogo = productosInventario.find(p => 
+                              p.nombre.toLowerCase() === productoNombre.toLowerCase()
+                            );
+                            
+                            if (!productosVentas[productoNombre]) {
+                              productosVentas[productoNombre] = {
+                                nombre: productoNombre,
+                                transacciones: 0,
+                                monto: 0,
+                                imagen: productoEnCatalogo?.imagen_url,
+                                tieneAsignacion: true
+                              };
+                            }
+                            
+                            productosVentas[productoNombre].transacciones += 1;
+                            productosVentas[productoNombre].monto += getMetricValue(t, metricType);
                           }
-                          
-                          acc[productoNombre].transacciones += 1;
-                          acc[productoNombre].monto += montoVenta;
-                          
-                          return acc;
-                        }, {} as Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>);
+                        });
 
                         // Agregar también productos precargados (servicios) desde transacciones
                         filteredTransactions.forEach(t => {
@@ -4280,13 +4281,13 @@ const RegistroIngresos = () => {
                         
                         // Usar montos reales sin ajuste proporcional
                         const productosArray = Object.values(productosVentas).sort((a: any, b: any) => b.monto - a.monto) as Array<{ nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>;
-                        const totalGeneral = productosArray.reduce((sum, p) => sum + p.monto, 0);
+                        const totalGeneralProductos = productosArray.reduce((sum, p) => sum + p.monto, 0);
                         const top10 = productosArray.slice(0, 10);
                         
                         return (
                           <>
                             {top10.map((producto) => {
-                              const porcentaje = totalGeneral > 0 ? ((producto.monto / totalGeneral) * 100).toFixed(1) : '0.0';
+                              const porcentaje = totalGeneralProductos > 0 ? ((producto.monto / totalGeneralProductos) * 100).toFixed(1) : '0.0';
                               return (
                                 <div key={producto.nombre} className={`flex items-center gap-3 p-3 border rounded-lg ${!producto.tieneAsignacion ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
                                   {producto.imagen ? (
@@ -4343,7 +4344,7 @@ const RegistroIngresos = () => {
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                       <p className="font-bold text-lg text-primary">
-                                        ${formatCifra(totalGeneral, scaleFormat)}
+                                        ${formatCifra(totalGeneralProductos, scaleFormat)}
                                       </p>
                                     </div>
                                     <div className="flex-shrink-0">
@@ -4464,13 +4465,13 @@ const RegistroIngresos = () => {
                         
                         // Usar montos reales sin ajuste proporcional
                         const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneral = clientesArray.reduce((sum, c) => sum + c.monto, 0);
+                        const totalGeneralClientes = clientesArray.reduce((sum, c) => sum + c.monto, 0);
                         const top10 = clientesArray.slice(0, 10);
                         
                         return (
                           <>
                             {top10.map((cliente) => {
-                              const porcentaje = totalGeneral > 0 ? ((cliente.monto / totalGeneral) * 100).toFixed(1) : '0.0';
+                              const porcentaje = totalGeneralClientes > 0 ? ((cliente.monto / totalGeneralClientes) * 100).toFixed(1) : '0.0';
                               return (
                                 <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
                                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -4514,7 +4515,7 @@ const RegistroIngresos = () => {
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                       <p className="font-bold text-lg text-primary">
-                                        ${formatCifra(totalGeneral, scaleFormat)}
+                                        ${formatCifra(totalGeneralClientes, scaleFormat)}
                                       </p>
                                     </div>
                                     <div className="flex-shrink-0">
