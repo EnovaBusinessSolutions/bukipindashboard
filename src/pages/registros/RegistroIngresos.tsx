@@ -4167,13 +4167,28 @@ const RegistroIngresos = () => {
                             return acc;
                           }, {} as Record<string, number>);
                           
+                          // Calcular diferencia de asientos directos y agregarla
+                          const totalTransacciones = Object.values(chartData).reduce((sum, v) => sum + v, 0);
+                          const diferencia = totalRealBarSub - totalTransacciones;
+                          if (diferencia > 0.01) {
+                            const keyAsientos = vistaGraficaBarras === "subcuenta" 
+                              ? "Asientos directos (sin subcuenta)"
+                              : "Asientos directos";
+                            chartData[keyAsientos] = diferencia;
+                          }
+                          
                           return Object.entries(chartData).map(([subcuenta, monto]) => ({
                             subcuenta,
                             monto
                           }));
                         })()} layout="vertical">
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
+                          <XAxis 
+                            type="number" 
+                            tickFormatter={(value) => formatCifra(value, scaleFormat)} 
+                            tick={{ fill: '#000000' }}
+                            domain={[0, (dataMax: number) => dataMax * 1.2]}
+                          />
                           <YAxis type="category" dataKey="subcuenta" width={150} tick={{ fill: '#000000' }} />
                           <Tooltip 
                             formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
