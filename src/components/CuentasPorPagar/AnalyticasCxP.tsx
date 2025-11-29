@@ -438,6 +438,7 @@ export default function AnalyticasCxP() {
                   formatter={(value: number) => formatearConPreferencias(value)}
                   className="text-xs fill-foreground font-semibold"
                   offset={5}
+                  style={{ dominantBaseline: 'middle' }}
                 />
               </Bar>
             </BarChart>
