@@ -75,9 +75,9 @@ export default function AnalyticasCxP() {
     .filter(a => a.min !== null && a.min > 0)
     .reduce((sum, a) => sum + a.cantidad, 0);
 
-  const proveedoresUnicos = Array.from(new Set(
-    detalle?.map(d => d.proveedor_nombre || 'Sin nombre') || []
-  ));
+  const proveedoresUnicos = analytics?.cxpPorProveedorApilado
+    ?.map(p => p.proveedor)
+    .filter(Boolean) || [];
 
   const toggleCategoria = (categoria: string) => {
     if (categoria === 'all') {
@@ -387,7 +387,7 @@ export default function AnalyticasCxP() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={dataProveedorFiltrada} layout="horizontal">
+            <BarChart data={dataProveedorFiltrada} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis type="number" className="text-xs" />
               <YAxis 
