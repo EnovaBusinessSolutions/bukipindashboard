@@ -23,6 +23,7 @@ export default function AnalyticaClientesNueva() {
   const [comprasPeriodo, setComprasPeriodo] = useState<"mes-curso" | "mes-acum" | "año-acum">("mes-acum");
   const [ventasPeriodo, setVentasPeriodo] = useState<"mes-acum" | "año-acum">("mes-acum");
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("todos");
+  const [tipoVisualizacion, setTipoVisualizacion] = useState<"ventas" | "unidades">("ventas");
 
   // Fetch transacciones
   const { data: transacciones = [], isLoading } = useQuery({
@@ -175,20 +176,25 @@ export default function AnalyticaClientesNueva() {
       );
     }
 
-    const productosMap = new Map<string, number>();
+    const productosMap = new Map<string, { total: number; unidades: number }>();
     transaccionesFiltradas.forEach(t => {
       const producto = t.descripcion || "Sin descripción";
-      productosMap.set(producto, (productosMap.get(producto) || 0) + t.monto_neto);
+      const actual = productosMap.get(producto) || { total: 0, unidades: 0 };
+      productosMap.set(producto, {
+        total: actual.total + t.monto_neto,
+        unidades: actual.unidades + 1
+      });
     });
 
     return Array.from(productosMap.entries())
-      .map(([producto, total]) => ({ 
+      .map(([producto, datos]) => ({ 
         producto: producto.length > 30 ? producto.substring(0, 30) + "..." : producto, 
-        total 
+        total: datos.total,
+        unidades: datos.unidades
       }))
-      .sort((a, b) => b.total - a.total)
+      .sort((a, b) => tipoVisualizacion === "ventas" ? b.total - a.total : b.unidades - a.unidades)
       .slice(0, 10);
-  }, [transacciones, ventasPeriodo, clienteSeleccionado]);
+  }, [transacciones, ventasPeriodo, clienteSeleccionado, tipoVisualizacion]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -382,6 +388,12 @@ export default function AnalyticaClientesNueva() {
                   <SelectItem value="año-acum">Año acumulado</SelectItem>
                 </SelectContent>
               </Select>
+              <Tabs value={tipoVisualizacion} onValueChange={(v) => setTipoVisualizacion(v as "ventas" | "unidades")}>
+                <TabsList>
+                  <TabsTrigger value="ventas">Ventas ($)</TabsTrigger>
+                  <TabsTrigger value="unidades">Unidades</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
           </div>
         </CardHeader>
@@ -390,20 +402,27 @@ export default function AnalyticaClientesNueva() {
             <BarChart data={datosVentasPorProducto}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="producto" className="text-xs" angle={-45} textAnchor="end" height={120} />
-              <YAxis className="text-xs" tickFormatter={(value) => formatCurrency(value)} />
+              <YAxis 
+                className="text-xs" 
+                tickFormatter={(value) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()} 
+              />
               <Tooltip 
-                formatter={(value: number) => formatCurrency(value)}
+                formatter={(value: number) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()}
                 contentStyle={{ 
                   backgroundColor: "hsl(var(--background))",
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "6px"
                 }}
               />
-              <Bar dataKey="total" fill="hsl(var(--primary))" name="Total Ventas">
+              <Bar 
+                dataKey={tipoVisualizacion === "ventas" ? "total" : "unidades"} 
+                fill="hsl(var(--primary))" 
+                name={tipoVisualizacion === "ventas" ? "Total Ventas" : "Unidades Vendidas"}
+              >
                 <LabelList 
-                  dataKey="total" 
+                  dataKey={tipoVisualizacion === "ventas" ? "total" : "unidades"} 
                   position="top" 
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value: number) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()}
                   className="text-xs fill-foreground font-medium"
                   offset={5}
                 />
