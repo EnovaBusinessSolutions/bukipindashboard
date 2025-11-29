@@ -80,12 +80,6 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const activosCirculantes = activoCirculante.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const activosFijos = activoFijo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const activosDiferidos = activoDiferido.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  
-  // Obtener saldos individuales para los treemaps
-  const caja = obtenerSaldo("1001");
-  const bancos = obtenerSaldo("1002");
-  const cuentasPorCobrar = obtenerSaldo("1003");
-  const inventario = obtenerSaldo("1005");
 
   // Calcular TODOS los pasivos desde los saldos de la balanza (cuentas 2xxx)
   const codigosPasivos = Object.keys(saldosPorCuenta).filter(c => c.startsWith("2"));
@@ -106,9 +100,6 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   // Calcular totales por subgrupo
   const pasivosCirculantes = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
   const pasivosLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  
-  // Obtener saldo individual de proveedores para el treemap
-  const proveedores = obtenerSaldo("2001");
 
   // Calcular TODOS los capital contable desde los saldos de la balanza (cuentas 3xxx)
   const codigosCapital = Object.keys(saldosPorCuenta).filter(c => c.startsWith("3"));
@@ -125,9 +116,6 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
   const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
   const impuestos = impuestosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
   const utilidadEjercicio = ingresos - egresos - impuestos;
-
-  const capitalSocialInicial = obtenerSaldo("3001");
-  const utilidadesRetenidas = obtenerSaldo("3002");
   const capital = totalCapitalContable + utilidadEjercicio;
 
   // 1. Estructura del Balance (Activos, Pasivos, Capital)
@@ -144,18 +132,29 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     { name: "Activos Diferidos", value: activosDiferidos, color: "hsl(var(--chart-4))" },
   ];
 
-  // 3. Desglose de Activos Circulantes
-  const activosCirculantesData = [
-    { name: "Caja", size: caja, color: "hsl(var(--chart-1))" },
-    { name: "Bancos", size: bancos, color: "hsl(var(--chart-2))" },
-    { name: "Cuentas por Cobrar", size: cuentasPorCobrar, color: "hsl(var(--chart-3))" },
-    { name: "Inventario", size: inventario, color: "hsl(var(--chart-4))" },
+  // Colores para gráficas dinámicas
+  const CHART_COLORS = [
+    "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
+    "hsl(var(--chart-4))", "hsl(var(--chart-5))"
   ];
 
-  // 3B. Desglose de Activos Fijos
-  const activosFijosData = [
-    { name: "Activos Fijos Netos", size: activosFijos, color: "hsl(var(--chart-3))" },
-  ];
+  // 3. Desglose de Activos Circulantes - DINÁMICO
+  const activosCirculantesData = activoCirculante
+    .map((cuenta, index) => ({
+      name: cuenta.nombre,
+      size: obtenerSaldo(cuenta.codigo),
+      color: CHART_COLORS[index % CHART_COLORS.length]
+    }))
+    .filter(item => Math.abs(item.size) > 0.01);
+
+  // 3B. Desglose de Activos Fijos - DINÁMICO
+  const activosFijosData = activoFijo
+    .map((cuenta, index) => ({
+      name: cuenta.nombre,
+      size: obtenerSaldo(cuenta.codigo),
+      color: CHART_COLORS[index % CHART_COLORS.length]
+    }))
+    .filter(item => Math.abs(item.size) > 0.01);
 
   // 3C. Desglose de Activos Diferidos
   const activosDiferidosData = [
@@ -168,22 +167,41 @@ const BalanceGeneralAnalitico = ({ cutoffDate }: BalanceGeneralAnaliticoProps) =
     { name: "Pasivos Largo Plazo", value: pasivosLargoPlazo, color: "hsl(var(--chart-4))" },
   ];
 
-  // 5. Desglose de Pasivos Circulantes
-  const pasivosCirculantesData = [
-    { name: "Proveedores", size: proveedores, color: "hsl(var(--chart-5))" },
-  ];
+  // 5. Desglose de Pasivos Circulantes - DINÁMICO
+  const pasivosCirculantesData = pasivoCortoPlazo
+    .map((cuenta, index) => ({
+      name: cuenta.nombre,
+      size: Math.abs(obtenerSaldo(cuenta.codigo)),
+      color: CHART_COLORS[index % CHART_COLORS.length]
+    }))
+    .filter(item => item.size > 0.01);
 
-  // 5B. Desglose de Pasivos Largo Plazo
-  const pasivosLargoPlazoData = [
-    { name: "Financiamientos", size: pasivosLargoPlazo, color: "hsl(var(--chart-4))" },
-  ];
+  // 5B. Desglose de Pasivos Largo Plazo - DINÁMICO
+  const pasivosLargoPlazoData = pasivoLargoPlazo
+    .map((cuenta, index) => ({
+      name: cuenta.nombre,
+      size: Math.abs(obtenerSaldo(cuenta.codigo)),
+      color: CHART_COLORS[index % CHART_COLORS.length]
+    }))
+    .filter(item => item.size > 0.01);
 
-  // 6. Capital Contable
+  // 6. Capital Contable - DINÁMICO
+  const capitalCuentas = cuentasFlat.filter(cuenta => 
+    cuenta.codigo.startsWith("3") && cuenta.estado_financiero === "Balance General"
+  );
+
   const capitalData = [
-    { name: "Capital Social", size: capitalSocialInicial, color: "hsl(var(--chart-2))" },
-    { name: "Utilidades Retenidas", size: utilidadesRetenidas, color: "hsl(var(--chart-3))" },
-    { name: "Utilidad del Ejercicio", size: utilidadEjercicio, color: "hsl(var(--chart-1))" },
-  ].filter(item => item.size > 0);
+    ...capitalCuentas.map((cuenta, index) => ({
+      name: cuenta.nombre,
+      size: Math.abs(obtenerSaldo(cuenta.codigo)),
+      color: CHART_COLORS[index % CHART_COLORS.length]
+    })),
+    { 
+      name: "Utilidad del Ejercicio", 
+      size: Math.abs(utilidadEjercicio), 
+      color: CHART_COLORS[capitalCuentas.length % CHART_COLORS.length] 
+    }
+  ].filter(item => Math.abs(item.size) > 0.01);
 
 
   const formatCurrency = (value: number) => {
