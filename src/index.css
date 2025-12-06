@@ -134,4 +134,29 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Custom scrollbar for sidebar */
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: hsl(208 100% 11%);
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: hsl(209 83% 25%);
+    border-radius: 3px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(208 37% 35%);
+  }
+
+  /* Firefox scrollbar */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(209 83% 25%) hsl(208 100% 11%);
+  }
 }
