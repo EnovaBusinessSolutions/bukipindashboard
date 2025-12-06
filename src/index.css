@@ -8,66 +8,67 @@ All colors MUST be HSL.
 
 @layer base {
 :root {
-    --background: 40 20% 98%;
-    --foreground: 0 0% 15%;
+    /* Nueva paleta de colores azul marino */
+    --background: 203 50% 95%;
+    --foreground: 208 100% 11%;
 
-    --card: 40 15% 96%;
-    --card-foreground: 0 0% 15%;
+    --card: 203 50% 91%;
+    --card-foreground: 208 100% 11%;
 
-    --popover: 40 15% 96%;
-    --popover-foreground: 0 0% 15%;
+    --popover: 203 50% 93%;
+    --popover-foreground: 208 100% 11%;
 
-    --primary: 180 25% 50%;
-    --primary-foreground: 40 20% 98%;
-    --primary-hover: 180 30% 45%;
+    --primary: 209 83% 25%;
+    --primary-foreground: 203 50% 95%;
+    --primary-hover: 208 100% 11%;
     
-    --finance-blue: 180 25% 50%;
-    --finance-blue-light: 180 20% 60%;
-    --finance-success: 180 25% 50%;
-    --finance-warning: 180 25% 50%;
+    --finance-blue: 209 83% 25%;
+    --finance-blue-light: 208 37% 45%;
+    --finance-success: 191 35% 47%;
+    --finance-warning: 203 70% 70%;
 
-    --chart-1: 180 50% 55%;
-    --chart-2: 180 45% 45%;
-    --chart-3: 180 55% 65%;
-    --chart-4: 180 40% 40%;
-    --chart-5: 180 60% 70%;
+    --chart-1: 208 100% 11%;
+    --chart-2: 209 83% 25%;
+    --chart-3: 208 37% 45%;
+    --chart-4: 191 35% 47%;
+    --chart-5: 191 31% 57%;
     
-    --chart-balance: 180 25% 50%;
-    --chart-income: 70 40% 45%;
+    --chart-balance: 209 83% 25%;
+    --chart-income: 191 35% 47%;
     --chart-expense: 0 50% 40%;
 
-    --secondary: 180 10% 92%;
-    --secondary-foreground: 0 0% 15%;
+    --secondary: 203 50% 85%;
+    --secondary-foreground: 208 100% 11%;
 
-    --muted: 180 8% 90%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 203 40% 88%;
+    --muted-foreground: 208 37% 35%;
 
-    --accent: 180 15% 88%;
-    --accent-foreground: 0 0% 15%;
+    --accent: 191 31% 57%;
+    --accent-foreground: 208 100% 11%;
 
     --destructive: 0 70% 55%;
-    --destructive-foreground: 40 20% 98%;
+    --destructive-foreground: 203 50% 95%;
     
-    --success: 142 76% 36%;
-    --success-foreground: 40 20% 98%;
+    --success: 191 35% 47%;
+    --success-foreground: 203 50% 95%;
     
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 15%;
+    --warning: 203 70% 70%;
+    --warning-foreground: 208 100% 11%;
 
-    --border: 180 10% 85%;
-    --input: 180 10% 85%;
-    --ring: 180 25% 50%;
+    --border: 203 40% 80%;
+    --input: 203 40% 80%;
+    --ring: 209 83% 25%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 180 25% 50%;
-    --sidebar-foreground: 40 20% 98%;
-    --sidebar-primary: 40 15% 96%;
-    --sidebar-primary-foreground: 180 25% 50%;
-    --sidebar-accent: 180 30% 45%;
-    --sidebar-accent-foreground: 40 20% 98%;
-    --sidebar-border: 180 20% 40%;
-    --sidebar-ring: 40 20% 98%;
+    --sidebar-background: 208 100% 11%;
+    --sidebar-foreground: 203 50% 95%;
+    --sidebar-primary: 203 50% 91%;
+    --sidebar-primary-foreground: 208 100% 11%;
+    --sidebar-accent: 209 83% 25%;
+    --sidebar-accent-foreground: 203 50% 95%;
+    --sidebar-border: 209 83% 20%;
+    --sidebar-ring: 203 50% 95%;
   }
 
   .dark {

@@ -1,16 +1,16 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
-import { Loader2 } from "lucide-react";
+import { Loader2, TrendingUp } from "lucide-react";
 
 const VentasAnalytics = () => {
   const { ventasResumen, loading, error } = useVentasResumen();
 
   if (loading) {
     return (
-      <Card className="col-span-2">
+      <Card className="col-span-2 border-0 shadow-lg">
         <CardContent className="flex items-center justify-center h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </CardContent>
       </Card>
     );
@@ -18,7 +18,7 @@ const VentasAnalytics = () => {
 
   if (error) {
     return (
-      <Card className="col-span-2">
+      <Card className="col-span-2 border-0 shadow-lg">
         <CardContent className="flex items-center justify-center h-[400px]">
           <p className="text-destructive">Error: {error}</p>
         </CardContent>
@@ -56,44 +56,85 @@ const VentasAnalytics = () => {
   };
 
   return (
-    <Card className="col-span-2">
-      <CardHeader>
-        <CardTitle>Análisis de Ventas, Descuentos e Ingresos Netos</CardTitle>
+    <Card className="col-span-2 border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+      <CardHeader className="pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <TrendingUp className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <CardTitle className="text-xl">Análisis de Ventas</CardTitle>
+            <CardDescription>Ventas, descuentos e ingresos netos</CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={300}>
           <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-            <XAxis dataKey="periodo" />
-            <YAxis tickFormatter={formatCurrency} />
-            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+            <XAxis 
+              dataKey="periodo" 
+              axisLine={false}
+              tickLine={false}
+              className="text-muted-foreground"
+            />
+            <YAxis 
+              tickFormatter={formatCurrency} 
+              axisLine={false}
+              tickLine={false}
+              className="text-muted-foreground"
+            />
+            <Tooltip 
+              formatter={(value: number) => formatCurrency(value)}
+              contentStyle={{
+                backgroundColor: 'hsl(var(--card))',
+                border: 'none',
+                borderRadius: '12px',
+                boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)',
+              }}
+            />
             <Legend />
-            <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Ventas Brutas" />
-            <Bar dataKey="descuentos" fill="hsl(var(--destructive))" name="Descuentos" />
-            <Bar dataKey="ingresoNeto" fill="hsl(var(--chart-2))" name="Ingreso Neto" />
+            <Bar 
+              dataKey="ventas" 
+              fill="hsl(var(--primary))" 
+              name="Ventas Brutas" 
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar 
+              dataKey="descuentos" 
+              fill="hsl(var(--destructive))" 
+              name="Descuentos" 
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar 
+              dataKey="ingresoNeto" 
+              fill="hsl(var(--success))" 
+              name="Ingreso Neto" 
+              radius={[4, 4, 0, 0]}
+            />
           </BarChart>
         </ResponsiveContainer>
         
-        {/* Resumen textual */}
-        <div className="mt-6 grid grid-cols-3 gap-4 text-sm">
-          <div className="text-center p-3 bg-primary/5 rounded-lg">
-            <p className="font-medium text-primary">Ventas del Día</p>
-            <p className="text-lg font-bold">{formatCurrency(ventasResumen.ventasDelDia)}</p>
-            <p className="text-xs text-muted-foreground">Descuento: {formatCurrency(ventasResumen.descuentosDelDia)}</p>
-            <p className="text-sm font-semibold text-chart-2">Neto: {formatCurrency(ventasResumen.ingresoNetoDelDia)}</p>
+        {/* Resumen con diseño mejorado */}
+        <div className="mt-6 grid grid-cols-3 gap-4">
+          <div className="text-center p-4 bg-primary/5 rounded-xl border border-primary/10 hover:border-primary/30 transition-colors">
+            <p className="font-medium text-primary text-sm mb-1">Día</p>
+            <p className="text-lg font-bold text-foreground">{formatCurrency(ventasResumen.ventasDelDia)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Desc: {formatCurrency(ventasResumen.descuentosDelDia)}</p>
+            <p className="text-sm font-semibold text-success mt-1">Neto: {formatCurrency(ventasResumen.ingresoNetoDelDia)}</p>
           </div>
           
-          <div className="text-center p-3 bg-primary/10 rounded-lg">
-            <p className="font-medium text-primary">Ventas del Mes</p>
-            <p className="text-lg font-bold">{formatCurrency(ventasResumen.ventasDelMes)}</p>
-            <p className="text-xs text-muted-foreground">Descuento: {formatCurrency(ventasResumen.descuentosDelMes)}</p>
-            <p className="text-sm font-semibold text-chart-2">Neto: {formatCurrency(ventasResumen.ingresoNetoDelMes)}</p>
+          <div className="text-center p-4 bg-accent/10 rounded-xl border border-accent/20 hover:border-accent/40 transition-colors">
+            <p className="font-medium text-accent text-sm mb-1">Mes</p>
+            <p className="text-lg font-bold text-foreground">{formatCurrency(ventasResumen.ventasDelMes)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Desc: {formatCurrency(ventasResumen.descuentosDelMes)}</p>
+            <p className="text-sm font-semibold text-success mt-1">Neto: {formatCurrency(ventasResumen.ingresoNetoDelMes)}</p>
           </div>
           
-          <div className="text-center p-3 bg-primary/15 rounded-lg">
-            <p className="font-medium text-primary">Ventas del Año</p>
-            <p className="text-lg font-bold">{formatCurrency(ventasResumen.ventasDelAno)}</p>
-            <p className="text-xs text-muted-foreground">Descuento: {formatCurrency(ventasResumen.descuentosDelAno)}</p>
-            <p className="text-sm font-semibold text-chart-2">Neto: {formatCurrency(ventasResumen.ingresoNetoDelAno)}</p>
+          <div className="text-center p-4 bg-success/10 rounded-xl border border-success/20 hover:border-success/40 transition-colors">
+            <p className="font-medium text-success text-sm mb-1">Año</p>
+            <p className="text-lg font-bold text-foreground">{formatCurrency(ventasResumen.ventasDelAno)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Desc: {formatCurrency(ventasResumen.descuentosDelAno)}</p>
+            <p className="text-sm font-semibold text-success mt-1">Neto: {formatCurrency(ventasResumen.ingresoNetoDelAno)}</p>
           </div>
         </div>
       </CardContent>
