@@ -162,9 +162,8 @@ export const RegistroImpuestosForm = () => {
       if (metodoPago === "efectivo") {
         const { data: detalles } = await supabase
           .from("detalle_asientos")
-          .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
-          .eq("cuenta_codigo", "1001")
-          .eq("asientos_contables.user_id", user.id);
+          .select("cuenta_codigo, debe, haber")
+          .eq("cuenta_codigo", "1001");
 
         if (!detalles) {
           toast({
@@ -195,9 +194,8 @@ export const RegistroImpuestosForm = () => {
       if (metodoPago === "transferencia") {
         const { data: detalles } = await supabase
           .from("detalle_asientos")
-          .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
-          .eq("cuenta_codigo", "1002")
-          .eq("asientos_contables.user_id", user.id);
+          .select("cuenta_codigo, debe, haber")
+          .eq("cuenta_codigo", "1002");
 
         if (!detalles) {
           toast({
@@ -228,10 +226,13 @@ export const RegistroImpuestosForm = () => {
 
     setIsSaving(true);
 
+    // Placeholder user_id - en producción esto vendría del contexto de auth
+    const placeholderUserId = '00000000-0000-0000-0000-000000000000';
+
     try {
       const diferencia = parseFloat(isrReal) - isrCalculado;
       const datosRegistro = {
-        user_id: user.id,
+        user_id: placeholderUserId,
         mes: mesSeleccionado,
         ano: anoSeleccionado,
         utilidad_antes_impuestos: utilidadAntesImpuestos,
@@ -269,7 +270,7 @@ export const RegistroImpuestosForm = () => {
       const { data: egresoData, error: egresoError } = await supabase
         .from('transacciones_egresos')
         .insert({
-          user_id: user.id,
+          user_id: placeholderUserId,
           tipo_egreso: 'impuesto',
           subtipo_egreso: 'ISR',
           descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
@@ -304,7 +305,7 @@ export const RegistroImpuestosForm = () => {
       const { data: asiento, error: asientoError } = await supabase
         .from('asientos_contables')
         .insert({
-          user_id: user.id,
+          user_id: placeholderUserId,
           numero_asiento: numeroAsiento,
           descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
           fecha: fechaAsiento.toISOString().split('T')[0]
@@ -412,7 +413,6 @@ export const RegistroImpuestosForm = () => {
       const { data } = await supabase
         .from('transacciones_impuestos')
         .select('*')
-        .eq('user_id', user.id)
         .eq('mes', mesSeleccionado)
         .eq('ano', anoSeleccionado)
         .order('created_at', { ascending: false });
@@ -440,7 +440,7 @@ export const RegistroImpuestosForm = () => {
 
   const generarNumeroAsiento = async (): Promise<string> => {
     const { data, error } = await supabase.rpc('generate_asiento_number', {
-      p_user_id: user?.id
+      p_user_id: ''
     });
 
     if (error) throw error;

@@ -70,7 +70,6 @@ export const ResumenImpuestos = () => {
             const { data: egresoData } = await supabase
               .from('transacciones_egresos')
               .select('tipo_pago, metodo_pago, monto_pagado, monto_pendiente, cuenta_codigo, created_at')
-              .eq('user_id', user.id)
               .eq('tipo_egreso', 'impuesto')
               .eq('subtipo_egreso', 'ISR')
               .ilike('descripcion', `%${meses[t.mes - 1]}%${t.ano}%`)
@@ -104,8 +103,7 @@ export const ResumenImpuestos = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'transacciones_impuestos',
-          filter: `user_id=eq.${user.id}`
+          table: 'transacciones_impuestos'
         },
         () => {
           fetchTransacciones();
@@ -116,7 +114,7 @@ export const ResumenImpuestos = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, mesSeleccionado, anoSeleccionado]);
+  }, [mesSeleccionado, anoSeleccionado]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -144,7 +142,6 @@ export const ResumenImpuestos = () => {
           )
         )
       `)
-      .eq('user_id', user?.id)
       .ilike('descripcion', `%ISR%${meses[transaccion.mes - 1]}%${transaccion.ano}%`)
       .order('created_at', { ascending: false })
       .limit(1)
