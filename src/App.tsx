@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,43 +29,50 @@ import Configuracion from "./pages/Configuracion";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <div className="h-screen bg-background flex overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/plan-cuentas" element={<PlanCuentas />} />
-              <Route path="/estados-financieros/resultados" element={<EstadoResultados />} />
-              <Route path="/estados-financieros/balance" element={<BalanceGeneral />} />
-              <Route path="/estados-financieros/flujo-efectivo" element={<FlujoEfectivo />} />
-              <Route path="/estados-financieros/balanza" element={<Balanza />} />
-              <Route path="/analisis-financiero/resultados" element={<AnalisisResultados />} />
-              <Route path="/analisis-financiero/balance" element={<AnalisisBalance />} />
-              <Route path="/registros/ingresos" element={<RegistroIngresos />} />
-              <Route path="/registros/egresos" element={<RegistroEgresos />} />
-              <Route path="/registros/inversiones" element={<RegistroInversiones />} />
-              <Route path="/registros/inventario" element={<Inventario />} />
-              <Route path="/registros/financiamientos" element={<RegistroFinanciamientos />} />
-              <Route path="/registros/capital" element={<RegistroCapital />} />
-              <Route path="/registros/impuestos" element={<RegistroImpuestos />} />
-              <Route path="/cobros-pagos/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
-              <Route path="/cobros-pagos/cuentas-por-pagar" element={<CuentasPorPagar />} />
-              <Route path="/clientes" element={<Clientes />} />
-              <Route path="/proveedores" element={<Proveedores />} />
-              <Route path="/configuracion" element={<Configuracion />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <div className="h-screen bg-background flex overflow-hidden w-full">
+            <Sidebar 
+              collapsed={sidebarCollapsed} 
+              onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+            />
+            <main className="flex-1 overflow-auto">
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/plan-cuentas" element={<PlanCuentas />} />
+                <Route path="/estados-financieros/resultados" element={<EstadoResultados />} />
+                <Route path="/estados-financieros/balance" element={<BalanceGeneral />} />
+                <Route path="/estados-financieros/flujo-efectivo" element={<FlujoEfectivo />} />
+                <Route path="/estados-financieros/balanza" element={<Balanza />} />
+                <Route path="/analisis-financiero/resultados" element={<AnalisisResultados />} />
+                <Route path="/analisis-financiero/balance" element={<AnalisisBalance />} />
+                <Route path="/registros/ingresos" element={<RegistroIngresos />} />
+                <Route path="/registros/egresos" element={<RegistroEgresos />} />
+                <Route path="/registros/inversiones" element={<RegistroInversiones />} />
+                <Route path="/registros/inventario" element={<Inventario />} />
+                <Route path="/registros/financiamientos" element={<RegistroFinanciamientos />} />
+                <Route path="/registros/capital" element={<RegistroCapital />} />
+                <Route path="/registros/impuestos" element={<RegistroImpuestos />} />
+                <Route path="/cobros-pagos/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
+                <Route path="/cobros-pagos/cuentas-por-pagar" element={<CuentasPorPagar />} />
+                <Route path="/clientes" element={<Clientes />} />
+                <Route path="/proveedores" element={<Proveedores />} />
+                <Route path="/configuracion" element={<Configuracion />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </main>
+          </div>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
