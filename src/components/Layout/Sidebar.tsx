@@ -3,17 +3,13 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, LogOut, User, Settings } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { ChevronDown, ChevronRight, User, Settings } from "lucide-react";
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
-import { toast } from "@/hooks/use-toast";
 
 const Sidebar = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, signOut } = useAuth();
   const { totalAtrasadas, isLoading: loadingAtrasadas } = useDepreciacionesAtrasadas();
   const [openSections, setOpenSections] = useState({
     contabilidad: false,
@@ -22,15 +18,6 @@ const Sidebar = () => {
     estadosFinancieros: false,
     analisisFinanciero: false
   });
-
-  const handleSignOut = async () => {
-    await signOut();
-    toast({
-      title: "Sesión cerrada",
-      description: "Has cerrado sesión correctamente"
-    });
-    navigate('/auth');
-  };
 
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections(prev => ({
@@ -302,12 +289,12 @@ const Sidebar = () => {
               <div className="flex items-center space-x-3 w-full">
                 <div className="w-8 h-8 bg-sidebar-primary rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-sidebar-primary-foreground font-medium text-sm">
-                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                    U
                   </span>
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-medium text-sidebar-foreground truncate">
-                    {user?.email?.split('@')[0] || 'Usuario'}
+                    Usuario
                   </p>
                   <p className="text-xs text-sidebar-foreground opacity-70">Administrador</p>
                 </div>
@@ -327,11 +314,6 @@ const Sidebar = () => {
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

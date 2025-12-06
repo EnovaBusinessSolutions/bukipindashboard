@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 export interface InversionCapex {
@@ -31,7 +30,6 @@ export interface InversionCapex {
   fecha_baja?: string;
   valor_venta?: number;
   motivo_baja?: string;
-  // Nuevos campos para manejo de ventas
   metodo_pago_venta?: string;
   tipo_pago_venta?: string;
   monto_pagado_venta?: number;
@@ -56,22 +54,19 @@ export interface RecomendacionDepreciacion {
 }
 
 export const useInversiones = () => {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: inversiones = [], isLoading } = useQuery({
-    queryKey: ["inversiones", user?.id],
+    queryKey: ["inversiones"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inversiones_capex")
         .select("*")
-        .eq("user_id", user?.id)
         .order("fecha_adquisicion", { ascending: false });
 
       if (error) throw error;
       return data as InversionCapex[];
     },
-    enabled: !!user?.id,
   });
 
   const { data: recomendaciones = [] } = useQuery({
@@ -88,10 +83,10 @@ export const useInversiones = () => {
   });
 
   const crearInversion = useMutation({
-    mutationFn: async (nuevaInversion: Omit<InversionCapex, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (nuevaInversion: Omit<InversionCapex, 'id' | 'created_at' | 'updated_at'>) => {
       const { data, error } = await supabase
         .from("inversiones_capex")
-        .insert([{ ...nuevaInversion, user_id: user?.id }])
+        .insert([nuevaInversion])
         .select()
         .single();
 

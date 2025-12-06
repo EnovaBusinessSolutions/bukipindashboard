@@ -10,7 +10,6 @@ import { Separator } from "@/components/ui/separator";
 import { Eye, TrendingUp, TrendingDown, Calendar, Package, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -64,7 +63,6 @@ interface AsientoContable {
 }
 
 const ResumenTransaccionesInventario = () => {
-  const { user } = useAuth();
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [tipoMovimiento, setTipoMovimiento] = useState<string>("todos");
@@ -77,7 +75,7 @@ const ResumenTransaccionesInventario = () => {
 
   // Obtener movimientos de inventario
   const { data: movimientos = [], isLoading, refetch } = useQuery({
-    queryKey: ["movimientos-inventario", user?.id, fechaInicio, fechaFin],
+    queryKey: ["movimientos-inventario", fechaInicio, fechaFin],
     queryFn: async () => {
       let query = supabase
         .from("movimientos_inventario")
@@ -88,7 +86,6 @@ const ResumenTransaccionesInventario = () => {
             imagen_url
           )
         `)
-        .or(`user_id.eq.${user?.id},user_id.is.null`) // Incluir movimientos sin user_id
         .order("created_at", { ascending: false });
 
       if (fechaInicio) {
@@ -101,19 +98,8 @@ const ResumenTransaccionesInventario = () => {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Actualizar movimientos sin user_id para asignarles el user_id actual
-      const movimientosSinUserId = data?.filter(m => !m.user_id) || [];
-      if (movimientosSinUserId.length > 0 && user?.id) {
-        const idsToUpdate = movimientosSinUserId.map(m => m.id);
-        await supabase
-          .from("movimientos_inventario")
-          .update({ user_id: user.id })
-          .in('id', idsToUpdate);
-      }
-      
       return data as MovimientoInventario[];
     },
-    enabled: !!user?.id,
   });
 
   // Obtener asiento contable relacionado con un movimiento

@@ -4,7 +4,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
 import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -18,7 +17,6 @@ interface DatosGrafica {
 }
 
 export const AnalyticaImpuestos = () => {
-  const { user } = useAuth();
   const currentYear = new Date().getFullYear();
   const mesActual = new Date().getMonth() + 1; // 1-12
   const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentYear);
@@ -37,8 +35,6 @@ export const AnalyticaImpuestos = () => {
   const { data: resultadosAnuales } = useEstadoResultadosMensual(currentYear);
 
   useEffect(() => {
-    if (!user) return;
-
     const fetchDatos = async () => {
       setLoading(true);
 
@@ -47,7 +43,6 @@ export const AnalyticaImpuestos = () => {
         const { data, error } = await supabase
           .from('transacciones_impuestos')
           .select('*')
-          .eq('user_id', user.id)
           .eq('ano', anoSeleccionado)
           .order('mes', { ascending: true });
 
@@ -141,7 +136,6 @@ export const AnalyticaImpuestos = () => {
         const { data: transaccionesAnoActual } = await supabase
           .from('transacciones_impuestos')
           .select('isr_real')
-          .eq('user_id', user.id)
           .eq('ano', currentYear);
         
         if (transaccionesAnoActual) {
@@ -155,7 +149,6 @@ export const AnalyticaImpuestos = () => {
         const { data: anosAnteriores, error } = await supabase
           .from('transacciones_impuestos')
           .select('*')
-          .eq('user_id', user.id)
           .gte('ano', currentYear - 4)
           .lt('ano', currentYear); // Solo años anteriores
         
@@ -220,8 +213,7 @@ export const AnalyticaImpuestos = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'transacciones_impuestos',
-          filter: `user_id=eq.${user.id}`
+          table: 'transacciones_impuestos'
         },
         () => {
           fetchDatos();
@@ -237,8 +229,7 @@ export const AnalyticaImpuestos = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'asientos_contables',
-          filter: `user_id=eq.${user.id}`
+          table: 'asientos_contables'
         },
         () => {
           // Solo refetch si estamos en el mes actual
@@ -253,7 +244,7 @@ export const AnalyticaImpuestos = () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(channelAsientos);
     };
-  }, [user, anoSeleccionado, tipoVista, currentYear, mesActual, utilidadMesActual, resultadosAnuales]);
+  }, [anoSeleccionado, tipoVista, currentYear, mesActual, utilidadMesActual, resultadosAnuales]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', {

@@ -1,15 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 export const useDepreciacionesReales = () => {
-  const { user } = useAuth();
-
   return useQuery({
-    queryKey: ["depreciaciones-reales", user?.id],
+    queryKey: ["depreciaciones-reales"],
     queryFn: async () => {
-      if (!user?.id) return {};
-
       // Obtener TODOS los asientos de depreciación DEP-*
       const { data: asientos, error } = await supabase
         .from("asientos_contables")
@@ -23,7 +18,6 @@ export const useDepreciacionesReales = () => {
             haber
           )
         `)
-        .eq("user_id", user.id)
         .like("numero_asiento", "DEP-%")
         .order("fecha", { ascending: false });
 
@@ -63,6 +57,5 @@ export const useDepreciacionesReales = () => {
 
       return { depreciacionesPorInversion, periodosRegistrados };
     },
-    enabled: !!user?.id,
   });
 };
