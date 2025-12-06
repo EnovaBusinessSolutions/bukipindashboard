@@ -9,14 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calculator, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { useAutoridadesFiscales } from "@/hooks/useAutoridadesFiscales";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export const RegistroImpuestosForm = () => {
-  const { user } = useAuth();
   const currentDate = new Date();
   const [mesSeleccionado, setMesSeleccionado] = useState<number>(currentDate.getMonth() + 1);
   const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentDate.getFullYear());
@@ -36,18 +34,14 @@ export const RegistroImpuestosForm = () => {
 
   useEffect(() => {
     const verificarRegistrosExistentes = async () => {
-      if (!user) return;
-
       const { data, error } = await supabase
         .from('transacciones_impuestos')
         .select('*')
-        .eq('user_id', user.id)
         .eq('mes', mesSeleccionado)
         .eq('ano', anoSeleccionado)
         .order('created_at', { ascending: false });
 
       if (data && data.length > 0) {
-        // Calcular el total acumulado de todos los registros
         const totalAcumulado = data.reduce((sum, reg) => sum + Number(reg.isr_real), 0);
         setRegistroExistente({
           registros: data,
@@ -66,7 +60,7 @@ export const RegistroImpuestosForm = () => {
     };
 
     verificarRegistrosExistentes();
-  }, [mesSeleccionado, anoSeleccionado, user]);
+  }, [mesSeleccionado, anoSeleccionado]);
 
   const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
   // ✅ Solo calcular ISR si hay utilidad positiva
@@ -91,15 +85,6 @@ export const RegistroImpuestosForm = () => {
                                   diasRestantesMes() <= 5;
 
   const handleGuardarRegistro = async () => {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "Debes iniciar sesión para guardar el registro",
-        variant: "destructive"
-      });
-      return;
-    }
-
     if (isPeriodoPasado()) {
       toast({
         title: "Error",

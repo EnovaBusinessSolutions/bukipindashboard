@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { FileText, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
@@ -32,7 +31,6 @@ interface TransaccionImpuesto {
 }
 
 export const ResumenImpuestos = () => {
-  const { user } = useAuth();
   const currentDate = new Date();
   const [transacciones, setTransacciones] = useState<TransaccionImpuesto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,16 +43,12 @@ export const ResumenImpuestos = () => {
   const { data: resultadosMensuales } = useEstadoResultadosMensual(anoSeleccionado);
 
   useEffect(() => {
-    if (!user) return;
-
     const fetchTransacciones = async () => {
       setLoading(true);
       
-      // Construir query con filtros
       let query = supabase
         .from('transacciones_impuestos')
         .select('*')
-        .eq('user_id', user.id)
         .eq('ano', anoSeleccionado);
       
       // Aplicar filtro de mes si no es "todos"

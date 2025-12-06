@@ -5,31 +5,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Trash2, AlertTriangle, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 const Configuracion = () => {
-  const { user } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleResetear = async () => {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "Debes estar autenticado",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsDeleting(true);
 
     try {
-      // 1. Obtener TODOS los asientos (incluyendo posibles residuales con user_id null o de prueba)
+      // 1. Obtener TODOS los asientos
       const { data: asientos } = await supabase
         .from('asientos_contables')
-        .select('id')
-        .or(`user_id.eq.${user.id},user_id.is.null`);
+        .select('id');
 
       const asientoIds = asientos?.map(a => a.id) || [];
 
@@ -41,40 +29,19 @@ const Configuracion = () => {
           .in('asiento_id', asientoIds);
       }
 
-      // 3. Borrar TODAS las transacciones y registros maestros (incluyendo residuales)
+      // 3. Borrar TODAS las transacciones y registros maestros
       await Promise.all([
-        // Transacciones - incluir posibles registros residuales
-        supabase.from('asientos_contables').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_cobros_pagos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_impuestos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('movimientos_inventario').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_financiamientos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_capital').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_egresos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('transacciones_ingresos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        
-        // Registros Maestros que afectan reportes financieros
-        supabase.from('inversiones_capex').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        supabase.from('financiamientos').delete().or(`user_id.eq.${user.id},user_id.is.null`),
-        
-        // Resetear inventario de productos a cero
-        supabase.from('productos').update({
-          cantidad_stock: 0,
-          cantidad_comprada: 0,
-          valor_total_inventario: 0,
-          costo_unitario: 0,
-          precio_venta: 0
-        }).or(`user_id.eq.${user.id},user_id.is.null`)
+        supabase.from('asientos_contables').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('transacciones_cobros_pagos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('transacciones_impuestos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('movimientos_inventario').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('transacciones_financiamientos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('transacciones_capital').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('transacciones_egresos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('transacciones_ingresos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('inversiones_capex').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('financiamientos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       ]);
-
-      // 4. Validar que efectivamente se borraron todos los datos
-      const { count: asientosRestantes } = await supabase
-        .from('asientos_contables')
-        .select('*', { count: 'exact', head: true });
-
-      if (asientosRestantes && asientosRestantes > 0) {
-        console.warn('⚠️ Aún existen asientos después del reset:', asientosRestantes);
-      }
 
       toast({
         title: "✅ Datos reseteados",
@@ -124,8 +91,8 @@ const Configuracion = () => {
               <CardContent>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-base">{user?.email || 'No disponible'}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Usuario</p>
+                    <p className="text-base">Administrador</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Rol</p>
@@ -183,7 +150,6 @@ const Configuracion = () => {
                               <li>Cobros y pagos registrados</li>
                               <li>Todas las inversiones CAPEX registradas</li>
                               <li>Todos los financiamientos y créditos registrados</li>
-                              <li>Se resetearán los valores de inventario de todos los productos a cero</li>
                             </ul>
                             <p className="text-sm font-semibold text-green-600 bg-green-50 p-3 rounded mt-3">
                               ✅ Se mantendrán: Plan de cuentas, catálogos de productos, clientes, proveedores, 
