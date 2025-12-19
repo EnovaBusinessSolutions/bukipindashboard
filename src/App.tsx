@@ -13,7 +13,7 @@ import BalanceGeneral from "./pages/BalanceGeneral";
 import FlujoEfectivo from "./pages/FlujoEfectivo";
 import Balanza from "./pages/Balanza";
 import Sidebar from "./components/Layout/Sidebar";
-import RegistroIngresos from "./pages/registros/RegistroIngresos";
+import RegistroIngresos from "./pages/registros/RegistroIngresos.page";
 import RegistroEgresos from "./pages/registros/RegistroEgresos";
 import RegistroInversiones from "./pages/registros/RegistroInversiones";
 import RegistroFinanciamientos from "./pages/registros/RegistroFinanciamientos";
