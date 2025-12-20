@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 export type ProductoEgreso = {
   id: string;
-  user_id: string;
+  user_id?: string; // en Mongo normalmente no se expone, pero lo dejo opcional por compat
   nombre: string;
   descripcion?: string;
   tipo: "gasto" | "costo";
@@ -13,11 +13,15 @@ export type ProductoEgreso = {
   es_recurrente: boolean;
   subcuenta_id?: string;
   cuenta_contable: string;
+
   imagen_url?: string;
+
+  // métricas calculadas (pueden venir del backend)
   precio_promedio: number;
   variacion_precio: number;
   total_transacciones: number;
   ultima_compra: string;
+
   activo: boolean;
   created_at: string;
   updated_at: string;
@@ -48,213 +52,203 @@ export type UpdateProductoEgresoData = {
   imagen?: File;
 };
 
+/**
+ * Helper: fetch multipart (FormData) con cookies.
+ * - NO seteamos Content-Type; el browser pone el boundary.
+ */
+async function apiFetchForm<T = any>(
+  path: string,
+  method: "POST" | "PATCH",
+  form: FormData
+): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    body: form,
+    credentials: "include",
+  });
+
+  const text = await res.text();
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!res.ok) {
+    const msg = data?.message || data?.error || `HTTP ${res.status}`;
+    throw Object.assign(new Error(msg), { status: res.status, data });
+  }
+
+  return data as T;
+}
+
 export const useProductosEgresos = () => {
   return useQuery({
     queryKey: ["productos-egresos"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("productos_egresos")
-        .select("*")
-        .eq("activo", true)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data as ProductoEgreso[];
+      // ✅ Backend recomendado: GET /api/productos-egresos?activo=true
+      // (y el backend filtra por owner=req.user._id)
+      const data = await apiFetch<ProductoEgreso[]>(
+        "/api/productos-egresos?activo=true"
+      );
+      return data || [];
     },
   });
 };
 
 export const useCreateProductoEgreso = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (productData: CreateProductoEgresoData) => {
-      console.log("🔍 Starting product creation with data:", productData);
-      
-      let imagenUrl = null;
+      // ✅ Si hay imagen => multipart
+      const hasImage = !!productData.imagen;
 
-      // Subir imagen si se seleccionó una
-      if (productData.imagen) {
-        console.log("📸 Uploading image...");
-        const fileExt = productData.imagen.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(fileName, productData.imagen);
+      if (hasImage) {
+        const form = new FormData();
+        form.append("nombre", productData.nombre);
+        if (productData.descripcion) form.append("descripcion", productData.descripcion);
+        form.append("tipo", productData.tipo);
+        form.append("unidad", productData.unidad);
+        if (productData.proveedor_principal) form.append("proveedor_principal", productData.proveedor_principal);
+        form.append("es_recurrente", String(productData.es_recurrente ?? false));
+        form.append("subcuenta_id", productData.subcuenta_id || "");
+        form.append("cuenta_contable", productData.cuenta_contable);
+        form.append("imagen", productData.imagen as File);
 
-        if (uploadError) {
-          console.error("❌ Error uploading image:", uploadError);
-          throw new Error("Error al subir la imagen");
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(uploadData.path);
-        
-        imagenUrl = publicUrl;
-        console.log("✅ Image uploaded successfully:", imagenUrl);
+        // ✅ Backend recomendado: POST /api/productos-egresos (multipart)
+        return await apiFetchForm<ProductoEgreso>(
+          "/api/productos-egresos",
+          "POST",
+          form
+        );
       }
 
-      const insertData = {
+      // ✅ Sin imagen => JSON normal
+      // Backend recomendado: POST /api/productos-egresos (json)
+      const payload = {
         nombre: productData.nombre,
         descripcion: productData.descripcion,
         tipo: productData.tipo,
         unidad: productData.unidad,
         proveedor_principal: productData.proveedor_principal,
-        es_recurrente: productData.es_recurrente || false,
+        es_recurrente: productData.es_recurrente ?? false,
         subcuenta_id: productData.subcuenta_id || null,
         cuenta_contable: productData.cuenta_contable,
-        imagen_url: imagenUrl,
-        user_id: null, // Set to null for prototype
       };
 
-      console.log("💾 Inserting product data:", insertData);
-
-      // Insertar producto en la base de datos
-      const { data, error } = await supabase
-        .from("productos_egresos")
-        .insert(insertData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("❌ Database insertion error:", error);
-        throw error;
-      }
-      
-      console.log("✅ Product created successfully:", data);
-      return data;
+      return await apiFetch<ProductoEgreso>("/api/productos-egresos", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
     },
     onSuccess: (data) => {
-      console.log("🎉 Mutation success, invalidating queries...");
       queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
       toast({
         title: "✅ Producto agregado",
-        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" agregado al catálogo${data.imagen_url ? " con imagen" : ""}`
+        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" agregado al catálogo${data.imagen_url ? " con imagen" : ""}`,
       });
     },
-    onError: (error) => {
-      console.error("❌ Mutation error:", error);
+    onError: (error: any) => {
+      console.error("❌ Error creando producto:", error);
       toast({
         title: "⚠️ Error",
-        description: "Hubo un problema al agregar el producto",
-        variant: "destructive"
+        description: error?.message || "Hubo un problema al agregar el producto",
+        variant: "destructive",
       });
-    }
+    },
   });
 };
 
 export const useUpdateProductoEgreso = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (productData: UpdateProductoEgresoData) => {
-      console.log("🔍 Starting product update with data:", productData);
-      
-      let imagenUrl: string | undefined = undefined;
+      const hasImage = !!productData.imagen;
 
-      // Subir nueva imagen si se seleccionó una
-      if (productData.imagen) {
-        console.log("📸 Uploading new image...");
-        const fileExt = productData.imagen.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(fileName, productData.imagen);
+      if (hasImage) {
+        const form = new FormData();
+        if (productData.nombre !== undefined) form.append("nombre", productData.nombre);
+        if (productData.descripcion !== undefined) form.append("descripcion", productData.descripcion);
+        if (productData.tipo !== undefined) form.append("tipo", productData.tipo);
+        if (productData.unidad !== undefined) form.append("unidad", productData.unidad);
+        if (productData.proveedor_principal !== undefined) form.append("proveedor_principal", productData.proveedor_principal);
+        if (productData.es_recurrente !== undefined) form.append("es_recurrente", String(productData.es_recurrente));
+        if (productData.subcuenta_id !== undefined) form.append("subcuenta_id", productData.subcuenta_id || "");
+        if (productData.cuenta_contable !== undefined) form.append("cuenta_contable", productData.cuenta_contable);
+        form.append("imagen", productData.imagen as File);
 
-        if (uploadError) {
-          console.error("❌ Error uploading image:", uploadError);
-          throw new Error("Error al subir la imagen");
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(uploadData.path);
-        
-        imagenUrl = publicUrl;
-        console.log("✅ Image uploaded successfully:", imagenUrl);
+        // ✅ Backend recomendado: PATCH /api/productos-egresos/:id (multipart)
+        return await apiFetchForm<ProductoEgreso>(
+          `/api/productos-egresos/${productData.id}`,
+          "PATCH",
+          form
+        );
       }
 
-      const updateData: any = {
-        nombre: productData.nombre,
-        descripcion: productData.descripcion,
-        tipo: productData.tipo,
-        unidad: productData.unidad,
-        proveedor_principal: productData.proveedor_principal,
-        es_recurrente: productData.es_recurrente,
-        subcuenta_id: productData.subcuenta_id || null,
-        cuenta_contable: productData.cuenta_contable,
-      };
+      // ✅ Sin imagen => JSON normal
+      const payload: any = {};
+      if (productData.nombre !== undefined) payload.nombre = productData.nombre;
+      if (productData.descripcion !== undefined) payload.descripcion = productData.descripcion;
+      if (productData.tipo !== undefined) payload.tipo = productData.tipo;
+      if (productData.unidad !== undefined) payload.unidad = productData.unidad;
+      if (productData.proveedor_principal !== undefined) payload.proveedor_principal = productData.proveedor_principal;
+      if (productData.es_recurrente !== undefined) payload.es_recurrente = productData.es_recurrente;
+      if (productData.subcuenta_id !== undefined) payload.subcuenta_id = productData.subcuenta_id || null;
+      if (productData.cuenta_contable !== undefined) payload.cuenta_contable = productData.cuenta_contable;
 
-      if (imagenUrl) {
-        updateData.imagen_url = imagenUrl;
-      }
-
-      console.log("💾 Updating product data:", updateData);
-
-      // Actualizar producto en la base de datos
-      const { data, error } = await supabase
-        .from("productos_egresos")
-        .update(updateData)
-        .eq("id", productData.id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("❌ Database update error:", error);
-        throw error;
-      }
-      
-      console.log("✅ Product updated successfully:", data);
-      return data;
+      // ✅ Backend recomendado: PATCH /api/productos-egresos/:id (json)
+      return await apiFetch<ProductoEgreso>(`/api/productos-egresos/${productData.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
     },
     onSuccess: (data) => {
-      console.log("🎉 Update success, invalidating queries...");
       queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
       toast({
         title: "✅ Producto actualizado",
-        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" actualizado correctamente`
+        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" actualizado correctamente`,
       });
     },
-    onError: (error) => {
-      console.error("❌ Update error:", error);
+    onError: (error: any) => {
+      console.error("❌ Error actualizando producto:", error);
       toast({
         title: "⚠️ Error",
-        description: "Hubo un problema al actualizar el producto",
-        variant: "destructive"
+        description: error?.message || "Hubo un problema al actualizar el producto",
+        variant: "destructive",
       });
-    }
+    },
   });
 };
 
 export const useDeleteProductoEgreso = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("productos_egresos")
-        .update({ activo: false })
-        .eq("id", id);
-
-      if (error) throw error;
+      // ✅ Borrado lógico
+      // Backend recomendado: PATCH /api/productos-egresos/:id {activo:false}
+      await apiFetch(`/api/productos-egresos/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ activo: false }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
       toast({
         title: "✅ Producto eliminado",
-        description: "El producto ha sido eliminado del catálogo"
+        description: "El producto ha sido eliminado del catálogo",
       });
     },
-    onError: (error) => {
-      console.error("Error deleting product:", error);
+    onError: (error: any) => {
+      console.error("❌ Error eliminando producto:", error);
       toast({
         title: "⚠️ Error",
-        description: "Hubo un problema al eliminar el producto",
-        variant: "destructive"
+        description: error?.message || "Hubo un problema al eliminar el producto",
+        variant: "destructive",
       });
-    }
+    },
   });
 };

@@ -1,12 +1,31 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LabelList,
+} from "recharts";
 import { Users, Package } from "lucide-react";
-import { format, startOfMonth, startOfYear, endOfMonth, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  startOfYear,
+  endOfMonth,
+  eachDayOfInterval,
+  eachMonthOfInterval,
+} from "date-fns";
 import { es } from "date-fns/locale";
 
 interface TransaccionIngreso {
@@ -14,8 +33,20 @@ interface TransaccionIngreso {
   cliente_nombre: string | null;
   descripcion: string;
   monto_neto: number;
-  created_at: string;
+  created_at: string; // ISO string
   estado: string;
+}
+
+// Soporta payloads tipo Supabase y tipo Mongo (camelCase)
+function normalizeTransaccionIngreso(raw: any): TransaccionIngreso {
+  return {
+    id: String(raw.id ?? raw._id ?? ""),
+    cliente_nombre: raw.cliente_nombre ?? raw.clienteNombre ?? null,
+    descripcion: raw.descripcion ?? raw.concepto ?? "",
+    monto_neto: Number(raw.monto_neto ?? raw.montoNeto ?? raw.total ?? 0),
+    created_at: String(raw.created_at ?? raw.createdAt ?? raw.fecha ?? new Date().toISOString()),
+    estado: String(raw.estado ?? "activo"),
+  };
 }
 
 export default function AnalyticaClientesNueva() {
@@ -25,19 +56,24 @@ export default function AnalyticaClientesNueva() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("todos");
   const [tipoVisualizacion, setTipoVisualizacion] = useState<"ventas" | "unidades">("ventas");
 
-  // Fetch transacciones
-  const { data: transacciones = [], isLoading } = useQuery({
+  // Fetch transacciones (SIN SUPABASE)
+  const {
+    data: transacciones = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ["transacciones-analitica-clientes"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transacciones_ingresos")
-        .select("*")
-        .eq("estado", "activo")
-        .not("cliente_nombre", "is", null)
-        .order("created_at", { ascending: true });
+      // ✅ Endpoint propuesto (ver sección de backend abajo)
+      const res = await apiFetch<any[]>(
+        "/api/transacciones/ingresos?estado=activo&cliente_nombre_not_null=1&sort=created_at:asc"
+      );
 
-      if (error) throw error;
-      return data as TransaccionIngreso[];
+      // apiFetch puede devolver {ok:true,data} o payload plano; en tu api.ts ya lo normalizas o aquí soportamos ambos:
+      const items = (res as any)?.data ?? res;
+
+      return Array.isArray(items) ? items.map(normalizeTransaccionIngreso) : [];
     },
   });
 
@@ -48,20 +84,16 @@ export default function AnalyticaClientesNueva() {
     const inicioAño = startOfYear(hoy);
 
     const calcularKPIs = (transaccionesFiltradas: TransaccionIngreso[]) => {
-      const clientesUnicos = new Set(transaccionesFiltradas.map(t => t.cliente_nombre));
+      const clientesUnicos = new Set(transaccionesFiltradas.map((t) => t.cliente_nombre));
       const productosVendidos = transaccionesFiltradas.length;
       return { clientes: clientesUnicos.size, productos: productosVendidos };
     };
 
-    const hoyTransacciones = transacciones.filter(t => 
-      new Date(t.created_at).toDateString() === hoy.toDateString()
+    const hoyTransacciones = transacciones.filter(
+      (t) => new Date(t.created_at).toDateString() === hoy.toDateString()
     );
-    const mesTransacciones = transacciones.filter(t => 
-      new Date(t.created_at) >= inicioMes
-    );
-    const añoTransacciones = transacciones.filter(t => 
-      new Date(t.created_at) >= inicioAño
-    );
+    const mesTransacciones = transacciones.filter((t) => new Date(t.created_at) >= inicioMes);
+    const añoTransacciones = transacciones.filter((t) => new Date(t.created_at) >= inicioAño);
 
     return {
       dia: calcularKPIs(hoyTransacciones),
@@ -73,18 +105,18 @@ export default function AnalyticaClientesNueva() {
   // ============ SECCIÓN 2: GRÁFICA DE LÍNEA - EVOLUCIÓN DE CLIENTES ============
   const datosEvolucion = useMemo(() => {
     const hoy = new Date();
-    
+
     if (evolucionPeriodo === "mes") {
       const inicioMes = startOfMonth(hoy);
       const diasDelMes = eachDayOfInterval({ start: inicioMes, end: hoy });
-      
-      return diasDelMes.map(dia => {
-        const transaccionesDia = transacciones.filter(t => {
+
+      return diasDelMes.map((dia) => {
+        const transaccionesDia = transacciones.filter((t) => {
           const fechaT = new Date(t.created_at);
           return fechaT <= dia && fechaT >= inicioMes;
         });
-        const clientesUnicos = new Set(transaccionesDia.map(t => t.cliente_nombre));
-        
+        const clientesUnicos = new Set(transaccionesDia.map((t) => t.cliente_nombre));
+
         return {
           fecha: format(dia, "dd MMM", { locale: es }),
           clientes: clientesUnicos.size,
@@ -93,15 +125,15 @@ export default function AnalyticaClientesNueva() {
     } else {
       const inicioAño = startOfYear(hoy);
       const mesesDelAño = eachMonthOfInterval({ start: inicioAño, end: hoy });
-      
-      return mesesDelAño.map(mes => {
+
+      return mesesDelAño.map((mes) => {
         const finDeMes = endOfMonth(mes);
-        const transaccionesMes = transacciones.filter(t => {
+        const transaccionesMes = transacciones.filter((t) => {
           const fechaT = new Date(t.created_at);
           return fechaT <= finDeMes && fechaT >= inicioAño;
         });
-        const clientesUnicos = new Set(transaccionesMes.map(t => t.cliente_nombre));
-        
+        const clientesUnicos = new Set(transaccionesMes.map((t) => t.cliente_nombre));
+
         return {
           fecha: format(mes, "MMM", { locale: es }),
           clientes: clientesUnicos.size,
@@ -113,7 +145,7 @@ export default function AnalyticaClientesNueva() {
   // Calcular máximo para eje Y (120% del valor máximo)
   const maxClientes = useMemo(() => {
     if (datosEvolucion.length === 0) return 10;
-    const max = Math.max(...datosEvolucion.map(d => d.clientes));
+    const max = Math.max(...datosEvolucion.map((d) => d.clientes));
     return Math.ceil(max * 1.2);
   }, [datosEvolucion]);
 
@@ -123,23 +155,18 @@ export default function AnalyticaClientesNueva() {
     const hoy = new Date();
 
     if (comprasPeriodo === "mes-curso") {
-      transaccionesFiltradas = transacciones.filter(t => {
+      transaccionesFiltradas = transacciones.filter((t) => {
         const fechaT = new Date(t.created_at);
-        return fechaT.getMonth() === hoy.getMonth() && 
-               fechaT.getFullYear() === hoy.getFullYear();
+        return fechaT.getMonth() === hoy.getMonth() && fechaT.getFullYear() === hoy.getFullYear();
       });
     } else if (comprasPeriodo === "mes-acum") {
-      transaccionesFiltradas = transacciones.filter(t => 
-        new Date(t.created_at) >= startOfMonth(hoy)
-      );
+      transaccionesFiltradas = transacciones.filter((t) => new Date(t.created_at) >= startOfMonth(hoy));
     } else if (comprasPeriodo === "año-acum") {
-      transaccionesFiltradas = transacciones.filter(t => 
-        new Date(t.created_at) >= startOfYear(hoy)
-      );
+      transaccionesFiltradas = transacciones.filter((t) => new Date(t.created_at) >= startOfYear(hoy));
     }
 
     const clientesMap = new Map<string, number>();
-    transaccionesFiltradas.forEach(t => {
+    transaccionesFiltradas.forEach((t) => {
       const nombre = t.cliente_nombre || "Sin nombre";
       clientesMap.set(nombre, (clientesMap.get(nombre) || 0) + 1);
     });
@@ -152,7 +179,7 @@ export default function AnalyticaClientesNueva() {
 
   // ============ SECCIÓN 4: BARRAS VERTICALES - VENTAS POR PRODUCTO POR CLIENTE ============
   const clientesUnicos = useMemo(() => {
-    const clientes = new Set(transacciones.map(t => t.cliente_nombre).filter(Boolean));
+    const clientes = new Set(transacciones.map((t) => t.cliente_nombre).filter(Boolean));
     return Array.from(clientes).sort() as string[];
   }, [transacciones]);
 
@@ -161,46 +188,38 @@ export default function AnalyticaClientesNueva() {
     const hoy = new Date();
 
     if (ventasPeriodo === "mes-acum") {
-      transaccionesFiltradas = transacciones.filter(t => 
-        new Date(t.created_at) >= startOfMonth(hoy)
-      );
+      transaccionesFiltradas = transacciones.filter((t) => new Date(t.created_at) >= startOfMonth(hoy));
     } else if (ventasPeriodo === "año-acum") {
-      transaccionesFiltradas = transacciones.filter(t => 
-        new Date(t.created_at) >= startOfYear(hoy)
-      );
+      transaccionesFiltradas = transacciones.filter((t) => new Date(t.created_at) >= startOfYear(hoy));
     }
 
     if (clienteSeleccionado !== "todos") {
-      transaccionesFiltradas = transaccionesFiltradas.filter(
-        t => t.cliente_nombre === clienteSeleccionado
-      );
+      transaccionesFiltradas = transaccionesFiltradas.filter((t) => t.cliente_nombre === clienteSeleccionado);
     }
 
     const productosMap = new Map<string, { total: number; unidades: number }>();
-    transaccionesFiltradas.forEach(t => {
+    transaccionesFiltradas.forEach((t) => {
       const producto = t.descripcion || "Sin descripción";
       const actual = productosMap.get(producto) || { total: 0, unidades: 0 };
       productosMap.set(producto, {
         total: actual.total + t.monto_neto,
-        unidades: actual.unidades + 1
+        unidades: actual.unidades + 1,
       });
     });
 
     return Array.from(productosMap.entries())
-      .map(([producto, datos]) => ({ 
-        producto: producto.length > 30 ? producto.substring(0, 30) + "..." : producto, 
+      .map(([producto, datos]) => ({
+        producto: producto.length > 30 ? producto.substring(0, 30) + "..." : producto,
         total: datos.total,
-        unidades: datos.unidades
+        unidades: datos.unidades,
       }))
-      .sort((a, b) => tipoVisualizacion === "ventas" ? b.total - a.total : b.unidades - a.unidades)
+      .sort((a, b) => (tipoVisualizacion === "ventas" ? b.total - a.total : b.unidades - a.unidades))
       .slice(0, 10);
   }, [transacciones, ventasPeriodo, clienteSeleccionado, tipoVisualizacion]);
 
   const maxVentasProducto = useMemo(() => {
     if (datosVentasPorProducto.length === 0) return 10;
-    const valores = datosVentasPorProducto.map(d => 
-      tipoVisualizacion === "ventas" ? d.total : d.unidades
-    );
+    const valores = datosVentasPorProducto.map((d) => (tipoVisualizacion === "ventas" ? d.total : d.unidades));
     const max = Math.max(...valores);
     return Math.ceil(max * 1.2);
   }, [datosVentasPorProducto, tipoVisualizacion]);
@@ -214,9 +233,14 @@ export default function AnalyticaClientesNueva() {
   };
 
   if (isLoading) {
+    return <div className="text-center py-8 text-muted-foreground">Cargando analíticas...</div>;
+  }
+
+  if (isError) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        Cargando analíticas...
+        No se pudieron cargar las analíticas.
+        <div className="text-xs opacity-70 mt-2">{(error as any)?.message ?? "Error desconocido"}</div>
       </div>
     );
   }
@@ -294,25 +318,25 @@ export default function AnalyticaClientesNueva() {
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="fecha" className="text-xs" />
               <YAxis className="text-xs" domain={[0, maxClientes]} />
-              <Tooltip 
-                contentStyle={{ 
+              <Tooltip
+                contentStyle={{
                   backgroundColor: "hsl(var(--background))",
                   border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px"
+                  borderRadius: "6px",
                 }}
               />
               <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="clientes" 
-                stroke="hsl(var(--primary))" 
+              <Line
+                type="monotone"
+                dataKey="clientes"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 name="Clientes"
                 dot={{ fill: "hsl(var(--primary))" }}
               >
-                <LabelList 
-                  dataKey="clientes" 
-                  position="top" 
+                <LabelList
+                  dataKey="clientes"
+                  position="top"
                   className="text-xs fill-foreground font-medium"
                   offset={8}
                 />
@@ -348,17 +372,17 @@ export default function AnalyticaClientesNueva() {
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis type="number" className="text-xs" />
               <YAxis dataKey="cliente" type="category" width={150} className="text-xs" />
-              <Tooltip 
-                contentStyle={{ 
+              <Tooltip
+                contentStyle={{
                   backgroundColor: "hsl(var(--background))",
                   border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px"
+                  borderRadius: "6px",
                 }}
               />
               <Bar dataKey="compras" fill="hsl(var(--primary))" name="Compras">
-                <LabelList 
-                  dataKey="compras" 
-                  position="right" 
+                <LabelList
+                  dataKey="compras"
+                  position="right"
                   className="text-xs fill-foreground font-medium"
                   offset={5}
                 />
@@ -383,8 +407,10 @@ export default function AnalyticaClientesNueva() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos los clientes</SelectItem>
-                  {clientesUnicos.map(cliente => (
-                    <SelectItem key={cliente} value={cliente}>{cliente}</SelectItem>
+                  {clientesUnicos.map((cliente) => (
+                    <SelectItem key={cliente} value={cliente}>
+                      {cliente}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -411,28 +437,28 @@ export default function AnalyticaClientesNueva() {
             <BarChart data={datosVentasPorProducto}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="producto" className="text-xs" angle={-45} textAnchor="end" height={120} />
-              <YAxis 
-                className="text-xs" 
+              <YAxis
+                className="text-xs"
                 domain={[0, maxVentasProducto]}
-                tickFormatter={(value) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()} 
+                tickFormatter={(value) => (tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString())}
               />
-              <Tooltip 
-                formatter={(value: number) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()}
-                contentStyle={{ 
+              <Tooltip
+                formatter={(value: number) => (tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString())}
+                contentStyle={{
                   backgroundColor: "hsl(var(--background))",
                   border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px"
+                  borderRadius: "6px",
                 }}
               />
-              <Bar 
-                dataKey={tipoVisualizacion === "ventas" ? "total" : "unidades"} 
-                fill="hsl(var(--primary))" 
+              <Bar
+                dataKey={tipoVisualizacion === "ventas" ? "total" : "unidades"}
+                fill="hsl(var(--primary))"
                 name={tipoVisualizacion === "ventas" ? "Total Ventas" : "Unidades Vendidas"}
               >
-                <LabelList 
-                  dataKey={tipoVisualizacion === "ventas" ? "total" : "unidades"} 
-                  position="top" 
-                  formatter={(value: number) => tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString()}
+                <LabelList
+                  dataKey={tipoVisualizacion === "ventas" ? "total" : "unidades"}
+                  position="top"
+                  formatter={(value: number) => (tipoVisualizacion === "ventas" ? formatCurrency(value) : value.toString())}
                   className="text-xs fill-foreground font-medium"
                   offset={5}
                 />
