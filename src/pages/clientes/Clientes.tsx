@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,24 @@ interface Cliente {
   updated_at: string;
 }
 
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string; error?: any } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
+const normalizeCliente = (c: any): Cliente => ({
+  id: c?.id ?? c?._id,
+  nombre: c?.nombre ?? "",
+  email: c?.email ?? undefined,
+  telefono: c?.telefono ?? undefined,
+  rfc: c?.rfc ?? undefined,
+  direccion: c?.direccion ?? undefined,
+  ciudad: c?.ciudad ?? undefined,
+  estado: c?.estado ?? undefined,
+  codigo_postal: c?.codigo_postal ?? c?.codigoPostal ?? undefined,
+  activo: typeof c?.activo === "boolean" ? c.activo : true,
+  created_at: c?.created_at ?? c?.createdAt ?? new Date().toISOString(),
+  updated_at: c?.updated_at ?? c?.updatedAt ?? new Date().toISOString(),
+});
+
 const Clientes = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -46,89 +64,6 @@ const Clientes = () => {
 
   const queryClient = useQueryClient();
 
-  // Fetch clientes
-  const { data: clientes = [], isLoading } = useQuery({
-    queryKey: ["clientes"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("*")
-        .order("nombre");
-      
-      if (error) throw error;
-      return data as Cliente[];
-    },
-  });
-
-  // Create/Update cliente mutation
-  const saveClienteMutation = useMutation({
-    mutationFn: async (clienteData: typeof formData & { id?: string }) => {
-      const { id, ...data } = clienteData;
-      
-      if (id) {
-        const { data: result, error } = await supabase
-          .from("clientes")
-          .update(data)
-          .eq("id", id)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return result;
-      } else {
-        const { data: result, error } = await supabase
-          .from("clientes")
-          .insert([{ ...data, user_id: "00000000-0000-0000-0000-000000000000" }])
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return result;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clientes"] });
-      setIsDialogOpen(false);
-      setEditingClient(null);
-      resetForm();
-      toast.success(editingClient ? "Cliente actualizado" : "Cliente creado exitosamente");
-    },
-    onError: (error: any) => {
-      if (error.code === "23505") {
-        if (error.message.includes("email")) {
-          toast.error("Este email ya está registrado para otro cliente");
-        } else if (error.message.includes("telefono")) {
-          toast.error("Este teléfono ya está registrado para otro cliente");
-        } else if (error.message.includes("rfc")) {
-          toast.error("Este RFC ya está registrado para otro cliente");
-        } else {
-          toast.error("Ya existe un cliente con estos datos");
-        }
-      } else {
-        toast.error("Error al guardar cliente: " + error.message);
-      }
-    },
-  });
-
-  // Delete cliente mutation
-  const deleteClienteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("clientes")
-        .delete()
-        .eq("id", id);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clientes"] });
-      toast.success("Cliente eliminado exitosamente");
-    },
-    onError: (error: any) => {
-      toast.error("Error al eliminar cliente: " + error.message);
-    },
-  });
-
   const resetForm = () => {
     setFormData({
       nombre: "",
@@ -142,6 +77,102 @@ const Clientes = () => {
       activo: true,
     });
   };
+
+  // Fetch clientes (backend)
+  const {
+    data: clientes = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["clientes"],
+    queryFn: async () => {
+      const json = await apiFetch("/api/clientes", { method: "GET" });
+      const list = unwrap<any[]>(json) || [];
+      return list.map(normalizeCliente).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    },
+  });
+
+  // Create/Update cliente mutation (backend)
+  const saveClienteMutation = useMutation({
+    mutationFn: async (clienteData: typeof formData & { id?: string }) => {
+      const { id, ...payload } = clienteData;
+
+      // Normalizar strings vacíos a null (igual que antes)
+      const body = {
+        ...payload,
+        email: payload.email.trim() || null,
+        telefono: payload.telefono.trim() || null,
+        rfc: payload.rfc.trim() || null,
+        direccion: payload.direccion.trim() || null,
+        ciudad: payload.ciudad.trim() || null,
+        estado: payload.estado.trim() || null,
+        codigo_postal: payload.codigo_postal.trim() || null,
+      };
+
+      if (id) {
+        const json = await apiFetch(`/api/clientes/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        return normalizeCliente(unwrap<any>(json));
+      }
+
+      const json = await apiFetch("/api/clientes", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      return normalizeCliente(unwrap<any>(json));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
+      setIsDialogOpen(false);
+      setEditingClient(null);
+      resetForm();
+      toast.success(editingClient ? "Cliente actualizado" : "Cliente creado exitosamente");
+    },
+    onError: (err: any) => {
+      const msg = String(err?.message || err || "");
+
+      // Detección “best-effort” de duplicados
+      if (msg.toLowerCase().includes("duplicate") || msg.includes("E11000") || msg.includes("23505")) {
+        if (msg.toLowerCase().includes("email")) {
+          toast.error("Este email ya está registrado para otro cliente");
+          return;
+        }
+        if (msg.toLowerCase().includes("telefono") || msg.toLowerCase().includes("phone")) {
+          toast.error("Este teléfono ya está registrado para otro cliente");
+          return;
+        }
+        if (msg.toLowerCase().includes("rfc")) {
+          toast.error("Este RFC ya está registrado para otro cliente");
+          return;
+        }
+        toast.error("Ya existe un cliente con estos datos");
+        return;
+      }
+
+      toast.error("Error al guardar cliente: " + msg);
+    },
+  });
+
+  // Delete cliente mutation (backend)
+  const deleteClienteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiFetch(`/api/clientes/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
+      toast.success("Cliente eliminado exitosamente");
+    },
+    onError: (err: any) => {
+      toast.error("Error al eliminar cliente: " + (err?.message || "Error desconocido"));
+    },
+  });
 
   const handleEdit = (cliente: Cliente) => {
     setEditingClient(cliente);
@@ -161,47 +192,41 @@ const Clientes = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.nombre.trim()) {
       toast.error("El nombre es requerido");
       return;
     }
 
-    const dataToSave = {
-      ...formData,
-      email: formData.email.trim() || null,
-      telefono: formData.telefono.trim() || null,
-      rfc: formData.rfc.trim() || null,
-      direccion: formData.direccion.trim() || null,
-      ciudad: formData.ciudad.trim() || null,
-      estado: formData.estado.trim() || null,
-      codigo_postal: formData.codigo_postal.trim() || null,
-    };
-
     if (editingClient) {
-      saveClienteMutation.mutate({ ...dataToSave, id: editingClient.id });
+      saveClienteMutation.mutate({ ...formData, id: editingClient.id });
     } else {
-      saveClienteMutation.mutate(dataToSave);
+      saveClienteMutation.mutate(formData);
     }
   };
 
-  const filteredClientes = clientes.filter(cliente =>
-    cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.telefono?.includes(searchTerm) ||
-    cliente.rfc?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredClientes = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return clientes;
 
-  const clientesActivos = clientes.filter(c => c.activo).length;
+    return clientes.filter((cliente) => {
+      return (
+        cliente.nombre.toLowerCase().includes(q) ||
+        cliente.email?.toLowerCase().includes(q) ||
+        cliente.telefono?.includes(searchTerm) ||
+        cliente.rfc?.toLowerCase().includes(q)
+      );
+    });
+  }, [clientes, searchTerm]);
+
+  const clientesActivos = clientes.filter((c) => c.activo).length;
   const totalClientes = clientes.length;
 
   return (
     <div className="h-full overflow-hidden flex flex-col">
       <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Base de Datos de Clientes</h1>
-        <p className="text-muted-foreground mt-2">
-          Gestiona todos los clientes de la empresa
-        </p>
+        <p className="text-muted-foreground mt-2">Gestiona todos los clientes de la empresa</p>
       </div>
 
       <div className="flex-1 overflow-auto p-6">
@@ -250,22 +275,33 @@ const Clientes = () => {
             />
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => {
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
                 setEditingClient(null);
                 resetForm();
-              }}>
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button
+                onClick={() => {
+                  setEditingClient(null);
+                  resetForm();
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Nuevo Cliente
               </Button>
             </DialogTrigger>
+
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>
-                  {editingClient ? "Editar Cliente" : "Nuevo Cliente"}
-                </DialogTitle>
+                <DialogTitle>{editingClient ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
               </DialogHeader>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="nombre">Nombre *</Label>
@@ -365,8 +401,13 @@ const Clientes = () => {
                   >
                     Cancelar
                   </Button>
+
                   <Button type="submit" disabled={saveClienteMutation.isPending}>
-                    {saveClienteMutation.isPending ? "Guardando..." : editingClient ? "Actualizar" : "Crear"}
+                    {saveClienteMutation.isPending
+                      ? "Guardando..."
+                      : editingClient
+                        ? "Actualizar"
+                        : "Crear"}
                   </Button>
                 </div>
               </form>
@@ -379,13 +420,17 @@ const Clientes = () => {
           <CardHeader>
             <CardTitle>Lista de Clientes</CardTitle>
             <CardDescription>
-              {filteredClientes.length} cliente{filteredClientes.length !== 1 ? 's' : ''} encontrado{filteredClientes.length !== 1 ? 's' : ''}
+              {filteredClientes.length} cliente{filteredClientes.length !== 1 ? "s" : ""} encontrado
+              {filteredClientes.length !== 1 ? "s" : ""}
             </CardDescription>
           </CardHeader>
+
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Cargando clientes...
+              <div className="text-center py-8 text-muted-foreground">Cargando clientes...</div>
+            ) : isError ? (
+              <div className="text-center py-8 text-destructive">
+                Error al cargar clientes: {(error as any)?.message || "Error desconocido"}
               </div>
             ) : filteredClientes.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -405,6 +450,7 @@ const Clientes = () => {
                       <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody>
                     {filteredClientes.map((cliente) => (
                       <TableRow key={cliente.id}>
@@ -418,45 +464,46 @@ const Clientes = () => {
                             )}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center space-x-1">
                             {cliente.email && <Mail className="h-3 w-3 text-muted-foreground" />}
                             <span className="text-sm">{cliente.email || "-"}</span>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center space-x-1">
                             {cliente.telefono && <Phone className="h-3 w-3 text-muted-foreground" />}
                             <span className="text-sm">{cliente.telefono || "-"}</span>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex items-center space-x-1">
                             {cliente.rfc && <FileText className="h-3 w-3 text-muted-foreground" />}
                             <span className="text-sm font-mono">{cliente.rfc || "-"}</span>
                           </div>
                         </TableCell>
+
                         <TableCell className="text-sm">{cliente.ciudad || "-"}</TableCell>
+
                         <TableCell>
                           {cliente.activo ? (
                             <Badge variant="default" className="bg-primary/10 text-primary">
                               Activo
                             </Badge>
                           ) : (
-                            <Badge variant="secondary">
-                              Inactivo
-                            </Badge>
+                            <Badge variant="secondary">Inactivo</Badge>
                           )}
                         </TableCell>
+
                         <TableCell>
                           <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(cliente)}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(cliente)}>
                               <Edit className="h-3 w-3" />
                             </Button>
+
                             <Button
                               variant="outline"
                               size="sm"

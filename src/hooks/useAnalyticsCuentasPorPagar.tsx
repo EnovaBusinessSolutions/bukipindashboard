@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 interface CuentaPorPagar {
   id: string;
@@ -18,9 +18,9 @@ interface AnalyticsCuentasPorPagar {
   cuentasPorProveedor: { proveedor: string; monto: number; cantidad: number }[];
   agingAnalysis: { rango: string; monto: number; cantidad: number }[];
   tendenciaMensual: { mes: string; monto: number }[];
-  agingAnalysisDetailed: { 
-    rango: string; 
-    monto: number; 
+  agingAnalysisDetailed: {
+    rango: string;
+    monto: number;
     cantidad: number;
     min: number | null;
     max: number | null;
@@ -38,6 +38,13 @@ interface AnalyticsCuentasPorPagar {
   }[];
 }
 
+type CxPAsientoRow = {
+  debe: number;
+  haber: number;
+  fecha: string; // ISO
+  cuenta_codigo: string; // "2001" | "2002"
+};
+
 export const useAnalyticsCuentasPorPagar = (
   periodo: "mensual" | "anual" = "mensual",
   filtroProveedor?: string
@@ -45,72 +52,77 @@ export const useAnalyticsCuentasPorPagar = (
   return useQuery({
     queryKey: ["analytics-cuentas-por-pagar", periodo, filtroProveedor],
     queryFn: async (): Promise<AnalyticsCuentasPorPagar> => {
-      // Obtener CxP de transacciones_egresos
-      const { data: cuentasEgresos, error: errorEgresos } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gt("monto_pendiente", 0)
-        .eq("estado", "activo")
-        .order("created_at", { ascending: false });
+      // 1) CxP de egresos pendientes
+      const egresosJson = await apiFetch("/api/cxp/egresos?pendientes=1", { method: "GET" });
+      const cuentasEgresos: any[] = (egresosJson as any)?.data ?? egresosJson ?? [];
 
-      if (errorEgresos) throw errorEgresos;
+      // 2) CxP de inversiones CAPEX compradas a crédito (monto_pendiente > 0)
+      const invJson = await apiFetch("/api/cxp/inversiones?pendientes=1", { method: "GET" });
+      const cuentasInversiones: any[] = (invJson as any)?.data ?? invJson ?? [];
 
-      // Obtener CxP de inversiones_capex (activos comprados a crédito)
-      const { data: cuentasInversiones, error: errorInversiones } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .gt("monto_pendiente", 0)
-        .in("estado", ["activo", "vendido"])
-        .order("created_at", { ascending: false });
+      // 3) Asientos contables para histórico real (cuentas 2001 y 2002)
+      const asientosJson = await apiFetch("/api/cxp/asientos?cuentas=2001,2002", { method: "GET" });
+      const asientos: CxPAsientoRow[] = (asientosJson as any)?.data ?? asientosJson ?? [];
 
-      if (errorInversiones) throw errorInversiones;
-
-      // Unificar ambas fuentes en un formato común
-      const cuentas = [
-        ...(cuentasEgresos || []),
-        ...(cuentasInversiones || []).map(inv => ({
+      // Unificar ambas fuentes a un formato común CuentaPorPagar
+      const cuentas: CuentaPorPagar[] = [
+        ...(cuentasEgresos || []).map((e: any) => ({
+          id: e.id,
+          proveedor_nombre: e.proveedor_nombre ?? null,
+          monto_pendiente: e.monto_pendiente ?? 0,
+          fecha_vencimiento: e.fecha_vencimiento ?? null,
+          created_at: e.created_at,
+          descripcion: e.descripcion ?? "Egreso",
+        })),
+        ...(cuentasInversiones || []).map((inv: any) => ({
           id: inv.id,
-          proveedor_nombre: inv.proveedor_nombre,
-          monto_pendiente: inv.monto_pendiente || 0,
-          fecha_vencimiento: inv.fecha_vencimiento,
+          proveedor_nombre: inv.proveedor_nombre ?? null,
+          monto_pendiente: inv.monto_pendiente ?? 0,
+          fecha_vencimiento: inv.fecha_vencimiento ?? null,
           created_at: inv.created_at,
-          descripcion: inv.producto_nombre,
-          user_id: inv.user_id
-        }))
+          descripcion: inv.producto_nombre ?? inv.descripcion ?? "Inversión CAPEX",
+        })),
       ];
 
       const today = new Date();
-      
-      // Calcular días de vencimiento
-      const cuentasConDias: CuentaPorPagar[] = cuentas.map(cuenta => {
+
+      // Calcular días de vencimiento (si no hay fecha_vencimiento, usar created_at)
+      const cuentasConDias: CuentaPorPagar[] = cuentas.map((cuenta) => {
         let diasVencimiento = 0;
+
         if (cuenta.fecha_vencimiento) {
           const fechaVenc = new Date(cuenta.fecha_vencimiento);
-          diasVencimiento = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
+          diasVencimiento = Math.floor(
+            (today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24)
+          );
         } else {
-          // Si no hay fecha de vencimiento, calcular desde la fecha de creación
           const fechaCreacion = new Date(cuenta.created_at);
-          diasVencimiento = Math.floor((today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
+          diasVencimiento = Math.floor(
+            (today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24)
+          );
         }
-        
-        return {
-          ...cuenta,
-          dias_vencimiento: diasVencimiento
-        };
+
+        return { ...cuenta, dias_vencimiento: diasVencimiento };
       });
 
-      // Calcular métricas generales
-      const totalPendiente = cuentasConDias.reduce((sum, c) => sum + c.monto_pendiente, 0);
-      const proveedoresUnicos = new Set(cuentasConDias.map(c => c.proveedor_nombre || 'Sin nombre')).size;
-      const promedioDeuda = totalPendiente / (cuentasConDias.length || 1);
+      // Aplicar filtro de proveedor a nivel dataset (para que TODO se calcule correctamente)
+      let cuentasFiltradas = cuentasConDias;
+      if (filtroProveedor && filtroProveedor !== "todos") {
+        cuentasFiltradas = cuentasConDias.filter(
+          (c) => (c.proveedor_nombre || "Sin nombre") === filtroProveedor
+        );
+      }
+
+      // Métricas generales
+      const totalPendiente = cuentasFiltradas.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+      const proveedoresUnicos = new Set(cuentasFiltradas.map((c) => c.proveedor_nombre || "Sin nombre")).size;
+      const promedioDeuda = totalPendiente / (cuentasFiltradas.length || 1);
 
       // Agrupar por proveedor
-      const porProveedor = cuentasConDias.reduce((acc, cuenta) => {
-        const proveedor = cuenta.proveedor_nombre || 'Sin nombre';
-        if (!acc[proveedor]) {
-          acc[proveedor] = { monto: 0, cantidad: 0 };
-        }
-        acc[proveedor].monto += cuenta.monto_pendiente;
+      const porProveedor = cuentasFiltradas.reduce((acc, cuenta) => {
+        const proveedor = cuenta.proveedor_nombre || "Sin nombre";
+        if (!acc[proveedor]) acc[proveedor] = { monto: 0, cantidad: 0 };
+        acc[proveedor].monto += cuenta.monto_pendiente || 0;
         acc[proveedor].cantidad += 1;
         return acc;
       }, {} as Record<string, { monto: number; cantidad: number }>);
@@ -120,93 +132,98 @@ export const useAnalyticsCuentasPorPagar = (
         .sort((a, b) => b.monto - a.monto)
         .slice(0, 10);
 
-      // Análisis de aging (días de vencimiento)
+      // Aging simple
       const agingRanges = [
-        { rango: '0-30 días', min: 0, max: 30 },
-        { rango: '31-60 días', min: 31, max: 60 },
-        { rango: '61-90 días', min: 61, max: 90 },
-        { rango: '90+ días', min: 91, max: Infinity }
+        { rango: "0-30 días", min: 0, max: 30 },
+        { rango: "31-60 días", min: 31, max: 60 },
+        { rango: "61-90 días", min: 61, max: 90 },
+        { rango: "90+ días", min: 91, max: Infinity },
       ];
 
-      const agingAnalysis = agingRanges.map(range => {
-        const cuentasEnRango = cuentasConDias.filter(c => 
-          (c.dias_vencimiento || 0) >= range.min && (c.dias_vencimiento || 0) <= range.max
-        );
+      const agingAnalysis = agingRanges.map((range) => {
+        const cuentasEnRango = cuentasFiltradas.filter((c) => {
+          const dias = c.dias_vencimiento || 0;
+          return dias >= range.min && dias <= range.max;
+        });
         return {
           rango: range.rango,
-          monto: cuentasEnRango.reduce((sum, c) => sum + c.monto_pendiente, 0),
-          cantidad: cuentasEnRango.length
+          monto: cuentasEnRango.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0),
+          cantidad: cuentasEnRango.length,
         };
       });
 
-      // Tendencia por mes (últimos 6 meses)
+      // Tendencia (últimos 6 meses) por created_at
       const mesesPasados = 6;
-      const tendenciaMensual = [];
-      
+      const tendenciaMensual: { mes: string; monto: number }[] = [];
+
       for (let i = mesesPasados - 1; i >= 0; i--) {
         const fecha = new Date();
         fecha.setMonth(fecha.getMonth() - i);
         const year = fecha.getFullYear();
         const month = fecha.getMonth();
-        
-        const cuentasDelMes = cuentasConDias.filter(cuenta => {
+
+        const cuentasDelMes = cuentasFiltradas.filter((cuenta) => {
           const fechaCuenta = new Date(cuenta.created_at);
           return fechaCuenta.getFullYear() === year && fechaCuenta.getMonth() === month;
         });
 
-        const nombreMes = fecha.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
         tendenciaMensual.push({
-          mes: nombreMes,
-          monto: cuentasDelMes.reduce((sum, c) => sum + c.monto_pendiente, 0)
+          mes: fecha.toLocaleDateString("es-ES", { month: "short", year: "2-digit" }),
+          monto: cuentasDelMes.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0),
         });
       }
 
-      // Análisis de aging detallado (6 categorías)
+      // Aging detallado (6 categorías)
       const agingRangesDetailed = [
-        { rango: 'Sin vencimiento', min: null, max: 0 },
-        { rango: 'Vencido 1-15 días', min: 1, max: 15 },
-        { rango: 'Vencido 16-30 días', min: 16, max: 30 },
-        { rango: 'Vencido 31-60 días', min: 31, max: 60 },
-        { rango: 'Vencido 61-90 días', min: 61, max: 90 },
-        { rango: 'Vencido +90 días', min: 91, max: null }
+        { rango: "Sin vencimiento", min: null, max: 0 },
+        { rango: "Vencido 1-15 días", min: 1, max: 15 },
+        { rango: "Vencido 16-30 días", min: 16, max: 30 },
+        { rango: "Vencido 31-60 días", min: 31, max: 60 },
+        { rango: "Vencido 61-90 días", min: 61, max: 90 },
+        { rango: "Vencido +90 días", min: 91, max: null },
       ];
 
-      const agingAnalysisDetailed = agingRangesDetailed.map(range => {
-        const cuentasEnRango = cuentasConDias.filter(c => {
+      const agingAnalysisDetailed = agingRangesDetailed.map((range) => {
+        const cuentasEnRango = cuentasFiltradas.filter((c) => {
           const dias = c.dias_vencimiento || 0;
-          if (range.min === null) return dias <= (range.max || 0);
+          if (range.min === null) return dias <= (range.max ?? 0);
           if (range.max === null) return dias >= range.min;
           return dias >= range.min && dias <= range.max;
         });
+
         return {
           rango: range.rango,
-          monto: cuentasEnRango.reduce((sum, c) => sum + c.monto_pendiente, 0),
+          monto: cuentasEnRango.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0),
           cantidad: cuentasEnRango.length,
           min: range.min,
-          max: range.max
+          max: range.max,
         };
       });
 
-      // Histórico de CxP (basado en periodo) - Incluir cuentas 2001 y 2002
-      const { data: asientos } = await supabase
-        .from("detalle_asientos")
-        .select("*, asientos_contables!inner(fecha)")
-        .in("cuenta_codigo", ["2001", "2002"])
-        .order("asientos_contables(fecha)", { ascending: true });
-
+      // Histórico CxP REAL (HABER - DEBE) para cuentas 2001 y 2002
+      // Nota: NO aplico filtroProveedor aquí porque el histórico viene del mayor contable (global).
       const historicoCxP: { fecha: string; saldo: number }[] = [];
-      
+
+      const calcularSaldoCxPHastaFecha = (fecha: Date) => {
+        const fechaFin = new Date(fecha);
+        fechaFin.setHours(23, 59, 59, 999);
+
+        const asientosHastaFecha = (asientos || []).filter((a) => new Date(a.fecha) <= fechaFin);
+        const saldo = asientosHastaFecha.reduce(
+          (sum, a) => sum + ((a.haber || 0) - (a.debe || 0)),
+          0
+        );
+        return saldo;
+      };
+
       if (periodo === "mensual") {
         // Últimos 30 días
         for (let i = 29; i >= 0; i--) {
           const fecha = new Date();
           fecha.setDate(fecha.getDate() - i);
-          const fechaStr = fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-          
-          const saldo = (asientos || [])
-            .filter(a => new Date(a.asientos_contables.fecha) <= fecha)
-            .reduce((sum, a) => sum + (a.haber || 0) - (a.debe || 0), 0);
-          
+          const fechaStr = fecha.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+
+          const saldo = calcularSaldoCxPHastaFecha(fecha);
           historicoCxP.push({ fecha: fechaStr, saldo });
         }
       } else {
@@ -214,63 +231,65 @@ export const useAnalyticsCuentasPorPagar = (
         for (let i = 11; i >= 0; i--) {
           const fecha = new Date();
           fecha.setMonth(fecha.getMonth() - i);
-          const fechaStr = fecha.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
-          
-          const saldo = (asientos || [])
-            .filter(a => {
-              const asientoDate = new Date(a.asientos_contables.fecha);
-              return asientoDate <= new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
-            })
-            .reduce((sum, a) => sum + (a.haber || 0) - (a.debe || 0), 0);
-          
+          const fechaStr = fecha.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
+
+          // cierre de mes
+          const cierreMes = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0, 23, 59, 59, 999);
+          const saldo = calcularSaldoCxPHastaFecha(cierreMes);
           historicoCxP.push({ fecha: fechaStr, saldo });
         }
       }
 
-      // CxP por proveedor apilado por antigüedad
-      const proveedoresUnique = Array.from(new Set(cuentasConDias.map(c => c.proveedor_nombre || 'Sin nombre')));
+      // CxP por proveedor apilado (antigüedad) - top 10
+      const proveedoresUnique = Array.from(
+        new Set(cuentasFiltradas.map((c) => c.proveedor_nombre || "Sin nombre"))
+      );
+
       const cxpPorProveedorApilado = proveedoresUnique
-        .map(proveedor => {
-          const cuentasProveedor = cuentasConDias.filter(c => (c.proveedor_nombre || 'Sin nombre') === proveedor);
-          
+        .map((proveedor) => {
+          const cuentasProveedor = cuentasFiltradas.filter(
+            (c) => (c.proveedor_nombre || "Sin nombre") === proveedor
+          );
+
           const sinVencimiento = cuentasProveedor
-            .filter(c => (c.dias_vencimiento || 0) <= 0)
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
-          
+            .filter((c) => (c.dias_vencimiento || 0) <= 0)
+            .reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+
           const vencido1_15 = cuentasProveedor
-            .filter(c => {
+            .filter((c) => {
               const dias = c.dias_vencimiento || 0;
               return dias >= 1 && dias <= 15;
             })
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
-          
+            .reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+
           const vencido16_30 = cuentasProveedor
-            .filter(c => {
+            .filter((c) => {
               const dias = c.dias_vencimiento || 0;
               return dias >= 16 && dias <= 30;
             })
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
-          
+            .reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+
           const vencido31_60 = cuentasProveedor
-            .filter(c => {
+            .filter((c) => {
               const dias = c.dias_vencimiento || 0;
               return dias >= 31 && dias <= 60;
             })
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
-          
+            .reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+
           const vencido61_90 = cuentasProveedor
-            .filter(c => {
+            .filter((c) => {
               const dias = c.dias_vencimiento || 0;
               return dias >= 61 && dias <= 90;
             })
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
-          
+            .reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+
           const vencidoMas90 = cuentasProveedor
-            .filter(c => (c.dias_vencimiento || 0) >= 91)
-            .reduce((sum, c) => sum + c.monto_pendiente, 0);
-          
-          const total = sinVencimiento + vencido1_15 + vencido16_30 + vencido31_60 + vencido61_90 + vencidoMas90;
-          
+            .filter((c) => (c.dias_vencimiento || 0) >= 91)
+            .reduce((sum, c) => sum + (c.monto_pendiente || 0), 0);
+
+          const total =
+            sinVencimiento + vencido1_15 + vencido16_30 + vencido31_60 + vencido61_90 + vencidoMas90;
+
           return {
             proveedor,
             sinVencimiento,
@@ -279,36 +298,12 @@ export const useAnalyticsCuentasPorPagar = (
             vencido31_60,
             vencido61_90,
             vencidoMas90,
-            total
+            total,
           };
         })
-        .filter(p => p.total > 0)
+        .filter((p) => p.total > 0)
         .sort((a, b) => b.total - a.total)
         .slice(0, 10);
-
-      // Aplicar filtro de proveedor si existe
-      let agingAnalysisFiltered = agingAnalysisDetailed;
-      if (filtroProveedor && filtroProveedor !== 'todos') {
-        const cuentasFiltradas = cuentasConDias.filter(c => 
-          (c.proveedor_nombre || 'Sin nombre') === filtroProveedor
-        );
-        
-        agingAnalysisFiltered = agingRangesDetailed.map(range => {
-          const cuentasEnRango = cuentasFiltradas.filter(c => {
-            const dias = c.dias_vencimiento || 0;
-            if (range.min === null) return dias <= (range.max || 0);
-            if (range.max === null) return dias >= range.min;
-            return dias >= range.min && dias <= range.max;
-          });
-          return {
-            rango: range.rango,
-            monto: cuentasEnRango.reduce((sum, c) => sum + c.monto_pendiente, 0),
-            cantidad: cuentasEnRango.length,
-            min: range.min,
-            max: range.max
-          };
-        });
-      }
 
       return {
         totalPendiente,
@@ -317,11 +312,11 @@ export const useAnalyticsCuentasPorPagar = (
         cuentasPorProveedor,
         agingAnalysis,
         tendenciaMensual,
-        agingAnalysisDetailed: agingAnalysisFiltered,
+        agingAnalysisDetailed,
         historicoCxP,
-        cxpPorProveedorApilado
+        cxpPorProveedorApilado,
       };
-    }
+    },
   });
 };
 
@@ -329,40 +324,39 @@ export const useCuentasPorPagarDetalle = () => {
   return useQuery({
     queryKey: ["cuentas-por-pagar-detalle"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gt("monto_pendiente", 0)
-        .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
-
-      if (error) throw error;
+      // Detalle combinado recomendado desde backend
+      const json = await apiFetch("/api/cxp/detalle?pendientes=1", { method: "GET" });
+      const data: any[] = (json as any)?.data ?? json ?? [];
 
       const today = new Date();
-      
-      return (data || []).map(cuenta => {
+
+      return (data || []).map((cuenta: any) => {
         let diasVencimiento = 0;
-        let estado = 'Al día';
-        
+        let estado = "Al día";
+
         if (cuenta.fecha_vencimiento) {
           const fechaVenc = new Date(cuenta.fecha_vencimiento);
-          diasVencimiento = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (diasVencimiento > 90) estado = 'Muy vencida';
-          else if (diasVencimiento > 30) estado = 'Vencida';
-          else if (diasVencimiento > 0) estado = 'Por vencer';
+          diasVencimiento = Math.floor(
+            (today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24)
+          );
+
+          if (diasVencimiento > 90) estado = "Muy vencida";
+          else if (diasVencimiento > 30) estado = "Vencida";
+          else if (diasVencimiento > 0) estado = "Por vencer";
         } else {
-          // Si no hay fecha de vencimiento, calcular desde la fecha de creación
           const fechaCreacion = new Date(cuenta.created_at);
-          diasVencimiento = Math.floor((today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
-          estado = 'Sin fecha límite';
+          diasVencimiento = Math.floor(
+            (today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          estado = "Sin fecha límite";
         }
-        
+
         return {
           ...cuenta,
           diasVencimiento,
-          estado
+          estado,
         };
       });
-    }
+    },
   });
 };

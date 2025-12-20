@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,35 +14,98 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Building2, Edit, Trash2, Plus, Search, Phone, Mail, Upload, Globe, CreditCard, FileText, Copy } from "lucide-react";
-import { useAutoridadesFiscales, AutoridadFiscal } from "@/hooks/useAutoridadesFiscales";
-import { supabase } from "@/integrations/supabase/client";
+
+import {
+  Building2,
+  Edit,
+  Trash2,
+  Plus,
+  Search,
+  Phone,
+  Mail,
+  Upload,
+  Globe,
+  CreditCard,
+  FileText,
+  Copy,
+} from "lucide-react";
+
 import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
+
+export type AutoridadFiscal = {
+  id: string;
+  nombre: string;
+  rfc?: string;
+  logo_url?: string;
+  pais: string;
+  telefono?: string;
+  email?: string;
+  sitio_web?: string;
+  direccion?: string;
+  cuenta_bancaria?: string;
+  notas?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type AutoridadForm = {
+  nombre: string;
+  rfc: string;
+  logo_url: string;
+  pais: string;
+  telefono: string;
+  email: string;
+  sitio_web: string;
+  direccion: string;
+  cuenta_bancaria: string;
+  notas: string;
+};
+
+function normalizeAutoridades(json: any): AutoridadFiscal[] {
+  const payload = json?.data ?? json;
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.autoridades)) return payload.autoridades;
+  return [];
+}
+
+function pickMostCommonCountry(list: AutoridadFiscal[]): string {
+  if (!list.length) return "N/A";
+  const counts = new Map<string, number>();
+  for (const a of list) {
+    const k = a.pais || "N/A";
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  let best = "N/A";
+  let bestCount = 0;
+  counts.forEach((v, k) => {
+    if (v > bestCount) {
+      best = k;
+      bestCount = v;
+    }
+  });
+  return best;
+}
 
 export default function CatalogoAutoridadesFiscales() {
-  const { autoridades, crearAutoridad, actualizarAutoridad, eliminarAutoridad } = useAutoridadesFiscales();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [editingAutoridad, setEditingAutoridad] = useState<AutoridadFiscal | null>(null);
+
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [selectedAutoridad, setSelectedAutoridad] = useState<AutoridadFiscal | null>(null);
-  const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AutoridadForm>({
     nombre: "",
     rfc: "",
     logo_url: "",
@@ -53,11 +118,94 @@ export default function CatalogoAutoridadesFiscales() {
     notas: "",
   });
 
-  const autoridadesFiltradas = autoridades.filter((aut) =>
-    aut.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    aut.pais.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const paisesComunes = ["México", "Estados Unidos", "España", "Reino Unido", "Canadá", "Otro"];
 
+  // ========= QUERY: LISTA =========
+  const { data: autoridades = [], isLoading } = useQuery({
+    queryKey: ["autoridades-fiscales"],
+    queryFn: async () => {
+      const json = await apiFetch("/api/impuestos/autoridades-fiscales");
+      return normalizeAutoridades(json);
+    },
+  });
+
+  const autoridadesFiltradas = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return autoridades;
+    return autoridades.filter((aut) => {
+      const n = (aut.nombre || "").toLowerCase();
+      const p = (aut.pais || "").toLowerCase();
+      return n.includes(term) || p.includes(term);
+    });
+  }, [autoridades, searchTerm]);
+
+  const paisPrincipal = useMemo(() => pickMostCommonCountry(autoridades), [autoridades]);
+  const conLogo = useMemo(() => autoridades.filter((a) => !!a.logo_url).length, [autoridades]);
+
+  // ========= MUTATIONS =========
+  const crearAutoridad = useMutation({
+    mutationFn: async (payload: Omit<AutoridadFiscal, "id">) => {
+      const json = await apiFetch("/api/impuestos/autoridades-fiscales", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
+      toast({ title: "✅ Autoridad creada" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "❌ Error al crear",
+        description: err?.message || "Error inesperado",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const actualizarAutoridad = useMutation({
+    mutationFn: async (payload: AutoridadFiscal) => {
+      const json = await apiFetch(`/api/impuestos/autoridades-fiscales/${payload.id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
+      toast({ title: "✅ Autoridad actualizada" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "❌ Error al actualizar",
+        description: err?.message || "Error inesperado",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const eliminarAutoridad = useMutation({
+    mutationFn: async (id: string) => {
+      const json = await apiFetch(`/api/impuestos/autoridades-fiscales/${id}`, {
+        method: "DELETE",
+      });
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
+      toast({ title: "🗑️ Autoridad eliminada" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "❌ Error al eliminar",
+        description: err?.message || "Error inesperado",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ========= UI HELPERS =========
   const handleViewDetails = (autoridad: AutoridadFiscal) => {
     setSelectedAutoridad(autoridad);
     setShowDetailsDialog(true);
@@ -78,9 +226,8 @@ export default function CatalogoAutoridadesFiscales() {
         cuenta_bancaria: autoridad.cuenta_bancaria || "",
         notas: autoridad.notas || "",
       });
-      if (autoridad.logo_url) {
-        setLogoPreview(autoridad.logo_url);
-      }
+      setLogoPreview(autoridad.logo_url || null);
+      setLogoFile(null);
     } else {
       setEditingAutoridad(null);
       setFormData({
@@ -98,78 +245,84 @@ export default function CatalogoAutoridadesFiscales() {
       setLogoFile(null);
       setLogoPreview(null);
     }
+
     setShowDialog(true);
   };
 
   const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast({
-          title: "❌ Archivo muy grande",
-          description: "El logo debe pesar menos de 2MB",
-          variant: "destructive"
-        });
-        return;
-      }
+    if (!file) return;
 
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: "❌ Tipo de archivo inválido",
-          description: "Solo se permiten imágenes",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      setLogoFile(file);
-      
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "❌ Archivo muy grande",
+        description: "El logo debe pesar menos de 2MB",
+        variant: "destructive",
+      });
+      return;
     }
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "❌ Tipo de archivo inválido",
+        description: "Solo se permiten imágenes",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLogoFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
   const uploadLogo = async (): Promise<string | null> => {
-    if (!logoFile) return formData.logo_url;
+    if (!logoFile) return formData.logo_url || null;
 
     try {
       setUploading(true);
-      
-      const fileExt = logoFile.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `autoridades-fiscales/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, logoFile);
+      const fd = new FormData();
+      fd.append("file", logoFile);
 
-      if (uploadError) {
-        toast({
-          title: "❌ Error al subir logo",
-          description: uploadError.message,
-          variant: "destructive"
-        });
-        return null;
+      // NOTA: usamos fetch directo porque tu apiFetch fuerza content-type JSON
+      const res = await fetch("/api/uploads/autoridades-fiscales/logo", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
+      if (!res.ok) {
+        const msg = json?.message || json?.error || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      const payload = json?.data ?? json;
+      const url = payload?.url || payload?.publicUrl || payload?.logo_url;
+
+      if (!url) throw new Error("El backend no devolvió url del logo.");
 
       toast({
         title: "✅ Logo subido",
-        description: "El logo se ha guardado correctamente"
+        description: "El logo se ha guardado correctamente",
       });
 
-      return publicUrl;
+      return url;
     } catch (error: any) {
       toast({
-        title: "❌ Error inesperado",
-        description: error.message,
-        variant: "destructive"
+        title: "❌ Error al subir logo",
+        description: error?.message || "Error inesperado",
+        variant: "destructive",
       });
       return null;
     } finally {
@@ -178,46 +331,56 @@ export default function CatalogoAutoridadesFiscales() {
   };
 
   const handleSave = async () => {
-    if (!formData.nombre) {
+    if (!formData.nombre.trim()) {
       toast({
         title: "❌ Campo requerido",
         description: "El nombre de la autoridad fiscal es obligatorio",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     try {
-      let logoUrl = formData.logo_url;
+      let logoUrl = formData.logo_url || "";
+
       if (logoFile) {
         const uploadedUrl = await uploadLogo();
-        if (uploadedUrl) {
-          logoUrl = uploadedUrl;
-        }
+        if (uploadedUrl) logoUrl = uploadedUrl;
       }
+
+      const payloadBase = {
+        nombre: formData.nombre.trim(),
+        rfc: formData.rfc.trim() || "",
+        logo_url: logoUrl || "",
+        pais: formData.pais || "México",
+        telefono: formData.telefono.trim() || "",
+        email: formData.email.trim() || "",
+        sitio_web: formData.sitio_web.trim() || "",
+        direccion: formData.direccion.trim() || "",
+        cuenta_bancaria: formData.cuenta_bancaria.trim() || "",
+        notas: formData.notas || "",
+      };
 
       if (editingAutoridad) {
         await actualizarAutoridad.mutateAsync({
           id: editingAutoridad.id,
-          ...formData,
-          logo_url: logoUrl,
+          ...payloadBase,
         });
       } else {
-        await crearAutoridad.mutateAsync({ ...formData, logo_url: logoUrl });
+        await crearAutoridad.mutateAsync(payloadBase);
       }
+
       setShowDialog(false);
       setLogoFile(null);
       setLogoPreview(null);
     } catch (error: any) {
       toast({
         title: "❌ Error al guardar",
-        description: error.message,
-        variant: "destructive"
+        description: error?.message || "Error inesperado",
+        variant: "destructive",
       });
     }
   };
-
-  const paisesComunes = ["México", "Estados Unidos", "España", "Reino Unido", "Canadá", "Otro"];
 
   return (
     <div className="space-y-6">
@@ -232,28 +395,13 @@ export default function CatalogoAutoridadesFiscales() {
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>País Principal</CardDescription>
-            <CardTitle className="text-2xl">
-              {autoridades.length > 0 
-                ? autoridades.reduce((acc, aut) => {
-                    acc[aut.pais] = (acc[aut.pais] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>).constructor === Object
-                  ? Object.entries(autoridades.reduce((acc, aut) => {
-                      acc[aut.pais] = (acc[aut.pais] || 0) + 1;
-                      return acc;
-                    }, {} as Record<string, number>))
-                    .sort(([,a], [,b]) => b - a)[0]?.[0] || "N/A"
-                  : "N/A"
-                : "N/A"}
-            </CardTitle>
+            <CardTitle className="text-2xl">{paisPrincipal}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Con Logo</CardDescription>
-            <CardTitle className="text-3xl">
-              {autoridades.filter(a => a.logo_url).length}
-            </CardTitle>
+            <CardTitle className="text-3xl">{conLogo}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -279,9 +427,7 @@ export default function CatalogoAutoridadesFiscales() {
       <Card>
         <CardHeader>
           <CardTitle>Catálogo de Autoridades Fiscales</CardTitle>
-          <CardDescription>
-            Gestiona las autoridades fiscales de diferentes países
-          </CardDescription>
+          <CardDescription>Gestiona las autoridades fiscales de diferentes países</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -295,7 +441,13 @@ export default function CatalogoAutoridadesFiscales() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {autoridadesFiltradas.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Cargando...
+                  </TableCell>
+                </TableRow>
+              ) : autoridadesFiltradas.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     No hay autoridades fiscales registradas. Haz clic en "Nueva Autoridad" para agregar una.
@@ -303,8 +455,8 @@ export default function CatalogoAutoridadesFiscales() {
                 </TableRow>
               ) : (
                 autoridadesFiltradas.map((autoridad) => (
-                  <TableRow 
-                    key={autoridad.id} 
+                  <TableRow
+                    key={autoridad.id}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleViewDetails(autoridad)}
                   >
@@ -333,6 +485,7 @@ export default function CatalogoAutoridadesFiscales() {
                         </div>
                       </div>
                     </TableCell>
+
                     <TableCell>
                       {autoridad.rfc ? (
                         <span className="font-mono text-sm">{autoridad.rfc}</span>
@@ -340,9 +493,11 @@ export default function CatalogoAutoridadesFiscales() {
                         <span className="text-sm text-muted-foreground">Sin RFC</span>
                       )}
                     </TableCell>
+
                     <TableCell>
                       <Badge variant="outline">{autoridad.pais}</Badge>
                     </TableCell>
+
                     <TableCell>
                       <div className="space-y-1">
                         {autoridad.telefono && (
@@ -359,6 +514,7 @@ export default function CatalogoAutoridadesFiscales() {
                         )}
                       </div>
                     </TableCell>
+
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -391,17 +547,13 @@ export default function CatalogoAutoridadesFiscales() {
         </CardContent>
       </Card>
 
-      {/* Dialog para crear/editar */}
+      {/* Dialog crear/editar */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingAutoridad ? "Editar Autoridad Fiscal" : "Nueva Autoridad Fiscal"}
-            </DialogTitle>
+            <DialogTitle>{editingAutoridad ? "Editar Autoridad Fiscal" : "Nueva Autoridad Fiscal"}</DialogTitle>
             <DialogDescription>
-              {editingAutoridad
-                ? "Modifica los datos de la autoridad fiscal"
-                : "Registra una nueva autoridad fiscal"}
+              {editingAutoridad ? "Modifica los datos de la autoridad fiscal" : "Registra una nueva autoridad fiscal"}
             </DialogDescription>
           </DialogHeader>
 
@@ -418,14 +570,10 @@ export default function CatalogoAutoridadesFiscales() {
 
             <div className="space-y-2">
               <Label>Logo de la Autoridad</Label>
-              
+
               {logoPreview && (
                 <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
-                  <img 
-                    src={logoPreview} 
-                    alt="Preview" 
-                    className="w-full h-full object-contain"
-                  />
+                  <img src={logoPreview} alt="Preview" className="w-full h-full object-contain" />
                   <Button
                     type="button"
                     variant="destructive"
@@ -446,18 +594,9 @@ export default function CatalogoAutoridadesFiscales() {
                 <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
                   <label className="cursor-pointer">
                     <Upload className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Haz clic para subir una imagen
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      PNG, JPG hasta 2MB
-                    </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleLogoSelect}
-                    />
+                    <p className="text-sm text-muted-foreground mb-1">Haz clic para subir una imagen</p>
+                    <p className="text-xs text-muted-foreground">PNG, JPG hasta 2MB</p>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoSelect} />
                   </label>
                 </div>
               )}
@@ -482,8 +621,10 @@ export default function CatalogoAutoridadesFiscales() {
                   onChange={(e) => setFormData({ ...formData, pais: e.target.value })}
                   className="w-full h-10 px-3 py-2 text-sm rounded-md border border-input bg-background"
                 >
-                  {paisesComunes.map(pais => (
-                    <option key={pais} value={pais}>{pais}</option>
+                  {paisesComunes.map((pais) => (
+                    <option key={pais} value={pais}>
+                      {pais}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -565,7 +706,7 @@ export default function CatalogoAutoridadesFiscales() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de Vista de Detalles */}
+      {/* Dialog detalles */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           {selectedAutoridad && (
@@ -573,8 +714,8 @@ export default function CatalogoAutoridadesFiscales() {
               <DialogHeader>
                 <div className="flex items-start gap-4">
                   {selectedAutoridad.logo_url ? (
-                    <img 
-                      src={selectedAutoridad.logo_url} 
+                    <img
+                      src={selectedAutoridad.logo_url}
                       alt={selectedAutoridad.nombre}
                       className="w-16 h-16 object-contain rounded-lg border"
                     />
@@ -593,7 +734,6 @@ export default function CatalogoAutoridadesFiscales() {
               </DialogHeader>
 
               <div className="space-y-6 mt-6">
-                {/* Información General */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold">
                     <FileText className="w-4 h-4" />
@@ -612,7 +752,6 @@ export default function CatalogoAutoridadesFiscales() {
                   </div>
                 </div>
 
-                {/* Información de Contacto */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold">
                     <Phone className="w-4 h-4" />
@@ -631,9 +770,9 @@ export default function CatalogoAutoridadesFiscales() {
                     <div>
                       <span className="text-muted-foreground">Sitio Web:</span>
                       {selectedAutoridad.sitio_web ? (
-                        <a 
-                          href={selectedAutoridad.sitio_web} 
-                          target="_blank" 
+                        <a
+                          href={selectedAutoridad.sitio_web}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium mt-1 flex items-center gap-2 text-primary hover:underline"
                         >
@@ -651,7 +790,6 @@ export default function CatalogoAutoridadesFiscales() {
                   </div>
                 </div>
 
-                {/* Información Bancaria */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold">
                     <CreditCard className="w-4 h-4" />
@@ -680,7 +818,6 @@ export default function CatalogoAutoridadesFiscales() {
                   </div>
                 </div>
 
-                {/* Notas */}
                 {selectedAutoridad.notas && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-semibold">
@@ -688,9 +825,7 @@ export default function CatalogoAutoridadesFiscales() {
                       Notas
                     </div>
                     <div className="h-px bg-border" />
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {selectedAutoridad.notas}
-                    </p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedAutoridad.notas}</p>
                   </div>
                 )}
               </div>
@@ -706,9 +841,7 @@ export default function CatalogoAutoridadesFiscales() {
                   <Edit className="w-4 h-4 mr-2" />
                   Editar
                 </Button>
-                <Button onClick={() => setShowDetailsDialog(false)}>
-                  Cerrar
-                </Button>
+                <Button onClick={() => setShowDetailsDialog(false)}>Cerrar</Button>
               </div>
             </>
           )}

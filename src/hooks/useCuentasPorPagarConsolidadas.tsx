@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 export interface CuentaPorPagarConsolidada {
   id: string;
-  tipo_transaccion: 'inventario' | 'egreso' | 'capex';
+  tipo_transaccion: "inventario" | "egreso" | "capex";
   proveedor_nombre: string | null;
   proveedor_telefono: string | null;
   proveedor_email: string | null;
@@ -16,6 +16,7 @@ export interface CuentaPorPagarConsolidada {
   tipo_pago: string;
   metodo_pago: string | null;
   created_at: string;
+
   // Campos específicos por tipo
   producto_nombre?: string;
   categoria_activo?: string;
@@ -23,465 +24,463 @@ export interface CuentaPorPagarConsolidada {
   cuenta_codigo?: string | null;
 }
 
+type AnyJson = any;
+
+const normalizeArray = <T,>(json: AnyJson): T[] => {
+  const data = json?.data ?? json ?? [];
+  return Array.isArray(data) ? (data as T[]) : [];
+};
+
+const safeNumber = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const daysDiff = (from: Date, to: Date) =>
+  Math.floor((from.getTime() - to.getTime()) / (1000 * 60 * 60 * 24));
+
+const fmtDayShort = (d: Date) =>
+  d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+
+const fmtMonthShort = (d: Date) =>
+  d.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
+
+/**
+ * TS: Object.entries(...) suele degradar a [string, unknown][]
+ * Este helper mantiene el tipo del value y elimina los rojos por spread.
+ */
+const typedEntries = <T extends Record<string, any>>(obj: T) =>
+  Object.entries(obj) as Array<[keyof T & string, T[keyof T]]>;
+
 export const useCuentasPorPagarConsolidadas = () => {
-  return useQuery({
+  return useQuery<CuentaPorPagarConsolidada[]>({
     queryKey: ["cuentas-por-pagar-consolidadas"],
     queryFn: async (): Promise<CuentaPorPagarConsolidada[]> => {
       const cuentasConsolidadas: CuentaPorPagarConsolidada[] = [];
 
-      // 1. Obtener egresos con saldo pendiente
-      const { data: egresos, error: egresosError } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gt("monto_pendiente", 0);
+      // 1) EGRESOS con saldo pendiente
+      // Endpoint esperado: GET /api/transacciones/egresos?pendiente_gt=0
+      const egresosJson: AnyJson = await apiFetch(
+        "/api/transacciones/egresos?pendiente_gt=0",
+        { method: "GET" }
+      );
+      const egresos = normalizeArray<any>(egresosJson);
 
-      if (egresosError) throw egresosError;
-
-      if (egresos) {
-        egresos.forEach(egreso => {
-          cuentasConsolidadas.push({
-            id: egreso.id,
-            tipo_transaccion: 'egreso',
-            proveedor_nombre: egreso.proveedor_nombre,
-            proveedor_telefono: egreso.proveedor_telefono,
-            proveedor_email: egreso.proveedor_email,
-            proveedor_rfc: egreso.proveedor_rfc,
-            descripcion: egreso.descripcion || `Egreso: ${egreso.tipo_egreso}`,
-            monto_total: egreso.monto_total,
-            monto_pagado: egreso.monto_pagado,
-            monto_pendiente: egreso.monto_pendiente,
-            fecha_vencimiento: egreso.fecha_vencimiento,
-            tipo_pago: egreso.tipo_pago,
-            metodo_pago: egreso.metodo_pago,
-            created_at: egreso.created_at,
-            subcuenta_id: egreso.subcuenta_id,
-            cuenta_codigo: egreso.cuenta_codigo
-          });
+      egresos.forEach((egreso) => {
+        cuentasConsolidadas.push({
+          id: egreso.id,
+          tipo_transaccion: "egreso",
+          proveedor_nombre: egreso.proveedor_nombre ?? null,
+          proveedor_telefono: egreso.proveedor_telefono ?? null,
+          proveedor_email: egreso.proveedor_email ?? null,
+          proveedor_rfc: egreso.proveedor_rfc ?? null,
+          descripcion: egreso.descripcion || `Egreso: ${egreso.tipo_egreso || ""}`.trim(),
+          monto_total: safeNumber(egreso.monto_total),
+          monto_pagado: safeNumber(egreso.monto_pagado),
+          monto_pendiente: safeNumber(egreso.monto_pendiente),
+          fecha_vencimiento: egreso.fecha_vencimiento ?? null,
+          tipo_pago: egreso.tipo_pago,
+          metodo_pago: egreso.metodo_pago ?? null,
+          created_at: egreso.created_at,
+          subcuenta_id: egreso.subcuenta_id ?? null,
+          cuenta_codigo: egreso.cuenta_codigo ?? null,
         });
-      }
+      });
 
-      // 2. Obtener inversiones CAPEX con saldo pendiente
-      const { data: inversiones, error: inversionesError } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .gt("monto_pendiente", 0);
+      // 2) CAPEX con saldo pendiente
+      // Endpoint esperado: GET /api/inversiones/capex?pendiente_gt=0
+      const inversionesJson: AnyJson = await apiFetch(
+        "/api/inversiones/capex?pendiente_gt=0",
+        { method: "GET" }
+      );
+      const inversiones = normalizeArray<any>(inversionesJson);
 
-      if (inversionesError) throw inversionesError;
-
-      if (inversiones) {
-        inversiones.forEach(inversion => {
-          cuentasConsolidadas.push({
-            id: inversion.id,
-            tipo_transaccion: 'capex',
-            proveedor_nombre: inversion.proveedor_nombre,
-            proveedor_telefono: inversion.proveedor_telefono,
-            proveedor_email: inversion.proveedor_email,
-            proveedor_rfc: inversion.proveedor_rfc,
-            descripcion: inversion.descripcion || `CAPEX: ${inversion.producto_nombre}`,
-            monto_total: inversion.valor_total,
-            monto_pagado: inversion.monto_pagado,
-            monto_pendiente: inversion.monto_pendiente || 0,
-            fecha_vencimiento: inversion.fecha_vencimiento,
-            tipo_pago: inversion.tipo_pago,
-            metodo_pago: inversion.metodo_pago,
-            created_at: inversion.created_at,
-            producto_nombre: inversion.producto_nombre,
-            categoria_activo: inversion.categoria_activo,
-            subcuenta_id: inversion.subcuenta_id,
-            cuenta_codigo: inversion.cuenta_codigo
-          });
+      inversiones.forEach((inv) => {
+        cuentasConsolidadas.push({
+          id: inv.id,
+          tipo_transaccion: "capex",
+          proveedor_nombre: inv.proveedor_nombre ?? null,
+          proveedor_telefono: inv.proveedor_telefono ?? null,
+          proveedor_email: inv.proveedor_email ?? null,
+          proveedor_rfc: inv.proveedor_rfc ?? null,
+          descripcion: inv.descripcion || `CAPEX: ${inv.producto_nombre || ""}`.trim(),
+          monto_total: safeNumber(inv.valor_total),
+          monto_pagado: safeNumber(inv.monto_pagado),
+          monto_pendiente: safeNumber(inv.monto_pendiente),
+          fecha_vencimiento: inv.fecha_vencimiento ?? null,
+          tipo_pago: inv.tipo_pago,
+          metodo_pago: inv.metodo_pago ?? null,
+          created_at: inv.created_at,
+          producto_nombre: inv.producto_nombre,
+          categoria_activo: inv.categoria_activo,
+          subcuenta_id: inv.subcuenta_id ?? null,
+          cuenta_codigo: inv.cuenta_codigo ?? null,
         });
-      }
+      });
 
-      // 3. Obtener movimientos de inventario con saldo pendiente
-      // Necesitamos buscar movimientos de tipo "compra" que tengan productos asociados con deuda pendiente
-      const { data: movimientos, error: movimientosError } = await supabase
-        .from("movimientos_inventario")
-        .select(`
-          *,
-          productos (
-            id,
-            nombre,
-            descripcion
-          )
-        `)
-        .eq("tipo_movimiento", "compra");
+      /**
+       * 3) INVENTARIO a crédito:
+       * En tu código original se comenta que “inventario a crédito” debería registrarse como egreso tipo inventario.
+       * Así que aquí NO metemos movimientos_inventario (porque no hay monto_pendiente real).
+       */
 
-      if (movimientosError) throw movimientosError;
-
-      // Para el inventario, como no tenemos campos directos de monto_pendiente,
-      // vamos a verificar si hay productos que se compraron pero quedaron a crédito
-      // Esto requeriría que los movimientos de inventario también tengan información de pago
-      // Por ahora, vamos a asumir que si queremos trackear inventario a crédito,
-      // esto debería registrarse como un egreso tipo "inventario"
-
-      // Ordenar por fecha de vencimiento
+      // Ordenar por fecha de vencimiento (las sin fecha al final)
       cuentasConsolidadas.sort((a, b) => {
         if (!a.fecha_vencimiento && !b.fecha_vencimiento) return 0;
         if (!a.fecha_vencimiento) return 1;
         if (!b.fecha_vencimiento) return -1;
-        return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
+        return (
+          new Date(a.fecha_vencimiento).getTime() -
+          new Date(b.fecha_vencimiento).getTime()
+        );
       });
 
       return cuentasConsolidadas;
-    }
+    },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };
 
-export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "mensual" | "anual" = "mensual") => {
-  return useQuery({
+type TipoCuenta = "egreso" | "capex";
+
+type CuentaBase = {
+  tipo: TipoCuenta;
+  monto_total: number;
+  monto_pendiente: number;
+  proveedor_nombre: string | null;
+  fecha_vencimiento?: string | null;
+  created_at: string;
+};
+
+type MontoCantidad = { monto: number; cantidad: number };
+
+type ProveedorApilado = {
+  sinVencimiento: number;
+  vencido1_15: number;
+  vencido16_30: number;
+  vencido31_60: number;
+  vencido61_90: number;
+  vencidoMas90: number;
+  total: number;
+};
+
+export type AnalyticsCuentasPorPagarConsolidadasResult = {
+  totalPendiente: number;
+  totalProveedores: number;
+  promedioDeuda: number;
+  distribucionPorTipo: Array<{ tipo: string; monto: number; cantidad: number }>;
+  cuentasPorProveedor: Array<{ proveedor: string; monto: number; cantidad: number }>;
+  agingAnalysis: Array<{ rango: string; monto: number; cantidad: number }>;
+  agingAnalysisDetailed: Array<{
+    rango: string;
+    monto: number;
+    cantidad: number;
+    min: number | null;
+    max: number | null;
+  }>;
+  historicoCxP: Array<{ fecha: string; saldo: number }>;
+  cxpPorProveedorApilado: Array<{ proveedor: string } & ProveedorApilado>;
+  proveedoresLista: string[];
+  todasCuentas: CuentaBase[];
+  tendenciaMensual: { mes: string; monto: number }[];
+};
+
+export const useAnalyticsCuentasPorPagarConsolidadas = (
+  periodo: "diario" | "mensual" | "anual" = "mensual"
+) => {
+  return useQuery<AnalyticsCuentasPorPagarConsolidadasResult>({
     queryKey: ["analytics-cuentas-por-pagar-consolidadas", periodo],
     queryFn: async () => {
-      const { data: egresos } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .gt("monto_pendiente", 0);
+      // Traer CxP base desde backend
+      const egresosJson: AnyJson = await apiFetch(
+        "/api/transacciones/egresos?pendiente_gt=0",
+        { method: "GET" }
+      );
+      const egresos = normalizeArray<any>(egresosJson);
 
-      const { data: inversiones } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .gt("monto_pendiente", 0);
+      const inversionesJson: AnyJson = await apiFetch(
+        "/api/inversiones/capex?pendiente_gt=0",
+        { method: "GET" }
+      );
+      const inversiones = normalizeArray<any>(inversionesJson);
 
-      const todasCuentas = [
-        ...(egresos || []).map(e => ({ ...e, tipo: 'egreso' as const, updated_at: e.updated_at })),
-        ...(inversiones || []).map(i => ({ 
-          ...i, 
-          tipo: 'capex' as const,
-          monto_total: i.valor_total,
-          proveedor_nombre: i.proveedor_nombre,
-          updated_at: i.updated_at
-        }))
+      const todasCuentas: CuentaBase[] = [
+        ...(egresos || []).map((e) => ({
+          tipo: "egreso" as const,
+          monto_total: safeNumber(e.monto_total),
+          monto_pendiente: safeNumber(e.monto_pendiente),
+          proveedor_nombre: e.proveedor_nombre ?? null,
+          fecha_vencimiento: e.fecha_vencimiento ?? null,
+          created_at: e.created_at,
+        })),
+        ...(inversiones || []).map((i) => ({
+          tipo: "capex" as const,
+          monto_total: safeNumber(i.valor_total),
+          monto_pendiente: safeNumber(i.monto_pendiente),
+          proveedor_nombre: i.proveedor_nombre ?? null,
+          fecha_vencimiento: i.fecha_vencimiento ?? null,
+          created_at: i.created_at,
+        })),
       ];
 
       const today = new Date();
 
       // Total pendiente
-      const totalPendiente = todasCuentas.reduce((sum, c) => 
-        sum + (c.monto_pendiente || 0), 0
+      const totalPendiente = todasCuentas.reduce(
+        (sum, c) => sum + safeNumber(c.monto_pendiente),
+        0
       );
 
       // Proveedores únicos
-      const proveedoresUnicos = new Set(
-        todasCuentas.map(c => c.proveedor_nombre || 'Sin nombre')
+      const totalProveedores = new Set(
+        todasCuentas.map((c) => c.proveedor_nombre || "Sin nombre")
       ).size;
 
-      // Promedio de deuda
+      // Promedio deuda
       const promedioDeuda = totalPendiente / (todasCuentas.length || 1);
 
-      // Distribución por tipo de transacción
-      const porTipo = todasCuentas.reduce((acc, cuenta) => {
-        const tipo = cuenta.tipo;
-        if (!acc[tipo]) {
-          acc[tipo] = { monto: 0, cantidad: 0 };
-        }
-        acc[tipo].monto += cuenta.monto_pendiente || 0;
-        acc[tipo].cantidad += 1;
-        return acc;
-      }, {} as Record<string, { monto: number; cantidad: number }>);
+      // Distribución por tipo
+      const porTipo: Record<string, MontoCantidad> = todasCuentas.reduce(
+        (acc, cuenta) => {
+          const tipo = cuenta.tipo;
+          if (!acc[tipo]) acc[tipo] = { monto: 0, cantidad: 0 };
+          acc[tipo].monto += safeNumber(cuenta.monto_pendiente);
+          acc[tipo].cantidad += 1;
+          return acc;
+        },
+        {} as Record<string, MontoCantidad>
+      );
 
-      const distribucionPorTipo = Object.entries(porTipo).map(([tipo, data]) => ({
-        tipo: tipo === 'egreso' ? 'Egresos' : tipo === 'capex' ? 'Inversiones CAPEX' : 'Inventario',
-        ...data
+      const distribucionPorTipo = typedEntries(porTipo).map(([tipo, data]) => ({
+        tipo: tipo === "egreso" ? "Egresos" : "Inversiones CAPEX",
+        ...data,
       }));
 
       // Agrupar por proveedor
-      const porProveedor = todasCuentas.reduce((acc, cuenta) => {
-        const proveedor = cuenta.proveedor_nombre || 'Sin nombre';
-        if (!acc[proveedor]) {
-          acc[proveedor] = { monto: 0, cantidad: 0 };
-        }
-        acc[proveedor].monto += cuenta.monto_pendiente || 0;
-        acc[proveedor].cantidad += 1;
-        return acc;
-      }, {} as Record<string, { monto: number; cantidad: number }>);
+      const porProveedor: Record<string, MontoCantidad> = todasCuentas.reduce(
+        (acc, cuenta) => {
+          const proveedor = cuenta.proveedor_nombre || "Sin nombre";
+          if (!acc[proveedor]) acc[proveedor] = { monto: 0, cantidad: 0 };
+          acc[proveedor].monto += safeNumber(cuenta.monto_pendiente);
+          acc[proveedor].cantidad += 1;
+          return acc;
+        },
+        {} as Record<string, MontoCantidad>
+      );
 
-      const cuentasPorProveedor = Object.entries(porProveedor)
+      const cuentasPorProveedor = typedEntries(porProveedor)
         .map(([proveedor, data]) => ({ proveedor, ...data }))
         .sort((a, b) => b.monto - a.monto)
         .slice(0, 10);
 
-      // Análisis de aging básico
+      // Aging (básico)
+      const getDiasVenc = (c: CuentaBase) => {
+        if (c.fecha_vencimiento) return daysDiff(today, new Date(c.fecha_vencimiento));
+        return daysDiff(today, new Date(c.created_at));
+      };
+
       const agingRanges = [
-        { rango: '0-30 días', min: 0, max: 30 },
-        { rango: '31-60 días', min: 31, max: 60 },
-        { rango: '61-90 días', min: 61, max: 90 },
-        { rango: '90+ días', min: 91, max: Infinity }
+        { rango: "0-30 días", min: 0, max: 30 },
+        { rango: "31-60 días", min: 31, max: 60 },
+        { rango: "61-90 días", min: 61, max: 90 },
+        { rango: "90+ días", min: 91, max: Infinity },
       ];
 
-      const agingAnalysis = agingRanges.map(range => {
-        const cuentasEnRango = todasCuentas.filter(c => {
-          let diasVencimiento = 0;
-          if (c.fecha_vencimiento) {
-            const fechaVenc = new Date(c.fecha_vencimiento);
-            diasVencimiento = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
-          } else {
-            const fechaCreacion = new Date(c.created_at);
-            diasVencimiento = Math.floor((today.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
-          }
-          return diasVencimiento >= range.min && diasVencimiento <= range.max;
+      const agingAnalysis = agingRanges.map((range) => {
+        const cuentasEnRango = todasCuentas.filter((c) => {
+          const dias = getDiasVenc(c);
+          return dias >= range.min && dias <= range.max;
         });
-        
+
         return {
           rango: range.rango,
-          monto: cuentasEnRango.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0),
-          cantidad: cuentasEnRango.length
+          monto: cuentasEnRango.reduce((sum, c) => sum + safeNumber(c.monto_pendiente), 0),
+          cantidad: cuentasEnRango.length,
         };
       });
 
-      // Análisis de aging detallado (6 categorías)
+      // Aging detallado (6 categorías)
       const agingRangesDetailed = [
-        { rango: 'Sin vencimiento', min: null, max: null },
-        { rango: 'Vencido 1-15 días', min: 1, max: 15 },
-        { rango: 'Vencido 16-30 días', min: 16, max: 30 },
-        { rango: 'Vencido 31-60 días', min: 31, max: 60 },
-        { rango: 'Vencido 61-90 días', min: 61, max: 90 },
-        { rango: 'Vencido +90 días', min: 91, max: Infinity }
+        { rango: "Sin vencimiento", min: null as number | null, max: null as number | null },
+        { rango: "Vencido 1-15 días", min: 1, max: 15 },
+        { rango: "Vencido 16-30 días", min: 16, max: 30 },
+        { rango: "Vencido 31-60 días", min: 31, max: 60 },
+        { rango: "Vencido 61-90 días", min: 61, max: 90 },
+        { rango: "Vencido +90 días", min: 91, max: Infinity },
       ];
 
-      const agingAnalysisDetailed = agingRangesDetailed.map(range => {
-        const cuentasEnRango = todasCuentas.filter(c => {
-          // Caso especial: sin vencimiento
+      const agingAnalysisDetailed = agingRangesDetailed.map((range) => {
+        const cuentasEnRango = todasCuentas.filter((c) => {
+          // Caso “Sin vencimiento”: incluye sin fecha y/o que aún no vencen
           if (range.min === null && range.max === null) {
             if (!c.fecha_vencimiento) return true;
-            const fechaVenc = new Date(c.fecha_vencimiento);
-            const dias = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
-            return dias < 0; // Aún no vence
+            const dias = daysDiff(today, new Date(c.fecha_vencimiento));
+            return dias < 0;
           }
-          
+
           if (!c.fecha_vencimiento) return false;
-          
-          const fechaVenc = new Date(c.fecha_vencimiento);
-          const dias = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
-          return dias >= range.min! && dias <= range.max!;
+          const dias = daysDiff(today, new Date(c.fecha_vencimiento));
+          return dias >= (range.min as number) && dias <= (range.max as number);
         });
-        
+
         return {
           rango: range.rango,
-          monto: cuentasEnRango.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0),
+          monto: cuentasEnRango.reduce((sum, c) => sum + safeNumber(c.monto_pendiente), 0),
           cantidad: cuentasEnRango.length,
           min: range.min,
-          max: range.max
+          max: range.max,
         };
       });
-
-      // Histórico de CxP (basado en asientos contables - cuenta 2001 Proveedores)
-      const historicoCxP = [];
-      const saldoActual = totalPendiente;
-      
-      const { data: detallesAsientos } = await supabase
-        .from("detalle_asientos")
-        .select(`
-          debe,
-          haber,
-          cuenta_codigo,
-          asientos_contables!inner(
-            fecha,
-            user_id
-          )
-        `)
-        .eq("asientos_contables.user_id", (egresos && egresos.length > 0) ? egresos[0].user_id : "")
-        .eq("cuenta_codigo", "2001")
-        .order("asientos_contables(fecha)", { ascending: true });
-      
-      if (periodo === "diario") {
-        const hoy = new Date();
-        hoy.setHours(23, 59, 59, 999);
-        const hace7Dias = new Date(hoy);
-        hace7Dias.setDate(hace7Dias.getDate() - 6);
-        hace7Dias.setHours(0, 0, 0, 0);
-        
-        // Calcular saldo al inicio del periodo (hace 7 días)
-        let saldoInicial = 0;
-        if (detallesAsientos) {
-          for (const detalle of detallesAsientos) {
-            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-            if (fechaAsiento < hace7Dias) {
-              // CxP: HABER aumenta, DEBE disminuye
-              saldoInicial += Number(detalle.haber || 0) - Number(detalle.debe || 0);
-            }
-          }
-        }
-        
-        // Generar datos para cada uno de los últimos 7 días
-        for (let i = 0; i < 7; i++) {
-          const fechaDia = new Date(hace7Dias);
-          fechaDia.setDate(fechaDia.getDate() + i);
-          fechaDia.setHours(23, 59, 59, 999);
-          
-          let saldoDia = saldoInicial;
-          
-          // Acumular movimientos desde el inicio del periodo hasta este día
-          if (detallesAsientos) {
-            for (const detalle of detallesAsientos) {
-              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-              if (fechaAsiento >= hace7Dias && fechaAsiento <= fechaDia) {
-                // CxP: HABER aumenta, DEBE disminuye
-                saldoDia += Number(detalle.haber || 0) - Number(detalle.debe || 0);
-              }
-            }
-          }
-          
-          historicoCxP.push({
-            fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-            saldo: Math.max(0, saldoDia)
-          });
-        }
-      } else if (periodo === "mensual") {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const diaActual = hoy.getDate();
-        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        
-        // Calcular saldo al inicio del mes
-        let saldoInicioMes = 0;
-        if (detallesAsientos) {
-          for (const detalle of detallesAsientos) {
-            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-            if (fechaAsiento < primerDiaMes) {
-              // CxP: HABER aumenta, DEBE disminuye
-              saldoInicioMes += Number(detalle.haber || 0) - Number(detalle.debe || 0);
-            }
-          }
-        }
-        
-        // Generar datos para cada día del mes hasta hoy
-        for (let dia = 1; dia <= diaActual; dia++) {
-          const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
-          fechaDia.setHours(23, 59, 59, 999);
-          
-          let saldoDia = saldoInicioMes;
-          
-          // Acumular movimientos desde inicio de mes hasta este día
-          if (detallesAsientos) {
-            for (const detalle of detallesAsientos) {
-              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-              if (fechaAsiento >= primerDiaMes && fechaAsiento <= fechaDia) {
-                // CxP: HABER aumenta, DEBE disminuye
-                saldoDia += Number(detalle.haber || 0) - Number(detalle.debe || 0);
-              }
-            }
-          }
-          
-          historicoCxP.push({
-            fecha: fechaDia.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-            saldo: Math.max(0, saldoDia)
-          });
-        }
-      } else if (periodo === "anual") {
-        const hoy = new Date();
-        const anioActual = hoy.getFullYear();
-        const mesActual = hoy.getMonth();
-        const inicioAno = new Date(anioActual, 0, 1);
-        
-        // Calcular saldo al inicio del año
-        let saldoInicioAno = 0;
-        if (detallesAsientos) {
-          for (const detalle of detallesAsientos) {
-            const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-            if (fechaAsiento < inicioAno) {
-              // CxP: HABER aumenta, DEBE disminuye
-              saldoInicioAno += Number(detalle.haber || 0) - Number(detalle.debe || 0);
-            }
-          }
-        }
-        
-        // Generar datos para cada mes del año hasta el mes actual
-        for (let mes = 0; mes <= mesActual; mes++) {
-          const ultimoDiaMes = new Date(anioActual, mes + 1, 0);
-          ultimoDiaMes.setHours(23, 59, 59, 999);
-          
-          let saldoMes = saldoInicioAno;
-          
-          // Acumular movimientos desde inicio de año hasta fin de este mes
-          if (detallesAsientos) {
-            for (const detalle of detallesAsientos) {
-              const fechaAsiento = new Date((detalle as any).asientos_contables.fecha);
-              if (fechaAsiento >= inicioAno && fechaAsiento <= ultimoDiaMes) {
-                // CxP: HABER aumenta, DEBE disminuye
-                saldoMes += Number(detalle.haber || 0) - Number(detalle.debe || 0);
-              }
-            }
-          }
-          
-          historicoCxP.push({
-            fecha: ultimoDiaMes.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
-            saldo: Math.max(0, saldoMes)
-          });
-        }
-      }
-
-      // CxP por proveedor apilado por antigüedad
-      const proveedoresMap = todasCuentas.reduce((acc, cuenta) => {
-        const proveedor = cuenta.proveedor_nombre || 'Sin nombre';
-        if (!acc[proveedor]) {
-          acc[proveedor] = {
-            sinVencimiento: 0,
-            vencido1_15: 0,
-            vencido16_30: 0,
-            vencido31_60: 0,
-            vencido61_90: 0,
-            vencidoMas90: 0,
-            total: 0
-          };
-        }
-        
-        const monto = cuenta.monto_pendiente || 0;
-        
-        // Calcular días de vencimiento
-        let diasVencimiento = null;
-        if (cuenta.fecha_vencimiento) {
-          const fechaVenc = new Date(cuenta.fecha_vencimiento);
-          diasVencimiento = Math.floor((today.getTime() - fechaVenc.getTime()) / (1000 * 60 * 60 * 24));
-        }
-        
-        if (diasVencimiento === null || diasVencimiento < 0) {
-          acc[proveedor].sinVencimiento += monto;
-        } else {
-          if (diasVencimiento >= 1 && diasVencimiento <= 15) acc[proveedor].vencido1_15 += monto;
-          else if (diasVencimiento >= 16 && diasVencimiento <= 30) acc[proveedor].vencido16_30 += monto;
-          else if (diasVencimiento >= 31 && diasVencimiento <= 60) acc[proveedor].vencido31_60 += monto;
-          else if (diasVencimiento >= 61 && diasVencimiento <= 90) acc[proveedor].vencido61_90 += monto;
-          else acc[proveedor].vencidoMas90 += monto;
-        }
-        
-        acc[proveedor].total += monto;
-        return acc;
-      }, {} as Record<string, any>);
-
-      const cxpPorProveedorApilado = Object.entries(proveedoresMap)
-        .map(([proveedor, data]) => ({ proveedor, ...data }))
-        .sort((a, b) => b.total - a.total);
-
-      // Vencimientos por proveedor (para selector)
-      const proveedoresLista = Array.from(
-        new Set(todasCuentas.map(c => c.proveedor_nombre).filter(Boolean))
-      ).sort();
 
       // Tendencia mensual (últimos 6 meses)
       const mesesPasados = 6;
-      const tendenciaMensual = [];
-      
+      const tendenciaMensual: { mes: string; monto: number }[] = [];
+
       for (let i = mesesPasados - 1; i >= 0; i--) {
         const fecha = new Date();
         fecha.setMonth(fecha.getMonth() - i);
         const year = fecha.getFullYear();
         const month = fecha.getMonth();
-        
-        const cuentasDelMes = todasCuentas.filter(cuenta => {
-          const fechaCuenta = new Date(cuenta.created_at);
-          return fechaCuenta.getFullYear() === year && fechaCuenta.getMonth() === month;
+
+        const cuentasDelMes = todasCuentas.filter((c) => {
+          const fc = new Date(c.created_at);
+          return fc.getFullYear() === year && fc.getMonth() === month;
         });
 
-        const nombreMes = fecha.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
         tendenciaMensual.push({
-          mes: nombreMes,
-          monto: cuentasDelMes.reduce((sum, c) => sum + (c.monto_pendiente || 0), 0)
+          mes: fmtMonthShort(fecha),
+          monto: cuentasDelMes.reduce((sum, c) => sum + safeNumber(c.monto_pendiente), 0),
         });
       }
 
+      /**
+       * HISTÓRICO CxP por asientos (cuentas 2001/2002)
+       * Endpoint esperado (backend filtra por owner):
+       *   GET /api/asientos/detalle?cuentas=2001,2002
+       * Respuesta: [{ debe:number, haber:number, fecha:'YYYY-MM-DD' }]
+       */
+      let historicoCxP: { fecha: string; saldo: number }[] = [];
+
+      try {
+        const asientosJson: AnyJson = await apiFetch(
+          "/api/asientos/detalle?cuentas=2001,2002",
+          { method: "GET" }
+        );
+        const detalles = normalizeArray<any>(asientosJson).map((x) => ({
+          debe: safeNumber(x.debe),
+          haber: safeNumber(x.haber),
+          fecha: x.fecha, // YYYY-MM-DD
+        }));
+
+        const saldoHasta = (fechaFin: Date) => {
+          const fin = new Date(fechaFin);
+          fin.setHours(23, 59, 59, 999);
+
+          // CxP: HABER aumenta, DEBE disminuye
+          const saldo = detalles
+            .filter((d) => new Date(d.fecha) <= fin)
+            .reduce((sum, d) => sum + (d.haber - d.debe), 0);
+
+          return Math.max(0, saldo);
+        };
+
+        if (periodo === "diario") {
+          const hoy = new Date();
+          hoy.setHours(23, 59, 59, 999);
+          const start = new Date(hoy);
+          start.setDate(start.getDate() - 6);
+          start.setHours(0, 0, 0, 0);
+
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(start);
+            d.setDate(d.getDate() + i);
+            d.setHours(23, 59, 59, 999);
+
+            historicoCxP.push({
+              fecha: fmtDayShort(d),
+              saldo: saldoHasta(d),
+            });
+          }
+        } else if (periodo === "mensual") {
+          const hoy = new Date();
+          const year = hoy.getFullYear();
+          const month = hoy.getMonth();
+          const day = hoy.getDate();
+
+          for (let dia = 1; dia <= day; dia++) {
+            const d = new Date(year, month, dia, 23, 59, 59, 999);
+            historicoCxP.push({
+              fecha: fmtDayShort(d),
+              saldo: saldoHasta(d),
+            });
+          }
+        } else {
+          const hoy = new Date();
+          const year = hoy.getFullYear();
+          const mesActual = hoy.getMonth();
+
+          for (let mes = 0; mes <= mesActual; mes++) {
+            const last = new Date(year, mes + 1, 0, 23, 59, 59, 999);
+            historicoCxP.push({
+              fecha: fmtMonthShort(last),
+              saldo: saldoHasta(last),
+            });
+          }
+        }
+      } catch {
+        historicoCxP = [];
+      }
+
+      // CxP por proveedor apilado por antigüedad
+      const proveedoresMap: Record<string, ProveedorApilado> = todasCuentas.reduce(
+        (acc, cuenta) => {
+          const proveedor = cuenta.proveedor_nombre || "Sin nombre";
+          if (!acc[proveedor]) {
+            acc[proveedor] = {
+              sinVencimiento: 0,
+              vencido1_15: 0,
+              vencido16_30: 0,
+              vencido31_60: 0,
+              vencido61_90: 0,
+              vencidoMas90: 0,
+              total: 0,
+            };
+          }
+
+          const monto = safeNumber(cuenta.monto_pendiente);
+
+          let diasVenc: number | null = null;
+          if (cuenta.fecha_vencimiento) {
+            diasVenc = daysDiff(today, new Date(cuenta.fecha_vencimiento));
+          }
+
+          if (diasVenc === null || diasVenc < 0) acc[proveedor].sinVencimiento += monto;
+          else if (diasVenc >= 1 && diasVenc <= 15) acc[proveedor].vencido1_15 += monto;
+          else if (diasVenc >= 16 && diasVenc <= 30) acc[proveedor].vencido16_30 += monto;
+          else if (diasVenc >= 31 && diasVenc <= 60) acc[proveedor].vencido31_60 += monto;
+          else if (diasVenc >= 61 && diasVenc <= 90) acc[proveedor].vencido61_90 += monto;
+          else acc[proveedor].vencidoMas90 += monto;
+
+          acc[proveedor].total += monto;
+          return acc;
+        },
+        {} as Record<string, ProveedorApilado>
+      );
+
+      const cxpPorProveedorApilado = typedEntries(proveedoresMap)
+        .map(([proveedor, data]) => ({ proveedor, ...data }))
+        .sort((a, b) => b.total - a.total);
+
+      const proveedoresLista = Array.from(
+        new Set(todasCuentas.map((c) => c.proveedor_nombre).filter(Boolean) as string[])
+      ).sort();
+
       return {
         totalPendiente,
-        totalProveedores: proveedoresUnicos,
+        totalProveedores,
         promedioDeuda,
         distribucionPorTipo,
         cuentasPorProveedor,
@@ -491,8 +490,12 @@ export const useAnalyticsCuentasPorPagarConsolidadas = (periodo: "diario" | "men
         cxpPorProveedorApilado,
         proveedoresLista,
         todasCuentas,
-        tendenciaMensual
+        tendenciaMensual,
       };
-    }
+    },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };

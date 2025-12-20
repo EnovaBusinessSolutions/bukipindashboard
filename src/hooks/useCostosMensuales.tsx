@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 interface CostoMensual {
   mes: string;
@@ -13,6 +13,18 @@ interface CostoPorCuenta {
   data: { mes: string; monto: number }[];
 }
 
+type EgresoCostoRow = {
+  monto_total: number | null;
+  cuenta_codigo: string | null;
+  subcuenta_id: string | null;
+  created_at: string;
+};
+
+type CuentaRow = {
+  codigo: string;
+  nombre: string;
+};
+
 export const useCostosMensuales = (año?: number, enabled: boolean = true) => {
   const añoActual = año || new Date().getFullYear();
 
@@ -25,26 +37,28 @@ export const useCostosMensuales = (año?: number, enabled: boolean = true) => {
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
       ];
 
-      // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO (en lugar de 12)
-      const fechaInicioAño = new Date(añoActual, 0, 1).toISOString();
-      const fechaFinAño = new Date(añoActual, 11, 31, 23, 59, 59).toISOString();
+      // Rango anual (ISO)
+      const fechaInicioAño = new Date(añoActual, 0, 1, 0, 0, 0, 0).toISOString();
+      const fechaFinAño = new Date(añoActual, 11, 31, 23, 59, 59, 999).toISOString();
 
-      const { data: transaccionesAño } = await supabase
-        .from('transacciones_egresos')
-        .select('monto_total, cuenta_codigo, subcuenta_id, created_at')
-        .eq('tipo_egreso', 'costo')
-        .gte('created_at', fechaInicioAño)
-        .lte('created_at', fechaFinAño);
+      // ✅ 1) Traer todos los egresos tipo "costo" del año (una sola llamada)
+      // Endpoint esperado:
+      // GET /api/egresos?tipo_egreso=costo&start=...&end=...&fields=monto_total,cuenta_codigo,subcuenta_id,created_at
+      const egresosJson = await apiFetch(
+        `/api/egresos?tipo_egreso=costo&start=${encodeURIComponent(fechaInicioAño)}&end=${encodeURIComponent(
+          fechaFinAño
+        )}&fields=monto_total,cuenta_codigo,subcuenta_id,created_at`,
+        { method: "GET" }
+      );
+      const transaccionesAño: EgresoCostoRow[] = (egresosJson as any)?.data ?? egresosJson ?? [];
 
-      // Agrupar transacciones por mes en frontend
-      const transaccionesPorMes = new Map<number, any[]>();
-      
-      transaccionesAño?.forEach(transaccion => {
-        const mes = new Date(transaccion.created_at).getMonth();
-        if (!transaccionesPorMes.has(mes)) {
-          transaccionesPorMes.set(mes, []);
-        }
-        transaccionesPorMes.get(mes)!.push(transaccion);
+      // Agrupar transacciones por mes
+      const transaccionesPorMes = new Map<number, EgresoCostoRow[]>();
+
+      (transaccionesAño || []).forEach((t) => {
+        const mes = new Date(t.created_at).getMonth(); // 0-11
+        if (!transaccionesPorMes.has(mes)) transaccionesPorMes.set(mes, []);
+        transaccionesPorMes.get(mes)!.push(t);
       });
 
       const costosMensuales: CostoMensual[] = [];
@@ -62,23 +76,20 @@ export const useCostosMensuales = (año?: number, enabled: boolean = true) => {
         let totalMes = 0;
         const costosDelMes = new Map<string, number>();
 
-        // Agrupar por cuenta_codigo
         for (const trans of transaccionesMes) {
-          const monto = trans.monto_total || 0;
+          const monto = Number(trans.monto_total ?? 0) || 0;
           totalMes += monto;
 
-          // Si tiene cuenta_codigo, agrupar por esa cuenta
           if (trans.cuenta_codigo) {
-            const montoActual = costosDelMes.get(trans.cuenta_codigo) || 0;
-            costosDelMes.set(trans.cuenta_codigo, montoActual + monto);
+            const prev = costosDelMes.get(trans.cuenta_codigo) || 0;
+            costosDelMes.set(trans.cuenta_codigo, prev + monto);
           }
         }
 
-        // Agregar los costos agrupados al objeto del mes
+        // Volcar agrupación al mes y al time-series por cuenta
         costosDelMes.forEach((monto, cuenta) => {
           costoMes[cuenta] = monto;
 
-          // Actualizar el mapa de costos por cuenta
           if (!costosPorCuentaMap.has(cuenta)) {
             costosPorCuentaMap.set(cuenta, {
               cuenta,
@@ -86,42 +97,51 @@ export const useCostosMensuales = (año?: number, enabled: boolean = true) => {
               data: []
             });
           }
+
           costosPorCuentaMap.get(cuenta)!.data.push({
             mes: meses[mes],
             monto
           });
         });
 
-        costoMes['total'] = totalMes;
+        costoMes["total"] = totalMes;
         costosMensuales.push(costoMes);
       }
 
-      // Obtener nombres de las cuentas en una sola consulta
+      // ✅ 2) Traer nombres de cuentas (una sola llamada)
       const cuentasCodigos = Array.from(costosPorCuentaMap.keys());
-      const { data: cuentasData } = await supabase
-        .from('cuentas')
-        .select('codigo, nombre')
-        .in('codigo', cuentasCodigos);
 
-      // Actualizar nombres de cuentas
-      const cuentasMap = new Map(cuentasData?.map(c => [c.codigo, c.nombre]) || []);
+      let cuentasData: CuentaRow[] = [];
+      if (cuentasCodigos.length > 0) {
+        // Endpoint esperado:
+        // GET /api/cuentas?codigos=1001,2001,....
+        const cuentasJson = await apiFetch(
+          `/api/cuentas?codigos=${encodeURIComponent(cuentasCodigos.join(","))}`,
+          { method: "GET" }
+        );
+        cuentasData = (cuentasJson as any)?.data ?? cuentasJson ?? [];
+      }
+
+      const cuentasMap = new Map((cuentasData || []).map((c) => [c.codigo, c.nombre]));
+
       costosPorCuentaMap.forEach((value, key) => {
         value.nombreCuenta = cuentasMap.get(key) || key;
       });
 
-      // Rellenar meses faltantes con 0 para cada cuenta
+      // Rellenar meses faltantes con 0 (por si alguna cuenta aparece después)
       const costosPorCuenta = Array.from(costosPorCuentaMap.values());
-      costosPorCuenta.forEach(cuenta => {
-        meses.forEach((mes, index) => {
-          if (!cuenta.data.find(d => d.mes === mes)) {
-            cuenta.data.splice(index, 0, { mes, monto: 0 });
+
+      costosPorCuenta.forEach((cuenta) => {
+        meses.forEach((mesNombre, index) => {
+          if (!cuenta.data.find((d) => d.mes === mesNombre)) {
+            cuenta.data.splice(index, 0, { mes: mesNombre, monto: 0 });
           }
         });
       });
 
-      const cuentas = costosPorCuenta.map(c => ({ 
-        codigo: c.cuenta, 
-        nombre: c.nombreCuenta 
+      const cuentas = costosPorCuenta.map((c) => ({
+        codigo: c.cuenta,
+        nombre: c.nombreCuenta
       }));
 
       return {
@@ -130,9 +150,9 @@ export const useCostosMensuales = (año?: number, enabled: boolean = true) => {
         cuentas
       };
     },
-    staleTime: 5 * 60 * 1000, // Cachear por 5 minutos
-    gcTime: 10 * 60 * 1000, // Mantener en memoria 10 minutos
-    retry: 1, // Solo 1 reintento
-    refetchOnWindowFocus: false, // No refrescar al cambiar de ventana
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false
   });
 };

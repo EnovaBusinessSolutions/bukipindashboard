@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 interface DetalleAsiento {
   cuenta_codigo: string;
@@ -11,7 +11,7 @@ interface DetalleAsiento {
 
 interface CostoVentaInventario {
   id: string;
-  fecha: string;
+  fecha: string; // YYYY-MM-DD
   descripcion: string;
   monto: number;
   numero_asiento: string;
@@ -22,8 +22,85 @@ interface CostoVentaInventario {
   detalles_asiento: DetalleAsiento[];
 }
 
-// Función helper para redondear a 2 decimales
+type AsientoRow = {
+  id: string;
+  numero_asiento: string;
+  descripcion: string | null;
+  fecha: string; // YYYY-MM-DD
+  created_at?: string;
+  detalle_asientos?: Array<{
+    id?: string;
+    cuenta_codigo: string;
+    debe: number | null;
+    haber: number | null;
+    descripcion: string | null;
+  }>;
+};
+
+type CuentaRow = { codigo: string; nombre: string };
+
+type MovimientoInventarioRow = {
+  id: string;
+  cantidad: number | null;
+  producto_id: string | null;
+  costo_total: number | null;
+  fecha: string; // YYYY-MM-DD
+  descripcion: string | null;
+};
+
+type ProductoRow = {
+  id: string;
+  nombre: string;
+  imagen_url: string | null;
+};
+
+type EgresoRow = {
+  descripcion: string;
+  producto_egreso_id: string | null;
+  cantidad: number | null;
+  precio_unitario: number | null;
+  monto_total: number | null;
+  created_at: string; // ISO
+};
+
+type ProductoEgresoRow = {
+  id: string;
+  nombre: string;
+  imagen_url: string | null;
+};
+
+// Helper: redondear a 2 decimales
 const redondear = (num: number) => Math.round(num * 100) / 100;
+
+const toISODate = (d: Date) => d.toISOString().split("T")[0];
+
+const getRange = (
+  periodFilter?: "diario" | "mensual" | "anual",
+  fechaDiaria?: Date,
+  fechaMensual?: Date
+) => {
+  if (periodFilter === "diario" && fechaDiaria) {
+    const day = toISODate(fechaDiaria);
+    return { start: day, end: day };
+  }
+
+  if (periodFilter === "mensual" && fechaMensual) {
+    const y = fechaMensual.getFullYear();
+    const m = fechaMensual.getMonth();
+    const first = new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0);
+    return { start: toISODate(first), end: toISODate(last) };
+  }
+
+  if (periodFilter === "anual") {
+    const y = new Date().getFullYear();
+    return { start: `${y}-01-01`, end: `${y}-12-31` };
+  }
+
+  // default: sin filtro -> año actual (para no reventar payload infinito)
+  const y = new Date().getFullYear();
+  return { start: `${y}-01-01`, end: `${y}-12-31` };
+};
 
 export const useCostosVentaInventario = (
   periodFilter?: "diario" | "mensual" | "anual",
@@ -33,182 +110,248 @@ export const useCostosVentaInventario = (
   return useQuery({
     queryKey: ["costos-venta-inventario", periodFilter, fechaDiaria, fechaMensual],
     queryFn: async (): Promise<CostoVentaInventario[]> => {
-      // Obtener todos los asientos que tienen movimientos en cuentas de costos (50XX)
-      let query = supabase
-        .from('asientos_contables')
-        .select(`
-          id,
-          numero_asiento,
-          descripcion,
-          fecha,
-          user_id,
-          detalle_asientos(
-            id,
-            cuenta_codigo,
-            debe,
-            haber,
-            descripcion
-          )
-        `)
-        .order('fecha', { ascending: false });
+      const { start, end } = getRange(periodFilter, fechaDiaria, fechaMensual);
 
-      // Aplicar filtros de fecha
-      if (periodFilter === "diario" && fechaDiaria) {
-        const fechaStr = fechaDiaria.toISOString().split('T')[0];
-        query = query.eq('fecha', fechaStr);
-      } else if (periodFilter === "mensual" && fechaMensual) {
-        const year = fechaMensual.getFullYear();
-        const month = fechaMensual.getMonth();
-        const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-        const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
-        query = query.gte('fecha', firstDay).lte('fecha', lastDay);
-      } else if (periodFilter === "anual") {
-        const year = new Date().getFullYear();
-        query = query.gte('fecha', `${year}-01-01`).lte('fecha', `${year}-12-31`);
-      }
+      // 1) Asientos (con detalle_asientos) en rango
+      // Endpoint esperado:
+      // GET /api/asientos?start=YYYY-MM-DD&end=YYYY-MM-DD&include_detalles=1
+      const asientosJson = await apiFetch(
+        `/api/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&include_detalles=1`,
+        { method: "GET" }
+      );
+      const asientos: AsientoRow[] = (asientosJson as any)?.data ?? asientosJson ?? [];
 
-      const { data: asientos, error: asientosError } = await query;
+      if (!asientos || asientos.length === 0) return [];
 
-      if (asientosError) {
-        console.error('Error fetching costos venta:', asientosError);
-        throw asientosError;
-      }
+      // 2) Cuentas (mapa codigo->nombre)
+      // Endpoint esperado:
+      // GET /api/cuentas
+      const cuentasJson = await apiFetch(`/api/cuentas`, { method: "GET" });
+      const cuentas: CuentaRow[] = (cuentasJson as any)?.data ?? cuentasJson ?? [];
+      const cuentasMap = new Map((cuentas || []).map((c) => [c.codigo, c.nombre]));
 
-      // Obtener nombres de cuentas
-      const { data: cuentas } = await supabase
-        .from('cuentas')
-        .select('codigo, nombre');
+      // 3) Movimientos inventario venta en rango (para matchear por fecha + monto + descripción)
+      // Endpoint esperado:
+      // GET /api/inventario/movimientos?tipo_movimiento=venta&estado=activo&start=YYYY-MM-DD&end=YYYY-MM-DD
+      const movJson = await apiFetch(
+        `/api/inventario/movimientos?tipo_movimiento=venta&estado=activo&start=${encodeURIComponent(
+          start
+        )}&end=${encodeURIComponent(end)}`,
+        { method: "GET" }
+      );
+      const movimientos: MovimientoInventarioRow[] = (movJson as any)?.data ?? movJson ?? [];
 
-      const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
+      // 4) Egresos en rango (para fallback productos_egresos)
+      // Endpoint esperado:
+      // GET /api/egresos?start=ISO&end=ISO&estado=activo&fields=descripcion,producto_egreso_id,cantidad,precio_unitario,monto_total,created_at
+      const startISO = new Date(`${start}T00:00:00.000Z`).toISOString();
+      const endISO = new Date(`${end}T23:59:59.999Z`).toISOString();
 
-      // Procesar los asientos para extraer la información de costos de venta
-      const costosVenta: CostoVentaInventario[] = [];
+      const egresosJson = await apiFetch(
+        `/api/egresos?estado=activo&start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(
+          endISO
+        )}&fields=descripcion,producto_egreso_id,cantidad,precio_unitario,monto_total,created_at`,
+        { method: "GET" }
+      );
+      const egresos: EgresoRow[] = (egresosJson as any)?.data ?? egresosJson ?? [];
 
-      for (const asiento of asientos || []) {
-        // Buscar SOLO cuenta 5002 (Costo de Venta Inventario)
-        const detalleCosto = asiento.detalle_asientos?.find(
-          (detalle: any) => detalle.cuenta_codigo === '5002' && 
-                            detalle.debe > 0
+      // Filtrar asientos que tengan 5002 (Costo de Venta Inventario) con debe > 0
+      const candidatos = (asientos || []).filter((as) =>
+        (as.detalle_asientos || []).some(
+          (d) => d.cuenta_codigo === "5002" && Number(d.debe ?? 0) > 0
+        )
+      );
+
+      if (candidatos.length === 0) return [];
+
+      // Matcheo previo: armamos mapa de movimientos por fecha para acelerar búsquedas
+      const movimientosPorFecha = new Map<string, MovimientoInventarioRow[]>();
+      (movimientos || []).forEach((m) => {
+        const f = m.fecha;
+        if (!movimientosPorFecha.has(f)) movimientosPorFecha.set(f, []);
+        movimientosPorFecha.get(f)!.push(m);
+      });
+
+      // También agrupamos egresos por descripción para fallback
+      const egresosPorDescripcion = new Map<string, EgresoRow[]>();
+      (egresos || []).forEach((e) => {
+        const desc = (e.descripcion || "").trim();
+        if (!desc) return;
+        if (!egresosPorDescripcion.has(desc)) egresosPorDescripcion.set(desc, []);
+        egresosPorDescripcion.get(desc)!.push(e);
+      });
+
+      // Vamos construyendo costosVenta y recolectando IDs de productos para batch fetch
+      const costosIntermedios: Array<{
+        asiento: AsientoRow;
+        detalleCosto: NonNullable<AsientoRow["detalle_asientos"]>[number];
+        producto_id_inventario?: string | null;
+        producto_egreso_id?: string | null;
+        productoNombreInferido: string;
+        cantidad: number | null;
+        costoUnitario: number | null;
+        productoImagen: string | null;
+      }> = [];
+
+      for (const asiento of candidatos) {
+        const detalleCosto = (asiento.detalle_asientos || []).find(
+          (d) => d.cuenta_codigo === "5002" && Number(d.debe ?? 0) > 0
         );
-
         if (!detalleCosto) continue;
 
-        // Extraer el nombre del producto de la descripción
-        let productoNombre = 'Producto Inventariado';
-        let productoImagen: string | null = null;
+        const montoCosto = Number(detalleCosto.debe ?? 0) || 0;
+        const montoBuscado = redondear(montoCosto);
+
+        // Inferir nombre desde descripción del asiento
+        let productoNombre = "Producto Inventariado";
+        const descripcionAsiento = (asiento.descripcion || "").trim();
+
+        if (descripcionAsiento.includes("Venta:")) {
+          productoNombre = descripcionAsiento.split("Venta:")[1]?.trim() || productoNombre;
+        } else if (descripcionAsiento.includes("Egreso:")) {
+          productoNombre = descripcionAsiento.split("Egreso:")[1]?.trim() || productoNombre;
+        }
+
+        // Buscar movimiento inventario del mismo día con mismo costo_total (redondeado)
+        const movsDia = movimientosPorFecha.get(asiento.fecha) || [];
+        const movMatch =
+          movsDia.find((m) => {
+            const costo = redondear(Number(m.costo_total ?? 0));
+            if (costo !== montoBuscado) return false;
+            const d = (m.descripcion || "").toLowerCase();
+            const pn = productoNombre.toLowerCase();
+            // si hay descripción, intentamos matchear por nombre; si no, solo por monto
+            return !d ? true : d.includes(pn);
+          }) || null;
+
         let cantidad: number | null = null;
         let costoUnitario: number | null = null;
-        
-        const descripcionAsiento = asiento.descripcion || '';
-        
-        // Extraer el nombre del producto según el tipo de asiento
-        if (descripcionAsiento.includes('Venta:')) {
-          productoNombre = descripcionAsiento.split('Venta:')[1]?.trim() || productoNombre;
-        } else if (descripcionAsiento.includes('Egreso:')) {
-          productoNombre = descripcionAsiento.split('Egreso:')[1]?.trim() || productoNombre;
+        let productoImagen: string | null = null;
+        let productoIdInventario: string | null = null;
+
+        if (movMatch) {
+          productoIdInventario = movMatch.producto_id || null;
+          if (movMatch.cantidad != null) {
+            cantidad = Math.abs(Number(movMatch.cantidad));
+            if (cantidad > 0) costoUnitario = montoCosto / cantidad;
+          }
         }
 
-        // Buscar el movimiento de inventario con redondeo a 2 decimales
-        const montoBuscado = redondear(Number(detalleCosto.debe));
-        
-        const { data: movimientos } = await supabase
-          .from('movimientos_inventario')
-          .select('id, cantidad, producto_id, costo_total')
-          .eq('tipo_movimiento', 'venta')
-          .eq('fecha', asiento.fecha)
-          .eq('estado', 'activo')
-          .ilike('descripcion', `%${productoNombre}%`);
-        
-        // Filtrar en JavaScript comparando montos redondeados
-        const movimiento = movimientos?.find(m => 
-          redondear(Number(m.costo_total)) === montoBuscado
-        ) || null;
+        // Fallback: buscar en egresos por descripción y monto_total similar
+        let productoEgresoId: string | null = null;
+        if (!productoIdInventario) {
+          const descripcionBusqueda = descripcionAsiento
+            .replace("Egreso: ", "")
+            .replace("Venta: ", "")
+            .trim();
 
-        if (movimiento && movimiento.cantidad) {
-          cantidad = Math.abs(Number(movimiento.cantidad));
-          
-          // CALCULAR el costo unitario = monto total / cantidad
-          if (cantidad > 0) {
-            costoUnitario = Number(detalleCosto.debe) / cantidad;
-          }
-          
-          // Obtener datos del producto con una query separada
-          if (movimiento.producto_id) {
-            const { data: producto } = await supabase
-              .from('productos')
-              .select('nombre, imagen_url')
-              .eq('id', movimiento.producto_id)
-              .maybeSingle();
-            
-            if (producto) {
-              productoNombre = producto.nombre;
-              productoImagen = producto.imagen_url;
+          const egList = egresosPorDescripcion.get(descripcionBusqueda) || [];
+          const egMatch =
+            egList.find((eg) => redondear(Number(eg.monto_total ?? 0)) === montoBuscado) || null;
+
+          if (egMatch?.producto_egreso_id) {
+            productoEgresoId = egMatch.producto_egreso_id;
+
+            if (egMatch.cantidad != null) {
+              cantidad = Math.abs(Number(egMatch.cantidad));
+              if (cantidad > 0) costoUnitario = montoCosto / cantidad;
             }
           }
         }
 
-        // Si no encontramos imagen en inventario, buscar en productos_egresos
-        if (!productoImagen && detalleCosto) {
-          // Buscar la transacción de egreso relacionada por descripción y monto (con redondeo)
-          const descripcionBusqueda = asiento.descripcion.replace('Egreso: ', '').replace('Venta: ', '').trim();
-          const montoBuscadoEgreso = redondear(Number(detalleCosto.debe));
-          
-          const { data: transaccionesEgresos } = await supabase
-            .from('transacciones_egresos')
-            .select('producto_egreso_id, cantidad, precio_unitario, monto_total')
-            .eq('descripcion', descripcionBusqueda)
-            .eq('user_id', asiento.user_id)
-            .eq('estado', 'activo');
-          
-          // Filtrar por monto redondeado
-          const transaccionEgreso = transaccionesEgresos?.find(te =>
-            redondear(Number(te.monto_total)) === montoBuscadoEgreso
-          ) || null;
-          
-          if (transaccionEgreso?.producto_egreso_id) {
-            const { data: productoEgreso } = await supabase
-              .from('productos_egresos')
-              .select('nombre, imagen_url')
-              .eq('id', transaccionEgreso.producto_egreso_id)
-              .maybeSingle();
-            
-            if (productoEgreso) {
-              productoNombre = productoEgreso.nombre;
-              productoImagen = productoEgreso.imagen_url;
-              
-              // Calcular cantidad y costo unitario desde transacciones_egresos
-              if (transaccionEgreso.cantidad) {
-                cantidad = Math.abs(Number(transaccionEgreso.cantidad));
-                if (cantidad > 0) {
-                  costoUnitario = Number(detalleCosto.debe) / cantidad;
-                }
-              }
-            }
+        costosIntermedios.push({
+          asiento,
+          detalleCosto,
+          producto_id_inventario: productoIdInventario,
+          producto_egreso_id: productoEgresoId,
+          productoNombreInferido: productoNombre,
+          cantidad,
+          costoUnitario,
+          productoImagen
+        });
+      }
+
+      // Batch fetch productos (inventario)
+      const idsProductos = Array.from(
+        new Set(costosIntermedios.map((c) => c.producto_id_inventario).filter(Boolean))
+      ) as string[];
+
+      let productosMap = new Map<string, ProductoRow>();
+      if (idsProductos.length > 0) {
+        // Endpoint esperado:
+        // GET /api/productos?ids=...
+        const prodJson = await apiFetch(`/api/productos?ids=${encodeURIComponent(idsProductos.join(","))}`, {
+          method: "GET"
+        });
+        const productos: ProductoRow[] = (prodJson as any)?.data ?? prodJson ?? [];
+        productosMap = new Map((productos || []).map((p) => [p.id, p]));
+      }
+
+      // Batch fetch productos_egresos (fallback)
+      const idsProdEgreso = Array.from(
+        new Set(costosIntermedios.map((c) => c.producto_egreso_id).filter(Boolean))
+      ) as string[];
+
+      let productosEgresosMap = new Map<string, ProductoEgresoRow>();
+      if (idsProdEgreso.length > 0) {
+        // Endpoint esperado:
+        // GET /api/productos-egresos?ids=...
+        const peJson = await apiFetch(
+          `/api/productos-egresos?ids=${encodeURIComponent(idsProdEgreso.join(","))}`,
+          { method: "GET" }
+        );
+        const productosEgresos: ProductoEgresoRow[] = (peJson as any)?.data ?? peJson ?? [];
+        productosEgresosMap = new Map((productosEgresos || []).map((p) => [p.id, p]));
+      }
+
+      // Armar respuesta final
+      const costosVenta: CostoVentaInventario[] = costosIntermedios.map((item) => {
+        const { asiento, detalleCosto } = item;
+
+        let productoNombre = item.productoNombreInferido;
+        let productoImagen: string | null = null;
+
+        if (item.producto_id_inventario) {
+          const prod = productosMap.get(item.producto_id_inventario);
+          if (prod) {
+            productoNombre = prod.nombre || productoNombre;
+            productoImagen = prod.imagen_url ?? null;
           }
         }
 
-        // Obtener todos los detalles del asiento con nombres de cuenta
-        const detallesAsiento: DetalleAsiento[] = asiento.detalle_asientos?.map((detalle: any) => ({
-          cuenta_codigo: detalle.cuenta_codigo,
-          cuenta_nombre: cuentasMap.get(detalle.cuenta_codigo) || null,
-          debe: Number(detalle.debe),
-          haber: Number(detalle.haber),
-          descripcion: detalle.descripcion
-        })) || [];
+        if (!productoImagen && item.producto_egreso_id) {
+          const pe = productosEgresosMap.get(item.producto_egreso_id);
+          if (pe) {
+            productoNombre = pe.nombre || productoNombre;
+            productoImagen = pe.imagen_url ?? null;
+          }
+        }
 
-        costosVenta.push({
+        const detallesAsiento: DetalleAsiento[] =
+          (asiento.detalle_asientos || []).map((d) => ({
+            cuenta_codigo: d.cuenta_codigo,
+            cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || null,
+            debe: Number(d.debe ?? 0) || 0,
+            haber: Number(d.haber ?? 0) || 0,
+            descripcion: d.descripcion
+          })) || [];
+
+        return {
           id: asiento.id,
           fecha: asiento.fecha,
-          descripcion: detalleCosto.descripcion || asiento.descripcion,
-          monto: Number(detalleCosto.debe),
+          descripcion: detalleCosto.descripcion || asiento.descripcion || "",
+          monto: Number(detalleCosto.debe ?? 0) || 0,
           numero_asiento: asiento.numero_asiento,
           producto_nombre: productoNombre,
           producto_imagen: productoImagen,
-          cantidad,
-          costo_unitario: costoUnitario,
+          cantidad: item.cantidad,
+          costo_unitario: item.costoUnitario,
           detalles_asiento: detallesAsiento
-        });
-      }
+        };
+      });
+
+      // Orden por fecha desc (por si el backend no)
+      costosVenta.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
 
       return costosVenta;
     }

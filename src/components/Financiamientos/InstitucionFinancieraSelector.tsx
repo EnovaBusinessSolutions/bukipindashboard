@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronsUpDown, Plus, Upload, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -28,15 +27,22 @@ interface InstitucionFinancieraSelectorProps {
   onChange: (id: string, nombre: string) => void;
 }
 
+/**
+ * ✅ Ajusta si tu backend usa otra ruta
+ */
+const UPLOAD_ENDPOINT = "/api/uploads/logo"; // + ?folder=instituciones
+
 export default function InstitucionFinancieraSelector({
   value,
   onChange,
 }: InstitucionFinancieraSelectorProps) {
   const [open, setOpen] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
+
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
   const { instituciones, crearInstitucion } = useInstitucionesFinancieras();
   const { toast } = useToast();
 
@@ -58,78 +64,104 @@ export default function InstitucionFinancieraSelector({
 
   const selectedInstitucion = instituciones.find((inst) => inst.id === value);
 
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validar tamaño (máx 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        toast({
-          title: "❌ Archivo muy grande",
-          description: "El logo debe pesar menos de 2MB",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Validar tipo
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: "❌ Tipo de archivo inválido",
-          description: "Solo se permiten imágenes",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      setLogoFile(file);
-      
-      // Crear preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  const resetForm = () => {
+    setFormData({
+      nombre: "",
+      logo_url: "",
+      ejecutivo_nombre: "",
+      ejecutivo_telefono: "",
+      ejecutivo_email: "",
+      telefono_principal: "",
+      email_principal: "",
+      direccion: "",
+      ciudad: "",
+      estado: "",
+      codigo_postal: "",
+      sitio_web: "",
+      notas: "",
+    });
+    setLogoFile(null);
+    setLogoPreview(null);
   };
 
+  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tamaño (máx 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "❌ Archivo muy grande",
+        description: "El logo debe pesar menos de 2MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar tipo
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "❌ Tipo de archivo inválido",
+        description: "Solo se permiten imágenes",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLogoFile(file);
+
+    // Preview local
+    const reader = new FileReader();
+    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * ✅ Upload al backend (multipart)
+   * Backend debe devolver: { ok:true, url:"..." } (o payload directo {url})
+   */
   const uploadLogo = async (): Promise<string | null> => {
-    if (!logoFile) return formData.logo_url;
+    if (!logoFile) return formData.logo_url || null;
 
     try {
       setUploading(true);
-      
-      const fileExt = logoFile.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `instituciones/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, logoFile);
+      const fd = new FormData();
+      fd.append("file", logoFile);
 
-      if (uploadError) {
-        toast({
-          title: "❌ Error al subir logo",
-          description: uploadError.message,
-          variant: "destructive"
-        });
-        return null;
+      const res = await fetch(`${UPLOAD_ENDPOINT}?folder=instituciones`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        // ignore
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
+      if (!res.ok) {
+        const msg = json?.error || json?.message || `Error HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      const url = json?.url || json?.data?.url;
+      if (!url) throw new Error("El backend no devolvió la URL del archivo subido.");
 
       toast({
         title: "✅ Logo subido",
-        description: "El logo se ha guardado correctamente"
+        description: "El logo se ha guardado correctamente",
       });
 
-      return publicUrl;
+      return url;
     } catch (error: any) {
       toast({
-        title: "❌ Error inesperado",
-        description: error.message,
-        variant: "destructive"
+        title: "❌ Error al subir logo",
+        description: error?.message || "Error inesperado",
+        variant: "destructive",
       });
       return null;
     } finally {
@@ -149,41 +181,27 @@ export default function InstitucionFinancieraSelector({
 
     try {
       let logoUrl = formData.logo_url;
+
       if (logoFile) {
         const uploadedUrl = await uploadLogo();
-        if (uploadedUrl) {
-          logoUrl = uploadedUrl;
-        }
+        if (uploadedUrl) logoUrl = uploadedUrl;
       }
 
-      await crearInstitucion.mutateAsync({ ...formData, logo_url: logoUrl }, {
-        onSuccess: (nuevaInstitucion) => {
-          onChange(nuevaInstitucion.id, nuevaInstitucion.nombre);
-          setShowNewDialog(false);
-          setFormData({
-            nombre: "",
-            logo_url: "",
-            ejecutivo_nombre: "",
-            ejecutivo_telefono: "",
-            ejecutivo_email: "",
-            telefono_principal: "",
-            email_principal: "",
-            direccion: "",
-            ciudad: "",
-            estado: "",
-            codigo_postal: "",
-            sitio_web: "",
-            notas: "",
-          });
-          setLogoFile(null);
-          setLogoPreview(null);
-        },
+      // Importante: mutateAsync NO soporta "onSuccess" como 2do parámetro en React Query v4.
+      // Mejor: capturar el retorno del backend (tu hook debe retornar la institución creada).
+      const nuevaInstitucion = await crearInstitucion.mutateAsync({
+        ...formData,
+        logo_url: logoUrl,
       });
+
+      onChange(nuevaInstitucion.id, nuevaInstitucion.nombre);
+      setShowNewDialog(false);
+      resetForm();
     } catch (error: any) {
       toast({
         title: "❌ Error al crear institución",
-        description: error.message,
-        variant: "destructive"
+        description: error?.message || "Error inesperado",
+        variant: "destructive",
       });
     }
   };
@@ -204,7 +222,7 @@ export default function InstitucionFinancieraSelector({
                   <Avatar className="h-5 w-5">
                     <AvatarImage src={selectedInstitucion.logo_url} />
                     <AvatarFallback className="text-xs">
-                      {selectedInstitucion.nombre[0]}
+                      {selectedInstitucion.nombre?.[0] || "I"}
                     </AvatarFallback>
                   </Avatar>
                 )}
@@ -216,6 +234,7 @@ export default function InstitucionFinancieraSelector({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
+
         <PopoverContent className="w-full p-0">
           <Command>
             <CommandInput placeholder="Buscar institución..." />
@@ -241,7 +260,7 @@ export default function InstitucionFinancieraSelector({
                       <Avatar className="h-6 w-6">
                         <AvatarImage src={institucion.logo_url} />
                         <AvatarFallback className="text-xs">
-                          {institucion.nombre[0]}
+                          {institucion.nombre?.[0] || "I"}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -249,9 +268,11 @@ export default function InstitucionFinancieraSelector({
                   </div>
                 </CommandItem>
               ))}
+
               <CommandItem
                 onSelect={() => {
                   setOpen(false);
+                  resetForm();
                   setShowNewDialog(true);
                 }}
                 className="border-t"
@@ -264,7 +285,13 @@ export default function InstitucionFinancieraSelector({
         </PopoverContent>
       </Popover>
 
-      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+      <Dialog
+        open={showNewDialog}
+        onOpenChange={(v) => {
+          setShowNewDialog(v);
+          if (!v) resetForm();
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nueva Institución Financiera</DialogTitle>
@@ -286,12 +313,12 @@ export default function InstitucionFinancieraSelector({
 
             <div className="space-y-2">
               <Label>Logo de la Institución</Label>
-              
+
               {logoPreview && (
                 <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
-                  <img 
-                    src={logoPreview} 
-                    alt="Preview" 
+                  <img
+                    src={logoPreview}
+                    alt="Preview"
                     className="w-full h-full object-contain"
                   />
                   <Button

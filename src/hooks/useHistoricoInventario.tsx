@@ -1,6 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { format, startOfMonth, parseISO, subMonths, startOfYear, eachDayOfInterval, endOfMonth, eachMonthOfInterval, endOfYear } from "date-fns";
+import { apiFetch } from "@/lib/api";
+import {
+  format,
+  startOfMonth,
+  parseISO,
+  startOfYear,
+  eachDayOfInterval,
+  endOfMonth,
+  eachMonthOfInterval,
+  endOfYear,
+} from "date-fns";
 import { es } from "date-fns/locale";
 
 export type DatoHistoricoMes = {
@@ -15,46 +24,51 @@ export type DatoHistoricoMes = {
 
 type Periodo = "mensual" | "anual";
 
-export const useHistoricoInventario = (
-  productoId: string | null, 
-  periodo: Periodo = "anual"
-) => {
+type MovimientoInventario = {
+  fecha: string; // YYYY-MM-DD
+  tipo_movimiento: "compra" | "venta" | "ajuste";
+  cantidad: number | string;
+  costo_total: number | string | null;
+  costo_unitario: number | string | null;
+  producto_id?: string | null;
+  estado?: string;
+};
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+
+const unwrap = <T,>(json: ApiEnvelope<T>): T => {
+  return (json as any)?.data ?? (json as T);
+};
+
+export const useHistoricoInventario = (productoId: string | null, periodo: Periodo = "anual") => {
   return useQuery({
     queryKey: ["historico-inventario", productoId, periodo],
-    queryFn: async () => {
+    queryFn: async (): Promise<DatoHistoricoMes[]> => {
       // Determinar fecha de inicio según período
-      const fechaInicio = periodo === "mensual" 
-        ? startOfMonth(new Date())
-        : startOfYear(new Date());
+      const fechaInicio = periodo === "mensual" ? startOfMonth(new Date()) : startOfYear(new Date());
 
-      // Construir query base
-      let query = supabase
-        .from("movimientos_inventario")
-        .select("*")
-        .eq("estado", "activo")
-        .gte("fecha", format(fechaInicio, "yyyy-MM-dd"))
-        .order("fecha", { ascending: true });
+      // NOTA: si productoId === "total" o null -> no filtramos
+      const params = new URLSearchParams();
+      params.set("periodo", periodo);
+      params.set("from", format(fechaInicio, "yyyy-MM-dd"));
+      if (productoId && productoId !== "total") params.set("productoId", productoId);
 
-      // Si hay producto específico, filtrar por él; sino, obtener todos
-      if (productoId && productoId !== "total") {
-        query = query.eq("producto_id", productoId);
-      }
+      const json = await apiFetch(`/api/inventario/movimientos/historico?${params.toString()}`, {
+        method: "GET",
+      });
 
-      const { data: movimientos, error } = await query;
-
-      if (error) throw error;
+      const movimientos = unwrap<MovimientoInventario[]>(json) || [];
 
       // Generar todos los períodos según el tipo seleccionado
       let todosPeriodos: DatoHistoricoMes[];
-      
+
       if (periodo === "mensual") {
-        // Generar todos los días del mes actual
         const diasDelMes = eachDayOfInterval({
           start: startOfMonth(new Date()),
-          end: endOfMonth(new Date())
+          end: endOfMonth(new Date()),
         });
-        
-        todosPeriodos = diasDelMes.map(dia => ({
+
+        todosPeriodos = diasDelMes.map((dia) => ({
           mes: format(dia, "dd MMM", { locale: es }),
           stock: 0,
           compras: 0,
@@ -64,13 +78,12 @@ export const useHistoricoInventario = (
           ventas_valor: 0,
         }));
       } else {
-        // Generar todos los meses del año actual
         const mesesDelAno = eachMonthOfInterval({
           start: startOfYear(new Date()),
-          end: endOfYear(new Date())
+          end: endOfYear(new Date()),
         });
-        
-        todosPeriodos = mesesDelAno.map(mes => ({
+
+        todosPeriodos = mesesDelAno.map((mes) => ({
           mes: format(mes, "MMM yyyy", { locale: es }),
           stock: 0,
           compras: 0,
@@ -83,12 +96,14 @@ export const useHistoricoInventario = (
 
       // Agrupar movimientos por período
       const movimientosPorPeriodo: Record<string, DatoHistoricoMes> = {};
-      
-      movimientos?.forEach((movimiento) => {
+
+      movimientos.forEach((movimiento) => {
         const fecha = parseISO(movimiento.fecha);
-        const periodoKey = periodo === "mensual" 
-          ? format(fecha, "dd MMM", { locale: es })
-          : format(startOfMonth(fecha), "MMM yyyy", { locale: es });
+
+        const periodoKey =
+          periodo === "mensual"
+            ? format(fecha, "dd MMM", { locale: es })
+            : format(startOfMonth(fecha), "MMM yyyy", { locale: es });
 
         if (!movimientosPorPeriodo[periodoKey]) {
           movimientosPorPeriodo[periodoKey] = {
@@ -102,9 +117,9 @@ export const useHistoricoInventario = (
           };
         }
 
-        const cantidad = Number(movimiento.cantidad);
-        const costoTotal = Number(movimiento.costo_total);
-        const costoUnitario = Number(movimiento.costo_unitario);
+        const cantidad = Number(movimiento.cantidad) || 0;
+        const costoTotal = Number(movimiento.costo_total) || 0;
+        const costoUnitario = Number(movimiento.costo_unitario) || 0;
 
         if (movimiento.tipo_movimiento === "compra") {
           movimientosPorPeriodo[periodoKey].compras += cantidad;
@@ -113,25 +128,26 @@ export const useHistoricoInventario = (
           movimientosPorPeriodo[periodoKey].ventas += cantidad;
           movimientosPorPeriodo[periodoKey].ventas_valor += cantidad * costoUnitario;
         } else if (movimiento.tipo_movimiento === "ajuste") {
+          // Ajuste positivo = entra stock (lo tratamos como compra)
           if (cantidad > 0) {
             movimientosPorPeriodo[periodoKey].compras += cantidad;
             movimientosPorPeriodo[periodoKey].compras_valor += costoTotal;
           } else {
-            movimientosPorPeriodo[periodoKey].ventas += Math.abs(cantidad);
-            movimientosPorPeriodo[periodoKey].ventas_valor += Math.abs(cantidad) * costoUnitario;
+            // Ajuste negativo = sale stock (lo tratamos como venta)
+            const abs = Math.abs(cantidad);
+            movimientosPorPeriodo[periodoKey].ventas += abs;
+            movimientosPorPeriodo[periodoKey].ventas_valor += abs * costoUnitario;
           }
         }
       });
 
       // Combinar todos los períodos con los movimientos
-      const datosHistoricos = todosPeriodos.map(periodo => {
-        const movimiento = movimientosPorPeriodo[periodo.mes];
-        return movimiento || periodo;
-      });
+      const datosHistoricos = todosPeriodos.map((p) => movimientosPorPeriodo[p.mes] || p);
 
       // Calcular stock acumulado
       let stockAcumulado = 0;
       let stockValorAcumulado = 0;
+
       datosHistoricos.forEach((dato) => {
         stockAcumulado += dato.compras - dato.ventas;
         stockValorAcumulado += dato.compras_valor - dato.ventas_valor;

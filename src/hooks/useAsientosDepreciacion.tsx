@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 interface DetalleAsiento {
   id: string;
@@ -16,72 +16,87 @@ interface AsientoDepreciacion {
   id: string;
   numero_asiento: string;
   descripcion: string;
-  fecha: string;
+  fecha: string; // YYYY-MM-DD
   detalle_asientos: DetalleAsiento[];
 }
+
+type AsientoDepreciacionApi = {
+  id: string;
+  numero_asiento: string;
+  descripcion: string;
+  fecha: string;
+  detalle_asientos?: Array<{
+    id: string;
+    cuenta_codigo: string;
+    debe: number | string | null;
+    haber: number | string | null;
+    descripcion: string | null;
+  }>;
+};
 
 export const useAsientosDepreciacion = (inversionId?: string) => {
   return useQuery({
     queryKey: ["asientos-depreciacion", inversionId],
-    queryFn: async () => {
+    queryFn: async (): Promise<AsientoDepreciacion[]> => {
       if (!inversionId) return [];
 
-      // Buscar asientos que coincidan con el patrón DEP-{inversionId}-
-      const numeroAsientoPattern = `DEP-${inversionId}-%`;
+      // 1) Traer asientos DEP-{inversionId}-* con detalles
+      // (Backend recomendado: ya filtra por owner=req.user._id)
+      const asientosJson = await apiFetch(
+        `/api/contabilidad/asientos/depreciacion/${encodeURIComponent(inversionId)}`,
+        { method: "GET" }
+      );
 
-      const { data, error } = await supabase
-        .from("asientos_contables")
-        .select(`
-          id,
-          numero_asiento,
-          descripcion,
-          fecha,
-          detalle_asientos (
-            id,
-            cuenta_codigo,
-            debe,
-            haber,
-            descripcion
-          )
-        `)
-        .like("numero_asiento", numeroAsientoPattern)
-        .order("fecha", { ascending: false });
+      const asientos: AsientoDepreciacionApi[] =
+        (asientosJson as any)?.data ?? asientosJson ?? [];
 
-      if (error) {
-        console.error("Error fetching asientos depreciacion:", error);
-        return [];
+      if (!Array.isArray(asientos) || asientos.length === 0) return [];
+
+      // 2) Recolectar códigos únicos de cuentas
+      const codigosSet = new Set<string>();
+      for (const asiento of asientos) {
+        for (const d of asiento.detalle_asientos || []) {
+          if (d?.cuenta_codigo) codigosSet.add(d.cuenta_codigo);
+        }
+      }
+      const codigos = Array.from(codigosSet);
+
+      // 3) Cargar catálogo de cuentas (solo las necesarias)
+      let cuentasMap = new Map<string, string>();
+      if (codigos.length > 0) {
+        const cuentasJson = await apiFetch(
+          `/api/catalogos/cuentas?codes=${encodeURIComponent(codigos.join(","))}&fields=codigo,nombre`,
+          { method: "GET" }
+        );
+
+        const cuentas: Array<{ codigo: string; nombre: string }> =
+          (cuentasJson as any)?.data ?? cuentasJson ?? [];
+
+        cuentasMap = new Map(cuentas.map((c) => [c.codigo, c.nombre]));
       }
 
-      // Obtener nombres de cuentas para todos los asientos
-      if (data && data.length > 0) {
-        const cuentasCodigos = new Set<string>();
-        data.forEach((asiento: any) => {
-          asiento.detalle_asientos?.forEach((d: any) => {
-            cuentasCodigos.add(d.cuenta_codigo);
-          });
-        });
+      // 4) Adjuntar nombre de cuenta y normalizar números
+      const normalizados: AsientoDepreciacion[] = asientos.map((asiento) => ({
+        id: asiento.id,
+        numero_asiento: asiento.numero_asiento,
+        descripcion: asiento.descripcion,
+        fecha: asiento.fecha,
+        detalle_asientos: (asiento.detalle_asientos || []).map((d) => ({
+          id: d.id,
+          cuenta_codigo: d.cuenta_codigo,
+          debe: Number(d.debe) || 0,
+          haber: Number(d.haber) || 0,
+          descripcion: d.descripcion || "",
+          cuenta: {
+            nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo,
+          },
+        })),
+      }));
 
-        const { data: cuentas } = await supabase
-          .from("cuentas")
-          .select("codigo, nombre")
-          .in("codigo", Array.from(cuentasCodigos));
+      // Si el backend no ordena, aseguramos orden por fecha desc aquí:
+      normalizados.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
 
-        const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
-        
-        // Agregar nombres de cuentas a cada detalle
-        data.forEach((asiento: any) => {
-          if (asiento.detalle_asientos) {
-            asiento.detalle_asientos = asiento.detalle_asientos.map((d: any) => ({
-              ...d,
-              cuenta: {
-                nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
-              }
-            }));
-          }
-        });
-      }
-
-      return data as AsientoDepreciacion[];
+      return normalizados;
     },
     enabled: !!inversionId,
   });

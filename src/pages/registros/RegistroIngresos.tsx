@@ -17,7 +17,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList, Treemap } from "recharts";
 import { useVentasResumen } from "@/hooks/useVentasResumen";
@@ -27,6 +26,52 @@ import { useCuentas } from "@/hooks/useCuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useUpdateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
+
+// ✅ Bukipin E2E (sin Supabase): helper de fetch con cookies + normalización
+async function apiJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = (json as any)?.error || (json as any)?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return ((json as any)?.data ?? json) as T;
+}
+
+// ✅ Compat: reemplazo de supabase.functions.invoke(...)
+async function invokeServer(fnName: string, args: { body?: any } = {}): Promise<{ data: any; error: any }> {
+  const body = args?.body ?? {};
+  try {
+    if (fnName === "registrar-ingreso") {
+      const data = await apiJson("/api/ingresos", { method: "POST", body: JSON.stringify(body) });
+      return { data, error: null };
+    }
+    if (fnName === "cancelar-ingreso") {
+      const transaccionId = body?.transaccionId;
+      const data = await apiJson(`/api/ingresos/${encodeURIComponent(transaccionId)}/cancelar`, {
+        method: "POST",
+        body: JSON.stringify({ motivoCancelacion: body?.motivoCancelacion }),
+      });
+      return { data, error: null };
+    }
+    // fallback genérico por si agregas otros nombres
+    const data = await apiJson(`/api/functions/${encodeURIComponent(fnName)}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    return { data, error: null };
+  } catch (e: any) {
+    return { data: null, error: { message: e?.message || String(e) } };
+  }
+}
+
 
 // Función helper para formatear montos con separador de comas
 const formatMonto = (value: number | string): string => {
@@ -644,27 +689,12 @@ const RegistroIngresos = () => {
   // useEffect para cargar asientos de ingresos directos (sin transacción asociada)
   useEffect(() => {
     const cargarAsientosDirectos = async () => {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user?.user?.id) return;
 
       try {
         // Obtener asientos contables que NO tienen transaccion_ingreso_id
-        const { data: asientos, error: asientosError } = await supabase
-          .from('asientos_contables')
-          .select(`
-            id,
-            fecha,
-            descripcion,
-            numero_asiento,
-            detalle_asientos!inner(
-              cuenta_codigo,
-              haber,
-              debe,
-              subcuenta_id
-            )
-          `)
-          .eq('user_id', user.user.id)
-          .is('transaccion_ingreso_id', null);
+        const resp = await apiJson<any>("/api/ingresos/asientos-directos");
+        const asientos = resp?.asientos ?? resp?.data?.asientos ?? resp ?? [];
+        const asientosError: any = null;
 
         if (asientosError) throw asientosError;
         if (!asientos) return;
@@ -690,8 +720,6 @@ const RegistroIngresos = () => {
   // useEffect para calcular analíticas desde asientos contables
   useEffect(() => {
     const calcularAnaliticasDesdeAsientos = async () => {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user?.user?.id) return;
 
       try {
         // Determinar el rango de fechas según el período seleccionado
@@ -713,12 +741,10 @@ const RegistroIngresos = () => {
         }
 
         // Consultar asientos contables en el rango de fechas
-        const { data: asientos, error: asientosError } = await supabase
-          .from('asientos_contables')
-          .select('id, fecha, descripcion')
-          .eq('user_id', user.user.id)
-          .gte('fecha', fechaInicio.toISOString().split('T')[0])
-          .lte('fecha', fechaFin.toISOString().split('T')[0]);
+        const resp = await apiJson<any>(`/api/ingresos/asientos?start=${encodeURIComponent(fechaInicio.toISOString().split('T')[0])}&end=${encodeURIComponent(fechaFin.toISOString().split('T')[0])}`);
+        const asientos = resp?.asientos ?? resp?.data?.asientos ?? [];
+        const detalles = resp?.detalles ?? resp?.data?.detalles ?? [];
+        const asientosError: any = null;
 
         if (asientosError) throw asientosError;
         if (!asientos || asientos.length === 0) {
@@ -734,13 +760,6 @@ const RegistroIngresos = () => {
 
         // Obtener detalles de asientos
         const asientoIds = asientos.map(a => a.id);
-        const { data: detalles, error: detallesError } = await supabase
-          .from('detalle_asientos')
-          .select('asiento_id, cuenta_codigo, debe, haber')
-          .in('asiento_id', asientoIds);
-
-        if (detallesError) throw detallesError;
-        if (!detalles) return;
 
         // Calcular totales según tipo de ingreso
         let ventasBrutasTotal = 0;
@@ -874,8 +893,6 @@ const RegistroIngresos = () => {
   useEffect(() => {
     const calcularTotales = async () => {
       try {
-        const { data: user } = await supabase.auth.getUser();
-        if (!user?.user?.id) return;
 
         const calcularPeriodo = async (periodo: 'dia' | 'mes' | 'ano') => {
           const today = new Date();
@@ -899,23 +916,9 @@ const RegistroIngresos = () => {
             endDate = `${year}-12-31`;
           }
 
-          const { data: detalles, error } = await supabase
-            .from('detalle_asientos')
-            .select(`
-              id,
-              cuenta_codigo,
-              debe,
-              haber,
-              asiento_id,
-              asientos_contables!inner(
-                fecha,
-                user_id
-              )
-            `)
-            .eq('asientos_contables.user_id', user.user.id)
-            .gte('asientos_contables.fecha', startDate)
-            .lte('asientos_contables.fecha', endDate)
-            .like('cuenta_codigo', '4%');
+          const resp = await apiJson<any>(`/api/ingresos/detalles?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`);
+          const detalles = resp?.detalles ?? resp?.data?.detalles ?? resp ?? [];
+          const error: any = null;
 
           if (error) throw error;
 
@@ -946,8 +949,6 @@ const RegistroIngresos = () => {
         // Función para cargar movimientos de inventario para analítica
         const cargarMovimientosInventario = async () => {
           try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
             
             // Calcular rango de fechas según el filtro de período
             let startDate: Date;
@@ -967,22 +968,9 @@ const RegistroIngresos = () => {
             }
             
             // Consultar movimientos de venta con información del producto
-            const { data: movimientos, error } = await supabase
-              .from('movimientos_inventario')
-              .select(`
-                *,
-                productos (
-                  id,
-                  nombre,
-                  precio_venta,
-                  imagen_url
-                )
-              `)
-              .eq('user_id', user.id)
-              .eq('tipo_movimiento', 'venta')
-              .gte('created_at', startDate.toISOString())
-              .lte('created_at', endDate.toISOString())
-              .order('created_at', { ascending: false });
+            const respMov = await apiJson<any>(`/api/inventario/movimientos?tipo=venta&start=${encodeURIComponent(startDate.toISOString())}&end=${encodeURIComponent(endDate.toISOString())}`);
+            const movimientos = respMov?.movimientos ?? respMov?.data?.movimientos ?? respMov ?? [];
+            const error: any = null;
             
             if (error) {
               console.error('Error cargando movimientos:', error);
@@ -1016,8 +1004,6 @@ const RegistroIngresos = () => {
     // Cargar movimientos de inventario para analítica
     const loadMovimientos = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
         
         // Calcular rango de fechas según el filtro de período
         let startDate: Date;
@@ -1037,22 +1023,9 @@ const RegistroIngresos = () => {
         }
         
         // Consultar movimientos de venta con información del producto
-        const { data: movimientos, error } = await supabase
-          .from('movimientos_inventario')
-          .select(`
-            *,
-            productos (
-              id,
-              nombre,
-              precio_venta,
-              imagen_url
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('tipo_movimiento', 'venta')
-          .gte('created_at', startDate.toISOString())
-          .lte('created_at', endDate.toISOString())
-          .order('created_at', { ascending: false });
+        const respMov = await apiJson<any>(`/api/inventario/movimientos?tipo=venta&start=${encodeURIComponent(startDate.toISOString())}&end=${encodeURIComponent(endDate.toISOString())}`);
+        const movimientos = respMov?.movimientos ?? respMov?.data?.movimientos ?? respMov ?? [];
+        const error: any = null;
         
         if (error) {
           console.error('Error cargando movimientos:', error);
@@ -1075,73 +1048,9 @@ const RegistroIngresos = () => {
     setLoadingAsientos(true);
     setCurrentAsientos(null);
     try {
-      console.log("Cargando asientos para transacción:", transaccionId);
-      
-      // Buscar el asiento contable por transaccion_ingreso_id
-      const { data: asientos, error: asientosError } = await supabase
-        .from('asientos_contables')
-        .select('*')
-        .eq('transaccion_ingreso_id', transaccionId)
-        .maybeSingle();
-
-      console.log("Resultado de asientos:", { asientos, asientosError });
-
-      if (asientosError) {
-        console.error("Error loading asiento:", asientosError);
-        toast({
-          title: "Error",
-          description: "Error al cargar asientos contables",
-          variant: "destructive"
-        });
-        setLoadingAsientos(false);
-        return;
-      }
-
-      if (!asientos) {
-        console.warn("No se encontró asiento para la transacción:", transaccionId);
-        setLoadingAsientos(false);
-        return;
-      }
-
-      // Obtener los detalles del asiento
-      const { data: detalles, error: detallesError } = await supabase
-        .from('detalle_asientos')
-        .select('*')
-        .eq('asiento_id', asientos.id);
-
-      console.log("Resultado de detalles:", { detalles, detallesError });
-
-      if (detallesError) {
-        console.error("Error loading detalles:", detallesError);
-        toast({
-          title: "Error",
-          description: "Error al cargar detalles de asientos",
-          variant: "destructive"
-        });
-        setLoadingAsientos(false);
-        return;
-      }
-
-      // Obtener nombres de cuentas
-      const { data: cuentas } = await supabase
-        .from('cuentas')
-        .select('codigo, nombre');
-
-      const cuentasMap = new Map(cuentas?.map(c => [c.codigo, c.nombre]) || []);
-
-      // Enriquecer detalles con nombres de cuentas
-      const detallesEnriquecidos = detalles?.map(d => ({
-        ...d,
-        cuenta_nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo
-      })) || [];
-
-      const asientoCompleto = {
-        ...asientos,
-        detalles: detallesEnriquecidos
-      };
-      
-      console.log("Asiento completo cargado:", asientoCompleto);
-      setCurrentAsientos(asientoCompleto);
+      const resp = await apiJson<any>(`/api/asientos/by-transaccion?source=ingreso&id=${encodeURIComponent(transaccionId)}`);
+      const asiento = resp?.asiento ?? resp?.data?.asiento ?? resp;
+      setCurrentAsientos(asiento);
     } catch (error) {
       console.error("Error en loadAsientosContables:", error);
       toast({
@@ -1210,12 +1119,8 @@ const RegistroIngresos = () => {
         
         // Si el producto no tiene costo, calcular el costo promedio histórico
         if (costoParaInventario === 0) {
-          const { data: movimientos } = await supabase
-            .from('movimientos_inventario')
-            .select('costo_unitario, cantidad, tipo_movimiento')
-            .eq('producto_id', selectedInventoryProductId)
-            .eq('tipo_movimiento', 'compra')
-            .order('created_at', { ascending: false });
+          const respMov = await apiJson<any>(`/api/inventario/productos/${encodeURIComponent(selectedInventoryProductId)}/movimientos?tipo=compra`);
+          const movimientos = respMov?.movimientos ?? respMov?.data?.movimientos ?? respMov ?? [];
           
           if (movimientos && movimientos.length > 0) {
             let totalCosto = 0;
@@ -1273,7 +1178,6 @@ const RegistroIngresos = () => {
             email: clienteEmail.trim() || undefined,
             telefono: clienteTelefono.trim() || undefined,
             rfc: clienteRFC.trim() || undefined,
-            activo: true
           });
           clienteId = nuevoCliente.id;
         } catch (error) {
@@ -1369,7 +1273,7 @@ const RegistroIngresos = () => {
           const montoPendienteProducto = montoPendienteFinal * proporcionProducto;
           
           // Llamar a edge function registrar-ingreso para CADA producto
-          const { data: result, error: edgeFunctionError } = await supabase.functions.invoke('registrar-ingreso', {
+          const { data: result, error: edgeFunctionError } = await invokeServer('registrar-ingreso', {
             body: {
               tipoIngreso: 'inventariados',
               descripcion: descripcionVenta,
@@ -1421,7 +1325,7 @@ const RegistroIngresos = () => {
         const {
           data,
           error
-        } = await supabase.functions.invoke('registrar-ingreso', {
+        } = await invokeServer('registrar-ingreso', {
           body: {
             tipoIngreso: selectedIncomeType,
             descripcion: descripcionToSend,
@@ -1523,7 +1427,7 @@ const RegistroIngresos = () => {
     try {
       console.log('Cancelando transacción:', transaccionACancelar.id);
       
-      const { data, error } = await supabase.functions.invoke('cancelar-ingreso', {
+      const { data, error } = await invokeServer('cancelar-ingreso', {
         body: {
           transaccionId: transaccionACancelar.id,
           motivoCancelacion: motivoCancelacion.trim()

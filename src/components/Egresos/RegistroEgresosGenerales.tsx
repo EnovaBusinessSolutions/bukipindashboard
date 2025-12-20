@@ -1,3 +1,4 @@
+// bukipin-dashboard/src/components/Egresos/RegistroEgresosGenerales.tsx
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,12 +12,20 @@ import { Wallet, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
-import { supabase } from "@/integrations/supabase/client";
 import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
-import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 
 const RegistroEgresosGenerales = () => {
   const [concept, setConcept] = useState("");
@@ -34,6 +43,7 @@ const RegistroEgresosGenerales = () => {
   const [description, setDescription] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: cuentasData } = useCuentas();
   const { data: subcuentasData } = useSubcuentas();
@@ -42,61 +52,56 @@ const RegistroEgresosGenerales = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!concept || !cuentaSeleccionada || !totalAmount || !paymentType) {
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa todos los campos obligatorios",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast({
-          title: "❌ Error de autenticación",
-          description: "Debes iniciar sesión para registrar egresos",
-          variant: "destructive"
-        });
-        return;
-      }
-
       const montoTotal = parseFloat(totalAmount);
-      const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
+      const montoPagado =
+        paymentType === "contado"
+          ? montoTotal
+          : paymentType === "parcial"
+            ? parseFloat(paidAmount) || 0
+            : 0;
 
-      // FASE 1: Verificar que los saldos se hayan cargado
+      // FASE 1: Verificar que los saldos se hayan cargado (si aplica)
       if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
         if (!saldosDisponibles) {
           toast({
             title: "⚠️ Error de validación",
             description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
-            variant: "destructive"
+            variant: "destructive",
           });
           return;
         }
       }
 
-      // FASE 2: Validar saldo disponible para efectivo o bancos
+      // FASE 2: Validar saldo disponible para efectivo
       if (paymentMethod === "efectivo") {
-        if (montoPagado > saldosDisponibles.efectivo) {
+        if (montoPagado > (saldosDisponibles?.efectivo ?? 0)) {
           toast({
             title: "💰 Saldo insuficiente en efectivo",
-            description: `Disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Necesitas: $${formatCurrency(montoPagado)}`,
-            variant: "destructive"
+            description: `Disponible: $${formatCurrency(saldosDisponibles?.efectivo ?? 0)} | Necesitas: $${formatCurrency(montoPagado)}`,
+            variant: "destructive",
           });
           return;
         }
       }
 
+      // Validar saldo disponible para bancos
       if (paymentMethod === "tarjeta-transferencia") {
-        if (montoPagado > saldosDisponibles.bancos) {
+        if (montoPagado > (saldosDisponibles?.bancos ?? 0)) {
           toast({
             title: "🏦 Saldo insuficiente en bancos",
-            description: `Disponible: $${formatCurrency(saldosDisponibles.bancos)} | Necesitas: $${formatCurrency(montoPagado)}`,
-            variant: "destructive"
+            description: `Disponible: $${formatCurrency(saldosDisponibles?.bancos ?? 0)} | Necesitas: $${formatCurrency(montoPagado)}`,
+            variant: "destructive",
           });
           return;
         }
@@ -106,16 +111,16 @@ const RegistroEgresosGenerales = () => {
       if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
         const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
         const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
-        
+
         if (!validacion.valido) {
           toast({
             title: "⚠️ Límite de crédito excedido",
             description: validacion.mensaje,
-            variant: "destructive"
+            variant: "destructive",
           });
           return;
         }
-        
+
         setPendingSubmit({ montoPagado, montoTotal });
         setShowConfirmDialog(true);
         return;
@@ -123,27 +128,26 @@ const RegistroEgresosGenerales = () => {
 
       await processTransaction(montoPagado, montoTotal);
     } catch (error) {
-      console.error('Error al registrar egreso:', error);
+      console.error("Error al registrar egreso:", error);
       toast({
         title: "❌ Error",
         description: "No se pudo registrar el egreso. Intenta nuevamente.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
 
   const processTransaction = async (montoPagado: number, montoTotal: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setIsSubmitting(true);
+    try {
+      const montoPendiente = montoTotal - montoPagado;
+      const tipoEgreso = cuentaSeleccionada.startsWith("5") ? "costo" : "gasto";
 
-    const montoPendiente = montoTotal - montoPagado;
-    const tipoEgreso = cuentaSeleccionada.startsWith('5') ? 'costo' : 'gasto';
-
-    // Llamar al edge function registrar-egreso
-    const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
-      body: {
+      // ✅ Antes: supabase.functions.invoke('registrar-egreso')
+      // ✅ Ahora: backend Mongo (sesión por cookies)
+      const payload = {
         tipo_egreso: tipoEgreso,
-        subtipo_egreso: 'general',
+        subtipo_egreso: "general",
         descripcion: concept,
         concepto: concept,
         cuenta_codigo: cuentaSeleccionada,
@@ -158,38 +162,54 @@ const RegistroEgresosGenerales = () => {
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
-        comentarios: description || null
-      }
-    });
+        comentarios: description || null,
+      };
 
-    if (error) {
-      console.error('Error en edge function:', error);
-      throw error;
+      const res = await apiFetch("/api/egresos/registrar", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const result = res?.data ?? res;
+
+      toast({
+        title: "✅ Egreso registrado",
+        description: `Egreso registrado correctamente${result?.numero_asiento ? ` con asiento contable ${result.numero_asiento}` : ""}`,
+      });
+
+      // Reset form
+      setConcept("");
+      setCuentaSeleccionada("");
+      setSubcuentaSeleccionada("");
+      setTotalAmount("");
+      setPaymentType("");
+      setPaymentMethod("");
+      setPaidAmount("");
+      setDueDate("");
+      setSupplierName("");
+      setSupplierPhone("");
+      setSupplierEmail("");
+      setSupplierRFC("");
+      setDescription("");
+      setShowConfirmDialog(false);
+      setPendingSubmit(null);
+    } catch (error: any) {
+      console.error("❌ Error al registrar egreso:", error);
+
+      // Si apiFetch propaga status/response, aquí puedes afinar el mensaje:
+      const msg =
+        error?.status === 401
+          ? "Tu sesión expiró. Inicia sesión nuevamente."
+          : "No se pudo registrar el egreso. Intenta nuevamente.";
+
+      toast({
+        title: "❌ Error",
+        description: msg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    console.log('Egreso registrado con asiento:', result);
-
-    toast({
-      title: "✅ Egreso registrado",
-      description: `Egreso registrado correctamente con asiento contable ${result?.numero_asiento || ''}`
-    });
-
-    // Reset form
-    setConcept("");
-    setCuentaSeleccionada("");
-    setSubcuentaSeleccionada("");
-    setTotalAmount("");
-    setPaymentType("");
-    setPaymentMethod("");
-    setPaidAmount("");
-    setDueDate("");
-    setSupplierName("");
-    setSupplierPhone("");
-    setSupplierEmail("");
-    setSupplierRFC("");
-    setDescription("");
-    setShowConfirmDialog(false);
-    setPendingSubmit(null);
   };
 
   return (
@@ -200,16 +220,15 @@ const RegistroEgresosGenerales = () => {
             <Wallet className="h-5 w-5" />
             Registro de Costos y Gastos Generales
           </CardTitle>
-          <CardDescription>
-            Registra egresos generales que no tienen un segmento específico en el catálogo
-          </CardDescription>
+          <CardDescription>Registra egresos generales que no tienen un segmento específico en el catálogo</CardDescription>
         </CardHeader>
+
         <CardContent className="p-6 pt-0">
           <form onSubmit={handleSubmit} className="space-y-6 pb-4">
             {/* Información del Gasto */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Información del Gasto</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="concepto">Concepto del Gasto *</Label>
@@ -224,15 +243,18 @@ const RegistroEgresosGenerales = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="cuenta">Cuenta *</Label>
-                  <Select value={cuentaSeleccionada} onValueChange={(value) => {
-                    setCuentaSeleccionada(value);
-                    setSubcuentaSeleccionada("");
-                  }}>
+                  <Select
+                    value={cuentaSeleccionada}
+                    onValueChange={(value) => {
+                      setCuentaSeleccionada(value);
+                      setSubcuentaSeleccionada("");
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cuenta" />
                     </SelectTrigger>
                     <SelectContent>
-                      {cuentasData?.cuentasFlat?.map((cuenta) => (
+                      {cuentasData?.cuentasFlat?.map((cuenta: any) => (
                         <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
                           {cuenta.codigo} - {cuenta.nombre}
                         </SelectItem>
@@ -249,16 +271,16 @@ const RegistroEgresosGenerales = () => {
                         <SelectValue placeholder="Seleccionar subcuenta" />
                       </SelectTrigger>
                       <SelectContent>
-                        {subcuentasData?.filter(sub => sub.cuenta_madre_codigo === cuentaSeleccionada).length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground">
-                            No hay subcuentas para esta cuenta.
-                          </div>
+                        {subcuentasData?.filter((sub: any) => sub.cuenta_madre_codigo === cuentaSeleccionada).length === 0 ? (
+                          <div className="p-2 text-sm text-muted-foreground">No hay subcuentas para esta cuenta.</div>
                         ) : (
-                          subcuentasData?.filter(sub => sub.cuenta_madre_codigo === cuentaSeleccionada).map((subcuenta) => (
-                            <SelectItem key={subcuenta.id} value={subcuenta.id}>
-                              {subcuenta.nombre}
-                            </SelectItem>
-                          ))
+                          subcuentasData
+                            ?.filter((sub: any) => sub.cuenta_madre_codigo === cuentaSeleccionada)
+                            .map((subcuenta: any) => (
+                              <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                                {subcuenta.nombre}
+                              </SelectItem>
+                            ))
                         )}
                       </SelectContent>
                     </Select>
@@ -285,7 +307,7 @@ const RegistroEgresosGenerales = () => {
             {/* Información de Pago */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Información de Pago</h3>
-              
+
               <div className="space-y-2">
                 <Label>Tipo de Pago *</Label>
                 <RadioGroup value={paymentType} onValueChange={setPaymentType}>
@@ -314,18 +336,18 @@ const RegistroEgresosGenerales = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="efectivo">
-                          Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo)}
+                          Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo ?? 0)}
                         </SelectItem>
                         <SelectItem value="tarjeta-transferencia">
-                          Bancos - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
+                          Bancos - Disponible: ${formatCurrency(saldosDisponibles?.bancos ?? 0)}
                         </SelectItem>
-                        {tarjetasCredito && tarjetasCredito.length > 0 ? (
-                          tarjetasCredito.map((tarjeta) => (
-                            <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                              {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible)}
-                            </SelectItem>
-                          ))
-                        ) : null}
+                        {tarjetasCredito && tarjetasCredito.length > 0
+                          ? tarjetasCredito.map((tarjeta: any) => (
+                              <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                                {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible ?? 0)}
+                              </SelectItem>
+                            ))
+                          : null}
                       </SelectContent>
                     </Select>
                   </div>
@@ -349,12 +371,7 @@ const RegistroEgresosGenerales = () => {
               {(paymentType === "credito" || paymentType === "parcial") && (
                 <div className="space-y-2">
                   <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
-                  <Input
-                    id="fecha-vencimiento"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
+                  <Input id="fecha-vencimiento" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 </div>
               )}
             </div>
@@ -364,7 +381,7 @@ const RegistroEgresosGenerales = () => {
             {/* Información del Proveedor */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Información del Proveedor</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="proveedor-nombre">Nombre del Proveedor</Label>
@@ -421,12 +438,12 @@ const RegistroEgresosGenerales = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button type="submit" className="gap-2">
+              <Button type="submit" className="gap-2" disabled={isSubmitting}>
                 <Save className="h-4 w-4" />
-                Registrar Egreso
+                {isSubmitting ? "Registrando..." : "Registrar Egreso"}
               </Button>
             </div>
           </form>
@@ -440,14 +457,14 @@ const RegistroEgresosGenerales = () => {
             <AlertDialogDescription>
               {paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito && (() => {
                 const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
-                const tarjeta = tarjetasCredito.find(t => t.id === tarjetaId);
+                const tarjeta = tarjetasCredito.find((t: any) => t.id === tarjetaId);
                 return tarjeta ? (
                   <>
                     <div className="space-y-2 my-4">
                       <p><strong>Tarjeta:</strong> {tarjeta.nombre}</p>
-                      <p><strong>Límite disponible actual:</strong> ${tarjeta.limite_disponible.toFixed(2)}</p>
-                      <p><strong>Monto del cargo:</strong> ${pendingSubmit?.montoPagado?.toFixed(2)}</p>
-                      <p><strong>Límite disponible después:</strong> ${(tarjeta.limite_disponible - (pendingSubmit?.montoPagado || 0)).toFixed(2)}</p>
+                      <p><strong>Límite disponible actual:</strong> ${Number(tarjeta.limite_disponible ?? 0).toFixed(2)}</p>
+                      <p><strong>Monto del cargo:</strong> ${Number(pendingSubmit?.montoPagado ?? 0).toFixed(2)}</p>
+                      <p><strong>Límite disponible después:</strong> ${(Number(tarjeta.limite_disponible ?? 0) - Number(pendingSubmit?.montoPagado ?? 0)).toFixed(2)}</p>
                     </div>
                     <p>¿Deseas continuar con este pago?</p>
                   </>
@@ -455,19 +472,27 @@ const RegistroEgresosGenerales = () => {
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setShowConfirmDialog(false);
-              setPendingSubmit(null);
-            }}>
+            <AlertDialogCancel
+              disabled={isSubmitting}
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setPendingSubmit(null);
+              }}
+            >
               Cancelar
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (pendingSubmit) {
-                processTransaction(pendingSubmit.montoPagado, pendingSubmit.montoTotal);
-              }
-            }}>
-              Continuar
+
+            <AlertDialogAction
+              disabled={isSubmitting}
+              onClick={() => {
+                if (pendingSubmit) {
+                  processTransaction(pendingSubmit.montoPagado, pendingSubmit.montoTotal);
+                }
+              }}
+            >
+              {isSubmitting ? "Procesando..." : "Continuar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

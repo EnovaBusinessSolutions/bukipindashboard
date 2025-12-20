@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { AlertCircle, Edit, Plus, Search, Trash2, Users, BarChart3 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Edit, Plus, Search, Trash2, Users } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import ResumenTransaccionesClientes from "@/components/Clientes/ResumenTransaccionesClientes";
 import AnalyticaClientesNueva from "@/components/Clientes/AnalyticaClientesNueva";
@@ -30,14 +29,29 @@ interface Cliente {
   activo: boolean;
   created_at: string;
   updated_at: string;
-  source?: 'dedicated' | 'transaction';
+  source?: "dedicated" | "transaction";
 }
+
+type ClienteForm = {
+  nombre: string;
+  email: string;
+  telefono: string;
+  rfc: string;
+  direccion: string;
+  ciudad: string;
+  estado: string;
+  codigo_postal: string;
+  activo: boolean;
+};
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string; error?: any } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
 
 const Clientes = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingClient, setEditingClient] = useState<Cliente | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ClienteForm>({
     nombre: "",
     email: "",
     telefono: "",
@@ -46,182 +60,144 @@ const Clientes = () => {
     ciudad: "",
     estado: "",
     codigo_postal: "",
-    activo: true
+    activo: true,
   });
 
   const queryClient = useQueryClient();
 
   // Fetch clients from transactions and dedicated clients table
   const { data: clientes = [], isLoading, error } = useQuery({
-    queryKey: ['clientes'],
-    queryFn: async () => {
-      // Get clients from dedicated table
-      const { data: dedicatedClients, error: dedicatedError } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('nombre', { ascending: true });
+    queryKey: ["clientes"],
+    queryFn: async (): Promise<Cliente[]> => {
+      // 1) Dedicated clients
+      const dedicatedJson = await apiFetch("/api/clientes?activo=all&sort=nombre", { method: "GET" });
+      const dedicatedClients = unwrap<Cliente[]>(dedicatedJson) || [];
 
-      if (dedicatedError) throw dedicatedError;
-
-      // Get clients from transactions
-      const { data: transactionClients, error: transactionError } = await supabase
-        .from('transacciones_ingresos')
-        .select(`
-          cliente_nombre,
-          cliente_email,
-          cliente_telefono,
-          cliente_rfc,
-          created_at
-        `)
-        .not('cliente_nombre', 'is', null)
-        .order('created_at', { ascending: false });
-
-      if (transactionError) throw transactionError;
+      // 2) Transaction clients (distinct-like from ingresos)
+      // Backend recomendado: devuelve lista ya deduplicada: [{cliente_nombre, cliente_email, cliente_telefono, cliente_rfc, created_at}]
+      const txJson = await apiFetch("/api/transacciones/ingresos/clientes", { method: "GET" });
+      const transactionClients = unwrap<any[]>(txJson) || [];
 
       // Convert transaction clients to client format and deduplicate
-      const transactionClientMap = new Map();
-      
-      transactionClients?.forEach((tc) => {
-        const key = `${tc.cliente_nombre}_${tc.cliente_email}_${tc.cliente_telefono}`.toLowerCase();
+      const transactionClientMap = new Map<string, Cliente>();
+
+      transactionClients.forEach((tc: any) => {
+        const nombre = (tc.cliente_nombre || "").trim();
+        if (!nombre) return;
+
+        const email = (tc.cliente_email || "").trim();
+        const telefono = (tc.cliente_telefono || "").trim();
+        const rfc = (tc.cliente_rfc || "").trim();
+
+        const key = `${nombre}_${email}_${telefono}`.toLowerCase();
+
         if (!transactionClientMap.has(key)) {
+          const createdAt = tc.created_at || new Date().toISOString();
           transactionClientMap.set(key, {
-            id: `tx-${Math.random().toString(36).substr(2, 9)}`, // temporary ID
-            nombre: tc.cliente_nombre || '',
-            email: tc.cliente_email || '',
-            telefono: tc.cliente_telefono || '',
-            rfc: tc.cliente_rfc || '',
-            direccion: '',
-            ciudad: '',
-            estado: '',
-            codigo_postal: '',
+            id: `tx-${key}`, // estable (no random) para no re-render raro
+            nombre,
+            email,
+            telefono,
+            rfc,
+            direccion: "",
+            ciudad: "",
+            estado: "",
+            codigo_postal: "",
             activo: true,
-            created_at: tc.created_at,
-            updated_at: tc.created_at,
-            source: 'transaction'
+            created_at: createdAt,
+            updated_at: createdAt,
+            source: "transaction",
           });
         }
       });
 
       const transactionClientsFormatted = Array.from(transactionClientMap.values());
-      
-      // Combine both sources, filtering out transaction clients that match dedicated clients
-      const dedicatedClientsWithSource = (dedicatedClients || []).map(c => ({ ...c, source: 'dedicated' as const }));
-      
-      // Create a set of keys from dedicated clients for deduplication
+
+      // Dedicated with source
+      const dedicatedClientsWithSource = (dedicatedClients || []).map((c: any) => ({
+        ...c,
+        source: "dedicated" as const,
+      }));
+
+      // Deduplicate: remove transaction clients that match dedicated
       const dedicatedKeys = new Set(
-        dedicatedClientsWithSource.map(c => 
-          `${c.nombre}_${c.email}_${c.telefono}`.toLowerCase()
-        )
+        dedicatedClientsWithSource.map((c: any) => `${c.nombre || ""}_${c.email || ""}_${c.telefono || ""}`.toLowerCase())
       );
-      
-      // Filter out transaction clients that already exist as dedicated clients
-      const uniqueTransactionClients = transactionClientsFormatted.filter(tc => {
-        const key = `${tc.nombre}_${tc.email}_${tc.telefono}`.toLowerCase();
+
+      const uniqueTransactionClients = transactionClientsFormatted.filter((tc) => {
+        const key = `${tc.nombre || ""}_${tc.email || ""}_${tc.telefono || ""}`.toLowerCase();
         return !dedicatedKeys.has(key);
       });
-      
-      // Combine both sources
-      const allClients = [
-        ...dedicatedClientsWithSource,
-        ...uniqueTransactionClients
-      ];
 
-      return allClients.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    }
+      const allClients = [...dedicatedClientsWithSource, ...uniqueTransactionClients];
+      return allClients.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+    },
   });
 
   // Create client mutation
   const createClientMutation = useMutation({
-    mutationFn: async (clientData: typeof formData) => {
-      const { data, error } = await supabase
-        .from('clientes')
-        .insert([{
-          ...clientData,
-          user_id: '00000000-0000-0000-0000-000000000000' // Temporal user ID
-        }])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+    mutationFn: async (clientData: ClienteForm) => {
+      const json = await apiFetch("/api/clientes", {
+        method: "POST",
+        body: JSON.stringify(clientData),
+      });
+      return unwrap<Cliente>(json);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
       toast.success("Cliente creado exitosamente");
       resetForm();
       setIsDialogOpen(false);
     },
     onError: (error: any) => {
-      if (error.code === '23505') {
-        if (error.message.includes('email')) {
-          toast.error("Ya existe un cliente con ese email");
-        } else if (error.message.includes('telefono')) {
-          toast.error("Ya existe un cliente con ese teléfono");
-        } else if (error.message.includes('rfc')) {
-          toast.error("Ya existe un cliente con ese RFC");
-        } else {
-          toast.error("Ya existe un cliente con esos datos");
-        }
-      } else {
-        toast.error("Error al crear cliente: " + error.message);
-      }
-    }
+      const msg = error?.message || String(error);
+
+      // Mimic duplicate messages (backend debe responder 409 con message claro)
+      if (msg.toLowerCase().includes("email")) toast.error("Ya existe un cliente con ese email");
+      else if (msg.toLowerCase().includes("telefono")) toast.error("Ya existe un cliente con ese teléfono");
+      else if (msg.toLowerCase().includes("rfc")) toast.error("Ya existe un cliente con ese RFC");
+      else toast.error("Error al crear cliente: " + msg);
+    },
   });
 
   // Update client mutation
   const updateClientMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
-      const { data: updatedData, error } = await supabase
-        .from('clientes')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return updatedData;
+    mutationFn: async ({ id, data }: { id: string; data: ClienteForm }) => {
+      const json = await apiFetch(`/api/clientes/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+      return unwrap<Cliente>(json);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
       toast.success("Cliente actualizado exitosamente");
       resetForm();
       setIsDialogOpen(false);
       setEditingClient(null);
     },
     onError: (error: any) => {
-      if (error.code === '23505') {
-        if (error.message.includes('email')) {
-          toast.error("Ya existe un cliente con ese email");
-        } else if (error.message.includes('telefono')) {
-          toast.error("Ya existe un cliente con ese teléfono");
-        } else if (error.message.includes('rfc')) {
-          toast.error("Ya existe un cliente con ese RFC");
-        } else {
-          toast.error("Ya existe un cliente con esos datos");
-        }
-      } else {
-        toast.error("Error al actualizar cliente: " + error.message);
-      }
-    }
+      const msg = error?.message || String(error);
+
+      if (msg.toLowerCase().includes("email")) toast.error("Ya existe un cliente con ese email");
+      else if (msg.toLowerCase().includes("telefono")) toast.error("Ya existe un cliente con ese teléfono");
+      else if (msg.toLowerCase().includes("rfc")) toast.error("Ya existe un cliente con ese RFC");
+      else toast.error("Error al actualizar cliente: " + msg);
+    },
   });
 
-  // Delete client mutation
+  // Delete client mutation (prefer soft-delete, pero si tu backend hace hard delete, ok)
   const deleteClientMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('clientes')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
+      await apiFetch(`/api/clientes/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
       toast.success("Cliente eliminado exitosamente");
     },
     onError: (error: any) => {
-      toast.error("Error al eliminar cliente: " + error.message);
-    }
+      toast.error("Error al eliminar cliente: " + (error?.message || "Error desconocido"));
+    },
   });
 
   const resetForm = () => {
@@ -234,7 +210,7 @@ const Clientes = () => {
       ciudad: "",
       estado: "",
       codigo_postal: "",
-      activo: true
+      activo: true,
     });
   };
 
@@ -254,7 +230,7 @@ const Clientes = () => {
       ciudad: client.ciudad || "",
       estado: client.estado || "",
       codigo_postal: client.codigo_postal || "",
-      activo: client.activo
+      activo: client.activo,
     });
     setEditingClient(client);
     setIsDialogOpen(true);
@@ -262,7 +238,7 @@ const Clientes = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.nombre.trim()) {
       toast.error("El nombre es requerido");
       return;
@@ -281,11 +257,12 @@ const Clientes = () => {
     }
   };
 
-  const filteredClients = clientes.filter(client =>
-    client.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (client.telefono && client.telefono.includes(searchTerm)) ||
-    (client.rfc && client.rfc.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredClients = clientes.filter(
+    (client) =>
+      client.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (client.telefono && client.telefono.includes(searchTerm)) ||
+      (client.rfc && client.rfc.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (isLoading) return <div className="p-6">Cargando clientes...</div>;
@@ -301,10 +278,9 @@ const Clientes = () => {
               <Users className="h-8 w-8" />
               Base de Datos de Clientes
             </h1>
-            <p className="text-muted-foreground mt-2">
-              Gestiona la información de todos tus clientes
-            </p>
+            <p className="text-muted-foreground mt-2">Gestiona la información de todos tus clientes</p>
           </div>
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={openCreateDialog} className="gap-2">
@@ -312,16 +288,15 @@ const Clientes = () => {
                 Nuevo Cliente
               </Button>
             </DialogTrigger>
+
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>
-                  {editingClient ? "Editar Cliente" : "Nuevo Cliente"}
-                </DialogTitle>
+                <DialogTitle>{editingClient ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
                 <DialogDescription>
                   {editingClient ? "Modifica los datos del cliente" : "Registra un nuevo cliente en el sistema"}
                 </DialogDescription>
               </DialogHeader>
-              
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -329,107 +304,103 @@ const Clientes = () => {
                     <Input
                       id="nombre"
                       value={formData.nombre}
-                      onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, nombre: e.target.value }))}
                       placeholder="Nombre completo del cliente"
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                       placeholder="correo@ejemplo.com"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="telefono">Teléfono</Label>
                     <Input
                       id="telefono"
                       value={formData.telefono}
-                      onChange={(e) => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, telefono: e.target.value }))}
                       placeholder="555-123-4567"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="rfc">RFC</Label>
                     <Input
                       id="rfc"
                       value={formData.rfc}
-                      onChange={(e) => setFormData(prev => ({ ...prev, rfc: e.target.value.toUpperCase() }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, rfc: e.target.value.toUpperCase() }))}
                       placeholder="XAXX010101000"
                       maxLength={13}
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="direccion">Dirección</Label>
                   <Textarea
                     id="direccion"
                     value={formData.direccion}
-                    onChange={(e) => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, direccion: e.target.value }))}
                     placeholder="Calle, número, colonia..."
                     rows={2}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="ciudad">Ciudad</Label>
                     <Input
                       id="ciudad"
                       value={formData.ciudad}
-                      onChange={(e) => setFormData(prev => ({ ...prev, ciudad: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, ciudad: e.target.value }))}
                       placeholder="Ciudad"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="estado">Estado</Label>
                     <Input
                       id="estado"
                       value={formData.estado}
-                      onChange={(e) => setFormData(prev => ({ ...prev, estado: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, estado: e.target.value }))}
                       placeholder="Estado"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="codigo_postal">Código Postal</Label>
                     <Input
                       id="codigo_postal"
                       value={formData.codigo_postal}
-                      onChange={(e) => setFormData(prev => ({ ...prev, codigo_postal: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, codigo_postal: e.target.value }))}
                       placeholder="12345"
                       maxLength={5}
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="activo"
                     checked={formData.activo}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, activo: checked }))}
+                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, activo: checked }))}
                   />
                   <Label htmlFor="activo">Cliente activo</Label>
                 </div>
-                
+
                 <div className="flex gap-2 pt-4">
                   <Button type="submit" disabled={createClientMutation.isPending || updateClientMutation.isPending}>
                     {editingClient ? "Actualizar" : "Crear"} Cliente
                   </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsDialogOpen(false)}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
                   </Button>
                 </div>
@@ -461,7 +432,7 @@ const Clientes = () => {
                     className="pl-10"
                   />
                 </div>
-                
+
                 <div className="flex gap-4">
                   <Card className="p-3">
                     <div className="text-center">
@@ -472,7 +443,7 @@ const Clientes = () => {
                   <Card className="p-3">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600">
-                        {clientes.filter(c => c.source === 'dedicated').length}
+                        {clientes.filter((c) => c.source === "dedicated").length}
                       </div>
                       <div className="text-xs text-muted-foreground">En Base de Datos</div>
                     </div>
@@ -480,7 +451,7 @@ const Clientes = () => {
                   <Card className="p-3">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">
-                        {clientes.filter(c => c.source === 'transaction').length}
+                        {clientes.filter((c) => c.source === "transaction").length}
                       </div>
                       <div className="text-xs text-muted-foreground">De Ventas</div>
                     </div>
@@ -521,33 +492,25 @@ const Clientes = () => {
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{client.nombre}</span>
-                                  {!client.activo && (
-                                    <Badge variant="secondary">Inactivo</Badge>
-                                  )}
+                                  {!client.activo && <Badge variant="secondary">Inactivo</Badge>}
                                 </div>
                               </TableCell>
                               <TableCell>{client.email || "-"}</TableCell>
                               <TableCell>{client.telefono || "-"}</TableCell>
                               <TableCell>{client.rfc || "-"}</TableCell>
                               <TableCell>
-                                <Badge variant={client.source === 'dedicated' ? "default" : "outline"}>
-                                  {client.source === 'dedicated' ? "Base de Datos" : "Ventas"}
+                                <Badge variant={client.source === "dedicated" ? "default" : "outline"}>
+                                  {client.source === "dedicated" ? "Base de Datos" : "Ventas"}
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                <Badge variant={client.activo ? "default" : "secondary"}>
-                                  {client.activo ? "Activo" : "Inactivo"}
-                                </Badge>
+                                <Badge variant={client.activo ? "default" : "secondary"}>{client.activo ? "Activo" : "Inactivo"}</Badge>
                               </TableCell>
                               <TableCell>
                                 <div className="flex gap-2">
-                                  {client.source === 'dedicated' ? (
+                                  {client.source === "dedicated" ? (
                                     <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openEditDialog(client)}
-                                      >
+                                      <Button variant="outline" size="sm" onClick={() => openEditDialog(client)}>
                                         <Edit className="h-4 w-4" />
                                       </Button>
                                       <Button
@@ -573,7 +536,7 @@ const Clientes = () => {
                                           ciudad: "",
                                           estado: "",
                                           codigo_postal: "",
-                                          activo: true
+                                          activo: true,
                                         });
                                         setEditingClient(null);
                                         setIsDialogOpen(true);

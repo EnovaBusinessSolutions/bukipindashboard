@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,19 +24,64 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, Edit, Trash2, Plus, Search, User, Phone, Mail, Upload } from "lucide-react";
 import { useInstitucionesFinancieras, InstitucionFinanciera } from "@/hooks/useInstitucionesFinancieras";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+
+/**
+ * ✅ Ajusta estas rutas si tu backend usa otras
+ */
+const FINANCIAMIENTOS_ENDPOINT = "/api/financiamientos";
+const UPLOAD_ENDPOINT = "/api/uploads/logo"; // + ?folder=instituciones
+
+type Financiamiento = {
+  id: string;
+  nombre: string;
+  estado: string; // "activo" | ...
+  monto_total: number;
+  tasa_interes: number;
+  institucion_financiera_id?: string | null;
+  saldo_actual: number;
+  tipo_credito: string;
+};
+
+async function apiJSON<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...init,
+    credentials: "include",
+    headers: {
+      ...(init?.headers || {}),
+    },
+  });
+
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    // ignore
+  }
+
+  if (!res.ok) {
+    const msg = json?.error || json?.message || `Error HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  // Normaliza: {ok:true,data:...} o payload directo
+  return (json?.data ?? json) as T;
+}
 
 export default function CatalogoAcreedores() {
   const { instituciones, crearInstitucion, actualizarInstitucion, eliminarInstitucion } =
     useInstitucionesFinancieras();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [editingInstitucion, setEditingInstitucion] = useState<InstitucionFinanciera | null>(null);
   const [selectedInstitucion, setSelectedInstitucion] = useState<InstitucionFinanciera | null>(null);
+
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -55,35 +100,35 @@ export default function CatalogoAcreedores() {
     notas: "",
   });
 
-  // Obtener financiamientos por institución
-  const { data: financiamientos } = useQuery({
+  /**
+   * ✅ Financiamientos desde backend (sin supabase)
+   * Backend debe filtrar por usuario usando cookie/session -> req.user
+   */
+  const { data: financiamientos = [], isLoading: isLoadingFin } = useQuery({
     queryKey: ["financiamientos-por-institucion"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-
-      const { data, error } = await supabase
-        .from("financiamientos")
-        .select("*")
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-      return data;
+      return await apiJSON<Financiamiento[]>(FINANCIAMIENTOS_ENDPOINT);
     },
   });
 
   // Calcular métricas
   const institucionesActivas = instituciones.length;
-  const creditosActivos = financiamientos?.filter((f) => f.estado === "activo").length || 0;
-  const montoTotalFinanciado = financiamientos?.reduce((acc, f) => acc + f.monto_total, 0) || 0;
+  const creditosActivos = financiamientos.filter((f) => f.estado === "activo").length || 0;
+
+  const montoTotalFinanciado =
+    financiamientos.reduce((acc, f) => acc + (Number(f.monto_total) || 0), 0) || 0;
+
   const tasaPromedio =
-    financiamientos && financiamientos.length > 0
-      ? financiamientos.reduce((acc, f) => acc + f.tasa_interes, 0) / financiamientos.length
+    financiamientos.length > 0
+      ? financiamientos.reduce((acc, f) => acc + (Number(f.tasa_interes) || 0), 0) /
+        financiamientos.length
       : 0;
 
-  const institucionesFiltradas = instituciones.filter((inst) =>
-    inst.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const institucionesFiltradas = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return instituciones;
+    return instituciones.filter((inst) => inst.nombre.toLowerCase().includes(term));
+  }, [instituciones, searchTerm]);
 
   const handleOpenDialog = (institucion?: InstitucionFinanciera) => {
     if (institucion) {
@@ -103,10 +148,8 @@ export default function CatalogoAcreedores() {
         sitio_web: institucion.sitio_web || "",
         notas: institucion.notas || "",
       });
-      // Si tiene logo, mostrar preview
-      if (institucion.logo_url) {
-        setLogoPreview(institucion.logo_url);
-      }
+      setLogoFile(null);
+      setLogoPreview(institucion.logo_url || null);
     } else {
       setEditingInstitucion(null);
       setFormData({
@@ -132,76 +175,83 @@ export default function CatalogoAcreedores() {
 
   const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validar tamaño (máx 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        toast({
-          title: "❌ Archivo muy grande",
-          description: "El logo debe pesar menos de 2MB",
-          variant: "destructive"
-        });
-        return;
-      }
+    if (!file) return;
 
-      // Validar tipo
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: "❌ Tipo de archivo inválido",
-          description: "Solo se permiten imágenes",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      setLogoFile(file);
-      
-      // Crear preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    // Validar tamaño (máx 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "❌ Archivo muy grande",
+        description: "El logo debe pesar menos de 2MB",
+        variant: "destructive",
+      });
+      return;
     }
+
+    // Validar tipo
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "❌ Tipo de archivo inválido",
+        description: "Solo se permiten imágenes",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLogoFile(file);
+
+    // Preview local
+    const reader = new FileReader();
+    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
+  /**
+   * ✅ Upload al backend (multipart)
+   * Backend debe regresar: { ok:true, url:"https://..." }
+   * (o payload directo {url})
+   */
   const uploadLogo = async (): Promise<string | null> => {
-    if (!logoFile) return formData.logo_url;
+    if (!logoFile) return formData.logo_url || null;
 
     try {
       setUploading(true);
-      
-      const fileExt = logoFile.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `instituciones/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, logoFile);
+      const fd = new FormData();
+      fd.append("file", logoFile);
 
-      if (uploadError) {
-        toast({
-          title: "❌ Error al subir logo",
-          description: uploadError.message,
-          variant: "destructive"
-        });
-        return null;
+      const res = await fetch(`${UPLOAD_ENDPOINT}?folder=instituciones`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        // ignore
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
+      if (!res.ok) {
+        const msg = json?.error || json?.message || `Error HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      const url = json?.url || json?.data?.url;
+      if (!url) throw new Error("El backend no devolvió la URL del archivo subido.");
 
       toast({
         title: "✅ Logo subido",
-        description: "El logo se ha guardado correctamente"
+        description: "El logo se ha guardado correctamente",
       });
 
-      return publicUrl;
+      return url;
     } catch (error: any) {
       toast({
-        title: "❌ Error inesperado",
-        description: error.message,
-        variant: "destructive"
+        title: "❌ Error al subir logo",
+        description: error?.message || "Error inesperado",
+        variant: "destructive",
       });
       return null;
     } finally {
@@ -211,12 +261,20 @@ export default function CatalogoAcreedores() {
 
   const handleSave = async () => {
     try {
+      if (!formData.nombre.trim()) {
+        toast({
+          title: "❌ Falta el nombre",
+          description: "El nombre de la institución es obligatorio.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       let logoUrl = formData.logo_url;
+
       if (logoFile) {
         const uploadedUrl = await uploadLogo();
-        if (uploadedUrl) {
-          logoUrl = uploadedUrl;
-        }
+        if (uploadedUrl) logoUrl = uploadedUrl;
       }
 
       if (editingInstitucion) {
@@ -228,26 +286,27 @@ export default function CatalogoAcreedores() {
       } else {
         await crearInstitucion.mutateAsync({ ...formData, logo_url: logoUrl });
       }
+
       setShowDialog(false);
       setLogoFile(null);
       setLogoPreview(null);
     } catch (error: any) {
       toast({
         title: "❌ Error al guardar",
-        description: error.message,
-        variant: "destructive"
+        description: error?.message || "Error inesperado",
+        variant: "destructive",
       });
     }
   };
 
   const getCreditosCount = (institucionId: string) => {
-    return financiamientos?.filter(
+    return financiamientos.filter(
       (f) => f.institucion_financiera_id === institucionId && f.estado === "activo"
-    ).length || 0;
+    ).length;
   };
 
   const getFinanciamientosByInstitucion = (institucionId: string) => {
-    return financiamientos?.filter((f) => f.institucion_financiera_id === institucionId) || [];
+    return financiamientos.filter((f) => f.institucion_financiera_id === institucionId);
   };
 
   return (
@@ -303,125 +362,132 @@ export default function CatalogoAcreedores() {
       <Card>
         <CardHeader>
           <CardTitle>Catálogo de Acreedores Financieros</CardTitle>
-          <CardDescription>
-            Gestiona las instituciones financieras con las que trabajas
-          </CardDescription>
+          <CardDescription>Gestiona las instituciones financieras con las que trabajas</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Institución</TableHead>
-                <TableHead>Ejecutivo</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead className="text-center">Créditos Activos</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {institucionesFiltradas.map((institucion) => {
-                const creditosCount = getCreditosCount(institucion.id);
-                return (
-                  <TableRow
-                    key={institucion.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setSelectedInstitucion(institucion)}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={institucion.logo_url || undefined} />
-                          <AvatarFallback>
-                            <Building2 className="h-5 w-5" />
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{institucion.nombre}</p>
-                          {institucion.sitio_web && (
-                            <a
-                              href={institucion.sitio_web}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              Sitio web →
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {institucion.ejecutivo_nombre ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <User className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm">{institucion.ejecutivo_nombre}</span>
+          {isLoadingFin ? (
+            <div className="text-sm text-muted-foreground">Cargando financiamientos…</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Institución</TableHead>
+                  <TableHead>Ejecutivo</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead className="text-center">Créditos Activos</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {institucionesFiltradas.map((institucion) => {
+                  const creditosCount = getCreditosCount(institucion.id);
+
+                  return (
+                    <TableRow
+                      key={institucion.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedInstitucion(institucion)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={institucion.logo_url || undefined} />
+                            <AvatarFallback>
+                              <Building2 className="h-5 w-5" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{institucion.nombre}</p>
+                            {institucion.sitio_web && (
+                              <a
+                                href={institucion.sitio_web}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Sitio web →
+                              </a>
+                            )}
                           </div>
-                          {institucion.ejecutivo_telefono && (
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        {institucion.ejecutivo_nombre ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <User className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-sm">{institucion.ejecutivo_nombre}</span>
+                            </div>
+                            {institucion.ejecutivo_telefono && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">
+                                  {institucion.ejecutivo_telefono}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Sin asignar</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-1">
+                          {institucion.telefono_principal && (
                             <div className="flex items-center gap-2">
                               <Phone className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">
-                                {institucion.ejecutivo_telefono}
-                              </span>
+                              <span className="text-xs">{institucion.telefono_principal}</span>
+                            </div>
+                          )}
+                          {institucion.email_principal && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-xs">{institucion.email_principal}</span>
                             </div>
                           )}
                         </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Sin asignar</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {institucion.telefono_principal && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs">{institucion.telefono_principal}</span>
-                          </div>
-                        )}
-                        {institucion.email_principal && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs">{institucion.email_principal}</span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={creditosCount > 0 ? "default" : "outline"}>
-                        {creditosCount}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenDialog(institucion);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            eliminarInstitucion.mutate(institucion.id);
-                          }}
-                          disabled={creditosCount > 0}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <Badge variant={creditosCount > 0 ? "default" : "outline"}>
+                          {creditosCount}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDialog(institucion);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              eliminarInstitucion.mutate(institucion.id);
+                            }}
+                            disabled={creditosCount > 0}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -429,9 +495,7 @@ export default function CatalogoAcreedores() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingInstitucion ? "Editar Institución" : "Nueva Institución"}
-            </DialogTitle>
+            <DialogTitle>{editingInstitucion ? "Editar Institución" : "Nueva Institución"}</DialogTitle>
             <DialogDescription>
               {editingInstitucion
                 ? "Modifica los datos de la institución financiera"
@@ -452,14 +516,10 @@ export default function CatalogoAcreedores() {
 
             <div className="space-y-2">
               <Label>Logo de la Institución</Label>
-              
+
               {logoPreview && (
                 <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
-                  <img 
-                    src={logoPreview} 
-                    alt="Preview" 
-                    className="w-full h-full object-contain"
-                  />
+                  <img src={logoPreview} alt="Preview" className="w-full h-full object-contain" />
                   <Button
                     type="button"
                     variant="destructive"
@@ -483,9 +543,7 @@ export default function CatalogoAcreedores() {
                     <p className="text-sm text-muted-foreground mb-1">
                       <span className="font-semibold text-primary">Click para subir</span> o arrastra aquí
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      PNG, JPG, SVG (máx. 2MB)
-                    </p>
+                    <p className="text-xs text-muted-foreground">PNG, JPG, SVG (máx. 2MB)</p>
                     <input
                       type="file"
                       className="hidden"
@@ -525,9 +583,7 @@ export default function CatalogoAcreedores() {
                 <Input
                   id="ejecutivo_telefono"
                   value={formData.ejecutivo_telefono}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ejecutivo_telefono: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, ejecutivo_telefono: e.target.value })}
                 />
               </div>
             </div>
@@ -548,9 +604,7 @@ export default function CatalogoAcreedores() {
                 <Input
                   id="telefono_principal"
                   value={formData.telefono_principal}
-                  onChange={(e) =>
-                    setFormData({ ...formData, telefono_principal: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, telefono_principal: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -623,13 +677,20 @@ export default function CatalogoAcreedores() {
               <Button variant="outline" onClick={() => setShowDialog(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={uploading || actualizarInstitucion.isPending || crearInstitucion.isPending}>
+              <Button
+                onClick={handleSave}
+                disabled={uploading || actualizarInstitucion.isPending || crearInstitucion.isPending}
+              >
                 {uploading ? (
                   <>
                     <Upload className="mr-2 h-4 w-4 animate-spin" />
                     Subiendo logo...
                   </>
-                ) : editingInstitucion ? "Guardar Cambios" : "Crear Institución"}
+                ) : editingInstitucion ? (
+                  "Guardar Cambios"
+                ) : (
+                  "Crear Institución"
+                )}
               </Button>
             </div>
           </div>
@@ -656,16 +717,13 @@ export default function CatalogoAcreedores() {
 
           {selectedInstitucion && (
             <div className="space-y-6">
-              {/* Información de contacto */}
               <div className="grid grid-cols-2 gap-4">
                 {selectedInstitucion.ejecutivo_nombre && (
                   <div>
                     <Label className="text-muted-foreground">Ejecutivo de Cuenta</Label>
                     <p className="font-medium">{selectedInstitucion.ejecutivo_nombre}</p>
                     {selectedInstitucion.ejecutivo_telefono && (
-                      <p className="text-sm text-muted-foreground">
-                        {selectedInstitucion.ejecutivo_telefono}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{selectedInstitucion.ejecutivo_telefono}</p>
                     )}
                     {selectedInstitucion.ejecutivo_email && (
                       <p className="text-sm text-primary">{selectedInstitucion.ejecutivo_email}</p>
@@ -683,7 +741,6 @@ export default function CatalogoAcreedores() {
                 </div>
               </div>
 
-              {/* Dirección */}
               {selectedInstitucion.direccion && (
                 <div>
                   <Label className="text-muted-foreground">Dirección</Label>
@@ -700,7 +757,6 @@ export default function CatalogoAcreedores() {
                 </div>
               )}
 
-              {/* Notas */}
               {selectedInstitucion.notas && (
                 <div>
                   <Label className="text-muted-foreground">Notas</Label>
@@ -708,11 +764,8 @@ export default function CatalogoAcreedores() {
                 </div>
               )}
 
-              {/* Financiamientos */}
               <div>
-                <Label className="text-muted-foreground mb-2 block">
-                  Financiamientos Asociados
-                </Label>
+                <Label className="text-muted-foreground mb-2 block">Financiamientos Asociados</Label>
                 <div className="space-y-2">
                   {getFinanciamientosByInstitucion(selectedInstitucion.id).map((f) => (
                     <Card key={f.id}>
@@ -724,17 +777,15 @@ export default function CatalogoAcreedores() {
                               {f.tipo_credito === "simple"
                                 ? "Crédito Simple"
                                 : f.tipo_credito === "revolvente"
-                                  ? "Crédito Revolvente"
-                                  : "Tarjeta Corporativa"}
+                                ? "Crédito Revolvente"
+                                : "Tarjeta Corporativa"}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="font-medium">
-                              ${f.saldo_actual.toLocaleString("es-MX")}
+                              ${Number(f.saldo_actual || 0).toLocaleString("es-MX")}
                             </p>
-                            <Badge variant={f.estado === "activo" ? "default" : "secondary"}>
-                              {f.estado}
-                            </Badge>
+                            <Badge variant={f.estado === "activo" ? "default" : "secondary"}>{f.estado}</Badge>
                           </div>
                         </div>
                       </CardContent>

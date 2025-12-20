@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export interface Accionista {
   id: string;
-  user_id: string;
+  // en backend multi-tenant, el owner se resuelve por req.user; no hace falta mandarlo desde frontend
   nombre: string;
   porcentaje_participacion: number;
   email?: string;
@@ -15,6 +15,18 @@ export interface Accionista {
   updated_at: string;
 }
 
+type CrearAccionistaInput = {
+  nombre: string;
+  porcentaje_participacion: number;
+  email?: string;
+  telefono?: string;
+  rfc?: string;
+};
+
+type ActualizarAccionistaInput = Partial<Omit<Accionista, "created_at" | "updated_at">> & {
+  id: string;
+};
+
 export const useAccionistas = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -22,30 +34,24 @@ export const useAccionistas = () => {
   const { data: accionistas = [], isLoading } = useQuery({
     queryKey: ["accionistas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("accionistas")
-        .select("*")
-        .eq("activo", true)
-        .order("nombre");
-
-      if (error) throw error;
-      return data as Accionista[];
+      // Debe regresar { data: Accionista[] } o Accionista[]
+      const json = await apiFetch("/api/accionistas", { method: "GET" });
+      const payload: any = (json as any)?.data ?? json;
+      return (payload ?? []) as Accionista[];
     },
+    staleTime: 60_000,
   });
 
   const crearAccionista = useMutation({
-    mutationFn: async (accionista: Omit<Accionista, "id" | "user_id" | "created_at" | "updated_at">) => {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Usuario no autenticado");
+    mutationFn: async (accionista: CrearAccionistaInput) => {
+      // Debe regresar { data: Accionista } o Accionista
+      const json = await apiFetch("/api/accionistas", {
+        method: "POST",
+        body: JSON.stringify(accionista),
+      });
 
-      const { data, error } = await supabase
-        .from("accionistas")
-        .insert([{ ...accionista, user_id: userData.user.id }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      const payload: any = (json as any)?.data ?? json;
+      return payload as Accionista;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accionistas"] });
@@ -54,26 +60,25 @@ export const useAccionistas = () => {
         description: "El accionista ha sido registrado exitosamente",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "No se pudo crear el accionista: " + error.message,
+        description: "No se pudo crear el accionista: " + (error?.message || "Error desconocido"),
         variant: "destructive",
       });
     },
   });
 
   const actualizarAccionista = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Accionista> & { id: string }) => {
-      const { data, error } = await supabase
-        .from("accionistas")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
+    mutationFn: async ({ id, ...updates }: ActualizarAccionistaInput) => {
+      // Debe regresar { data: Accionista } o Accionista
+      const json = await apiFetch(`/api/accionistas/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
 
-      if (error) throw error;
-      return data;
+      const payload: any = (json as any)?.data ?? json;
+      return payload as Accionista;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accionistas"] });
@@ -82,10 +87,10 @@ export const useAccionistas = () => {
         description: "Los datos del accionista han sido actualizados",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "No se pudo actualizar el accionista: " + error.message,
+        description: "No se pudo actualizar el accionista: " + (error?.message || "Error desconocido"),
         variant: "destructive",
       });
     },
@@ -93,12 +98,10 @@ export const useAccionistas = () => {
 
   const eliminarAccionista = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("accionistas")
-        .update({ activo: false })
-        .eq("id", id);
-
-      if (error) throw error;
+      // Soft delete -> activo:false
+      await apiFetch(`/api/accionistas/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accionistas"] });
@@ -107,10 +110,10 @@ export const useAccionistas = () => {
         description: "El accionista ha sido dado de baja",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "No se pudo eliminar el accionista: " + error.message,
+        description: "No se pudo eliminar el accionista: " + (error?.message || "Error desconocido"),
         variant: "destructive",
       });
     },

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Eye, TrendingUp, TrendingDown, Calendar, Package, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -25,15 +24,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
 
 interface MovimientoInventario {
   id: string;
   producto_id: string;
-  tipo_movimiento: string;
+  tipo_movimiento: string; // compra|venta|entrada|salida
   cantidad: number;
   costo_unitario: number;
   costo_total: number;
-  fecha: string;
+  fecha: string; // YYYY-MM-DD
   descripcion?: string;
   estado?: string | null;
   motivo_cancelacion?: string | null;
@@ -62,141 +62,72 @@ interface AsientoContable {
   }[];
 }
 
+function normalize<T = any>(json: any): T {
+  return (json?.data ?? json) as T;
+}
+
+async function getMovimientos(params: { start?: string; end?: string }) {
+  const qs = new URLSearchParams();
+  if (params.start) qs.set("start", params.start);
+  if (params.end) qs.set("end", params.end);
+
+  const json = await apiFetch(`/api/inventario/movimientos?${qs.toString()}`);
+  return normalize<MovimientoInventario[]>(json) || [];
+}
+
+async function getAsientoByMovimientoId(movimientoId: string) {
+  const json = await apiFetch(`/api/inventario/movimientos/${movimientoId}/asiento`);
+  return normalize<AsientoContable | null>(json) ?? null;
+}
+
+async function cancelarCompraInventario(payload: { movimientoId: string; motivoCancelacion: string }) {
+  const json = await apiFetch(`/api/inventario/movimientos/${payload.movimientoId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ motivoCancelacion: payload.motivoCancelacion }),
+  });
+  return normalize<{ ok: boolean; message?: string }>(json);
+}
+
 const ResumenTransaccionesInventario = () => {
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [tipoMovimiento, setTipoMovimiento] = useState<string>("todos");
   const [productoFiltro, setProductoFiltro] = useState<string>("todos");
+
   const [selectedMovimiento, setSelectedMovimiento] = useState<MovimientoInventario | null>(null);
+
   const [movimientoACancelar, setMovimientoACancelar] = useState<MovimientoInventario | null>(null);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
-  // Obtener movimientos de inventario
-  const { data: movimientos = [], isLoading, refetch } = useQuery({
+  // Movimientos
+  const {
+    data: movimientos = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["movimientos-inventario", fechaInicio, fechaFin],
-    queryFn: async () => {
-      let query = supabase
-        .from("movimientos_inventario")
-        .select(`
-          *,
-          productos (
-            nombre,
-            imagen_url
-          )
-        `)
-        .order("created_at", { ascending: false });
-
-      if (fechaInicio) {
-        query = query.gte("fecha", fechaInicio);
-      }
-      if (fechaFin) {
-        query = query.lte("fecha", fechaFin);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      return data as MovimientoInventario[];
-    },
+    queryFn: () => getMovimientos({ start: fechaInicio || undefined, end: fechaFin || undefined }),
   });
 
-  // Obtener asiento contable relacionado con un movimiento
+  // Asiento del movimiento seleccionado (lo pedimos por id, sin heurísticas raras)
   const { data: asientoDetalle } = useQuery({
     queryKey: ["asiento-movimiento", selectedMovimiento?.id],
     queryFn: async () => {
-      if (!selectedMovimiento) return null;
-
-      // Para movimientos de venta (salidas)
-      if (selectedMovimiento.tipo_movimiento === 'venta') {
-        const { data: transaccion, error: transError } = await supabase
-          .from("transacciones_ingresos")
-          .select("id")
-          .ilike("descripcion", `%${selectedMovimiento.productos?.nombre || ""}%`)
-          .gte("created_at", `${selectedMovimiento.fecha}T00:00:00`)
-          .lte("created_at", `${selectedMovimiento.fecha}T23:59:59`)
-          .limit(1)
-          .maybeSingle();
-
-        if (transError || !transaccion) {
-          console.error("Error fetching transaccion ingreso:", transError);
-          return null;
-        }
-
-        const { data, error } = await supabase
-          .from("asientos_contables")
-          .select(`
-            id,
-            numero_asiento,
-            descripcion,
-            fecha,
-            detalle_asientos (
-              id,
-              cuenta_codigo,
-              debe,
-              haber,
-              descripcion,
-              cuentas (
-                nombre
-              )
-            )
-          `)
-          .eq("transaccion_ingreso_id", transaccion.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error fetching asiento:", error);
-          return null;
-        }
-        return data as AsientoContable | null;
-      }
-
-      // Para movimientos de compra (entradas)
-      if (selectedMovimiento.tipo_movimiento === 'compra') {
-        const { data, error } = await supabase
-          .from("asientos_contables")
-          .select(`
-            id,
-            numero_asiento,
-            descripcion,
-            fecha,
-            detalle_asientos (
-              id,
-              cuenta_codigo,
-              debe,
-              haber,
-              descripcion,
-              cuentas (
-                nombre
-              )
-            )
-          `)
-          .ilike("descripcion", `%${selectedMovimiento.productos?.nombre || ""}%`)
-          .eq("fecha", selectedMovimiento.fecha)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error fetching asiento compra:", error);
-          return null;
-        }
-        return data as AsientoContable | null;
-      }
-
-      return null;
+      if (!selectedMovimiento?.id) return null;
+      return await getAsientoByMovimientoId(selectedMovimiento.id);
     },
-    enabled: !!selectedMovimiento,
+    enabled: !!selectedMovimiento?.id,
   });
 
-  // Función de cancelación
+  // Cancelación
   const handleCancelarMovimiento = async () => {
     if (!movimientoACancelar || !motivoCancelacion.trim()) {
       toast({
         title: "Error",
         description: "Debes ingresar un motivo de cancelación",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -204,85 +135,75 @@ const ResumenTransaccionesInventario = () => {
     setIsCancelling(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('cancelar-compra-inventario', {
-        body: {
-          movimientoId: movimientoACancelar.id,
-          motivoCancelacion
-        }
+      await cancelarCompraInventario({
+        movimientoId: movimientoACancelar.id,
+        motivoCancelacion: motivoCancelacion.trim(),
       });
 
-      if (error) throw error;
-
-      // Primero cerramos el diálogo y limpiamos estados
       setIsCancelDialogOpen(false);
       setMotivoCancelacion("");
       setMovimientoACancelar(null);
 
-      // Refrescar datos
       await refetch();
 
-      // Mostrar toast después de actualizar
       toast({
         title: "✅ Compra cancelada",
-        description: "La compra ha sido cancelada y se generó el asiento de reversión"
+        description: "La compra ha sido cancelada y se generó el asiento de reversión",
       });
-
     } catch (error: any) {
-      console.error('Error al cancelar:', error);
+      console.error("Error al cancelar:", error);
       toast({
         title: "Error al cancelar",
-        description: error.message || "No se pudo cancelar la compra",
-        variant: "destructive"
+        description: error?.message || "No se pudo cancelar la compra",
+        variant: "destructive",
       });
     } finally {
       setIsCancelling(false);
     }
   };
 
-  // Obtener lista única de productos para filtro
-  const productosUnicos = Array.from(
-    new Set(movimientos.map((m) => m.productos?.nombre).filter(Boolean))
-  );
+  // Productos únicos para filtro
+  const productosUnicos = useMemo(() => {
+    return Array.from(new Set(movimientos.map((m) => m.productos?.nombre).filter(Boolean))) as string[];
+  }, [movimientos]);
 
-  // Aplicar filtros
-  const movimientosFiltrados = movimientos.filter((mov) => {
-    // Filtro por tipo de movimiento
-    if (tipoMovimiento !== "todos") {
-      const esEntrada = mov.tipo_movimiento === "entrada" || mov.tipo_movimiento === "compra";
-      const esSalida = mov.tipo_movimiento === "salida" || mov.tipo_movimiento === "venta";
-      
-      if (tipoMovimiento === "entrada" && !esEntrada) {
-        return false;
+  // Filtros
+  const movimientosFiltrados = useMemo(() => {
+    return movimientos.filter((mov) => {
+      if (tipoMovimiento !== "todos") {
+        const esEntrada = mov.tipo_movimiento === "entrada" || mov.tipo_movimiento === "compra";
+        const esSalida = mov.tipo_movimiento === "salida" || mov.tipo_movimiento === "venta";
+
+        if (tipoMovimiento === "entrada" && !esEntrada) return false;
+        if (tipoMovimiento === "salida" && !esSalida) return false;
       }
-      if (tipoMovimiento === "salida" && !esSalida) {
-        return false;
-      }
-    }
-    
-    // Filtro por producto
-    if (productoFiltro !== "todos" && mov.productos?.nombre !== productoFiltro) {
-      return false;
-    }
-    
-    return true;
-  });
 
-  // Calcular subtotales
-  const totalEntradas = movimientosFiltrados
-    .filter((m) => m.tipo_movimiento === "entrada" || m.tipo_movimiento === "compra")
-    .reduce((sum, m) => sum + Math.abs(m.costo_total), 0);
+      if (productoFiltro !== "todos" && mov.productos?.nombre !== productoFiltro) return false;
 
-  const totalSalidas = movimientosFiltrados
-    .filter((m) => m.tipo_movimiento === "salida" || m.tipo_movimiento === "venta")
-    .reduce((sum, m) => sum + Math.abs(m.costo_total), 0);
+      return true;
+    });
+  }, [movimientos, tipoMovimiento, productoFiltro]);
 
-  const cantidadEntradas = movimientosFiltrados.filter(
-    (m) => m.tipo_movimiento === "entrada" || m.tipo_movimiento === "compra"
-  ).length;
+  // Subtotales
+  const totalEntradas = useMemo(() => {
+    return movimientosFiltrados
+      .filter((m) => m.tipo_movimiento === "entrada" || m.tipo_movimiento === "compra")
+      .reduce((sum, m) => sum + Math.abs(m.costo_total || 0), 0);
+  }, [movimientosFiltrados]);
 
-  const cantidadSalidas = movimientosFiltrados.filter(
-    (m) => m.tipo_movimiento === "salida" || m.tipo_movimiento === "venta"
-  ).length;
+  const totalSalidas = useMemo(() => {
+    return movimientosFiltrados
+      .filter((m) => m.tipo_movimiento === "salida" || m.tipo_movimiento === "venta")
+      .reduce((sum, m) => sum + Math.abs(m.costo_total || 0), 0);
+  }, [movimientosFiltrados]);
+
+  const cantidadEntradas = useMemo(() => {
+    return movimientosFiltrados.filter((m) => m.tipo_movimiento === "entrada" || m.tipo_movimiento === "compra").length;
+  }, [movimientosFiltrados]);
+
+  const cantidadSalidas = useMemo(() => {
+    return movimientosFiltrados.filter((m) => m.tipo_movimiento === "salida" || m.tipo_movimiento === "venta").length;
+  }, [movimientosFiltrados]);
 
   if (isLoading) {
     return (
@@ -303,27 +224,17 @@ const ResumenTransaccionesInventario = () => {
       <Card>
         <CardHeader>
           <CardTitle>Filtros de Búsqueda</CardTitle>
-          <CardDescription>
-            Filtra las transacciones de inventario por fecha, tipo y producto
-          </CardDescription>
+          <CardDescription>Filtra las transacciones de inventario por fecha, tipo y producto</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Fecha Inicio</label>
-              <Input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-              />
+              <Input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Fecha Fin</label>
-              <Input
-                type="date"
-                value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
-              />
+              <Input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Tipo Movimiento</label>
@@ -347,7 +258,7 @@ const ResumenTransaccionesInventario = () => {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   {productosUnicos.map((producto) => (
-                    <SelectItem key={producto} value={producto || ""}>
+                    <SelectItem key={producto} value={producto}>
                       {producto}
                     </SelectItem>
                   ))}
@@ -371,9 +282,7 @@ const ResumenTransaccionesInventario = () => {
             <div className="text-2xl font-bold text-green-600">
               ${totalEntradas.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {cantidadEntradas} transacciones
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{cantidadEntradas} transacciones</p>
           </CardContent>
         </Card>
 
@@ -388,9 +297,7 @@ const ResumenTransaccionesInventario = () => {
             <div className="text-2xl font-bold text-red-600">
               ${totalSalidas.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {cantidadSalidas} transacciones
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{cantidadSalidas} transacciones</p>
           </CardContent>
         </Card>
 
@@ -400,13 +307,9 @@ const ResumenTransaccionesInventario = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${(totalEntradas - totalSalidas).toLocaleString("es-MX", {
-                minimumFractionDigits: 2,
-              })}
+              ${(totalEntradas - totalSalidas).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Entradas - Salidas
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Entradas - Salidas</p>
           </CardContent>
         </Card>
 
@@ -416,20 +319,16 @@ const ResumenTransaccionesInventario = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{movimientosFiltrados.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Movimientos registrados
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Movimientos registrados</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabla de transacciones */}
+      {/* Tabla */}
       <Card>
         <CardHeader>
           <CardTitle>Transacciones de Inventario</CardTitle>
-          <CardDescription>
-            Historial completo de entradas y salidas de inventario
-          </CardDescription>
+          <CardDescription>Historial completo de entradas y salidas de inventario</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -445,342 +344,300 @@ const ResumenTransaccionesInventario = () => {
                 <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {movimientosFiltrados.map((movimiento) => {
-                const esCancelado = movimiento.estado === 'cancelado' || movimiento.descripcion?.includes('CANCELACIÓN');
-                
+                const esCancelado =
+                  movimiento.estado === "cancelado" || movimiento.descripcion?.includes("CANCELACIÓN");
+
                 return (
-                <TableRow key={movimiento.id} className={esCancelado ? "opacity-60 bg-muted/50" : ""}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      {format(new Date(movimiento.fecha), "dd/MM/yyyy")}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      {movimiento.productos?.imagen_url ? (
-                        <img 
-                          src={movimiento.productos.imagen_url} 
-                          alt={movimiento.productos.nombre}
-                          className="w-10 h-10 rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center">
-                          <Package className="w-5 h-5 text-muted-foreground" />
-                        </div>
-                      )}
-                      <span className="font-medium">
-                        {movimiento.productos?.nombre || "Producto eliminado"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Badge
-                        variant={
-                          movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
-                            ? "default"
-                            : "destructive"
-                        }
-                      >
-                        {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" ? (
-                          <TrendingUp className="h-3 w-3 mr-1" />
+                  <TableRow key={movimiento.id} className={esCancelado ? "opacity-60 bg-muted/50" : ""}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        {format(new Date(movimiento.fecha), "dd/MM/yyyy")}
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        {movimiento.productos?.imagen_url ? (
+                          <img
+                            src={movimiento.productos.imagen_url}
+                            alt={movimiento.productos.nombre}
+                            className="w-10 h-10 rounded-md object-cover"
+                          />
                         ) : (
-                          <TrendingDown className="h-3 w-3 mr-1" />
+                          <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+                            <Package className="w-5 h-5 text-muted-foreground" />
+                          </div>
                         )}
-                        {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" 
-                          ? "Entrada" 
-                          : "Salida"}
-                      </Badge>
-                      {movimiento.estado === 'cancelado' && (
-                        <Badge variant="destructive" className="text-xs">
-                          Cancelado
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {movimiento.cantidad.toLocaleString("es-MX")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    ${movimiento.costo_unitario.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    ${movimiento.costo_total.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </TableCell>
-                  <TableCell className="max-w-xs">
-                    <div className="flex flex-col gap-1">
-                      {esCancelado && (
-                        <Badge variant="destructive" className="w-fit">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Cancelado
-                        </Badge>
-                      )}
-                      <span className={esCancelado ? "text-xs line-through" : ""}>
-                        {movimiento.descripcion || "-"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedMovimiento(movimiento)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle>Detalle de Transacción</DialogTitle>
-                        </DialogHeader>
-                        {selectedMovimiento && (
-                          <div className="space-y-6">
-                            {/* Alerta de cancelación */}
-                            {selectedMovimiento.estado === 'cancelado' && (
-                              <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
-                                <div className="flex items-start gap-2">
-                                  <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                                  <div className="flex-1">
-                                    <p className="font-medium text-red-700 dark:text-red-300 text-sm">
-                                      Movimiento Cancelado
-                                    </p>
-                                    {selectedMovimiento.motivo_cancelacion && (
-                                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                                        {selectedMovimiento.motivo_cancelacion}
-                                      </p>
-                                    )}
-                                    {selectedMovimiento.fecha_cancelacion && (
-                                      <p className="text-xs text-red-500 mt-1">
-                                        Cancelado el: {format(new Date(selectedMovimiento.fecha_cancelacion), 'dd/MM/yyyy HH:mm')}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Información de la transacción */}
-                            <div>
-                              <h3 className="text-lg font-semibold mb-3">
-                                Información del Movimiento
-                              </h3>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Producto</p>
-                                  <p className="font-medium">
-                                    {selectedMovimiento.productos?.nombre}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Tipo</p>
-                                  <Badge
-                                    variant={
-                                      selectedMovimiento.tipo_movimiento === "entrada" || 
-                                      selectedMovimiento.tipo_movimiento === "compra"
-                                        ? "default"
-                                        : "destructive"
-                                    }
-                                  >
-                                    {selectedMovimiento.tipo_movimiento === "entrada" || 
-                                     selectedMovimiento.tipo_movimiento === "compra"
-                                      ? "Entrada"
-                                      : "Salida"}
-                                  </Badge>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Fecha</p>
-                                  <p className="font-medium">
-                                    {format(
-                                      new Date(selectedMovimiento.fecha),
-                                      "dd/MM/yyyy"
-                                    )}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Cantidad</p>
-                                  <p className="font-medium">
-                                    {selectedMovimiento.cantidad.toLocaleString("es-MX")}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Costo Unitario
-                                  </p>
-                                  <p className="font-medium">
-                                    $
-                                    {selectedMovimiento.costo_unitario.toLocaleString(
-                                      "es-MX",
-                                      { minimumFractionDigits: 2 }
-                                    )}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Costo Total</p>
-                                  <p className="font-medium text-lg">
-                                    $
-                                    {selectedMovimiento.costo_total.toLocaleString("es-MX", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-                              {selectedMovimiento.descripcion && (
-                                <div className="mt-4">
-                                  <p className="text-sm text-muted-foreground">Descripción</p>
-                                  <p>{selectedMovimiento.descripcion}</p>
-                                </div>
-                              )}
-                            </div>
+                        <span className="font-medium">{movimiento.productos?.nombre || "Producto eliminado"}</span>
+                      </div>
+                    </TableCell>
 
-                            <Separator />
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge
+                          variant={
+                            movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra" ? (
+                            <TrendingUp className="h-3 w-3 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3 mr-1" />
+                          )}
+                          {movimiento.tipo_movimiento === "entrada" || movimiento.tipo_movimiento === "compra"
+                            ? "Entrada"
+                            : "Salida"}
+                        </Badge>
 
-                            {/* Asientos en Balanza de Comprobación */}
-                            <div>
-                              <h3 className="text-lg font-semibold mb-4">
-                                Asientos en Balanza de Comprobación
-                              </h3>
-                              {!asientoDetalle ? (
-                                <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center space-y-2">
-                                  <p>No se encontraron asientos contables para esta transacción</p>
-                                  <p className="text-xs">
-                                    Las entradas (compras) y salidas (ventas) de inventario generan 
-                                    asientos automáticamente que afectan tus cuentas de inventario, 
-                                    efectivo/bancos y cuentas por pagar.
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="space-y-4">
-                                  {/* Información del Asiento */}
-                                  <div className="p-4 bg-muted rounded-lg">
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                      <div>
-                                        <span className="font-medium">Número de Asiento:</span>{' '}
-                                        {asientoDetalle.numero_asiento}
-                                      </div>
-                                      <div>
-                                        <span className="font-medium">Fecha:</span>{' '}
-                                        {format(new Date(asientoDetalle.fecha), 'dd/MM/yyyy')}
-                                      </div>
-                                      <div className="col-span-2">
-                                        <span className="font-medium">Descripción:</span>{' '}
-                                        {asientoDetalle.descripcion}
+                        {movimiento.estado === "cancelado" && (
+                          <Badge variant="destructive" className="text-xs">
+                            Cancelado
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="text-right">{movimiento.cantidad.toLocaleString("es-MX")}</TableCell>
+
+                    <TableCell className="text-right">
+                      ${movimiento.costo_unitario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </TableCell>
+
+                    <TableCell className="text-right font-medium">
+                      ${movimiento.costo_total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </TableCell>
+
+                    <TableCell className="max-w-xs">
+                      <div className="flex flex-col gap-1">
+                        {esCancelado && (
+                          <Badge variant="destructive" className="w-fit">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Cancelado
+                          </Badge>
+                        )}
+                        <span className={esCancelado ? "text-xs line-through" : ""}>{movimiento.descripcion || "-"}</span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedMovimiento(movimiento)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+
+                          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Detalle de Transacción</DialogTitle>
+                            </DialogHeader>
+
+                            {selectedMovimiento && (
+                              <div className="space-y-6">
+                                {selectedMovimiento.estado === "cancelado" && (
+                                  <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+                                    <div className="flex items-start gap-2">
+                                      <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                                      <div className="flex-1">
+                                        <p className="font-medium text-red-700 dark:text-red-300 text-sm">
+                                          Movimiento Cancelado
+                                        </p>
+                                        {selectedMovimiento.motivo_cancelacion && (
+                                          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                                            {selectedMovimiento.motivo_cancelacion}
+                                          </p>
+                                        )}
+                                        {selectedMovimiento.fecha_cancelacion && (
+                                          <p className="text-xs text-red-500 mt-1">
+                                            Cancelado el:{" "}
+                                            {format(new Date(selectedMovimiento.fecha_cancelacion), "dd/MM/yyyy HH:mm")}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
+                                )}
 
-                                  {/* Tabla de Detalles */}
-                                  <div className="border rounded-lg overflow-hidden">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="w-[200px]">Cuenta</TableHead>
-                                          <TableHead>Descripción</TableHead>
-                                          <TableHead className="text-right w-[150px]">Debe</TableHead>
-                                          <TableHead className="text-right w-[150px]">Haber</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {asientoDetalle.detalle_asientos?.map((detalle, idx) => (
-                                          <TableRow key={idx}>
-                                            <TableCell>
-                                              <div>
-                                                <div className="font-medium text-sm">
-                                                  {detalle.cuenta_codigo}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                  {detalle.cuentas?.nombre}
-                                                </div>
-                                              </div>
-                                            </TableCell>
-                                            <TableCell className="text-sm">
-                                              {detalle.descripcion}
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium">
-                                              {detalle.debe > 0
-                                                ? `$${Number(detalle.debe).toLocaleString('es-MX', {
-                                                    minimumFractionDigits: 2,
-                                                  })}`
-                                                : '-'}
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium">
-                                              {detalle.haber > 0
-                                                ? `$${Number(detalle.haber).toLocaleString('es-MX', {
-                                                    minimumFractionDigits: 2,
-                                                  })}`
-                                                : '-'}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                        {/* Fila de Totales */}
-                                        <TableRow className="border-t-2 bg-muted/50 font-bold">
-                                          <TableCell colSpan={2}>TOTALES</TableCell>
-                                          <TableCell className="text-right">
-                                            $
-                                            {asientoDetalle.detalle_asientos
-                                              ?.reduce((sum, d) => sum + Number(d.debe), 0)
-                                              .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                          </TableCell>
-                                          <TableCell className="text-right">
-                                            $
-                                            {asientoDetalle.detalle_asientos
-                                              ?.reduce((sum, d) => sum + Number(d.haber), 0)
-                                              .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                          </TableCell>
-                                        </TableRow>
-                                      </TableBody>
-                                    </Table>
+                                <div>
+                                  <h3 className="text-lg font-semibold mb-3">Información del Movimiento</h3>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Producto</p>
+                                      <p className="font-medium">{selectedMovimiento.productos?.nombre}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Tipo</p>
+                                      <Badge
+                                        variant={
+                                          selectedMovimiento.tipo_movimiento === "entrada" ||
+                                          selectedMovimiento.tipo_movimiento === "compra"
+                                            ? "default"
+                                            : "destructive"
+                                        }
+                                      >
+                                        {selectedMovimiento.tipo_movimiento === "entrada" ||
+                                        selectedMovimiento.tipo_movimiento === "compra"
+                                          ? "Entrada"
+                                          : "Salida"}
+                                      </Badge>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Fecha</p>
+                                      <p className="font-medium">{format(new Date(selectedMovimiento.fecha), "dd/MM/yyyy")}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Cantidad</p>
+                                      <p className="font-medium">{selectedMovimiento.cantidad.toLocaleString("es-MX")}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Costo Unitario</p>
+                                      <p className="font-medium">
+                                        ${selectedMovimiento.costo_unitario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Costo Total</p>
+                                      <p className="font-medium text-lg">
+                                        ${selectedMovimiento.costo_total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                                      </p>
+                                    </div>
                                   </div>
 
-                                  {/* Nota informativa */}
-                                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
-                                    <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                      💡 Trazabilidad Contable
-                                    </p>
-                                    <p className="text-blue-600 dark:text-blue-400">
-                                      Este asiento contable refleja cómo esta transacción de inventario
-                                      afecta a las diferentes cuentas en la balanza de comprobación y
-                                      posteriormente en los estados financieros.
-                                    </p>
-                                  </div>
+                                  {selectedMovimiento.descripcion && (
+                                    <div className="mt-4">
+                                      <p className="text-sm text-muted-foreground">Descripción</p>
+                                      <p>{selectedMovimiento.descripcion}</p>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </DialogContent>
-                    </Dialog>
-                    
-                    {/* Botón de cancelar (solo para compras no canceladas) */}
-                    {movimiento.tipo_movimiento === 'compra' && 
-                     movimiento.estado !== 'cancelado' && 
-                     !movimiento.descripcion?.includes('CANCELACIÓN') && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={() => {
-                          setMovimientoACancelar(movimiento);
-                          setIsCancelDialogOpen(true);
-                        }}
-                      >
-                        <XCircle className="h-3 w-3 mr-1" />
-                        Cancelar
-                      </Button>
-                    )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-              )}
+
+                                <Separator />
+
+                                <div>
+                                  <h3 className="text-lg font-semibold mb-4">Asientos en Balanza de Comprobación</h3>
+                                  {!asientoDetalle ? (
+                                    <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center space-y-2">
+                                      <p>No se encontraron asientos contables para esta transacción</p>
+                                      <p className="text-xs">
+                                        Las entradas (compras) y salidas (ventas) generan asientos automáticamente.
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-4">
+                                      <div className="p-4 bg-muted rounded-lg">
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                          <div>
+                                            <span className="font-medium">Número de Asiento:</span> {asientoDetalle.numero_asiento}
+                                          </div>
+                                          <div>
+                                            <span className="font-medium">Fecha:</span>{" "}
+                                            {format(new Date(asientoDetalle.fecha), "dd/MM/yyyy")}
+                                          </div>
+                                          <div className="col-span-2">
+                                            <span className="font-medium">Descripción:</span> {asientoDetalle.descripcion}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="border rounded-lg overflow-hidden">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead className="w-[200px]">Cuenta</TableHead>
+                                              <TableHead>Descripción</TableHead>
+                                              <TableHead className="text-right w-[150px]">Debe</TableHead>
+                                              <TableHead className="text-right w-[150px]">Haber</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {asientoDetalle.detalle_asientos?.map((detalle, idx) => (
+                                              <TableRow key={idx}>
+                                                <TableCell>
+                                                  <div>
+                                                    <div className="font-medium text-sm">{detalle.cuenta_codigo}</div>
+                                                    <div className="text-xs text-muted-foreground">{detalle.cuentas?.nombre}</div>
+                                                  </div>
+                                                </TableCell>
+                                                <TableCell className="text-sm">{detalle.descripcion}</TableCell>
+                                                <TableCell className="text-right font-medium">
+                                                  {detalle.debe > 0
+                                                    ? `$${Number(detalle.debe).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                                                    : "-"}
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium">
+                                                  {detalle.haber > 0
+                                                    ? `$${Number(detalle.haber).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                                                    : "-"}
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+
+                                            <TableRow className="border-t-2 bg-muted/50 font-bold">
+                                              <TableCell colSpan={2}>TOTALES</TableCell>
+                                              <TableCell className="text-right">
+                                                $
+                                                {asientoDetalle.detalle_asientos
+                                                  ?.reduce((sum, d) => sum + Number(d.debe), 0)
+                                                  .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                $
+                                                {asientoDetalle.detalle_asientos
+                                                  ?.reduce((sum, d) => sum + Number(d.haber), 0)
+                                                  .toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                                              </TableCell>
+                                            </TableRow>
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+
+                                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
+                                        <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Trazabilidad Contable</p>
+                                        <p className="text-blue-600 dark:text-blue-400">
+                                          Este asiento refleja cómo esta transacción afecta tu balanza y estados financieros.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </DialogContent>
+                        </Dialog>
+
+                        {/* Cancelar (solo compras no canceladas y no reversión) */}
+                        {movimiento.tipo_movimiento === "compra" &&
+                          movimiento.estado !== "cancelado" &&
+                          !movimiento.descripcion?.includes("CANCELACIÓN") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                              onClick={() => {
+                                setMovimientoACancelar(movimiento);
+                                setIsCancelDialogOpen(true);
+                              }}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Cancelar
+                            </Button>
+                          )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
 
@@ -792,24 +649,23 @@ const ResumenTransaccionesInventario = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog de confirmación de cancelación */}
+      {/* Dialog confirmación cancelación */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Cancelar esta compra de inventario?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción creará un asiento de reversión automático y ajustará el inventario.
-              No se puede deshacer esta operación.
+              Esta acción creará un asiento de reversión automático y ajustará el inventario. No se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           {movimientoACancelar && (
             <div className="space-y-4 py-4">
               <div className="p-4 bg-muted rounded-md space-y-2">
                 <div className="flex items-center gap-3">
                   {movimientoACancelar.productos?.imagen_url ? (
-                    <img 
-                      src={movimientoACancelar.productos.imagen_url} 
+                    <img
+                      src={movimientoACancelar.productos.imagen_url}
                       alt={movimientoACancelar.productos.nombre}
                       className="w-12 h-12 rounded-md object-cover"
                     />
@@ -823,7 +679,9 @@ const ResumenTransaccionesInventario = () => {
                     <p className="text-sm text-muted-foreground">{movimientoACancelar.descripcion}</p>
                   </div>
                 </div>
+
                 <Separator />
+
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Cantidad:</span>
@@ -832,12 +690,12 @@ const ResumenTransaccionesInventario = () => {
                   <div>
                     <span className="text-muted-foreground">Costo Total:</span>
                     <span className="ml-2 font-medium">
-                      ${movimientoACancelar.costo_total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      ${movimientoACancelar.costo_total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="motivo">Motivo de cancelación *</Label>
                 <Textarea
@@ -851,11 +709,9 @@ const ResumenTransaccionesInventario = () => {
               </div>
             </div>
           )}
-          
+
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isCancelling}>
-              Cancelar
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={isCancelling}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCancelarMovimiento}
               disabled={isCancelling || !motivoCancelacion.trim()}

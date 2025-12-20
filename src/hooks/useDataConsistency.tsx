@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 interface ConsistencyResult {
@@ -11,7 +11,7 @@ interface ConsistencyResult {
 interface Discrepancia {
   tipo: string;
   mensaje: string;
-  severidad: 'baja' | 'media' | 'alta';
+  severidad: "baja" | "media" | "alta";
   valorEsperado?: number;
   valorActual?: number;
   diferencia?: number;
@@ -20,16 +20,15 @@ interface Discrepancia {
 
 /**
  * Hook para validar la consistencia de datos entre tablas operativas y asientos contables
- * 
- * ARQUITECTURA: Este hook verifica que los datos en las tablas operativas (transacciones_*)
- * coincidan con los asientos contables (fuente de verdad). Si hay discrepancias > 1%,
- * se notifica al usuario.
- * 
+ *
+ * ARQUITECTURA: verifica que los datos operativos (transacciones_*)
+ * coincidan con los asientos contables (fuente de verdad).
+ *
  * Validaciones:
  * 1. Balance de asientos (Debe = Haber en cada asiento)
  * 2. Total de ingresos (transacciones_ingresos vs detalle_asientos cuenta 4XXX)
  * 3. Total de egresos (transacciones_egresos vs detalle_asientos cuenta 5XXX)
- * 4. Saldo de efectivo y bancos
+ * 4. Saldo de efectivo y bancos (1001, 1002)
  */
 export const useDataConsistency = (enableNotifications: boolean = true) => {
   return useQuery({
@@ -38,165 +37,178 @@ export const useDataConsistency = (enableNotifications: boolean = true) => {
       const discrepancias: Discrepancia[] = [];
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
+        /**
+         * 0) Verificar sesión (si 401 => no notificar, solo "consistente" para no molestar)
+         * Endpoint esperado: GET /api/auth/me
+         */
+        let me: any = null;
+        try {
+          const meJson = await apiFetch("/api/auth/me", { method: "GET" });
+          me = meJson?.data ?? meJson;
+        } catch (e: any) {
+          // Si no hay sesión activa, no levantamos error: simplemente no verificamos.
           return { isConsistent: true, discrepancias: [], totalDiscrepancias: 0 };
         }
 
-        // 1. VALIDAR BALANCE DE ASIENTOS (Debe = Haber)
-        const { data: asientos } = await supabase
-          .from('asientos_contables')
-          .select('id, numero_asiento, detalle_asientos(debe, haber)')
-          .eq('user_id', user.id);
+        if (!me?.user && !me?._id) {
+          return { isConsistent: true, discrepancias: [], totalDiscrepancias: 0 };
+        }
 
-        asientos?.forEach(asiento => {
-          const detalles = (asiento as any).detalle_asientos || [];
-          const totalDebe = detalles.reduce((sum: number, d: any) => sum + (d.debe || 0), 0);
-          const totalHaber = detalles.reduce((sum: number, d: any) => sum + (d.haber || 0), 0);
-          
+        /**
+         * 1) VALIDAR BALANCE DE ASIENTOS (Debe = Haber)
+         * Endpoint esperado:
+         *  GET /api/asientos/with-detalles
+         *  -> [{ id, numero_asiento, detalle_asientos:[{debe,haber}] }]
+         */
+        const asientosJson = await apiFetch("/api/asientos/with-detalles", { method: "GET" });
+        const asientos = (asientosJson?.data ?? asientosJson ?? []) as any[];
+
+        asientos.forEach((asiento) => {
+          const detalles = asiento?.detalle_asientos || [];
+          const totalDebe = detalles.reduce((sum: number, d: any) => sum + (Number(d.debe) || 0), 0);
+          const totalHaber = detalles.reduce((sum: number, d: any) => sum + (Number(d.haber) || 0), 0);
+
           const diferencia = Math.abs(totalDebe - totalHaber);
           if (diferencia > 0.01) {
             discrepancias.push({
-              tipo: 'Balance de Asiento',
-              mensaje: `El asiento ${(asiento as any).numero_asiento} no está balanceado`,
-              severidad: 'alta',
+              tipo: "Balance de Asiento",
+              mensaje: `El asiento ${asiento?.numero_asiento || asiento?.id} no está balanceado`,
+              severidad: "alta",
               valorEsperado: totalDebe,
               valorActual: totalHaber,
               diferencia,
-              porcentajeDiferencia: totalDebe > 0 ? (diferencia / totalDebe) * 100 : 0
+              porcentajeDiferencia: totalDebe > 0 ? (diferencia / totalDebe) * 100 : 0,
             });
           }
         });
 
-        // 2. VALIDAR TOTAL DE INGRESOS
-        // Total desde transacciones_ingresos
-        const { data: transaccionesIngresos } = await supabase
-          .from('transacciones_ingresos')
-          .select('monto_neto')
-          .eq('user_id', user.id);
+        /**
+         * 2) VALIDAR TOTAL DE INGRESOS
+         * 2.1) Total desde transacciones_ingresos
+         * Endpoint esperado: GET /api/transacciones/ingresos?fields=monto_neto
+         */
+        const ingresosTxJson = await apiFetch(
+          "/api/transacciones/ingresos?fields=monto_neto",
+          { method: "GET" }
+        );
+        const transaccionesIngresos = (ingresosTxJson?.data ?? ingresosTxJson ?? []) as any[];
 
-        const totalTransaccionesIngresos = transaccionesIngresos?.reduce(
-          (sum, t) => sum + (t.monto_neto || 0), 0
-        ) || 0;
+        const totalTransaccionesIngresos =
+          transaccionesIngresos.reduce((sum, t) => sum + (Number(t.monto_neto) || 0), 0) || 0;
 
-        // Total desde asientos contables (cuentas 4XXX)
-        const { data: detallesIngresos } = await supabase
-          .from('detalle_asientos')
-          .select('debe, haber, asientos_contables!inner(user_id)')
-          .like('cuenta_codigo', '4%')
-          .eq('asientos_contables.user_id', user.id);
-
-        const totalAsientosIngresos = detallesIngresos?.reduce(
-          (sum, d) => sum + ((d.haber || 0) - (d.debe || 0)), 0
-        ) || 0;
+        /**
+         * 2.2) Total desde asientos contables (cuentas 4XXX)
+         * Endpoint esperado:
+         *  GET /api/asientos/detalle/sum?prefix=4
+         *  -> { total: number }  // total neto ingresos = haber - debe
+         */
+        const ingresosAsientosJson = await apiFetch("/api/asientos/detalle/sum?prefix=4", {
+          method: "GET",
+        });
+        const totalAsientosIngresos = Number((ingresosAsientosJson?.data ?? ingresosAsientosJson)?.total) || 0;
 
         const diferenciaIngresos = Math.abs(totalTransaccionesIngresos - totalAsientosIngresos);
-        const porcentajeDifIngresos = totalAsientosIngresos > 0 
-          ? (diferenciaIngresos / totalAsientosIngresos) * 100 
-          : 0;
+        const porcentajeDifIngresos =
+          totalAsientosIngresos > 0 ? (diferenciaIngresos / totalAsientosIngresos) * 100 : 0;
 
         if (porcentajeDifIngresos > 1) {
           discrepancias.push({
-            tipo: 'Ingresos',
+            tipo: "Ingresos",
             mensaje: `Discrepancia en ingresos: ${porcentajeDifIngresos.toFixed(2)}%`,
-            severidad: porcentajeDifIngresos > 5 ? 'alta' : 'media',
+            severidad: porcentajeDifIngresos > 5 ? "alta" : "media",
             valorEsperado: totalAsientosIngresos,
             valorActual: totalTransaccionesIngresos,
             diferencia: diferenciaIngresos,
-            porcentajeDiferencia: porcentajeDifIngresos
+            porcentajeDiferencia: porcentajeDifIngresos,
           });
         }
 
-        // 3. VALIDAR TOTAL DE EGRESOS
-        // Total desde transacciones_egresos
-        const { data: transaccionesEgresos } = await supabase
-          .from('transacciones_egresos')
-          .select('monto_total')
-          .eq('user_id', user.id);
+        /**
+         * 3) VALIDAR TOTAL DE EGRESOS
+         * 3.1) Total desde transacciones_egresos
+         * Endpoint esperado: GET /api/transacciones/egresos?fields=monto_total
+         */
+        const egresosTxJson = await apiFetch(
+          "/api/transacciones/egresos?fields=monto_total",
+          { method: "GET" }
+        );
+        const transaccionesEgresos = (egresosTxJson?.data ?? egresosTxJson ?? []) as any[];
 
-        const totalTransaccionesEgresos = transaccionesEgresos?.reduce(
-          (sum, t) => sum + (t.monto_total || 0), 0
-        ) || 0;
+        const totalTransaccionesEgresos =
+          transaccionesEgresos.reduce((sum, t) => sum + (Number(t.monto_total) || 0), 0) || 0;
 
-        // Total desde asientos contables (cuentas 5XXX)
-        const { data: detallesEgresos } = await supabase
-          .from('detalle_asientos')
-          .select('debe, haber, asientos_contables!inner(user_id)')
-          .like('cuenta_codigo', '5%')
-          .eq('asientos_contables.user_id', user.id);
-
-        const totalAsientosEgresos = detallesEgresos?.reduce(
-          (sum, d) => sum + ((d.debe || 0) - (d.haber || 0)), 0
-        ) || 0;
+        /**
+         * 3.2) Total desde asientos contables (cuentas 5XXX)
+         * Endpoint esperado:
+         *  GET /api/asientos/detalle/sum?prefix=5
+         *  -> { total: number } // total neto egresos = debe - haber
+         */
+        const egresosAsientosJson = await apiFetch("/api/asientos/detalle/sum?prefix=5", {
+          method: "GET",
+        });
+        const totalAsientosEgresos = Number((egresosAsientosJson?.data ?? egresosAsientosJson)?.total) || 0;
 
         const diferenciaEgresos = Math.abs(totalTransaccionesEgresos - totalAsientosEgresos);
-        const porcentajeDifEgresos = totalAsientosEgresos > 0 
-          ? (diferenciaEgresos / totalAsientosEgresos) * 100 
-          : 0;
+        const porcentajeDifEgresos =
+          totalAsientosEgresos > 0 ? (diferenciaEgresos / totalAsientosEgresos) * 100 : 0;
 
         if (porcentajeDifEgresos > 1) {
           discrepancias.push({
-            tipo: 'Egresos',
+            tipo: "Egresos",
             mensaje: `Discrepancia en egresos: ${porcentajeDifEgresos.toFixed(2)}%`,
-            severidad: porcentajeDifEgresos > 5 ? 'alta' : 'media',
+            severidad: porcentajeDifEgresos > 5 ? "alta" : "media",
             valorEsperado: totalAsientosEgresos,
             valorActual: totalTransaccionesEgresos,
             diferencia: diferenciaEgresos,
-            porcentajeDiferencia: porcentajeDifEgresos
+            porcentajeDiferencia: porcentajeDifEgresos,
           });
         }
 
-        // 4. VERIFICAR SALDOS DE EFECTIVO Y BANCOS
-        const { data: detallesEfectivo } = await supabase
-          .from('detalle_asientos')
-          .select('cuenta_codigo, debe, haber, asientos_contables!inner(user_id)')
-          .in('cuenta_codigo', ['1001', '1002'])
-          .eq('asientos_contables.user_id', user.id);
-
-        let efectivo = 0;
-        let bancos = 0;
-
-        detallesEfectivo?.forEach(d => {
-          const saldo = (d.debe || 0) - (d.haber || 0);
-          if (d.cuenta_codigo === '1001') {
-            efectivo += saldo;
-          } else if (d.cuenta_codigo === '1002') {
-            bancos += saldo;
-          }
+        /**
+         * 4) SALDOS EFECTIVO Y BANCOS (1001, 1002)
+         * Endpoint esperado:
+         *  GET /api/asientos/detalle/saldos?cuentas=1001,1002
+         *  -> { saldos: { "1001": number, "1002": number } }
+         * Nota: saldo = (debe - haber) acumulado
+         */
+        const saldosJson = await apiFetch("/api/asientos/detalle/saldos?cuentas=1001,1002", {
+          method: "GET",
         });
+        const saldos = (saldosJson?.data ?? saldosJson)?.saldos ?? {};
 
-        // Validar que no haya saldos negativos críticos
+        const efectivo = Number(saldos["1001"]) || 0;
+        const bancos = Number(saldos["1002"]) || 0;
+
         if (efectivo < -100) {
           discrepancias.push({
-            tipo: 'Saldo Efectivo',
-            mensaje: 'Saldo de efectivo negativo detectado',
-            severidad: 'alta',
+            tipo: "Saldo Efectivo",
+            mensaje: "Saldo de efectivo negativo detectado",
+            severidad: "alta",
             valorEsperado: 0,
             valorActual: efectivo,
-            diferencia: Math.abs(efectivo)
+            diferencia: Math.abs(efectivo),
           });
         }
 
         if (bancos < -100) {
           discrepancias.push({
-            tipo: 'Saldo Bancos',
-            mensaje: 'Saldo de bancos negativo detectado',
-            severidad: 'alta',
+            tipo: "Saldo Bancos",
+            mensaje: "Saldo de bancos negativo detectado",
+            severidad: "alta",
             valorEsperado: 0,
             valorActual: bancos,
-            diferencia: Math.abs(bancos)
+            diferencia: Math.abs(bancos),
           });
         }
 
-        // Mostrar notificación si hay discrepancias y está habilitado
+        // Notificación si hay discrepancias críticas
         if (enableNotifications && discrepancias.length > 0) {
-          const discrepanciasAltas = discrepancias.filter(d => d.severidad === 'alta');
-          
+          const discrepanciasAltas = discrepancias.filter((d) => d.severidad === "alta");
           if (discrepanciasAltas.length > 0) {
             toast({
               title: "⚠️ Inconsistencias Detectadas",
               description: `Se encontraron ${discrepanciasAltas.length} inconsistencias críticas en los datos contables.`,
-              variant: "destructive"
+              variant: "destructive",
             });
           }
         }
@@ -204,23 +216,24 @@ export const useDataConsistency = (enableNotifications: boolean = true) => {
         return {
           isConsistent: discrepancias.length === 0,
           discrepancias,
-          totalDiscrepancias: discrepancias.length
+          totalDiscrepancias: discrepancias.length,
         };
-
       } catch (error) {
-        console.error('Error validando consistencia:', error);
-        return { 
-          isConsistent: false, 
-          discrepancias: [{
-            tipo: 'Error',
-            mensaje: 'Error al validar consistencia de datos',
-            severidad: 'alta'
-          }], 
-          totalDiscrepancias: 1 
+        console.error("Error validando consistencia:", error);
+        return {
+          isConsistent: false,
+          discrepancias: [
+            {
+              tipo: "Error",
+              mensaje: "Error al validar consistencia de datos",
+              severidad: "alta",
+            },
+          ],
+          totalDiscrepancias: 1,
         };
       }
     },
-    refetchInterval: 60000, // Validar cada minuto
-    staleTime: 30000, // Considerar datos válidos por 30 segundos
+    refetchInterval: 60000, // cada minuto
+    staleTime: 30000, // 30 segundos
   });
 };

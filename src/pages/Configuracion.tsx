@@ -1,10 +1,29 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Trash2, AlertTriangle, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string; error?: any } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
+type ResetResponse = {
+  success: boolean;
+  deleted?: Record<string, number>;
+  message?: string;
+};
 
 const Configuracion = () => {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -14,34 +33,17 @@ const Configuracion = () => {
     setIsDeleting(true);
 
     try {
-      // 1. Obtener TODOS los asientos
-      const { data: asientos } = await supabase
-        .from('asientos_contables')
-        .select('id');
+      // ✅ Un solo endpoint backend (más seguro y consistente)
+      const json = await apiFetch("/api/admin/reset-transactions", {
+        method: "POST",
+        body: JSON.stringify({ scope: "transactions" }),
+      });
 
-      const asientoIds = asientos?.map(a => a.id) || [];
+      const data = unwrap<ResetResponse>(json);
 
-      // 2. Borrar detalle_asientos primero (depende de asientos)
-      if (asientoIds.length > 0) {
-        await supabase
-          .from('detalle_asientos')
-          .delete()
-          .in('asiento_id', asientoIds);
+      if (!data?.success) {
+        throw new Error(data?.message || "No se pudo completar el reseteo.");
       }
-
-      // 3. Borrar TODAS las transacciones y registros maestros
-      await Promise.all([
-        supabase.from('asientos_contables').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('transacciones_cobros_pagos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('transacciones_impuestos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('movimientos_inventario').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('transacciones_financiamientos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('transacciones_capital').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('transacciones_egresos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('transacciones_ingresos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('inversiones_capex').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('financiamientos').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-      ]);
 
       toast({
         title: "✅ Datos reseteados",
@@ -49,18 +51,16 @@ const Configuracion = () => {
       });
 
       setShowConfirm(false);
-      
-      // Recargar después de 1.5 segundos
+
       setTimeout(() => {
         window.location.reload();
       }, 1500);
-
-    } catch (error) {
-      console.error('Error al resetear datos:', error);
+    } catch (error: any) {
+      console.error("Error al resetear datos:", error);
       toast({
         title: "❌ Error",
-        description: "Hubo un error al borrar los datos. Intenta nuevamente.",
-        variant: "destructive"
+        description: error?.message || "Hubo un error al borrar los datos. Intenta nuevamente.",
+        variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
@@ -74,113 +74,107 @@ const Configuracion = () => {
           <Settings className="h-8 w-8" />
           Configuración
         </h1>
-        <p className="text-muted-foreground">
-          Gestiona las preferencias y configuración del sistema
-        </p>
+        <p className="text-muted-foreground">Gestiona las preferencias y configuración del sistema</p>
       </div>
-          
-          <div className="space-y-6 max-w-4xl">
-            {/* Información del Usuario */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Información de la Cuenta</CardTitle>
-                <CardDescription>
-                  Detalles de tu cuenta de usuario
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Usuario</p>
-                    <p className="text-base">Administrador</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Rol</p>
-                    <p className="text-base">Administrador</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Zona de Peligro */}
-            <Card className="border-red-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-red-600">
-                  <AlertTriangle className="h-5 w-5" />
-                  Zona de Peligro
-                </CardTitle>
-                <CardDescription>
-                  Acciones irreversibles que afectarán permanentemente tus datos
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-red-900 mb-2">Resetear Todas las Transacciones</h4>
-                  <p className="text-sm text-red-800 mb-4">
-                    Esta acción borrará permanentemente todas tus transacciones, movimientos de inventario 
-                    y asientos contables. Los catálogos y configuración se mantendrán intactos.
-                  </p>
-                  
-                  <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
-                    <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="destructive" 
-                        className="w-full sm:w-auto"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Resetear Todos los Datos
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-                          <AlertTriangle className="h-5 w-5" />
-                          ¿Estás completamente seguro?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          <div className="space-y-3">
-                            <p className="font-semibold">
-                              Esta acción NO se puede deshacer. Se borrarán permanentemente:
-                            </p>
-                            <ul className="text-sm space-y-1 list-disc list-inside bg-red-50 p-3 rounded">
-                              <li>Todas las transacciones de ingresos y egresos</li>
-                              <li>Todos los movimientos de inventario</li>
-                              <li>Todos los asientos contables</li>
-                              <li>Transacciones de capital, financiamientos e impuestos</li>
-                              <li>Cobros y pagos registrados</li>
-                              <li>Todas las inversiones CAPEX registradas</li>
-                              <li>Todos los financiamientos y créditos registrados</li>
-                            </ul>
-                            <p className="text-sm font-semibold text-green-600 bg-green-50 p-3 rounded mt-3">
-                              ✅ Se mantendrán: Plan de cuentas, catálogos de productos, clientes, proveedores, 
-                              accionistas y toda la configuración del sistema.
-                            </p>
-                          </div>
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleResetear}
-                          disabled={isDeleting}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          {isDeleting ? "Borrando..." : "Sí, borrar todo"}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
+      <div className="space-y-6 max-w-4xl">
+        {/* Información del Usuario */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Información de la Cuenta</CardTitle>
+            <CardDescription>Detalles de tu cuenta de usuario</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Usuario</p>
+                <p className="text-base">Administrador</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Rol</p>
+                <p className="text-base">Administrador</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-sm text-yellow-800">
-                    💡 <strong>Sugerencia:</strong> Si solo quieres corregir algunos datos, 
-                    considera editar las transacciones individuales en lugar de resetear todo el sistema.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Zona de Peligro */}
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Zona de Peligro
+            </CardTitle>
+            <CardDescription>Acciones irreversibles que afectarán permanentemente tus datos</CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h4 className="font-semibold text-red-900 mb-2">Resetear Todas las Transacciones</h4>
+              <p className="text-sm text-red-800 mb-4">
+                Esta acción borrará permanentemente todas tus transacciones, movimientos de inventario y asientos contables.
+                Los catálogos y configuración se mantendrán intactos.
+              </p>
+
+              <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full sm:w-auto">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Resetear Todos los Datos
+                  </Button>
+                </AlertDialogTrigger>
+
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                      <AlertTriangle className="h-5 w-5" />
+                      ¿Estás completamente seguro?
+                    </AlertDialogTitle>
+
+                    <AlertDialogDescription>
+                      <div className="space-y-3">
+                        <p className="font-semibold">Esta acción NO se puede deshacer. Se borrarán permanentemente:</p>
+                        <ul className="text-sm space-y-1 list-disc list-inside bg-red-50 p-3 rounded">
+                          <li>Todas las transacciones de ingresos y egresos</li>
+                          <li>Todos los movimientos de inventario</li>
+                          <li>Todos los asientos contables</li>
+                          <li>Transacciones de capital, financiamientos e impuestos</li>
+                          <li>Cobros y pagos registrados</li>
+                          <li>Todas las inversiones CAPEX registradas</li>
+                          <li>Todos los financiamientos y créditos registrados</li>
+                        </ul>
+
+                        <p className="text-sm font-semibold text-green-600 bg-green-50 p-3 rounded mt-3">
+                          ✅ Se mantendrán: Plan de cuentas, catálogos de productos, clientes, proveedores, accionistas y
+                          toda la configuración del sistema.
+                        </p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleResetear}
+                      disabled={isDeleting}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {isDeleting ? "Borrando..." : "Sí, borrar todo"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                💡 <strong>Sugerencia:</strong> Si solo quieres corregir algunos datos, considera editar las transacciones
+                individuales en lugar de resetear todo el sistema.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

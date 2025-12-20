@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 
 interface VentasResumen {
   ventasDelDia: number;
@@ -19,206 +19,161 @@ interface VentasResumen {
   totalIngresosDelAno: number;
 }
 
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
+const clamp0 = (n: any) => Math.max(0, Number(n) || 0);
+
+const ZERO: VentasResumen = {
+  ventasDelDia: 0,
+  ventasDelMes: 0,
+  ventasDelAno: 0,
+  otrosIngresosDelDia: 0,
+  otrosIngresosDelMes: 0,
+  otrosIngresosDelAno: 0,
+  descuentosDelDia: 0,
+  descuentosDelMes: 0,
+  descuentosDelAno: 0,
+  ingresoNetoDelDia: 0,
+  ingresoNetoDelMes: 0,
+  ingresoNetoDelAno: 0,
+  totalIngresosDelDia: 0,
+  totalIngresosDelMes: 0,
+  totalIngresosDelAno: 0,
+};
+
 /**
  * Hook para obtener resumen de ventas DESDE ASIENTOS CONTABLES (Única Fuente de Verdad)
- * 
- * ARQUITECTURA: Este hook consulta ÚNICAMENTE la balanza de comprobación (asientos_contables + detalle_asientos)
- * para garantizar consistencia con los estados financieros.
- * 
- * Cuentas utilizadas:
- * - 4001: Ventas (Ingresos por ventas de productos/servicios)
- * - 4003: Descuentos sobre ventas
- * - 4004 y otras 4XXX: Otros ingresos (extraordinarios, donaciones, etc.)
+ *
+ * Cuentas:
+ * - 4001: Ventas (acreedor) => haber - debe
+ * - 4003: Descuentos sobre ventas (contra-cuenta, deudora) => debe - haber
+ * - Otras 4XXX: Otros ingresos (acreedor) => haber - debe
  */
 export const useVentasResumen = () => {
-  const [ventasResumen, setVentasResumen] = useState<VentasResumen>({
-    ventasDelDia: 0,
-    ventasDelMes: 0,
-    ventasDelAno: 0,
-    otrosIngresosDelDia: 0,
-    otrosIngresosDelMes: 0,
-    otrosIngresosDelAno: 0,
-    descuentosDelDia: 0,
-    descuentosDelMes: 0,
-    descuentosDelAno: 0,
-    ingresoNetoDelDia: 0,
-    ingresoNetoDelMes: 0,
-    ingresoNetoDelAno: 0,
-    totalIngresosDelDia: 0,
-    totalIngresosDelMes: 0,
-    totalIngresosDelAno: 0,
-  });
-  
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchVentasResumen = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const query = useQuery({
+    queryKey: ["ventas-resumen"],
+    queryFn: async (): Promise<VentasResumen> => {
       const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().split('T')[0];
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-      const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+        .toISOString()
+        .split("T")[0];
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+      const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().split("T")[0];
 
-      // OBTENER DATOS DESDE ASIENTOS CONTABLES (ÚNICA FUENTE DE VERDAD)
-      // Obtener todos los detalles de ingresos (cuentas 4XXX)
-      const { data: detalles, error: errorDetalles } = await supabase
-        .from('detalle_asientos')
-        .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha, user_id)')
-        .gte('asientos_contables.fecha', startOfYear)
-        .like('cuenta_codigo', '4%');
+      // Endpoint recomendado:
+      // GET /api/contabilidad/detalle-asientos?from=YYYY-MM-DD&to=YYYY-MM-DD&cuenta_prefix=4
+      // Debe devolver items con:
+      // { cuenta_codigo, debe, haber, fecha }  (fecha del asiento)
+      //
+      // Nota: Si tu backend devuelve { asientos_contables: { fecha } } también lo soportamos.
+      const json = await apiFetch(
+        `/api/contabilidad/detalle-asientos?from=${encodeURIComponent(startOfYear)}&to=${encodeURIComponent(
+          today.toISOString().split("T")[0]
+        )}&cuenta_prefix=4`,
+        { method: "GET" }
+      );
 
-      if (errorDetalles) {
-        console.error('Error fetching detalles de ingresos:', errorDetalles);
-        throw errorDetalles;
-      }
+      const detalles = unwrap<any[]>(json) || [];
 
-      // Si no hay datos, retornar ceros
-      if (!detalles || detalles.length === 0) {
-        setVentasResumen({
-          ventasDelDia: 0,
-          ventasDelMes: 0,
-          ventasDelAno: 0,
-          otrosIngresosDelDia: 0,
-          otrosIngresosDelMes: 0,
-          otrosIngresosDelAno: 0,
-          descuentosDelDia: 0,
-          descuentosDelMes: 0,
-          descuentosDelAno: 0,
-          ingresoNetoDelDia: 0,
-          ingresoNetoDelMes: 0,
-          ingresoNetoDelAno: 0,
-          totalIngresosDelDia: 0,
-          totalIngresosDelMes: 0,
-          totalIngresosDelAno: 0,
-        });
-        return;
-      }
+      if (!detalles.length) return ZERO;
 
-      // Calcular totales por periodo
       let ventasDelDia = 0;
       let ventasDelMes = 0;
       let ventasDelAno = 0;
+
       let otrosIngresosDelDia = 0;
       let otrosIngresosDelMes = 0;
       let otrosIngresosDelAno = 0;
+
       let descuentosDelDia = 0;
       let descuentosDelMes = 0;
       let descuentosDelAno = 0;
 
-      detalles.forEach(detalle => {
-        const fechaAsiento = detalle.asientos_contables.fecha;
-        
-        // Cuenta 4003: Descuentos sobre Ventas (tiene naturaleza DEUDORA en contra-cuenta de ingresos)
-        // El DEBE aumenta los descuentos (reduce ingresos)
-        if (detalle.cuenta_codigo === '4003') {
-          const montoDescuento = (detalle.debe || 0) - (detalle.haber || 0);
-          
-          if (fechaAsiento >= startOfDay) {
-            descuentosDelDia += montoDescuento;
-          }
-          if (fechaAsiento >= startOfMonth) {
-            descuentosDelMes += montoDescuento;
-          }
-          if (fechaAsiento >= startOfYear) {
-            descuentosDelAno += montoDescuento;
-          }
-        } else if (detalle.cuenta_codigo === '4001') {
-          // Cuenta 4001: Ventas normales (naturaleza ACREEDORA)
-          const montoVenta = (detalle.haber || 0) - (detalle.debe || 0);
+      detalles.forEach((detalle) => {
+        const codigo = String(detalle?.cuenta_codigo || "");
 
-          if (fechaAsiento >= startOfDay) {
-            ventasDelDia += montoVenta;
-          }
-          if (fechaAsiento >= startOfMonth) {
-            ventasDelMes += montoVenta;
-          }
-          if (fechaAsiento >= startOfYear) {
-            ventasDelAno += montoVenta;
-          }
-        } else {
-          // Otras cuentas 4XXX: Otros ingresos (naturaleza ACREEDORA)
-          const montoOtros = (detalle.haber || 0) - (detalle.debe || 0);
+        const fechaAsiento: string =
+          detalle?.fecha ||
+          detalle?.asientos_contables?.fecha ||
+          detalle?.asiento_fecha ||
+          "";
 
-          if (fechaAsiento >= startOfDay) {
-            otrosIngresosDelDia += montoOtros;
-          }
-          if (fechaAsiento >= startOfMonth) {
-            otrosIngresosDelMes += montoOtros;
-          }
-          if (fechaAsiento >= startOfYear) {
-            otrosIngresosDelAno += montoOtros;
-          }
+        if (!fechaAsiento) return;
+
+        const debe = Number(detalle?.debe || 0);
+        const haber = Number(detalle?.haber || 0);
+
+        // 4003 = descuentos (debe - haber)
+        if (codigo === "4003") {
+          const montoDescuento = (debe || 0) - (haber || 0);
+
+          if (fechaAsiento >= startOfDay) descuentosDelDia += montoDescuento;
+          if (fechaAsiento >= startOfMonth) descuentosDelMes += montoDescuento;
+          if (fechaAsiento >= startOfYear) descuentosDelAno += montoDescuento;
+          return;
+        }
+
+        // 4001 = ventas (haber - debe)
+        if (codigo === "4001") {
+          const montoVenta = (haber || 0) - (debe || 0);
+
+          if (fechaAsiento >= startOfDay) ventasDelDia += montoVenta;
+          if (fechaAsiento >= startOfMonth) ventasDelMes += montoVenta;
+          if (fechaAsiento >= startOfYear) ventasDelAno += montoVenta;
+          return;
+        }
+
+        // Otras 4XXX = otros ingresos (haber - debe)
+        if (codigo.startsWith("4")) {
+          const montoOtros = (haber || 0) - (debe || 0);
+
+          if (fechaAsiento >= startOfDay) otrosIngresosDelDia += montoOtros;
+          if (fechaAsiento >= startOfMonth) otrosIngresosDelMes += montoOtros;
+          if (fechaAsiento >= startOfYear) otrosIngresosDelAno += montoOtros;
         }
       });
 
-      // Calcular ingresos netos (ventas - descuentos)
-      const ingresoNetoDelDia = Math.max(0, ventasDelDia - descuentosDelDia);
-      const ingresoNetoDelMes = Math.max(0, ventasDelMes - descuentosDelMes);
-      const ingresoNetoDelAno = Math.max(0, ventasDelAno - descuentosDelAno);
+      // Ingresos netos (ventas - descuentos)
+      const ingresoNetoDelDia = clamp0(ventasDelDia - descuentosDelDia);
+      const ingresoNetoDelMes = clamp0(ventasDelMes - descuentosDelMes);
+      const ingresoNetoDelAno = clamp0(ventasDelAno - descuentosDelAno);
 
-      setVentasResumen({
-        ventasDelDia: Math.max(0, ventasDelDia),
-        ventasDelMes: Math.max(0, ventasDelMes),
-        ventasDelAno: Math.max(0, ventasDelAno),
-        otrosIngresosDelDia: Math.max(0, otrosIngresosDelDia),
-        otrosIngresosDelMes: Math.max(0, otrosIngresosDelMes),
-        otrosIngresosDelAno: Math.max(0, otrosIngresosDelAno),
-        descuentosDelDia,
-        descuentosDelMes,
-        descuentosDelAno,
+      return {
+        ventasDelDia: clamp0(ventasDelDia),
+        ventasDelMes: clamp0(ventasDelMes),
+        ventasDelAno: clamp0(ventasDelAno),
+
+        otrosIngresosDelDia: clamp0(otrosIngresosDelDia),
+        otrosIngresosDelMes: clamp0(otrosIngresosDelMes),
+        otrosIngresosDelAno: clamp0(otrosIngresosDelAno),
+
+        // descuentos pueden ser 0+ (contra-cuenta). Los dejamos tal cual (no clamp) para que respeten contabilidad.
+        descuentosDelDia: Number(descuentosDelDia) || 0,
+        descuentosDelMes: Number(descuentosDelMes) || 0,
+        descuentosDelAno: Number(descuentosDelAno) || 0,
+
         ingresoNetoDelDia,
         ingresoNetoDelMes,
         ingresoNetoDelAno,
-        totalIngresosDelDia: ingresoNetoDelDia + otrosIngresosDelDia,
-        totalIngresosDelMes: ingresoNetoDelMes + otrosIngresosDelMes,
-        totalIngresosDelAno: ingresoNetoDelAno + otrosIngresosDelAno,
-      });
-    } catch (err) {
-      console.error('Error fetching ventas resumen:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
-    }
+
+        totalIngresosDelDia: clamp0(ingresoNetoDelDia + otrosIngresosDelDia),
+        totalIngresosDelMes: clamp0(ingresoNetoDelMes + otrosIngresosDelMes),
+        totalIngresosDelAno: clamp0(ingresoNetoDelAno + otrosIngresosDelAno),
+      };
+    },
+
+    // equivalente “realtime”: refrescar periódicamente
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  return {
+    ventasResumen: query.data ?? ZERO,
+    loading: query.isLoading,
+    error: query.error ? (query.error as Error).message : null,
+    refetch: query.refetch,
   };
-
-  useEffect(() => {
-    fetchVentasResumen();
-
-    // Configurar realtime para actualizaciones automáticas
-    // Escuchar cambios en asientos_contables (fuente de verdad)
-    const channel = supabase
-      .channel('asientos-changes-ventas')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'asientos_contables'
-        },
-        () => {
-          fetchVentasResumen();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'detalle_asientos'
-        },
-        () => {
-          fetchVentasResumen();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  return { ventasResumen, loading, error, refetch: fetchVentasResumen };
 };

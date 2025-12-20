@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
 
 export interface InstitucionFinanciera {
   id: string;
@@ -24,82 +24,48 @@ export interface InstitucionFinanciera {
   updated_at: string;
 }
 
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
+const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+
 export const useInstitucionesFinancieras = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch instituciones
-  const { data: instituciones, isLoading } = useQuery({
+  const query = useQuery({
     queryKey: ["instituciones-financieras"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
-
-      const { data, error } = await supabase
-        .from("instituciones_financieras")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("activo", true)
-        .order("nombre", { ascending: true });
-
-      if (error) throw error;
-      return data as InstitucionFinanciera[];
+      const json = await apiFetch("/api/instituciones-financieras", { method: "GET" });
+      const data = unwrap<InstitucionFinanciera[]>(json) || [];
+      return data.filter((i) => i.activo !== false).sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
   });
 
-  // Suscripción en tiempo real
+  // (Opcional) Si quieres refrescar cada X tiempo en lugar de realtime:
   useEffect(() => {
-    const channel = supabase
-      .channel("instituciones-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "instituciones_financieras",
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["instituciones-financieras"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // Si no quieres polling, borra este efecto
+    const t = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["instituciones-financieras"] });
+    }, 60_000);
+    return () => clearInterval(t);
   }, [queryClient]);
 
-  // Crear institución
   const crearInstitucion = useMutation({
-    mutationFn: async (data: Omit<InstitucionFinanciera, "id" | "user_id" | "created_at" | "updated_at" | "activo">) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
+    mutationFn: async (
+      payload: Omit<InstitucionFinanciera, "id" | "user_id" | "created_at" | "updated_at" | "activo">
+    ) => {
+      // Verificar duplicados (frontend guardrail; backend debe validar también)
+      const existentes = queryClient.getQueryData<InstitucionFinanciera[]>(["instituciones-financieras"]) || [];
+      const yaExiste = existentes.some((i) => i.activo !== false && norm(i.nombre) === norm(payload.nombre));
+      if (yaExiste) throw new Error("Ya existe una institución con ese nombre");
 
-      // Verificar duplicados
-      const { data: existente } = await supabase
-        .from("instituciones_financieras")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("nombre", data.nombre)
-        .eq("activo", true)
-        .single();
+      const json = await apiFetch("/api/instituciones-financieras", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
-      if (existente) {
-        throw new Error("Ya existe una institución con ese nombre");
-      }
-
-      const { data: nuevaInstitucion, error } = await supabase
-        .from("instituciones_financieras")
-        .insert({
-          ...data,
-          user_id: user.id,
-          activo: true,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return nuevaInstitucion as InstitucionFinanciera;
+      return unwrap<InstitucionFinanciera>(json);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["instituciones-financieras"] });
@@ -108,24 +74,22 @@ export const useInstitucionesFinancieras = () => {
         description: "La institución financiera se registró correctamente",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: "❌ Error al crear institución",
-        description: error.message,
+        description: error?.message || "No se pudo crear la institución",
         variant: "destructive",
       });
     },
   });
 
-  // Actualizar institución
   const actualizarInstitucion = useMutation({
-    mutationFn: async ({ id, ...data }: Partial<InstitucionFinanciera> & { id: string }) => {
-      const { error } = await supabase
-        .from("instituciones_financieras")
-        .update(data)
-        .eq("id", id);
-
-      if (error) throw error;
+    mutationFn: async ({ id, ...patch }: Partial<InstitucionFinanciera> & { id: string }) => {
+      const json = await apiFetch(`/api/instituciones-financieras/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      return unwrap<InstitucionFinanciera>(json);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["instituciones-financieras"] });
@@ -134,35 +98,35 @@ export const useInstitucionesFinancieras = () => {
         description: "Los cambios se guardaron correctamente",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "❌ Error al actualizar",
-        description: "No se pudieron guardar los cambios",
+        description: error?.message || "No se pudieron guardar los cambios",
         variant: "destructive",
       });
     },
   });
 
-  // Eliminar institución (soft delete)
   const eliminarInstitucion = useMutation({
     mutationFn: async (id: string) => {
-      // Verificar si tiene créditos activos
-      const { data: creditosActivos } = await supabase
-        .from("financiamientos")
-        .select("id")
-        .eq("institucion_financiera_id", id)
-        .eq("estado", "activo");
+      // Validar si tiene créditos activos (E2E sin Supabase)
+      const p = new URLSearchParams();
+      p.set("institucion_financiera_id", id);
+      p.set("estado", "activo");
 
-      if (creditosActivos && creditosActivos.length > 0) {
+      const finJson = await apiFetch(`/api/financiamientos?${p.toString()}`, { method: "GET" });
+      const creditos = unwrap<any[]>(finJson) || [];
+
+      if (creditos.length > 0) {
         throw new Error("No se puede eliminar una institución con créditos activos");
       }
 
-      const { error } = await supabase
-        .from("instituciones_financieras")
-        .update({ activo: false })
-        .eq("id", id);
+      // Soft delete en backend (DELETE que marca activo=false)
+      await apiFetch(`/api/instituciones-financieras/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
 
-      if (error) throw error;
+      return { ok: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["instituciones-financieras"] });
@@ -171,18 +135,18 @@ export const useInstitucionesFinancieras = () => {
         description: "La institución se dio de baja correctamente",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: "❌ Error al eliminar",
-        description: error.message,
+        description: error?.message || "No se pudo eliminar la institución",
         variant: "destructive",
       });
     },
   });
 
   return {
-    instituciones: instituciones || [],
-    isLoading,
+    instituciones: query.data || [],
+    isLoading: query.isLoading,
     crearInstitucion,
     actualizarInstitucion,
     eliminarInstitucion,

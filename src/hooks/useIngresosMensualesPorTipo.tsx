@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 interface IngresoMensual {
   mes: string;
@@ -9,11 +9,16 @@ interface IngresoMensual {
   total: number;
 }
 
-interface DetalleIngreso {
-  tipo_ingreso: string;
-  monto: number;
-  cuenta_principal_codigo: string;
-}
+type DetalleAsientoAPI = {
+  cuenta_codigo: string;
+  debe: number | string | null;
+  haber: number | string | null;
+  // Recomendado: el backend lo manda plano para evitar joins
+  asiento_fecha: string; // YYYY-MM-DD
+};
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
 
 export const useIngresosMensualesPorTipo = (año?: number) => {
   const añoActual = año || new Date().getFullYear();
@@ -23,27 +28,30 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
     queryFn: async (): Promise<IngresoMensual[]> => {
       const meses = [
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
       ];
 
       // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO (en lugar de 12)
       const fechaInicioAño = `${añoActual}-01-01`;
       const fechaFinAño = `${añoActual}-12-31`;
 
-      const { data: detallesAño } = await supabase
-        .from('detalle_asientos')
-        .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
-        .gte('asientos_contables.fecha', fechaInicioAño)
-        .lte('asientos_contables.fecha', fechaFinAño);
+      const params = new URLSearchParams();
+      params.set("from", fechaInicioAño);
+      params.set("to", fechaFinAño);
+
+      const json = await apiFetch(`/api/contabilidad/detalle-asientos?${params.toString()}`, {
+        method: "GET",
+      });
+
+      const detallesAño = unwrap<DetalleAsientoAPI[]>(json) || [];
 
       // Agrupar por mes en frontend
-      const detallesPorMes = new Map<number, any[]>();
-      
-      detallesAño?.forEach(detalle => {
-        const mes = new Date(detalle.asientos_contables.fecha).getMonth();
-        if (!detallesPorMes.has(mes)) {
-          detallesPorMes.set(mes, []);
-        }
+      const detallesPorMes = new Map<number, DetalleAsientoAPI[]>();
+
+      detallesAño.forEach((detalle) => {
+        const fecha = new Date(detalle.asiento_fecha);
+        const mes = fecha.getMonth();
+        if (!detallesPorMes.has(mes)) detallesPorMes.set(mes, []);
         detallesPorMes.get(mes)!.push(detalle);
       });
 
@@ -52,36 +60,39 @@ export const useIngresosMensualesPorTipo = (año?: number) => {
 
       for (let mes = 0; mes < 12; mes++) {
         const detallesMes = detallesPorMes.get(mes) || [];
-        
+
         let ventas = 0;
         let otrosIngresos = 0;
 
         // Clasificar según el código de cuenta con naturaleza contable correcta
-        detallesMes.forEach(detalle => {
+        detallesMes.forEach((detalle) => {
           const codigo = detalle.cuenta_codigo;
-          const debe = detalle.debe || 0;
-          const haber = detalle.haber || 0;
-          
+          const debe = Number(detalle.debe) || 0;
+          const haber = Number(detalle.haber) || 0;
+
           // Ventas (cuenta 4001 y 4004) - Naturaleza acreedora
-          if (codigo === '4001' || codigo === '4004') {
+          if (codigo === "4001" || codigo === "4004") {
             ventas += haber - debe;
           }
           // Devoluciones y Descuentos sobre Ventas (4002, 4003) - RESTAN de ventas
-          else if (codigo === '4002' || codigo === '4003') {
+          else if (codigo === "4002" || codigo === "4003") {
             ventas -= debe - haber;
           }
           // Otros Ingresos (41XX) - Naturaleza acreedora
-          else if (codigo.startsWith('41')) {
+          else if (codigo.startsWith("41")) {
             otrosIngresos += haber - debe;
           }
         });
 
+        const ventasSafe = Math.max(0, ventas);
+        const otrosSafe = Math.max(0, otrosIngresos);
+
         ingresosMensuales.push({
           mes: meses[mes],
           mesNumero: mes + 1,
-          ventas: Math.max(0, ventas),
-          otrosIngresos: Math.max(0, otrosIngresos),
-          total: Math.max(0, ventas + otrosIngresos)
+          ventas: ventasSafe,
+          otrosIngresos: otrosSafe,
+          total: Math.max(0, ventasSafe + otrosSafe),
         });
       }
 

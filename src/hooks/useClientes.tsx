@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 export interface Cliente {
@@ -15,90 +15,105 @@ export interface Cliente {
   activo: boolean;
   created_at: string;
   updated_at: string;
-  source?: 'dedicated' | 'transaction';
+  source?: "dedicated" | "transaction";
+}
+
+type TxClienteRow = {
+  cliente_nombre: string | null;
+  cliente_email: string | null;
+  cliente_telefono: string | null;
+  cliente_rfc: string | null;
+  created_at: string;
+};
+
+function safeLower(v: any) {
+  return String(v ?? "").trim().toLowerCase();
 }
 
 export const useClientes = () => {
   return useQuery({
     queryKey: ["clientes"],
-    queryFn: async () => {
-      // Obtener clientes de la tabla dedicada
-      const { data: dedicatedClients, error: dedicatedError } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('activo', true)
-        .order('nombre', { ascending: true });
+    queryFn: async (): Promise<Cliente[]> => {
+      // 1) Clientes dedicados
+      const dedicatedJson = await apiFetch("/api/clientes", { method: "GET" });
+      const dedicatedClients: Cliente[] = (dedicatedJson as any)?.data ?? dedicatedJson;
 
-      if (dedicatedError) throw dedicatedError;
+      // 2) Clientes inferidos desde transacciones (ingresos)
+      //    (solo campos mínimos para no traer toda la transacción)
+      const txJson = await apiFetch("/api/ingresos/clientes-min", { method: "GET" });
+      const transactionClients: TxClienteRow[] = (txJson as any)?.data ?? txJson;
 
-      // Obtener clientes de las transacciones
-      const { data: transactionClients, error: transactionError } = await supabase
-        .from('transacciones_ingresos')
-        .select(`
-          cliente_nombre,
-          cliente_email,
-          cliente_telefono,
-          cliente_rfc,
-          created_at
-        `)
-        .not('cliente_nombre', 'is', null)
-        .order('created_at', { ascending: false });
+      // Convertir clientes de transacciones al formato Cliente + deduplicar por key (incluye RFC/email/tel)
+      const transactionClientMap = new Map<string, Cliente>();
 
-      if (transactionError) throw transactionError;
+      (transactionClients || []).forEach((tc) => {
+        const nombre = tc.cliente_nombre?.trim() || "";
+        if (!nombre) return;
 
-      // Convertir clientes de transacciones al formato de cliente y deduplicar
-      const transactionClientMap = new Map();
-      
-      transactionClients?.forEach((tc) => {
-        const key = `${tc.cliente_nombre}_${tc.cliente_email}_${tc.cliente_telefono}_${tc.cliente_rfc}`.toLowerCase();
-        if (!transactionClientMap.has(key)) {
-          transactionClientMap.set(key, {
-            id: `tx-${Math.random().toString(36).substr(2, 9)}`, // ID temporal
-            nombre: tc.cliente_nombre || '',
-            email: tc.cliente_email || '',
-            telefono: tc.cliente_telefono || '',
-            rfc: tc.cliente_rfc || '',
-            direccion: '',
-            ciudad: '',
-            estado: '',
-            codigo_postal: '',
+        const keyFull = [
+          tc.cliente_nombre,
+          tc.cliente_email,
+          tc.cliente_telefono,
+          tc.cliente_rfc,
+        ]
+          .map(safeLower)
+          .join("_");
+
+        if (!transactionClientMap.has(keyFull)) {
+          // id estable derivado del key (para evitar rerenders raros)
+          const tempId = `tx-${keyFull.slice(0, 32) || Math.random().toString(36).slice(2, 10)}`;
+
+          transactionClientMap.set(keyFull, {
+            id: tempId,
+            nombre,
+            email: tc.cliente_email?.trim() || "",
+            telefono: tc.cliente_telefono?.trim() || "",
+            rfc: tc.cliente_rfc?.trim() || "",
+            direccion: "",
+            ciudad: "",
+            estado: "",
+            codigo_postal: "",
             activo: true,
             created_at: tc.created_at,
             updated_at: tc.created_at,
-            source: 'transaction'
+            source: "transaction",
           });
         }
       });
 
-      // Fusionar clientes dedicados y de transacciones
-      const allClients = [
-        ...(dedicatedClients?.map(dc => ({ ...dc, source: 'dedicated' })) || []),
-        ...Array.from(transactionClientMap.values())
+      // Fusionar
+      const allClients: Cliente[] = [
+        ...(dedicatedClients || []).map((dc) => ({ ...dc, source: "dedicated" as const })),
+        ...Array.from(transactionClientMap.values()),
       ];
 
-      // Deduplicar por nombre, email, teléfono - priorizar clientes dedicados
-      const finalClients = [];
-      const seenKeys = new Set();
+      // Deduplicar por nombre+email+telefono (prioriza dedicated)
+      const finalClients: Cliente[] = [];
+      const seenKeys = new Set<string>();
 
-      // Primero agregar clientes dedicados
-      allClients.filter(c => c.source === 'dedicated').forEach(client => {
-        const key = `${client.nombre}_${client.email}_${client.telefono}`.toLowerCase();
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          finalClients.push(client);
-        }
-      });
+      // Primero dedicated
+      allClients
+        .filter((c) => c.source === "dedicated")
+        .forEach((client) => {
+          const key = [client.nombre, client.email, client.telefono].map(safeLower).join("_");
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            finalClients.push(client);
+          }
+        });
 
-      // Luego agregar clientes de transacciones que no están duplicados
-      allClients.filter(c => c.source === 'transaction').forEach(client => {
-        const key = `${client.nombre}_${client.email}_${client.telefono}`.toLowerCase();
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          finalClients.push(client);
-        }
-      });
+      // Luego transaction
+      allClients
+        .filter((c) => c.source === "transaction")
+        .forEach((client) => {
+          const key = [client.nombre, client.email, client.telefono].map(safeLower).join("_");
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            finalClients.push(client);
+          }
+        });
 
-      return finalClients.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      return finalClients.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
     },
   });
 };
@@ -107,18 +122,21 @@ export const useCreateCliente = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (cliente: Omit<Cliente, "id" | "created_at" | "updated_at" | "user_id">) => {
-      const { data, error } = await supabase
-        .from("clientes")
-        .insert([{
-          ...cliente,
-          user_id: (await supabase.auth.getUser()).data.user?.id
-        }])
-        .select()
-        .single();
+    mutationFn: async (
+      cliente: Omit<Cliente, "id" | "created_at" | "updated_at" | "activo" | "source">
+    ) => {
+      const payload = {
+        ...cliente,
+        activo: true,
+      };
 
-      if (error) throw error;
-      return data;
+      const json = await apiFetch("/api/clientes", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const data = (json as any)?.data ?? json;
+      return data as Cliente;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientes"] });
@@ -127,11 +145,11 @@ export const useCreateCliente = () => {
         description: "El cliente ha sido registrado exitosamente.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error creating client:", error);
       toast({
         title: "Error",
-        description: "No se pudo crear el cliente.",
+        description: error?.message || "No se pudo crear el cliente.",
         variant: "destructive",
       });
     },

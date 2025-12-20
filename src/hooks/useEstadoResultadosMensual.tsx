@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 interface ResultadoMensual {
   mes: string;
@@ -21,6 +21,25 @@ interface ResultadoMensual {
   margenNeto: number;
 }
 
+type DetalleAsientoAPI = {
+  cuenta_codigo: string;
+  debe: number | null;
+  haber: number | null;
+  asientos_contables: {
+    fecha: string; // YYYY-MM-DD
+  };
+};
+
+const parseYYYYMMDDLocal = (yyyyMmDd: string): Date | null => {
+  const parts = (yyyyMmDd || "").split("-");
+  if (parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]) - 1;
+  const d = Number(parts[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  return new Date(y, m, d);
+};
+
 export const useEstadoResultadosMensual = (año?: number) => {
   const añoActual = año || new Date().getFullYear();
 
@@ -28,32 +47,50 @@ export const useEstadoResultadosMensual = (año?: number) => {
     queryKey: ["estado-resultados-mensual", añoActual],
     queryFn: async (): Promise<ResultadoMensual[]> => {
       const meses = [
-        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
       ];
 
-      // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO (en lugar de 12)
+      // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO
       const fechaInicioAño = `${añoActual}-01-01`;
       const fechaFinAño = `${añoActual}-12-31`;
 
-      const { data: detallesAño } = await supabase
-        .from('detalle_asientos')
-        .select('cuenta_codigo, debe, haber, asientos_contables!inner(fecha)')
-        .gte('asientos_contables.fecha', fechaInicioAño)
-        .lte('asientos_contables.fecha', fechaFinAño);
+      /**
+       * Endpoint esperado:
+       * GET /api/contabilidad/detalle-asientos?start=YYYY-MM-DD&end=YYYY-MM-DD
+       * Devuelve { ok:true, data:[...] } o payload plano [...]
+       */
+      const json = await apiFetch(
+        `/api/contabilidad/detalle-asientos?start=${encodeURIComponent(fechaInicioAño)}&end=${encodeURIComponent(
+          fechaFinAño
+        )}`,
+        { method: "GET" }
+      );
+
+      const detallesAño = (json?.data ?? json ?? []) as DetalleAsientoAPI[];
 
       // Agrupar por mes en frontend usando Map
-      const detallesPorMes = new Map<number, any[]>();
-      
-      detallesAño?.forEach(detalle => {
-        const mes = new Date(detalle.asientos_contables.fecha).getMonth();
-        if (!detallesPorMes.has(mes)) {
-          detallesPorMes.set(mes, []);
-        }
+      const detallesPorMes = new Map<number, DetalleAsientoAPI[]>();
+
+      detallesAño.forEach((detalle) => {
+        const fecha = parseYYYYMMDDLocal(detalle.asientos_contables?.fecha || "");
+        if (!fecha) return;
+        const mes = fecha.getMonth();
+        if (!detallesPorMes.has(mes)) detallesPorMes.set(mes, []);
         detallesPorMes.get(mes)!.push(detalle);
       });
 
-      // Procesar cada mes (sin más consultas async)
+      // Procesar cada mes (sin más consultas)
       const resultados: ResultadoMensual[] = [];
 
       for (let mes = 0; mes < 12; mes++) {
@@ -65,59 +102,65 @@ export const useEstadoResultadosMensual = (año?: number) => {
         let depreciacion = 0;
         let intereses = 0;
 
-        detallesMes.forEach(detalle => {
-          const codigo = detalle.cuenta_codigo;
-          const debe = detalle.debe || 0;
-          const haber = detalle.haber || 0;
-          
+        detallesMes.forEach((detalle) => {
+          const codigo = String(detalle.cuenta_codigo || "");
+          const debe = Number(detalle.debe) || 0;
+          const haber = Number(detalle.haber) || 0;
+
           // === INGRESOS (Cuentas 4XXX) ===
-          // Ventas (4001, 4004) - Naturaleza acreedora
-          if (codigo === '4001' || codigo === '4004') {
+          // Ventas (4001, 4004) - naturaleza acreedora
+          if (codigo === "4001" || codigo === "4004") {
             ingresos += haber - debe;
           }
-          // Devoluciones y Descuentos sobre Ventas (4002, 4003) - RESTAN
-          else if (codigo === '4002' || codigo === '4003') {
+          // Devoluciones/Descuentos sobre Ventas (4002, 4003) - RESTAN
+          else if (codigo === "4002" || codigo === "4003") {
             ingresos -= debe - haber;
           }
-          // Otros Ingresos (41XX) - Naturaleza acreedora
-          else if (codigo.startsWith('41')) {
+          // Otros Ingresos (41XX) - naturaleza acreedora
+          else if (codigo.startsWith("41")) {
             ingresos += haber - debe;
           }
-          
+
           // === COSTOS (Cuentas 50XX) ===
-          // Costo de Ventas (5001, 5002) - Naturaleza deudora
-          else if (codigo === '5001' || codigo === '5002') {
+          // Costo de Ventas (5001, 5002) - naturaleza deudora
+          else if (codigo === "5001" || codigo === "5002") {
             costos += debe - haber;
           }
-          // Devoluciones/Descuentos sobre Compras (5003, 5004) - RESTAN de costos
-          else if (codigo === '5003' || codigo === '5004') {
+          // Devoluciones/Descuentos sobre Compras (5003, 5004) - RESTAN
+          else if (codigo === "5003" || codigo === "5004") {
             costos -= debe - haber;
           }
-          
+
           // === GASTOS (Cuentas 51XX) ===
-          // Depreciación (5109, 5110) - separada para cálculo de EBITDA
-          else if (codigo === '5109' || codigo === '5110') {
+          // Depreciación (5109, 5110) - separada para EBITDA
+          else if (codigo === "5109" || codigo === "5110") {
             depreciacion += debe - haber;
           }
-          // Gastos Operativos (51XX excepto depreciaciones)
-          else if (codigo.startsWith('51') && codigo !== '5109' && codigo !== '5110') {
+          // Gastos operativos (51XX excepto depreciaciones)
+          else if (codigo.startsWith("51") && codigo !== "5109" && codigo !== "5110") {
             gastos += debe - haber;
           }
-          
-          // === INTERESES (Cuenta 5201, 5111-5199) ===
-          else if (codigo === '5201' || (codigo.startsWith('51') && parseInt(codigo) >= 5111)) {
+
+          // === INTERESES ===
+          // ✅ Regla segura: solo 5201 (Intereses)
+          else if (codigo === "5201") {
             intereses += debe - haber;
           }
+
+          // ⚠️ Si quieres mantener tu regla original (NO recomendado), descomenta:
+          // else if (codigo === "5201" || (codigo.startsWith("51") && parseInt(codigo, 10) >= 5111)) {
+          //   intereses += debe - haber;
+          // }
         });
 
-        // Calcular utilidades y márgenes según estructura contable
+        // Calcular utilidades y márgenes
         const utilidadBruta = ingresos - costos;
         const ebitda = utilidadBruta - gastos;
         const ebit = ebitda - depreciacion;
         const utilidadAntesImpuestos = ebit - intereses;
-        
-        // Calcular impuestos (30% estimado sobre utilidad antes de impuestos positiva)
-        const impuestos = utilidadAntesImpuestos > 0 ? utilidadAntesImpuestos * 0.30 : 0;
+
+        // Impuestos estimados (30% si hay utilidad positiva)
+        const impuestos = utilidadAntesImpuestos > 0 ? utilidadAntesImpuestos * 0.3 : 0;
         const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
         const margenBruto = ingresos > 0 ? (utilidadBruta / ingresos) * 100 : 0;
@@ -142,15 +185,15 @@ export const useEstadoResultadosMensual = (año?: number) => {
           margenBruto,
           margenEBITDA,
           margenEBIT,
-          margenNeto
+          margenNeto,
         });
       }
 
       return resultados;
     },
-    staleTime: 5 * 60 * 1000, // Cachear por 5 minutos
-    gcTime: 10 * 60 * 1000, // Mantener en memoria 10 minutos
-    retry: 1, // Solo 1 reintento
-    refetchOnWindowFocus: false, // No refrescar al cambiar de ventana
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };

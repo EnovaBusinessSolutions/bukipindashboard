@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -69,6 +69,10 @@ const COLORS = {
 };
 
 const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.destructive];
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string; error?: any } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
 
 // Componente personalizado para mostrar el total a la derecha de las barras apiladas
 const CustomTotalLabel = (props: any) => {
@@ -157,62 +161,19 @@ const CuentasPorCobrar = () => {
   };
 
 
-  // Query para todas las transacciones (incluyendo pagadas) para ver trazabilidad
-  const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
-    queryKey: ["todas-transacciones-ingresos"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transacciones_ingresos")
-        .select("*")
-        .order("created_at", { ascending: false });
+ const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
+  queryKey: ["todas-transacciones-ingresos"],
+  queryFn: async () => {
+    // Debe devolver un array con la misma forma que usabas (id, created_at, monto_total, monto_pagado, monto_pendiente, etc.)
+    const json = await apiFetch("/api/transacciones/ingresos?include_all=true&order=created_at_desc", {
+      method: "GET",
+    });
+    return unwrap<any[]>(json) || [];
+  },
+});
 
-      if (error) throw error;
-      return data || [];
-    },
-  });
 
   const queryClient = useQueryClient();
-
-  // Real-time updates for accounts receivable
-  useEffect(() => {
-    const channelIngresos = supabase
-      .channel('cuentas-por-cobrar-ingresos')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transacciones_ingresos'
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
-          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
-        }
-      )
-      .subscribe();
-
-    const channelInversiones = supabase
-      .channel('cuentas-por-cobrar-inversiones')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'inversiones_capex',
-          filter: 'estado=eq.vendido'
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
-          queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channelIngresos);
-      supabase.removeChannel(channelInversiones);
-    };
-  }, [queryClient]);
 
   // Hooks para analíticas
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC, filtroClienteAnalitica);
@@ -227,174 +188,112 @@ const CuentasPorCobrar = () => {
     )
   ).sort();
 
-  // Query para obtener asientos contables de una transacción
   const { data: asientosContables, isLoading: loadingAsientos } = useQuery({
-    queryKey: ["asientos-contables-transaccion", selectedTransaccionId],
-    queryFn: async () => {
-      if (!selectedTransaccionId) return null;
-      
-      const { data: asiento, error: asientoError } = await supabase
-        .from("asientos_contables")
-        .select(`
-          *,
-          detalle_asientos (
-            *,
-            cuentas:cuenta_codigo (
-              codigo,
-              nombre,
-              estado_financiero,
-              grupo
-            ),
-            subcuentas (
-              id,
-              nombre
-            )
-          )
-        `)
-        .eq("transaccion_ingreso_id", selectedTransaccionId)
-        .single();
+  queryKey: ["asientos-contables-transaccion", selectedTransaccionId],
+  queryFn: async () => {
+    if (!selectedTransaccionId) return null;
 
-      if (asientoError) {
-        console.error("Error fetching asiento:", asientoError);
-        return null;
-      }
+    // Debe devolver el asiento con detalle_asientos + cuentas + subcuentas como lo esperas en el render
+    const json = await apiFetch(
+      `/api/asientos/by-transaccion-ingreso/${encodeURIComponent(selectedTransaccionId)}`,
+      { method: "GET" }
+    );
 
-      return asiento;
-    },
-    enabled: !!selectedTransaccionId && detalleContableOpen,
-  });
+    return unwrap<any>(json) ?? null;
+  },
+  enabled: !!selectedTransaccionId && detalleContableOpen,
+});
+
   
-  // Query para obtener historial de pagos de una factura
   const { data: historialPagos, isLoading: loadingHistorial } = useQuery({
-    queryKey: ["historial-pagos", selectedFacturaId],
-    queryFn: async () => {
-      if (!selectedFacturaId) return [];
-      
-      // Obtener pagos registrados
-      const { data: pagos, error } = await supabase
-        .from("transacciones_cobros_pagos")
-        .select("*")
-        .eq("referencia_id", selectedFacturaId)
-        .eq("tipo_transaccion", "cobro")
-        .order("fecha", { ascending: false });
+  queryKey: ["historial-pagos", selectedFacturaId],
+  queryFn: async () => {
+    if (!selectedFacturaId) return [];
 
-      if (error) {
-        console.error("Error fetching historial:", error);
-        return [];
+    // 1) Historial de cobros registrados
+    const pagosJson = await apiFetch(
+      `/api/cobros-pagos/historial?referencia_id=${encodeURIComponent(selectedFacturaId)}&tipo=cobro`,
+      { method: "GET" }
+    );
+    const pagos = (unwrap<any[]>(pagosJson) || []).sort((a, b) => {
+      const da = new Date(a?.fecha || a?.created_at || 0).getTime();
+      const db = new Date(b?.fecha || b?.created_at || 0).getTime();
+      return db - da;
+    });
+
+    // 2) Si no existe “Pago inicial”, intentar inferir desde la transacción original
+    const tienePagoInicial = pagos?.some((p) => String(p?.descripcion || "").includes("Pago inicial"));
+
+    if (!tienePagoInicial) {
+      const trxJson = await apiFetch(`/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`, {
+        method: "GET",
+      });
+      const transaccion = unwrap<any>(trxJson);
+
+      if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
+        const pagoInicial = {
+          id: `inicial-${selectedFacturaId}`,
+          user_id: transaccion.user_id,
+          tipo_transaccion: "cobro",
+          referencia_id: selectedFacturaId,
+          referencia_tabla: "transacciones_ingresos",
+          monto: transaccion.monto_pagado,
+          metodo_pago: transaccion.metodo_pago,
+          fecha: new Date(transaccion.created_at).toISOString().split("T")[0],
+          descripcion: `Pago inicial - ${transaccion.descripcion}`,
+          created_at: transaccion.created_at,
+          updated_at: transaccion.created_at,
+          _es_pago_inicial: true,
+        };
+
+        return [pagoInicial, ...(pagos || [])];
       }
+    }
 
-      // Verificar si existe un pago inicial registrado
-      const tienePagoInicial = pagos?.some(p => p.descripcion?.includes("Pago inicial"));
-      
-      // Si no hay pago inicial registrado, obtener de la transacción original
-      if (!tienePagoInicial) {
-        const { data: transaccion, error: transError } = await supabase
-          .from("transacciones_ingresos")
-          .select("*")
-          .eq("id", selectedFacturaId)
-          .single();
+    return pagos || [];
+  },
+  enabled: !!selectedFacturaId && historialPagosOpen,
+});
 
-        if (!transError && transaccion && transaccion.monto_pagado > 0) {
-          // Agregar el pago inicial al inicio del historial
-          const pagoInicial = {
-            id: `inicial-${selectedFacturaId}`,
-            user_id: transaccion.user_id,
-            tipo_transaccion: 'cobro',
-            referencia_id: selectedFacturaId,
-            referencia_tabla: 'transacciones_ingresos',
-            monto: transaccion.monto_pagado,
-            metodo_pago: transaccion.metodo_pago,
-            fecha: new Date(transaccion.created_at).toISOString().split('T')[0],
-            descripcion: `Pago inicial - ${transaccion.descripcion}`,
-            created_at: transaccion.created_at,
-            updated_at: transaccion.created_at,
-            _es_pago_inicial: true // Marcador especial
-          };
-          
-          return [pagoInicial, ...(pagos || [])];
-        }
-      }
-
-      return pagos || [];
-    },
-    enabled: !!selectedFacturaId && historialPagosOpen,
-  });
 
   // Mutación para registrar pago
   const registrarPagoMutation = useMutation({
-    mutationFn: async ({ cuentaId, monto, metodo, tipoRegistro }: { 
-      cuentaId: string; 
-      monto: number; 
-      metodo: string;
-      tipoRegistro: 'ingreso' | 'venta_activo';
-    }) => {
-      const cuenta = cuentasPorCobrar?.find(c => c.id === cuentaId);
-      if (!cuenta) throw new Error("Cuenta no encontrada");
+  mutationFn: async ({
+    cuentaId,
+    monto,
+    metodo,
+    tipoRegistro,
+  }: {
+    cuentaId: string;
+    monto: number;
+    metodo: string;
+    tipoRegistro: "ingreso" | "venta_activo";
+  }) => {
+    const json = await apiFetch("/api/cuentas-por-cobrar/registrar-pago", {
+      method: "POST",
+      body: JSON.stringify({
+        cuentaId,
+        monto,
+        metodo_pago: metodo,
+        tipoRegistro,
+      }),
+    });
 
-      const nuevoMontoPendiente = (cuenta.monto_pendiente || 0) - monto;
-      const nuevoMontoPagado = (cuenta.monto_pagado || 0) + monto;
+    return unwrap<any>(json);
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
+    queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
+    queryClient.invalidateQueries({ queryKey: ["todas-transacciones-ingresos"] });
+    toast.success("Pago registrado exitosamente");
+    setPagoDialogOpen(false);
+    resetPagoForm();
+  },
+  onError: (error: any) => {
+    toast.error("Error al registrar el pago: " + (error?.message || "Error desconocido"));
+  },
+});
 
-      // Actualizar según el tipo de registro
-      if (tipoRegistro === 'venta_activo') {
-        // Actualizar inversión vendida
-        const { error: updateError } = await supabase
-          .from('inversiones_capex')
-          .update({
-            monto_pendiente_venta: Math.max(0, nuevoMontoPendiente),
-            monto_pagado_venta: nuevoMontoPagado,
-            tipo_pago_venta: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
-          })
-          .eq('id', cuentaId);
-
-        if (updateError) throw updateError;
-      } else {
-        // Actualizar transacción de ingreso normal
-        const { error: updateError } = await supabase
-          .from('transacciones_ingresos')
-          .update({
-            monto_pendiente: Math.max(0, nuevoMontoPendiente),
-            monto_pagado: nuevoMontoPagado,
-            tipo_pago: nuevoMontoPendiente <= 0 ? 'contado' : 'parcial'
-          })
-          .eq('id', cuentaId);
-
-        if (updateError) throw updateError;
-      }
-
-      // Registrar el cobro en la tabla de cobros/pagos
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
-
-      const referencia_tabla = tipoRegistro === 'venta_activo' ? 'inversiones_capex' : 'transacciones_ingresos';
-
-      const { error: insertError } = await supabase
-        .from('transacciones_cobros_pagos')
-        .insert({
-          user_id: user.id,
-          tipo_transaccion: 'cobro',
-          referencia_id: cuentaId,
-          referencia_tabla: referencia_tabla,
-          monto: monto,
-          metodo_pago: metodo,
-          fecha: new Date().toISOString().split('T')[0],
-          descripcion: `Cobro de ${cuenta.cliente_nombre || 'Cliente'}: ${cuenta.descripcion}`
-        });
-
-      if (insertError) throw insertError;
-      
-      return { cuentaId, monto, metodo };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
-      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
-      toast.success("Pago registrado exitosamente");
-      setPagoDialogOpen(false);
-      resetPagoForm();
-    },
-    onError: (error: any) => {
-      toast.error("Error al registrar el pago: " + error.message);
-    }
-  });
 
   const filteredCuentas = (() => {
     let cuentas = cuentasPorCobrar?.filter(

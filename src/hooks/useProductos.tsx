@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export type Producto = {
@@ -15,6 +15,8 @@ export type Producto = {
   user_id: string | null;
   created_at: string;
   updated_at: string;
+
+  // métricas opcionales (pueden venir del backend o calcularse en otros hooks)
   cantidad_stock?: number;
   costo_unitario?: number;
   cantidad_comprada?: number;
@@ -22,31 +24,102 @@ export type Producto = {
 };
 
 export type ProductoConSubcuenta = Producto & {
-  subcuenta_nombre?: string;
+  subcuenta_nombre?: string | null;
 };
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
+const toErrorMessage = (err: any) => {
+  if (!err) return "Error desconocido";
+  if (typeof err === "string") return err;
+  return err?.message || err?.error || "Error desconocido";
+};
+
+// ---- Upload helper (FormData) ----
+async function uploadProductImage(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/uploads/product-image", {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    let msg = `Error subiendo imagen (${res.status})`;
+    try {
+      const j = await res.json();
+      msg = j?.message || j?.error || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const json = await res.json();
+  const url =
+    json?.data?.url ||
+    json?.url ||
+    json?.publicUrl ||
+    json?.location ||
+    json?.data?.publicUrl;
+
+  if (!url) throw new Error("El backend no devolvió la URL de la imagen.");
+  return url;
+}
+
+// ---- Lookup helper (opcional) ----
+// Si el endpoint no existe o devuelve 404, regresa null (y el hook crea el producto nuevo).
+async function lookupProductoPorNombre(nombre: string): Promise<Producto | null> {
+  const res = await fetch(`/api/productos/lookup?nombre=${encodeURIComponent(nombre)}`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    // si el endpoint no existe (404 ya cubierto) o falla, mejor no romper flujo:
+    // dejamos que el caller haga fallback.
+    return null;
+  }
+
+  const json = await res.json();
+  return unwrap<Producto>(json) ?? null;
+}
+
+function mapProductoConSubcuenta(p: any): ProductoConSubcuenta {
+  // Soporta diferentes shapes:
+  // - { subcuentas: { nombre } } (estilo Supabase)
+  // - { subcuenta: { nombre } } (backend propio)
+  // - { subcuenta_nombre } ya plano
+  const subcuentaNombre =
+    p?.subcuentas?.nombre ?? p?.subcuenta?.nombre ?? p?.subcuenta_nombre ?? null;
+
+  return {
+    ...p,
+    subcuenta_nombre: subcuentaNombre,
+  };
+}
+
+// =======================
+// Queries
+// =======================
 
 export const useProductos = () => {
   return useQuery({
     queryKey: ["productos"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("productos")
-        .select(`
-          *,
-          subcuentas (nombre)
-        `)
-        .eq("activo", true)
-        .order("created_at", { ascending: false });
+    queryFn: async (): Promise<ProductoConSubcuenta[]> => {
+      const json = await apiFetch("/api/productos?activo=true", { method: "GET" });
+      const data = unwrap<any[]>(json) || [];
 
-      if (error) throw error;
+      // Orden similar al original: created_at DESC (si existe)
+      const sorted = [...data].sort((a, b) => {
+        const ta = a?.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b?.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+      });
 
-      // Transform to include subcuenta name
-      const productosConSubcuenta: ProductoConSubcuenta[] = data?.map((producto: any) => ({
-        ...producto,
-        subcuenta_nombre: producto.subcuentas?.nombre || null
-      })) || [];
-
-      return productosConSubcuenta;
+      return sorted.map(mapProductoConSubcuenta);
     },
   });
 };
@@ -55,223 +128,177 @@ export const useProductos = () => {
 export const useProductosServicios = () => {
   return useQuery({
     queryKey: ["productos-servicios"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("productos")
-        .select(`
-          *,
-          subcuentas (nombre)
-        `)
-        .eq("activo", true)
-        .eq("cuenta_codigo", "4001") // Solo productos de servicios, no inventario
-        .order("created_at", { ascending: false });
+    queryFn: async (): Promise<ProductoConSubcuenta[]> => {
+      const json = await apiFetch("/api/productos?activo=true&cuenta_codigo=4001", {
+        method: "GET",
+      });
+      const data = unwrap<any[]>(json) || [];
 
-      if (error) throw error;
+      const sorted = [...data].sort((a, b) => {
+        const ta = a?.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b?.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+      });
 
-      // Transform to include subcuenta name
-      const productosConSubcuenta: ProductoConSubcuenta[] = data?.map((producto: any) => ({
-        ...producto,
-        subcuenta_nombre: producto.subcuentas?.nombre || null
-      })) || [];
-
-      return productosConSubcuenta;
+      return sorted.map(mapProductoConSubcuenta);
     },
   });
 };
+
+// =======================
+// Mutations
+// =======================
 
 export const useCreateProducto = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ 
-      nombre, 
-      precio, 
+    mutationFn: async ({
+      nombre,
+      precio,
       precioVenta,
       cantidad,
-      descripcion, 
-      subcuentaId, 
-      imagen 
-    }: { 
-      nombre: string; 
+      descripcion,
+      subcuentaId,
+      imagen,
+    }: {
+      nombre: string;
       precio: number;
       precioVenta?: number;
-      cantidad?: number;
+      cantidad?: number; // si existe => compra inventario
       descripcion?: string;
       subcuentaId?: string;
       imagen?: File;
     }) => {
       const esCompraInventario = cantidad !== undefined;
       const cuentaCodigo = esCompraInventario ? "1005" : "4001";
-      
+
+      // Subir imagen si aplica
+      let imagenUrl: string | null = null;
+      if (imagen) {
+        imagenUrl = await uploadProductImage(imagen);
+      }
+
       if (esCompraInventario) {
-        // Buscar producto existente
-        const { data: productoExistente, error: searchError } = await supabase
-          .from("productos")
-          .select("*")
-          .eq("nombre", nombre)
-          .eq("activo", true)
-          .single();
+        // ===== Inventario: upsert producto por nombre + crear movimiento compra =====
+        const costoTotal = precio * Number(cantidad || 0);
 
-        if (searchError && searchError.code !== 'PGRST116') {
-          throw new Error(`Error al buscar producto: ${searchError.message}`);
+        // 1) Intentar lookup por endpoint (si existe)
+        let productoExistente: Producto | null = await lookupProductoPorNombre(nombre);
+
+        // 2) Fallback: buscar en cache de react-query si no existe endpoint lookup
+        if (!productoExistente) {
+          const cached = (queryClient.getQueryData(["productos"]) as ProductoConSubcuenta[] | undefined) || [];
+          productoExistente =
+            cached.find((p) => (p.nombre || "").trim().toLowerCase() === nombre.trim().toLowerCase()) || null;
         }
-
-        let imagenUrl = null;
-
-        if (imagen) {
-          const fileExt = imagen.name.split('.').pop();
-          const fileName = `${Math.random()}.${fileExt}`;
-          const filePath = `productos/${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('product-images')
-            .upload(filePath, imagen);
-
-          if (uploadError) throw new Error(`Error al subir imagen: ${uploadError.message}`);
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(filePath);
-
-          imagenUrl = publicUrl;
-        }
-
-        const costoTotal = precio * cantidad!;
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Usuario no autenticado");
 
         if (productoExistente) {
-          // Producto existe - solo actualizar info básica si hay imagen o descripción
-          if (imagenUrl || descripcion || precioVenta !== undefined) {
-            const { error: updateError } = await supabase
-              .from("productos")
-              .update({
-                descripcion: descripcion || productoExistente.descripcion,
-                imagen_url: imagenUrl || productoExistente.imagen_url,
-                subcuenta_id: subcuentaId || productoExistente.subcuenta_id,
-                precio_venta: precioVenta !== undefined ? precioVenta : productoExistente.precio_venta,
-                updated_at: new Date().toISOString()
-              })
-              .eq("id", productoExistente.id);
+          // Actualizar info básica si hay cambios relevantes (como en el original)
+          const patch: any = { updated_at: new Date().toISOString() };
 
-            if (updateError) throw updateError;
+          if (descripcion) patch.descripcion = descripcion;
+          if (imagenUrl) patch.imagen_url = imagenUrl;
+          if (subcuentaId !== undefined) patch.subcuenta_id = subcuentaId || null;
+          if (precioVenta !== undefined) patch.precio_venta = precioVenta;
+
+          // Solo parchear si hay algo aparte de updated_at
+          const keys = Object.keys(patch).filter((k) => k !== "updated_at");
+          if (keys.length > 0) {
+            await apiFetch(`/api/productos/${encodeURIComponent(productoExistente.id)}`, {
+              method: "PATCH",
+              body: JSON.stringify(patch),
+            });
           }
 
-          // Crear movimiento (el trigger calcula todo automáticamente)
-          const { error: movimientoError } = await supabase
-            .from("movimientos_inventario")
-            .insert({
+          // Crear movimiento de compra (trigger/backend calcula stock/costos si aplica)
+          await apiFetch("/api/movimientos-inventario", {
+            method: "POST",
+            body: JSON.stringify({
               producto_id: productoExistente.id,
-              user_id: user.id,
-              tipo_movimiento: 'compra',
-              cantidad: cantidad!,
-              costo_unitario: precio,
-              costo_total: costoTotal,
-              descripcion: `Compra adicional de inventario`
-            });
+              tipo_movimiento: "compra",
+              cantidad: Number(cantidad),
+              costo_unitario: Number(precio),
+              costo_total: Number(costoTotal),
+              descripcion: "Compra adicional de inventario",
+            }),
+          });
 
-          if (movimientoError) throw movimientoError;
-
-          return {
-            id: productoExistente.id,
-            esActualizacion: true
-          };
-        } else {
-          // Producto nuevo
-          const { data, error } = await supabase
-            .from("productos")
-            .insert({
-              nombre,
-              precio,
-              precio_venta: precioVenta || 0,
-              descripcion: descripcion || null,
-              subcuenta_id: subcuentaId || null,
-              imagen_url: imagenUrl,
-              cuenta_codigo: cuentaCodigo,
-              user_id: null
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          // Crear movimiento inicial
-          const { error: movimientoError } = await supabase
-            .from("movimientos_inventario")
-            .insert({
-              producto_id: data.id,
-              user_id: user.id,
-              tipo_movimiento: 'compra',
-              cantidad: cantidad!,
-              costo_unitario: precio,
-              costo_total: costoTotal,
-              descripcion: 'Compra inicial - Nuevo producto en inventario'
-            });
-
-          if (movimientoError) throw movimientoError;
-
-          return { ...data, esActualizacion: false };
-        }
-      } else {
-        // Productos de servicios (cuenta 4001)
-        let imagenUrl = null;
-
-        if (imagen) {
-          const fileExt = imagen.name.split('.').pop();
-          const fileName = `${Math.random()}.${fileExt}`;
-          const filePath = `productos/${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('product-images')
-            .upload(filePath, imagen);
-
-          if (uploadError) throw new Error(`Error al subir imagen: ${uploadError.message}`);
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(filePath);
-
-          imagenUrl = publicUrl;
+          return { id: productoExistente.id, esActualizacion: true };
         }
 
-        const { data, error } = await supabase
-          .from("productos")
-          .insert({
+        // Producto nuevo
+        const creadoJson = await apiFetch("/api/productos", {
+          method: "POST",
+          body: JSON.stringify({
             nombre,
-            precio,
+            precio: Number(precio),
+            precio_venta: Number(precioVenta || 0),
             descripcion: descripcion || null,
             subcuenta_id: subcuentaId || null,
             imagen_url: imagenUrl,
             cuenta_codigo: cuentaCodigo,
-            user_id: null
-          })
-          .select()
-          .single();
+            activo: true,
+          }),
+        });
 
-        if (error) throw error;
-        return data;
+        const creado = unwrap<Producto>(creadoJson);
+
+        await apiFetch("/api/movimientos-inventario", {
+          method: "POST",
+          body: JSON.stringify({
+            producto_id: creado.id,
+            tipo_movimiento: "compra",
+            cantidad: Number(cantidad),
+            costo_unitario: Number(precio),
+            costo_total: Number(costoTotal),
+            descripcion: "Compra inicial - Nuevo producto en inventario",
+          }),
+        });
+
+        return { ...creado, esActualizacion: false };
       }
+
+      // ===== Servicios (cuenta 4001) =====
+      const json = await apiFetch("/api/productos", {
+        method: "POST",
+        body: JSON.stringify({
+          nombre,
+          precio: Number(precio),
+          precio_venta: Number(precioVenta ?? precio), // si no mandan precioVenta, usamos precio
+          descripcion: descripcion || null,
+          subcuenta_id: subcuentaId || null,
+          imagen_url: imagenUrl,
+          cuenta_codigo: cuentaCodigo,
+          activo: true,
+        }),
+      });
+
+      return unwrap<Producto>(json);
     },
+
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["productos"] });
-      
-      if (data.esActualizacion) {
+      queryClient.invalidateQueries({ queryKey: ["productos-servicios"] });
+
+      if (data?.esActualizacion) {
         toast({
           title: "Inventario actualizado",
-          description: `Se agregó nueva compra al producto existente`,
+          description: "Se agregó una nueva compra al producto existente",
         });
       } else {
         toast({
-          title: "Producto agregado al inventario",
-          description: `Se creó un nuevo producto en el inventario`,
+          title: "Producto registrado",
+          description: "Se registró correctamente el producto",
         });
       }
     },
+
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Error al registrar compra: " + (error.message || "Error desconocido"),
+        description: "Error al registrar: " + toErrorMessage(error),
         variant: "destructive",
       });
     },
@@ -283,79 +310,62 @@ export const useUpdateProducto = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ 
-      id, 
-      nombre, 
-      descripcion, 
-      precio, 
+    mutationFn: async ({
+      id,
+      nombre,
+      descripcion,
+      precio,
       imagen,
-      subcuentaId 
-    }: { 
-      id: string; 
-      nombre?: string; 
-      descripcion?: string; 
-      precio?: number; 
+      subcuentaId,
+    }: {
+      id: string;
+      nombre?: string;
+      descripcion?: string;
+      precio?: number;
       imagen?: File;
       subcuentaId?: string | null;
     }) => {
       let imagenUrl: string | undefined;
 
-      // Si hay una nueva imagen, subirla
       if (imagen) {
-        const fileExt = imagen.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `productos/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, imagen);
-
-        if (uploadError) {
-          throw new Error(`Error al subir imagen: ${uploadError.message}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-
-        imagenUrl = publicUrl;
+        imagenUrl = await uploadProductImage(imagen);
       }
 
-      // Preparar objeto de actualización solo con campos definidos
       const updateData: any = {
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
       if (nombre !== undefined) updateData.nombre = nombre;
       if (descripcion !== undefined) updateData.descripcion = descripcion;
       if (precio !== undefined) {
-        updateData.precio = precio;
-        updateData.precio_venta = precio;
+        updateData.precio = Number(precio);
+        // Mantengo comportamiento del original: también setea precio_venta = precio
+        updateData.precio_venta = Number(precio);
       }
       if (imagenUrl !== undefined) updateData.imagen_url = imagenUrl;
       if (subcuentaId !== undefined) updateData.subcuenta_id = subcuentaId || null;
 
-      const { data, error } = await supabase
-        .from("productos")
-        .update(updateData)
-        .eq("id", id)
-        .select()
-        .single();
+      const json = await apiFetch(`/api/productos/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(updateData),
+      });
 
-      if (error) throw error;
-      return data;
+      return unwrap<Producto>(json);
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["productos"] });
+      queryClient.invalidateQueries({ queryKey: ["productos-servicios"] });
       toast({
         title: "Producto actualizado",
         description: "El producto se ha actualizado correctamente",
       });
     },
+
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo actualizar el producto",
+        description: toErrorMessage(error) || "No se pudo actualizar el producto",
         variant: "destructive",
       });
     },
@@ -368,24 +378,26 @@ export const useDeleteProducto = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("productos")
-        .update({ activo: false })
-        .eq("id", id);
-
-      if (error) throw error;
+      await apiFetch(`/api/productos/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ activo: false, updated_at: new Date().toISOString() }),
+      });
+      return true;
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["productos"] });
+      queryClient.invalidateQueries({ queryKey: ["productos-servicios"] });
       toast({
         title: "Producto eliminado",
         description: "El producto ha sido desactivado exitosamente",
       });
     },
-    onError: () => {
+
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Error al eliminar el producto",
+        description: toErrorMessage(error) || "Error al eliminar el producto",
         variant: "destructive",
       });
     },

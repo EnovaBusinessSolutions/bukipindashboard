@@ -1,11 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
 
 export interface AutoridadFiscal {
   id: string;
-  user_id: string;
   nombre: string;
   rfc: string | null;
   logo_url: string | null;
@@ -21,82 +20,40 @@ export interface AutoridadFiscal {
   updated_at: string;
 }
 
+type ApiList<T> = { ok?: boolean; data?: T } | T;
+
 export const useAutoridadesFiscales = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch autoridades
-  const { data: autoridades, isLoading } = useQuery({
+  // ✅ LISTAR
+  const { data: autoridades = [], isLoading } = useQuery({
     queryKey: ["autoridades-fiscales"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
-
-      const { data, error } = await supabase
-        .from("autoridades_fiscales" as any)
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("activo", true)
-        .order("nombre", { ascending: true });
-
-      if (error) throw error;
-      return data as unknown as AutoridadFiscal[];
+    queryFn: async (): Promise<AutoridadFiscal[]> => {
+      const json = await apiFetch("/api/autoridades-fiscales", { method: "GET" });
+      const rows = (json as any)?.data ?? json;
+      return Array.isArray(rows) ? (rows as AutoridadFiscal[]) : [];
     },
   });
 
-  // Suscripción en tiempo real
+  // (Opcional) Si quieres forzar refetch al montar, aquí está.
   useEffect(() => {
-    const channel = supabase
-      .channel("autoridades-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "autoridades_fiscales",
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
-        }
-      )
-      .subscribe();
+    // no-op por ahora
+  }, []);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
-
-  // Crear autoridad
+  // ✅ CREAR
   const crearAutoridad = useMutation({
-    mutationFn: async (data: Omit<AutoridadFiscal, "id" | "user_id" | "created_at" | "updated_at" | "activo">) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
+    mutationFn: async (
+      payload: Omit<AutoridadFiscal, "id" | "created_at" | "updated_at" | "activo">
+    ): Promise<AutoridadFiscal> => {
+      const json = await apiFetch("/api/autoridades-fiscales", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
-      // Verificar duplicados
-      const { data: existente } = await supabase
-        .from("autoridades_fiscales" as any)
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("nombre", data.nombre)
-        .eq("activo", true)
-        .single();
-
-      if (existente) {
-        throw new Error("Ya existe una autoridad fiscal con ese nombre");
-      }
-
-      const { data: nuevaAutoridad, error } = await supabase
-        .from("autoridades_fiscales" as any)
-        .insert({
-          ...data,
-          user_id: user.id,
-          activo: true,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return nuevaAutoridad as unknown as AutoridadFiscal;
+      const autoridad = (json as any)?.data ?? json;
+      if (!autoridad?.id) throw new Error("Respuesta inválida al crear autoridad fiscal");
+      return autoridad as AutoridadFiscal;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
@@ -105,24 +62,25 @@ export const useAutoridadesFiscales = () => {
         description: "La autoridad fiscal se registró correctamente",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: "❌ Error al crear autoridad",
-        description: error.message,
+        description: error?.message || "No se pudo crear la autoridad fiscal",
         variant: "destructive",
       });
     },
   });
 
-  // Actualizar autoridad
+  // ✅ ACTUALIZAR
   const actualizarAutoridad = useMutation({
-    mutationFn: async ({ id, ...data }: Partial<AutoridadFiscal> & { id: string }) => {
-      const { error } = await supabase
-        .from("autoridades_fiscales" as any)
-        .update(data)
-        .eq("id", id);
+    mutationFn: async ({ id, ...updates }: Partial<AutoridadFiscal> & { id: string }) => {
+      const json = await apiFetch(`/api/autoridades-fiscales/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(updates),
+      });
 
-      if (error) throw error;
+      // Si backend devuelve {ok:true}, no necesitamos más.
+      return (json as any)?.data ?? json;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
@@ -131,35 +89,22 @@ export const useAutoridadesFiscales = () => {
         description: "Los cambios se guardaron correctamente",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "❌ Error al actualizar",
-        description: "No se pudieron guardar los cambios",
+        description: error?.message || "No se pudieron guardar los cambios",
         variant: "destructive",
       });
     },
   });
 
-  // Eliminar autoridad (soft delete)
+  // ✅ ELIMINAR (soft delete)
   const eliminarAutoridad = useMutation({
     mutationFn: async (id: string) => {
-      // Verificar si tiene registros de impuestos asociados
-      const { data: impuestosAsociados } = await supabase
-        .from("transacciones_egresos")
-        .select("id")
-        .eq("tipo_egreso", "impuesto")
-        .ilike("proveedor_nombre", `%${id}%`);
-
-      if (impuestosAsociados && impuestosAsociados.length > 0) {
-        throw new Error("No se puede eliminar una autoridad con registros de impuestos asociados");
-      }
-
-      const { error } = await supabase
-        .from("autoridades_fiscales" as any)
-        .update({ activo: false })
-        .eq("id", id);
-
-      if (error) throw error;
+      // Backend debe validar:
+      // - si tiene impuestos asociados, bloquear
+      // - si no, hacer soft delete activo=false
+      await apiFetch(`/api/autoridades-fiscales/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["autoridades-fiscales"] });
@@ -168,17 +113,17 @@ export const useAutoridadesFiscales = () => {
         description: "La autoridad fiscal se dio de baja correctamente",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: "❌ Error al eliminar",
-        description: error.message,
+        description: error?.message || "No se pudo eliminar la autoridad fiscal",
         variant: "destructive",
       });
     },
   });
 
   return {
-    autoridades: autoridades || [],
+    autoridades,
     isLoading,
     crearAutoridad,
     actualizarAutoridad,

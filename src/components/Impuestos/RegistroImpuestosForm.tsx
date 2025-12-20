@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -6,22 +8,66 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
-import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
-import { useAutoridadesFiscales } from "@/hooks/useAutoridadesFiscales";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+import { Calculator, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+
+import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
+import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
+import { formatCurrency as formatCurrencyUI } from "@/lib/utils";
+
+type AutoridadFiscal = {
+  id: string;
+  nombre: string;
+  rfc?: string;
+  logo_url?: string;
+  pais: string;
+};
+
+type TxImpuesto = {
+  id: string;
+  mes: number;
+  ano: number;
+  isr_calculado: number;
+  isr_real: number;
+  createdAt?: string;
+  created_at?: string;
+};
+
+function normalizeArray<T = any>(json: any): T[] {
+  const payload = json?.data ?? json;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+const meses = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
 export const RegistroImpuestosForm = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const currentDate = new Date();
   const [mesSeleccionado, setMesSeleccionado] = useState<number>(currentDate.getMonth() + 1);
   const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentDate.getFullYear());
+
   const [tasaISR, setTasaISR] = useState<string>("30");
   const [isrReal, setIsrReal] = useState<string>("");
   const [observaciones, setObservaciones] = useState<string>("");
-  const [registroExistente, setRegistroExistente] = useState<any>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [tipoPago, setTipoPago] = useState<string>("total");
   const [fechaVencimiento, setFechaVencimiento] = useState<string>("");
@@ -29,44 +75,12 @@ export const RegistroImpuestosForm = () => {
   const [metodoPago, setMetodoPago] = useState<string>("transferencia");
   const [montoPagado, setMontoPagado] = useState<string>("");
 
+  // Utilidad del periodo (este hook debe ya estar migrado a backend; este archivo no usa supabase)
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
-  const { autoridades } = useAutoridadesFiscales();
-
-  useEffect(() => {
-    const verificarRegistrosExistentes = async () => {
-      const { data, error } = await supabase
-        .from('transacciones_impuestos')
-        .select('*')
-        .eq('mes', mesSeleccionado)
-        .eq('ano', anoSeleccionado)
-        .order('created_at', { ascending: false });
-
-      if (data && data.length > 0) {
-        const totalAcumulado = data.reduce((sum, reg) => sum + Number(reg.isr_real), 0);
-        setRegistroExistente({
-          registros: data,
-          total_acumulado: totalAcumulado,
-          ultimo_registro: data[0]
-        });
-      } else {
-        setRegistroExistente(null);
-        setIsrReal("");
-        setObservaciones("");
-        setTipoPago("total");
-        setFechaVencimiento("");
-        setMetodoPago("transferencia");
-        setMontoPagado("");
-      }
-    };
-
-    verificarRegistrosExistentes();
-  }, [mesSeleccionado, anoSeleccionado]);
 
   const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
-  // ✅ Solo calcular ISR si hay utilidad positiva
-  const isrCalculado = utilidadAntesImpuestos > 0 
-    ? (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100 
-    : 0;
+  const isrCalculado =
+    utilidadAntesImpuestos > 0 ? (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100 : 0;
 
   const isPeriodoPasado = () => {
     const periodoSeleccionado = new Date(anoSeleccionado, mesSeleccionado - 1);
@@ -80,25 +94,81 @@ export const RegistroImpuestosForm = () => {
     return ultimoDiaMes - diaActual;
   };
 
-  const mostrarAlertaCierreMes = mesSeleccionado === currentDate.getMonth() + 1 && 
-                                  anoSeleccionado === currentDate.getFullYear() && 
-                                  diasRestantesMes() <= 5;
+  const mostrarAlertaCierreMes =
+    mesSeleccionado === currentDate.getMonth() + 1 &&
+    anoSeleccionado === currentDate.getFullYear() &&
+    diasRestantesMes() <= 5;
+
+  // ===== Authorities (E2E, sin hook supabase) =====
+  const { data: autoridades = [] } = useQuery({
+    queryKey: ["autoridades-fiscales"],
+    queryFn: async () => {
+      const json = await apiFetch("/api/impuestos/autoridades-fiscales");
+      return normalizeArray<AutoridadFiscal>(json);
+    },
+  });
+
+  // ===== Registros existentes del periodo =====
+  const { data: registrosPeriodo = [], isFetching: loadingRegistros } = useQuery({
+    queryKey: ["impuestos-isr-registros", mesSeleccionado, anoSeleccionado],
+    queryFn: async () => {
+      const json = await apiFetch(
+        `/api/impuestos/isr/registros?mes=${encodeURIComponent(mesSeleccionado)}&ano=${encodeURIComponent(
+          anoSeleccionado
+        )}`
+      );
+      return normalizeArray<TxImpuesto>(json);
+    },
+  });
+
+  const registroExistente = useMemo(() => {
+    if (!registrosPeriodo?.length) return null;
+    const totalAcumulado = registrosPeriodo.reduce((sum, reg) => sum + Number(reg.isr_real || 0), 0);
+    const ultimo = registrosPeriodo[0];
+    return {
+      registros: registrosPeriodo,
+      total_acumulado: totalAcumulado,
+      ultimo_registro: ultimo,
+    };
+  }, [registrosPeriodo]);
+
+  // Reset fields si cambia periodo y no hay registros
+  useEffect(() => {
+    if (!registroExistente) {
+      setIsrReal("");
+      setObservaciones("");
+      setTipoPago("total");
+      setFechaVencimiento("");
+      setMetodoPago("transferencia");
+      setMontoPagado("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesSeleccionado, anoSeleccionado, registroExistente?.registros?.length]);
 
   const handleGuardarRegistro = async () => {
     if (isPeriodoPasado()) {
       toast({
         title: "Error",
         description: "No puedes crear registros para períodos pasados",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
-    if (!isrReal || parseFloat(isrReal) < 0) {
+    if (!isrReal || isNaN(parseFloat(isrReal)) || parseFloat(isrReal) < 0) {
       toast({
         title: "Error",
         description: "Debes ingresar el monto real de ISR",
-        variant: "destructive"
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!autoridadSeleccionada) {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar una autoridad fiscal",
+        variant: "destructive",
       });
       return;
     }
@@ -107,7 +177,7 @@ export const RegistroImpuestosForm = () => {
       toast({
         title: "Error",
         description: "Debes ingresar la fecha de vencimiento para pago a crédito",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -116,26 +186,26 @@ export const RegistroImpuestosForm = () => {
       toast({
         title: "Error",
         description: "Debes seleccionar el método de pago",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     if (tipoPago === "parcial") {
-      if (!montoPagado || parseFloat(montoPagado) <= 0) {
+      if (!montoPagado || isNaN(parseFloat(montoPagado)) || parseFloat(montoPagado) <= 0) {
         toast({
           title: "Error",
           description: "Debes ingresar el monto pagado",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
-      
+
       if (parseFloat(montoPagado) > parseFloat(isrReal)) {
         toast({
           title: "Error",
           description: "El monto pagado no puede ser mayor al ISR total",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
@@ -144,261 +214,64 @@ export const RegistroImpuestosForm = () => {
         toast({
           title: "Error",
           description: "Debes ingresar la fecha de vencimiento para el saldo pendiente",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
     }
 
-    // FASE 1: Validar saldo disponible antes de registrar
-    let montoPagadoFinal = 0;
-    if (tipoPago === "total") {
-      montoPagadoFinal = parseFloat(isrReal);
-    } else if (tipoPago === "parcial") {
-      montoPagadoFinal = parseFloat(montoPagado);
-    }
-
-    if (montoPagadoFinal > 0 && (tipoPago === "total" || tipoPago === "parcial")) {
-      if (metodoPago === "efectivo") {
-        const { data: detalles } = await supabase
-          .from("detalle_asientos")
-          .select("cuenta_codigo, debe, haber")
-          .eq("cuenta_codigo", "1001");
-
-        if (!detalles) {
-          toast({
-            title: "⚠️ Error de validación",
-            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
-            variant: "destructive"
-          });
-          setIsSaving(false);
-          return;
-        }
-
-        let efectivo = 0;
-        detalles.forEach(detalle => {
-          efectivo += (detalle.debe || 0) - (detalle.haber || 0);
-        });
-
-        if (montoPagadoFinal > efectivo) {
-          toast({
-            title: "💰 Saldo insuficiente en efectivo",
-            description: `Disponible: $${formatCurrency(efectivo)} | Necesitas: $${formatCurrency(montoPagadoFinal)}`,
-            variant: "destructive"
-          });
-          setIsSaving(false);
-          return;
-        }
-      }
-
-      if (metodoPago === "transferencia") {
-        const { data: detalles } = await supabase
-          .from("detalle_asientos")
-          .select("cuenta_codigo, debe, haber")
-          .eq("cuenta_codigo", "1002");
-
-        if (!detalles) {
-          toast({
-            title: "⚠️ Error de validación",
-            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
-            variant: "destructive"
-          });
-          setIsSaving(false);
-          return;
-        }
-
-        let bancos = 0;
-        detalles.forEach(detalle => {
-          bancos += (detalle.debe || 0) - (detalle.haber || 0);
-        });
-
-        if (montoPagadoFinal > bancos) {
-          toast({
-            title: "🏦 Saldo insuficiente en bancos",
-            description: `Disponible: $${formatCurrency(bancos)} | Necesitas: $${formatCurrency(montoPagadoFinal)}`,
-            variant: "destructive"
-          });
-          setIsSaving(false);
-          return;
-        }
-      }
+    // Bloqueo: si hay pérdidas, sólo permitir registrar 0.00
+    if (utilidadAntesImpuestos <= 0 && parseFloat(isrReal || "0") !== 0) {
+      toast({
+        title: "Error",
+        description: "Con pérdidas del período, solo puedes registrar ISR total de $0.00",
+        variant: "destructive",
+      });
+      return;
     }
 
     setIsSaving(true);
 
-    // Placeholder user_id - en producción esto vendría del contexto de auth
-    const placeholderUserId = '00000000-0000-0000-0000-000000000000';
-
     try {
-      const diferencia = parseFloat(isrReal) - isrCalculado;
-      const datosRegistro = {
-        user_id: placeholderUserId,
+      const pagoIndex = (registroExistente?.registros?.length || 0) + 1;
+
+      const body = {
         mes: mesSeleccionado,
         ano: anoSeleccionado,
+
+        // Datos base
         utilidad_antes_impuestos: utilidadAntesImpuestos,
-        tasa_isr: parseFloat(tasaISR),
+        tasa_isr: parseFloat(tasaISR || "0"),
         isr_calculado: isrCalculado,
-        isr_real: parseFloat(isrReal),
-        diferencia: diferencia,
-        observaciones: observaciones || null
+        isr_real_total: parseFloat(isrReal),
+
+        // UI/Flujo de pago
+        tipo_pago: tipoPago, // total | parcial | credito
+        metodo_pago: tipoPago === "total" || tipoPago === "parcial" ? metodoPago : null, // transferencia | efectivo
+        monto_pagado: tipoPago === "total" ? parseFloat(isrReal) : tipoPago === "parcial" ? parseFloat(montoPagado) : 0,
+        fecha_vencimiento: tipoPago === "credito" || tipoPago === "parcial" ? fechaVencimiento : null,
+
+        // Autoridad
+        autoridad_id: autoridadSeleccionada,
+
+        // Extra
+        observaciones: observaciones || null,
+        pago_index: pagoIndex,
       };
 
-      // Siempre crear un nuevo registro (nunca actualizar)
-      let montoPagadoFinal = 0;
-      let montoPendienteFinal = 0;
-      let tipoPagoFinal = '';
-      
-      if (tipoPago === "total") {
-        montoPagadoFinal = parseFloat(isrReal);
-        montoPendienteFinal = 0;
-        tipoPagoFinal = 'contado';
-      } else if (tipoPago === "credito") {
-        montoPagadoFinal = 0;
-        montoPendienteFinal = parseFloat(isrReal);
-        tipoPagoFinal = 'credito';
-      } else if (tipoPago === "parcial") {
-        montoPagadoFinal = parseFloat(montoPagado);
-        montoPendienteFinal = parseFloat(isrReal) - parseFloat(montoPagado);
-        tipoPagoFinal = 'parcial';
-      }
-
-      // Obtener datos de la autoridad seleccionada
-      const autoridadData = autoridades.find(a => a.id === autoridadSeleccionada);
-      const proveedorNombre = autoridadData?.nombre || "SAT - Servicio de Administración Tributaria";
-      const proveedorRfc = autoridadData?.rfc || "SAT970701NN3";
-
-      const { data: egresoData, error: egresoError } = await supabase
-        .from('transacciones_egresos')
-        .insert({
-          user_id: placeholderUserId,
-          tipo_egreso: 'impuesto',
-          subtipo_egreso: 'ISR',
-          descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
-          cuenta_codigo: '6001',
-          monto_total: parseFloat(isrReal),
-          monto_pagado: montoPagadoFinal,
-          monto_pendiente: montoPendienteFinal,
-          tipo_pago: tipoPagoFinal,
-          metodo_pago: (tipoPago === "total" || tipoPago === "parcial") ? metodoPago : null,
-          fecha_vencimiento: (tipoPago === "credito" || tipoPago === "parcial") ? fechaVencimiento : null,
-          proveedor_nombre: proveedorNombre,
-          proveedor_rfc: proveedorRfc,
-          comentarios: observaciones
-        })
-        .select()
-        .single();
-
-      if (egresoError) throw egresoError;
-      
-      const { data: newTransaction, error } = await supabase
-        .from('transacciones_impuestos')
-        .insert(datosRegistro)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Crear asiento contable (doble partida)
-      const numeroAsiento = await generarNumeroAsiento();
-      const fechaAsiento = new Date(anoSeleccionado, mesSeleccionado - 1, 1);
-
-      const { data: asiento, error: asientoError } = await supabase
-        .from('asientos_contables')
-        .insert({
-          user_id: placeholderUserId,
-          numero_asiento: numeroAsiento,
-          descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
-          fecha: fechaAsiento.toISOString().split('T')[0]
-        })
-        .select()
-        .single();
-
-      if (asientoError) throw asientoError;
-
-      // Detalles del asiento (doble partida)
-      let detalles;
-      
-      if (tipoPago === "total") {
-        // Pago total: Debe ISR / Haber Bancos
-        detalles = [
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '6001', // ISR (gasto)
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
-            debe: parseFloat(isrReal),
-            haber: 0
-          },
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '1002', // Bancos
-            descripcion: `Pago ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: 0,
-            haber: parseFloat(isrReal)
-          }
-        ];
-      } else if (tipoPago === "credito") {
-        // Pago a crédito: Debe ISR / Haber Proveedores (cuenta por pagar)
-        detalles = [
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '6001', // ISR (gasto)
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
-            debe: parseFloat(isrReal),
-            haber: 0
-          },
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
-            descripcion: `Cuenta por pagar ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: 0,
-            haber: parseFloat(isrReal)
-          }
-        ];
-      } else {
-        // Pago parcial: Debe ISR / Haber Bancos (pagado) + Haber Proveedores (pendiente)
-        detalles = [
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '6001', // ISR (gasto)
-            descripcion: `ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado} - Pago ${registroExistente ? registroExistente.registros.length + 1 : 1}`,
-            debe: parseFloat(isrReal),
-            haber: 0
-          },
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '1002', // Bancos
-            descripcion: `Pago parcial ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: 0,
-            haber: montoPagadoFinal
-          },
-          {
-            asiento_id: asiento.id,
-            cuenta_codigo: '2001', // Proveedores (pasivo - cuenta por pagar)
-            descripcion: `Saldo pendiente ISR ${meses[mesSeleccionado - 1]} ${anoSeleccionado}`,
-            debe: 0,
-            haber: montoPendienteFinal
-          }
-        ];
-      }
-
-      const { error: detallesError } = await supabase
-        .from('detalle_asientos')
-        .insert(detalles);
-
-      if (detallesError) throw detallesError;
-
-      let descripcionToast = "";
-      if (tipoPago === "total") {
-        descripcionToast = "El pago de ISR se registró correctamente con su asiento contable";
-      } else if (tipoPago === "credito") {
-        descripcionToast = "La cuenta por pagar de ISR se registró correctamente con su asiento contable";
-      } else {
-        descripcionToast = "El pago parcial de ISR y su cuenta por pagar se registraron correctamente";
-      }
+      await apiFetch("/api/impuestos/isr/registros", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
 
       toast({
         title: "Registro guardado",
-        description: descripcionToast
+        description:
+          tipoPago === "total"
+            ? "El pago de ISR se registró correctamente con su asiento contable"
+            : tipoPago === "credito"
+            ? "La cuenta por pagar de ISR se registró correctamente con su asiento contable"
+            : "El pago parcial de ISR y su cuenta por pagar se registraron correctamente",
       });
 
       // Limpiar formulario
@@ -409,55 +282,18 @@ export const RegistroImpuestosForm = () => {
       setMetodoPago("transferencia");
       setMontoPagado("");
 
-      // Recargar datos
-      const { data } = await supabase
-        .from('transacciones_impuestos')
-        .select('*')
-        .eq('mes', mesSeleccionado)
-        .eq('ano', anoSeleccionado)
-        .order('created_at', { ascending: false });
-
-      if (data && data.length > 0) {
-        const totalAcumulado = data.reduce((sum, reg) => sum + Number(reg.isr_real), 0);
-        setRegistroExistente({
-          registros: data,
-          total_acumulado: totalAcumulado,
-          ultimo_registro: data[0]
-        });
-      }
-
-    } catch (error) {
-      console.error("Error al guardar registro:", error);
+      await queryClient.invalidateQueries({ queryKey: ["impuestos-isr-registros", mesSeleccionado, anoSeleccionado] });
+    } catch (err: any) {
+      const msg = err?.message || "Hubo un error al guardar el registro";
       toast({
         title: "Error",
-        description: "Hubo un error al guardar el registro",
-        variant: "destructive"
+        description: msg,
+        variant: "destructive",
       });
     } finally {
       setIsSaving(false);
     }
   };
-
-  const generarNumeroAsiento = async (): Promise<string> => {
-    const { data, error } = await supabase.rpc('generate_asiento_number', {
-      p_user_id: ''
-    });
-
-    if (error) throw error;
-    return data;
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(value);
-  };
-
-  const meses = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
 
   return (
     <div className="space-y-6">
@@ -484,9 +320,8 @@ export const RegistroImpuestosForm = () => {
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            ⚠️ Este período tiene pérdidas ({formatCurrency(utilidadAntesImpuestos)}). 
-            No se calcula ISR sobre resultados negativos. Puedes registrar un pago de $0.00 
-            para documentar el período, o esperar a tener utilidades positivas.
+            ⚠️ Este período tiene pérdidas ({formatCurrencyUI(utilidadAntesImpuestos)}). No se calcula ISR sobre resultados negativos. Puedes registrar
+            un pago de $0.00 para documentar el período.
           </AlertDescription>
         </Alert>
       )}
@@ -495,9 +330,9 @@ export const RegistroImpuestosForm = () => {
         <Alert className="border-blue-500 bg-blue-500/10">
           <CheckCircle2 className="h-4 w-4 text-blue-600" />
           <AlertDescription className="text-blue-600 dark:text-blue-400">
-            Has registrado un total acumulado de {formatCurrency(registroExistente.total_acumulado)} de ISR para {meses[mesSeleccionado - 1]} {anoSeleccionado} 
-            ({registroExistente.registros.length} registro{registroExistente.registros.length > 1 ? 's' : ''}). 
-            Puedes continuar agregando pagos adicionales.
+            Has registrado un total acumulado de {formatCurrencyUI(registroExistente.total_acumulado)} de ISR para {meses[mesSeleccionado - 1]}{" "}
+            {anoSeleccionado} ({registroExistente.registros.length} registro{registroExistente.registros.length > 1 ? "s" : ""}). Puedes continuar agregando
+            pagos adicionales.
           </AlertDescription>
         </Alert>
       )}
@@ -508,54 +343,39 @@ export const RegistroImpuestosForm = () => {
           <CardTitle>Período</CardTitle>
           <CardDescription>Selecciona el mes y año del registro</CardDescription>
         </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="mes">Mes</Label>
-              <Select 
-                value={mesSeleccionado.toString()} 
-                onValueChange={(value) => setMesSeleccionado(parseInt(value))}
-                disabled={true}
-              >
-                <SelectTrigger id="mes" className="bg-muted text-muted-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {meses.map((mes, index) => {
-                    const mesNumero = index + 1;
-                    const mesActual = currentDate.getMonth() + 1;
-                    
-                    return (
-                      <SelectItem 
-                        key={mesNumero} 
-                        value={mesNumero.toString()}
-                        disabled={mesNumero !== mesActual}
-                      >
-                        {mes}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="mes">Mes</Label>
+            <Select value={mesSeleccionado.toString()} onValueChange={(v) => setMesSeleccionado(parseInt(v))} disabled>
+              <SelectTrigger id="mes" className="bg-muted text-muted-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {meses.map((mes, index) => {
+                  const mesNumero = index + 1;
+                  const mesActual = currentDate.getMonth() + 1;
+                  return (
+                    <SelectItem key={mesNumero} value={mesNumero.toString()} disabled={mesNumero !== mesActual}>
+                      {mes}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ano">Año</Label>
-              <Select 
-                value={anoSeleccionado.toString()} 
-                onValueChange={(value) => setAnoSeleccionado(parseInt(value))}
-                disabled={true}
-              >
-                <SelectTrigger id="ano" className="bg-muted text-muted-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={currentDate.getFullYear().toString()}>
-                    {currentDate.getFullYear()}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="ano">Año</Label>
+            <Select value={anoSeleccionado.toString()} onValueChange={(v) => setAnoSeleccionado(parseInt(v))} disabled>
+              <SelectTrigger id="ano" className="bg-muted text-muted-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={currentDate.getFullYear().toString()}>{currentDate.getFullYear()}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Cálculo de ISR */}
@@ -565,43 +385,37 @@ export const RegistroImpuestosForm = () => {
             <Calculator className="h-5 w-5" />
             Cálculo de ISR
           </CardTitle>
-          <CardDescription>
-            Cálculo automático basado en la utilidad antes de impuestos del período seleccionado
-          </CardDescription>
+          <CardDescription>Cálculo automático basado en la utilidad antes de impuestos del período seleccionado</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Cargando datos del período...
-            </div>
+            <div className="text-center py-8 text-muted-foreground">Cargando datos del período...</div>
           ) : (
             <>
               <div className="p-4 bg-muted rounded-lg space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ingresos:</span>
-                  <span className="font-semibold">{formatCurrency(utilidadData?.ingresos || 0)}</span>
+                  <span className="font-semibold">{formatCurrencyUI(utilidadData?.ingresos || 0)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Costos:</span>
-                  <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.costos || 0)}</span>
+                  <span className="font-semibold text-red-600">-{formatCurrencyUI(utilidadData?.costos || 0)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Gastos:</span>
-                  <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.gastos || 0)}</span>
+                  <span className="font-semibold text-red-600">-{formatCurrencyUI(utilidadData?.gastos || 0)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Depreciación:</span>
-                  <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.depreciacion || 0)}</span>
+                  <span className="font-semibold text-red-600">-{formatCurrencyUI(utilidadData?.depreciacion || 0)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Intereses:</span>
-                  <span className="font-semibold text-red-600">-{formatCurrency(utilidadData?.intereses || 0)}</span>
+                  <span className="font-semibold text-red-600">-{formatCurrencyUI(utilidadData?.intereses || 0)}</span>
                 </div>
                 <div className="pt-3 border-t border-border flex justify-between items-center">
                   <span className="font-semibold">Utilidad Antes de Impuestos:</span>
-                  <span className="text-xl font-bold text-foreground">
-                    {formatCurrency(utilidadAntesImpuestos)}
-                  </span>
+                  <span className="text-xl font-bold text-foreground">{formatCurrencyUI(utilidadAntesImpuestos)}</span>
                 </div>
               </div>
 
@@ -621,17 +435,13 @@ export const RegistroImpuestosForm = () => {
 
               <div className="p-4 bg-primary/10 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-2">
-                  {utilidadAntesImpuestos > 0 
-                    ? `ISR Calculado (${tasaISR}%)` 
-                    : 'Sin impuesto (pérdida del período)'}
+                  {utilidadAntesImpuestos > 0 ? `ISR Calculado (${tasaISR}%)` : "Sin impuesto (pérdida del período)"}
                 </p>
-                <p className="text-2xl font-bold text-primary">
-                  {formatCurrency(isrCalculado)}
-                </p>
+                <p className="text-2xl font-bold text-primary">{formatCurrencyUI(isrCalculado)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {utilidadAntesImpuestos > 0 
-                    ? `${tasaISR}% de ${formatCurrency(utilidadAntesImpuestos)}`
-                    : 'No se genera ISR con resultados negativos'}
+                  {utilidadAntesImpuestos > 0
+                    ? `${tasaISR}% de ${formatCurrencyUI(utilidadAntesImpuestos)}`
+                    : "No se genera ISR con resultados negativos"}
                 </p>
               </div>
             </>
@@ -650,112 +460,46 @@ export const RegistroImpuestosForm = () => {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="isr-real" className="text-base font-semibold">Monto TOTAL del ISR *</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsrReal(isrCalculado.toFixed(2))}
-                className="text-xs"
-              >
+              <Label htmlFor="isr-real" className="text-base font-semibold">
+                Monto TOTAL del ISR *
+              </Label>
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsrReal(isrCalculado.toFixed(2))} className="text-xs">
                 Usar ISR Calculado
               </Button>
             </div>
+
             <Input
               id="isr-real"
               type="text"
               placeholder="Ingresa el importe total del ISR"
               value={isrReal}
               onChange={(e) => {
-                const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
-                // Permitir vacío, números con o sin punto decimal
-                if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                  setIsrReal(value);
-                }
+                const value = e.target.value.replace(/,/g, "").replace(/[^\d.]/g, "");
+                if (value === "" || /^\d*\.?\d*$/.test(value)) setIsrReal(value);
               }}
-              onBlur={(e) => {
-                // Al perder foco, formatear el número si es válido
+              onBlur={() => {
                 const num = parseFloat(isrReal);
-                if (!isNaN(num)) {
-                  setIsrReal(num.toFixed(2));
-                }
+                if (!isNaN(num)) setIsrReal(num.toFixed(2));
               }}
               maxLength={20}
               className="text-lg font-semibold"
             />
+
             {isrReal && !isNaN(parseFloat(isrReal)) && (
               <p className="text-sm font-medium text-primary">
-                {parseFloat(isrReal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                {parseFloat(isrReal).toLocaleString("es-MX", { style: "currency", currency: "MXN" })}
               </p>
             )}
+
             <p className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-2 rounded border border-blue-200 dark:border-blue-800">
               ℹ️ <strong>Importante:</strong> Este es el monto total del impuesto que te corresponde pagar. En el siguiente paso elegirás cómo realizarás el pago.
             </p>
           </div>
 
-          {isrReal && (
-            (() => {
-              const montoAnterior = registroExistente ? registroExistente.total_acumulado : 0;
-              const faltantePrevio = isrCalculado - montoAnterior;
-              const nuevoMonto = parseFloat(isrReal);
-              const totalConNuevo = montoAnterior + nuevoMonto;
-              const diferenciaFinal = totalConNuevo - isrCalculado;
-              
-              return (parseFloat(isrReal) !== isrCalculado || registroExistente) && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-2">
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    <span className="font-semibold">Análisis del registro:</span>
-                  </p>
-                  <div className="text-sm text-amber-600 dark:text-amber-400 space-y-1">
-                    <div className="flex justify-between">
-                      <span>ISR según cálculo del período:</span>
-                      <span className="font-semibold">{formatCurrency(isrCalculado)}</span>
-                    </div>
-                    {registroExistente && (
-                      <>
-                        <div className="flex justify-between">
-                          <span>Ya has registrado (total acumulado):</span>
-                          <span className="font-semibold">{formatCurrency(montoAnterior)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs pt-1 border-t border-amber-500/20">
-                          <span>Te {faltantePrevio >= 0 ? 'faltaba' : 'sobraba'}:</span>
-                          <span className="font-medium">{formatCurrency(Math.abs(faltantePrevio))}</span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex justify-between pt-1 border-t border-amber-500/20">
-                      <span>Vas a registrar ahora:</span>
-                      <span className="font-semibold">{formatCurrency(nuevoMonto)}</span>
-                    </div>
-                    <div className="flex justify-between font-semibold bg-amber-500/20 p-2 rounded">
-                      <span>Total que tendrás registrado:</span>
-                      <span>{formatCurrency(totalConNuevo)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t-2 border-amber-500/30">
-                      <span className="font-semibold">
-                        Diferencia final vs cálculo:
-                      </span>
-                      <span className="font-bold">
-                        {diferenciaFinal > 0 ? "+" : ""}
-                        {formatCurrency(diferenciaFinal)}
-                      </span>
-                    </div>
-                    <p className="text-xs pt-1 italic">
-                      {Math.abs(diferenciaFinal) < 0.01
-                        ? '✓ Coincidirá exactamente con el cálculo'
-                        : diferenciaFinal > 0 
-                          ? `${formatCurrency(Math.abs(diferenciaFinal))} por encima del cálculo`
-                          : `${formatCurrency(Math.abs(diferenciaFinal))} por debajo del cálculo`
-                      }
-                    </p>
-                  </div>
-                </div>
-              );
-            })()
-          )}
-
           <div className="space-y-2">
-            <Label htmlFor="tipo-pago" className="text-base font-semibold">¿Cómo realizarás el pago de este ISR? *</Label>
+            <Label htmlFor="tipo-pago" className="text-base font-semibold">
+              ¿Cómo realizarás el pago de este ISR? *
+            </Label>
             <Select value={tipoPago} onValueChange={setTipoPago}>
               <SelectTrigger id="tipo-pago">
                 <SelectValue />
@@ -771,12 +515,7 @@ export const RegistroImpuestosForm = () => {
           {tipoPago === "credito" && (
             <div className="space-y-2">
               <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
-              <Input
-                id="fecha-vencimiento"
-                type="date"
-                value={fechaVencimiento}
-                onChange={(e) => setFechaVencimiento(e.target.value)}
-              />
+              <Input id="fecha-vencimiento" type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
             </div>
           )}
 
@@ -807,60 +546,25 @@ export const RegistroImpuestosForm = () => {
                       placeholder="Ingresa solo el monto que pagarás en este momento"
                       value={montoPagado}
                       onChange={(e) => {
-                        const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '');
-                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                          setMontoPagado(value);
-                        }
+                        const value = e.target.value.replace(/,/g, "").replace(/[^\d.]/g, "");
+                        if (value === "" || /^\d*\.?\d*$/.test(value)) setMontoPagado(value);
                       }}
-                      onBlur={(e) => {
+                      onBlur={() => {
                         const num = parseFloat(montoPagado);
-                        if (!isNaN(num)) {
-                          setMontoPagado(num.toFixed(2));
-                        }
+                        if (!isNaN(num)) setMontoPagado(num.toFixed(2));
                       }}
                       maxLength={20}
                       className="text-lg font-bold border-2"
                     />
                     {montoPagado && !isNaN(parseFloat(montoPagado)) && (
                       <p className="text-sm font-semibold text-green-700 dark:text-green-400">
-                        ✓ Pagarás: {parseFloat(montoPagado).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                        ✓ Pagarás: {parseFloat(montoPagado).toLocaleString("es-MX", { style: "currency", currency: "MXN" })}
                       </p>
                     )}
                     <p className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-white/50 dark:bg-black/20 p-2 rounded">
                       ⚠️ Este NO es el total del ISR, es solo lo que vas a pagar en este momento. El resto quedará como saldo pendiente.
                     </p>
                   </div>
-
-                  {montoPagado && isrReal && parseFloat(montoPagado) > 0 && parseFloat(isrReal) > 0 && (
-                    <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg border-2 border-amber-400 dark:border-amber-700">
-                      <h4 className="font-bold text-amber-900 dark:text-amber-100 mb-3 flex items-center gap-2">
-                        📊 Resumen del Pago Parcial
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center p-2 bg-white/50 dark:bg-black/20 rounded">
-                          <span className="text-sm font-medium">Monto TOTAL de ISR:</span>
-                          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                            {formatCurrency(parseFloat(isrReal))}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center p-2 bg-green-100 dark:bg-green-900/30 rounded">
-                          <span className="text-sm font-medium text-green-800 dark:text-green-300">✓ Pagarás AHORA:</span>
-                          <span className="text-lg font-bold text-green-700 dark:text-green-400">
-                            {formatCurrency(parseFloat(montoPagado))}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center p-2 bg-red-100 dark:bg-red-900/30 rounded border-t-2 border-red-300 dark:border-red-700">
-                          <span className="text-sm font-medium text-red-800 dark:text-red-300">📅 Quedará PENDIENTE:</span>
-                          <span className="text-xl font-bold text-red-700 dark:text-red-400">
-                            {formatCurrency(parseFloat(isrReal) - parseFloat(montoPagado))}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-3 italic font-medium">
-                        ✓ El saldo pendiente se registrará como cuenta por pagar y deberás liquidarlo antes de la fecha de vencimiento.
-                      </p>
-                    </div>
-                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="fecha-vencimiento-parcial">Fecha de Vencimiento del Saldo *</Label>
@@ -895,24 +599,19 @@ export const RegistroImpuestosForm = () => {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={aut.logo_url || undefined} />
-                          <AvatarFallback className="text-xs">
-                            {aut.nombre.substring(0, 2).toUpperCase()}
-                          </AvatarFallback>
+                          <AvatarFallback className="text-xs">{aut.nombre.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <span>{aut.nombre}</span>
-                        {aut.pais !== "México" && (
-                          <span className="text-xs text-muted-foreground">({aut.pais})</span>
-                        )}
+                        {aut.pais !== "México" && <span className="text-xs text-muted-foreground">({aut.pais})</span>}
                       </div>
                     </SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
+
             {autoridadSeleccionada && (
-              <p className="text-xs text-muted-foreground">
-                RFC: {autoridades.find(a => a.id === autoridadSeleccionada)?.rfc || "N/A"}
-              </p>
+              <p className="text-xs text-muted-foreground">RFC: {autoridades.find((a) => a.id === autoridadSeleccionada)?.rfc || "N/A"}</p>
             )}
           </div>
 
@@ -927,18 +626,22 @@ export const RegistroImpuestosForm = () => {
             />
           </div>
 
-          <Button 
-            className="w-full" 
+          <Button
+            className="w-full"
             onClick={handleGuardarRegistro}
             disabled={
-              !isrReal || 
-              isSaving || 
+              !isrReal ||
+              isSaving ||
               isPeriodoPasado() ||
               (utilidadAntesImpuestos <= 0 && parseFloat(isrReal || "0") !== 0)
             }
           >
             {isSaving ? "Guardando..." : "Guardar Nuevo Registro"}
           </Button>
+
+          {loadingRegistros && (
+            <p className="text-xs text-muted-foreground text-center pt-2">Actualizando registros...</p>
+          )}
         </CardContent>
       </Card>
     </div>

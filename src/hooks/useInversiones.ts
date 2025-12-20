@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 export interface InversionCapex {
@@ -30,6 +30,7 @@ export interface InversionCapex {
   fecha_baja?: string;
   valor_venta?: number;
   motivo_baja?: string;
+
   metodo_pago_venta?: string;
   tipo_pago_venta?: string;
   monto_pagado_venta?: number;
@@ -39,6 +40,7 @@ export interface InversionCapex {
   comprador_rfc?: string;
   comprador_telefono?: string;
   comprador_email?: string;
+
   created_at: string;
   updated_at: string;
 }
@@ -53,45 +55,48 @@ export interface RecomendacionDepreciacion {
   created_at: string;
 }
 
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+
+const toErrorMessage = (err: any) => {
+  if (!err) return "Error desconocido";
+  if (typeof err === "string") return err;
+  return err?.message || err?.error || "Error desconocido";
+};
+
 export const useInversiones = () => {
   const queryClient = useQueryClient();
 
-  const { data: inversiones = [], isLoading } = useQuery({
+  const inversionesQuery = useQuery({
     queryKey: ["inversiones"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("inversiones_capex")
-        .select("*")
-        .order("fecha_adquisicion", { ascending: false });
+    queryFn: async (): Promise<InversionCapex[]> => {
+      const json = await apiFetch("/api/inversiones", { method: "GET" });
+      const data = unwrap<InversionCapex[]>(json) || [];
 
-      if (error) throw error;
-      return data as InversionCapex[];
+      // Mantener el orden original del hook (fecha_adquisicion DESC)
+      return [...data].sort(
+        (a, b) => new Date(b.fecha_adquisicion).getTime() - new Date(a.fecha_adquisicion).getTime()
+      );
     },
   });
 
-  const { data: recomendaciones = [] } = useQuery({
+  const recomendacionesQuery = useQuery({
     queryKey: ["recomendaciones_depreciacion"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("recomendaciones_depreciacion")
-        .select("*")
-        .order("categoria_activo");
+    queryFn: async (): Promise<RecomendacionDepreciacion[]> => {
+      const json = await apiFetch("/api/recomendaciones-depreciacion", { method: "GET" });
+      const data = unwrap<RecomendacionDepreciacion[]>(json) || [];
 
-      if (error) throw error;
-      return data as RecomendacionDepreciacion[];
+      return [...data].sort((a, b) => a.categoria_activo.localeCompare(b.categoria_activo));
     },
   });
 
   const crearInversion = useMutation({
-    mutationFn: async (nuevaInversion: Omit<InversionCapex, 'id' | 'created_at' | 'updated_at'>) => {
-      const { data, error } = await supabase
-        .from("inversiones_capex")
-        .insert([nuevaInversion])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async (nuevaInversion: Omit<InversionCapex, "id" | "created_at" | "updated_at">) => {
+      const json = await apiFetch("/api/inversiones", {
+        method: "POST",
+        body: JSON.stringify(nuevaInversion),
+      });
+      return unwrap<InversionCapex>(json);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inversiones"] });
@@ -103,7 +108,7 @@ export const useInversiones = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo registrar la inversión",
+        description: toErrorMessage(error) || "No se pudo registrar la inversión",
         variant: "destructive",
       });
     },
@@ -117,15 +122,11 @@ export const useInversiones = () => {
       id: string;
       actualizacion: Partial<InversionCapex>;
     }) => {
-      const { data, error } = await supabase
-        .from("inversiones_capex")
-        .update(actualizacion)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      const json = await apiFetch(`/api/inversiones/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(actualizacion),
+      });
+      return unwrap<InversionCapex>(json);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inversiones"] });
@@ -137,7 +138,7 @@ export const useInversiones = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo actualizar la inversión",
+        description: toErrorMessage(error) || "No se pudo actualizar la inversión",
         variant: "destructive",
       });
     },
@@ -145,12 +146,10 @@ export const useInversiones = () => {
 
   const eliminarInversion = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("inversiones_capex")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await apiFetch(`/api/inversiones/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inversiones"] });
@@ -162,7 +161,7 @@ export const useInversiones = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo eliminar la inversión",
+        description: toErrorMessage(error) || "No se pudo eliminar la inversión",
         variant: "destructive",
       });
     },
@@ -189,7 +188,7 @@ export const useInversiones = () => {
       fecha_baja: string;
       motivo_baja: string;
       valor_venta?: number;
-      estado: 'vendido' | 'dado_de_baja';
+      estado: "vendido" | "dado_de_baja";
       metodo_pago_venta?: string;
       tipo_pago_venta?: string;
       monto_pagado_venta?: number;
@@ -200,33 +199,37 @@ export const useInversiones = () => {
       comprador_telefono?: string;
       comprador_email?: string;
     }) => {
-      const { data, error } = await supabase
-        .from("inversiones_capex")
-        .update({
-          estado,
-          fecha_baja,
-          motivo_baja,
-          valor_venta,
-          metodo_pago_venta,
-          tipo_pago_venta,
-          monto_pagado_venta,
-          monto_pendiente_venta,
-          fecha_vencimiento_venta,
-          comprador_nombre,
-          comprador_rfc,
-          comprador_telefono,
-          comprador_email,
-        })
-        .eq("id", id)
-        .select()
-        .single();
+      const patch: Partial<InversionCapex> = {
+        estado,
+        fecha_baja,
+        motivo_baja,
+        valor_venta,
+        metodo_pago_venta,
+        tipo_pago_venta,
+        monto_pagado_venta,
+        monto_pendiente_venta,
+        fecha_vencimiento_venta,
+        comprador_nombre,
+        comprador_rfc,
+        comprador_telefono,
+        comprador_email,
+      };
 
-      if (error) throw error;
-      return data;
+      // Limpieza ligera: evitar mandar undefined (backends estrictos lo agradecen)
+      Object.keys(patch).forEach((k) => {
+        if ((patch as any)[k] === undefined) delete (patch as any)[k];
+      });
+
+      const json = await apiFetch(`/api/inversiones/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+
+      return unwrap<InversionCapex>(json);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["inversiones"] });
-      const mensaje = variables.estado === 'vendido' ? 'vendido' : 'dado de baja';
+      const mensaje = variables.estado === "vendido" ? "vendido" : "dado de baja";
       toast({
         title: "Activo actualizado",
         description: `El activo ha sido ${mensaje} correctamente`,
@@ -235,16 +238,17 @@ export const useInversiones = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "No se pudo dar de baja el activo",
+        description: toErrorMessage(error) || "No se pudo dar de baja el activo",
         variant: "destructive",
       });
     },
   });
 
   return {
-    inversiones,
-    recomendaciones,
-    isLoading,
+    inversiones: inversionesQuery.data || [],
+    recomendaciones: recomendacionesQuery.data || [],
+    isLoading: inversionesQuery.isLoading || recomendacionesQuery.isLoading,
+
     crearInversion,
     actualizarInversion,
     eliminarInversion,

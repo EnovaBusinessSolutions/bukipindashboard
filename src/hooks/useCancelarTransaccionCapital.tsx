@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
 interface CancelarTransaccionParams {
@@ -7,43 +7,55 @@ interface CancelarTransaccionParams {
   motivoCancelacion: string;
 }
 
+type CancelarTransaccionResponse =
+  | { ok: true; numeroAsientoReversion?: string; data?: any }
+  | { numeroAsientoReversion?: string; [key: string]: any };
+
 export const useCancelarTransaccionCapital = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ transaccionId, motivoCancelacion }: CancelarTransaccionParams) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error("No hay sesión activa");
-      }
+    mutationFn: async ({
+      transaccionId,
+      motivoCancelacion,
+    }: CancelarTransaccionParams) => {
+      if (!transaccionId) throw new Error("transaccionId es requerido");
+      if (!motivoCancelacion?.trim())
+        throw new Error("Debes indicar un motivo de cancelación");
 
-      const response = await supabase.functions.invoke('cancelar-transaccion-capital', {
-        body: {
-          transaccionId,
-          motivoCancelacion
-        }
+      const json = await apiFetch("/api/capital/cancelar", {
+        method: "POST",
+        body: JSON.stringify({ transaccionId, motivoCancelacion }),
       });
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Error al cancelar la transacción');
-      }
+      // Soporta backend que devuelva {ok:true,data:{...}} o payload plano
+      const payload = (json as any)?.data ?? json;
 
-      return response.data;
+      // Validación mínima de respuesta (para UX)
+      // Idealmente backend regresa numeroAsientoReversion
+      return payload as CancelarTransaccionResponse;
     },
+
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["transacciones-capital"] });
       queryClient.invalidateQueries({ queryKey: ["asientos-capital"] });
-      
+
+      const numeroAsiento =
+        (data as any)?.numeroAsientoReversion ||
+        (data as any)?.numero_asiento_reversion;
+
       toast.success("Transacción cancelada exitosamente", {
-        description: `Se generó el asiento de reversión ${data.numeroAsientoReversion}`
+        description: numeroAsiento
+          ? `Se generó el asiento de reversión ${numeroAsiento}`
+          : "Se generó el asiento de reversión correctamente",
       });
     },
-    onError: (error: Error) => {
+
+    onError: (error: any) => {
       console.error("Error al cancelar transacción:", error);
       toast.error("Error al cancelar", {
-        description: error.message
+        description: error?.message || "No se pudo cancelar la transacción",
       });
-    }
+    },
   });
 };

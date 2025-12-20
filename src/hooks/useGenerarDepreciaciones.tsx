@@ -1,16 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
 
 interface GenerarDepreciacionesParams {
   mes?: number;
   ano?: number;
-  origen?: 'automatico' | 'manual';
+  origen?: "automatico" | "manual";
 }
 
 interface GenerarDepreciacionesResponse {
   success: boolean;
-  mes: number;
+  mes: number; // 1-12
   ano: number;
   total_activos: number;
   asientos_creados: number;
@@ -20,57 +20,62 @@ interface GenerarDepreciacionesResponse {
     activo: string;
     numero_asiento: string;
     monto?: number;
-    estado: 'creado' | 'ya_existe';
+    estado: "creado" | "ya_existe";
   }>;
 }
+
+type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
+
+const unwrap = <T,>(json: ApiEnvelope<T>): T => {
+  return (json as any)?.data ?? (json as T);
+};
 
 export const useGenerarDepreciaciones = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (params: GenerarDepreciacionesParams = {}) => {
-      const { data, error } = await supabase.functions.invoke('generar-depreciaciones-manual', {
-        body: { ...params, origen: params.origen || 'manual' },
+      const payload: GenerarDepreciacionesParams = {
+        ...params,
+        origen: params.origen || "manual",
+      };
+
+      const json = await apiFetch("/api/depreciaciones/generar", {
+        method: "POST",
+        body: JSON.stringify(payload),
       });
 
-      if (error) {
-        throw error;
-      }
-
-      return data as GenerarDepreciacionesResponse;
+      return unwrap<GenerarDepreciacionesResponse>(json);
     },
     onSuccess: (data) => {
-    queryClient.invalidateQueries({ queryKey: ['asientos-depreciacion'] });
-    queryClient.invalidateQueries({ queryKey: ['asientos-depreciacion-all'] });
-    queryClient.invalidateQueries({ queryKey: ['inversiones'] });
-    queryClient.invalidateQueries({ queryKey: ['asientos-contables'] });
+      // invalidaciones (idénticas a tu versión)
+      queryClient.invalidateQueries({ queryKey: ["asientos-depreciacion"] });
+      queryClient.invalidateQueries({ queryKey: ["asientos-depreciacion-all"] });
+      queryClient.invalidateQueries({ queryKey: ["inversiones"] });
+      queryClient.invalidateQueries({ queryKey: ["asientos-contables"] });
 
-      const mesNombre = new Date(data.ano, data.mes - 1).toLocaleString('es-MX', { 
-        month: 'long', 
-        year: 'numeric' 
+      const mesNombre = new Date(data.ano, data.mes - 1).toLocaleString("es-MX", {
+        month: "long",
+        year: "numeric",
       });
-      
+
       // Mensajes según resultado
       if (data.asientos_creados > 0 && data.asientos_existentes === 0) {
-        // Todos nuevos - éxito total
         toast({
           title: "✅ Depreciaciones generadas",
           description: `Se crearon ${data.asientos_creados} asiento(s) para ${mesNombre}.`,
         });
       } else if (data.asientos_creados === 0 && data.asientos_existentes > 0) {
-        // Todos ya existen
         toast({
           title: "ℹ️ Sin cambios",
           description: `Las depreciaciones de ${mesNombre} ya fueron generadas anteriormente (${data.asientos_existentes} asiento(s)).`,
         });
       } else if (data.asientos_creados > 0 && data.asientos_existentes > 0) {
-        // Mixto
         toast({
           title: "⚠️ Parcialmente generado",
           description: `${data.asientos_creados} nuevo(s), ${data.asientos_existentes} ya existían para ${mesNombre}.`,
         });
       } else {
-        // Sin activos
         toast({
           title: "⚠️ Sin asientos",
           description: `No se encontraron activos que requieran depreciación en ${mesNombre}.`,
@@ -87,10 +92,10 @@ export const useGenerarDepreciaciones = () => {
         console.error("Errores al generar depreciaciones:", data.errores);
       }
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: `No se pudieron generar las depreciaciones: ${error.message}`,
+        description: `No se pudieron generar las depreciaciones: ${error?.message || "Error desconocido"}`,
         variant: "destructive",
       });
     },

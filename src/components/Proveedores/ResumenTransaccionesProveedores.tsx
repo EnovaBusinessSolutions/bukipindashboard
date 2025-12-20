@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,15 +30,15 @@ export default function ResumenTransaccionesProveedores() {
   const { data: transacciones, isLoading } = useQuery({
     queryKey: ["transacciones-proveedores"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transacciones_egresos")
-        .select("*")
-        .eq("estado", "activo")
-        .order("created_at", { ascending: false });
+      // Endpoint backend (sin Supabase)
+      // Debe regresar: { data: TransaccionProveedor[] } o directamente TransaccionProveedor[]
+      // Debe incluir sólo owner=req.user._id
+      const json = await apiFetch("/api/proveedores/transacciones", { method: "GET" });
 
-      if (error) throw error;
-      return data as TransaccionProveedor[];
+      const payload: any = (json as any)?.data ?? json;
+      return (payload ?? []) as TransaccionProveedor[];
     },
+    staleTime: 60_000,
   });
 
   const proveedoresUnicos = Array.from(
@@ -57,8 +57,7 @@ export default function ResumenTransaccionesProveedores() {
       transaccion.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Filtro por proveedor
-    const matchProveedor =
-      proveedorFiltro === "todos" || transaccion.proveedor_nombre === proveedorFiltro;
+    const matchProveedor = proveedorFiltro === "todos" || transaccion.proveedor_nombre === proveedorFiltro;
 
     // Filtro por período
     let matchPeriodo = true;
@@ -100,10 +99,9 @@ export default function ResumenTransaccionesProveedores() {
     <Card>
       <CardHeader>
         <CardTitle>Resumen de Transacciones con Proveedores</CardTitle>
-        <CardDescription>
-          Visualiza y filtra todas las transacciones de egresos registradas con proveedores
-        </CardDescription>
+        <CardDescription>Visualiza y filtra todas las transacciones de egresos registradas con proveedores</CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-4">
         {/* Filtros */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -116,6 +114,7 @@ export default function ResumenTransaccionesProveedores() {
               className="pl-9"
             />
           </div>
+
           <Select value={proveedorFiltro} onValueChange={setProveedorFiltro}>
             <SelectTrigger>
               <SelectValue placeholder="Todos los proveedores" />
@@ -129,6 +128,7 @@ export default function ResumenTransaccionesProveedores() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={periodoFiltro} onValueChange={setPeriodoFiltro}>
             <SelectTrigger>
               <SelectValue placeholder="Todos los períodos" />
@@ -166,22 +166,12 @@ export default function ResumenTransaccionesProveedores() {
                 <TableBody>
                   {transaccionesFiltradas.map((transaccion) => (
                     <TableRow key={transaccion.id}>
-                      <TableCell>
-                        {format(new Date(transaccion.created_at), "dd/MM/yyyy", { locale: es })}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {transaccion.proveedor_nombre || "Sin proveedor"}
-                      </TableCell>
+                      <TableCell>{format(new Date(transaccion.created_at), "dd/MM/yyyy", { locale: es })}</TableCell>
+                      <TableCell className="font-medium">{transaccion.proveedor_nombre || "Sin proveedor"}</TableCell>
                       <TableCell>{transaccion.descripcion}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(transaccion.monto_total)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(transaccion.monto_pagado)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(transaccion.monto_pendiente || 0)}
-                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(transaccion.monto_total)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(transaccion.monto_pagado)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(transaccion.monto_pendiente || 0)}</TableCell>
                       <TableCell>{transaccion.metodo_pago || "N/A"}</TableCell>
                       <TableCell>{getEstadoBadge(transaccion.estado)}</TableCell>
                     </TableRow>
@@ -201,9 +191,7 @@ export default function ResumenTransaccionesProveedores() {
             </div>
           </>
         ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            No se encontraron transacciones con los filtros seleccionados.
-          </div>
+          <div className="text-center py-8 text-muted-foreground">No se encontraron transacciones con los filtros seleccionados.</div>
         )}
       </CardContent>
     </Card>
