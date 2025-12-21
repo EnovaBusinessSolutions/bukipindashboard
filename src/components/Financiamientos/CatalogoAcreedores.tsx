@@ -100,10 +100,7 @@ export default function CatalogoAcreedores() {
     notas: "",
   });
 
-  /**
-   * ✅ Financiamientos desde backend (sin supabase)
-   * Backend debe filtrar por usuario usando cookie/session -> req.user
-   */
+ 
   const { data: financiamientos = [], isLoading: isLoadingFin } = useQuery({
     queryKey: ["financiamientos-por-institucion"],
     queryFn: async () => {

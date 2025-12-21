@@ -75,7 +75,7 @@ export const RegistroImpuestosForm = () => {
   const [metodoPago, setMetodoPago] = useState<string>("transferencia");
   const [montoPagado, setMontoPagado] = useState<string>("");
 
-  // Utilidad del periodo (este hook debe ya estar migrado a backend; este archivo no usa supabase)
+  
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
 
   const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
@@ -99,7 +99,7 @@ export const RegistroImpuestosForm = () => {
     anoSeleccionado === currentDate.getFullYear() &&
     diasRestantesMes() <= 5;
 
-  // ===== Authorities (E2E, sin hook supabase) =====
+  
   const { data: autoridades = [] } = useQuery({
     queryKey: ["autoridades-fiscales"],
     queryFn: async () => {

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 export interface SaldosDisponibles {
   efectivo: number;
@@ -7,41 +7,67 @@ export interface SaldosDisponibles {
   total: number;
 }
 
+type AnyJson = any;
+
+type DetalleAsiento = {
+  cuenta_codigo: string; // "1001" | "1002"
+  debe?: number | string | null;
+  haber?: number | string | null;
+};
+
+const normalizeArray = <T,>(json: AnyJson): T[] => {
+  const data = json?.data ?? json ?? [];
+  return Array.isArray(data) ? (data as T[]) : [];
+};
+
+const safeNumber = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export const useSaldosDisponibles = () => {
-  return useQuery({
+  return useQuery<SaldosDisponibles>({
     queryKey: ["saldos-disponibles"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
+      /**
+       * ✅ E2E: el backend debe filtrar por owner (req.user._id)
+       * y regresar detalles de asientos SOLO de las cuentas solicitadas.
+       *
+       * Endpoint esperado:
+       *   GET /api/asientos/detalle?cuentas=1001,1002
+       *
+       * Respuesta:
+       *   [{ cuenta_codigo, debe, haber, ... }]
+       *   o { data: [...] }
+       */
+      const json: AnyJson = await apiFetch("/api/asientos/detalle?cuentas=1001,1002", {
+        method: "GET",
+      });
 
-      // OBTENER TODO DESDE ASIENTOS CONTABLES - ÚNICA FUENTE DE VERDAD
-      // Obtener saldo acumulado de efectivo (cuenta 1001) y bancos (cuenta 1002)
-      const { data: detalles } = await supabase
-        .from("detalle_asientos")
-        .select("cuenta_codigo, debe, haber, asientos_contables!inner(user_id)")
-        .in("cuenta_codigo", ["1001", "1002"])
-        .eq("asientos_contables.user_id", user.id);
+      const detalles = normalizeArray<DetalleAsiento>(json);
 
       let efectivo = 0;
       let bancos = 0;
 
-      detalles?.forEach(detalle => {
-        const saldo = (detalle.debe || 0) - (detalle.haber || 0);
-        
-        if (detalle.cuenta_codigo === "1001") {
-          efectivo += saldo;
-        } else if (detalle.cuenta_codigo === "1002") {
-          bancos += saldo;
-        }
-      });
+      for (const d of detalles) {
+        const codigo = String(d.cuenta_codigo || "");
+        const debe = safeNumber(d.debe);
+        const haber = safeNumber(d.haber);
+        const saldo = debe - haber;
 
-      const saldos: SaldosDisponibles = {
+        if (codigo === "1001") efectivo += saldo;
+        else if (codigo === "1002") bancos += saldo;
+      }
+
+      return {
         efectivo: Math.max(0, efectivo),
         bancos: Math.max(0, bancos),
-        total: Math.max(0, efectivo + bancos)
+        total: Math.max(0, efectivo + bancos),
       };
-
-      return saldos;
     },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };

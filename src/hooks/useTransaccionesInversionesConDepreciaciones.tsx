@@ -1,12 +1,12 @@
 import { useMemo } from "react";
-import { useInversiones } from "./useInversiones";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useInversiones } from "./useInversiones";
 import type { InversionCapex } from "./useInversiones";
+import { apiFetch } from "@/lib/api";
 
 export interface TransaccionInversionCompleta {
   id: string;
-  tipo: 'alta' | 'baja' | 'venta' | 'depreciacion';
+  tipo: "alta" | "baja" | "venta" | "depreciacion";
   fecha: string;
   activo: string;
   categoria: string;
@@ -20,49 +20,75 @@ export interface TransaccionInversionCompleta {
   mes_ano?: string;
 }
 
+type AnyJson = any;
+
+type AsientoDepreciacion = {
+  id: string;
+  numero_asiento: string;
+  descripcion?: string | null;
+  fecha: string; // ISO date
+  detalle_asientos?: Array<{
+    id?: string;
+    cuenta_codigo: string;
+    debe?: number;
+    haber?: number;
+    descripcion?: string | null;
+  }>;
+};
+
+const normalizeArray = <T,>(json: AnyJson): T[] => {
+  const data = json?.data ?? json ?? [];
+  return Array.isArray(data) ? (data as T[]) : [];
+};
+
+const toNumber = (v: any) => {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "0"));
+  return Number.isFinite(n) ? n : 0;
+};
+
+const toISODate = (d: Date) => d.toISOString().split("T")[0];
+
 export const useTransaccionesInversionesConDepreciaciones = () => {
   const { inversiones, isLoading: loadingInversiones } = useInversiones();
-  
-  // Obtener todos los asientos de depreciación
-  const { data: asientosDepreciacion, isLoading: loadingAsientos } = useQuery({
-    queryKey: ['asientos-depreciacion-all'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("asientos_contables")
-        .select(`
-          id,
-          numero_asiento,
-          descripcion,
-          fecha,
-          detalle_asientos (
-            id,
-            cuenta_codigo,
-            debe,
-            haber,
-            descripcion
-          )
-        `)
-        .like("numero_asiento", "DEP-%")
-        .order("fecha", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching asientos depreciacion:", error);
-        return [];
-      }
+  /**
+   * ✅ Backend esperado:
+   *   GET /api/asientos?tipo=depreciacion
+   * o:
+   *   GET /api/asientos/depreciacion
+   *
+   * Debe devolver:
+   * [
+   *  { id, numero_asiento, descripcion, fecha, detalle_asientos:[{cuenta_codigo,debe,haber,descripcion}] }
+   * ]
+   * o { ok:true, data:[...] }
+   */
+  const { data: asientosDepreciacion = [], isLoading: loadingAsientos } = useQuery({
+    queryKey: ["asientos-depreciacion-all"],
+    queryFn: async (): Promise<AsientoDepreciacion[]> => {
+      // ✅ usa UN endpoint canonical (ajústalo si tu backend lo nombró distinto)
+      const json: AnyJson = await apiFetch(`/api/asientos?tipo=depreciacion`, { method: "GET" });
+      const rows = normalizeArray<AsientoDepreciacion>(json);
 
-      return data || [];
+      // fallback de orden por fecha desc (por si backend no ordena)
+      rows.sort((a, b) => String(b.fecha ?? "").localeCompare(String(a.fecha ?? "")));
+      return rows;
     },
     enabled: inversiones.length > 0,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const transacciones = useMemo(() => {
     const resultado: TransaccionInversionCompleta[] = [];
-    
+
     inversiones.forEach((inversion) => {
-      // Transacción de alta (registro inicial)
+      // Alta
       resultado.push({
         id: `alta-${inversion.id}`,
-        tipo: 'alta',
+        tipo: "alta",
         fecha: inversion.fecha_adquisicion,
         activo: inversion.producto_nombre,
         categoria: inversion.categoria_activo,
@@ -71,44 +97,48 @@ export const useTransaccionesInversionesConDepreciaciones = () => {
         inversion_id: inversion.id,
         inversion,
       });
-      
-      // Agregar depreciaciones si el activo está activo o dado de baja
-      if (inversion.estado === 'activo' || inversion.estado === 'dado_de_baja') {
-        const asientosInversion = asientosDepreciacion?.filter(
-          asiento => asiento.numero_asiento.includes(inversion.id)
-        ) || [];
-        
-        asientosInversion.forEach((asiento: any) => {
-          // Extraer mes y año del número de asiento (formato: DEP-{id}-YYYYMM)
-          const match = asiento.numero_asiento.match(/DEP-.+-(\d{4})(\d{2})/);
-          const año = match ? match[1] : "";
-          const mes = match ? match[2] : "";
-          
-          // Calcular fecha: Último día del mes del periodo
-          const fechaDepreciacion = match 
-            ? new Date(parseInt(año), parseInt(mes), 0) // Último día del mes
+
+      // Depreciaciones (si activo o dado de baja)
+      if (inversion.estado === "activo" || inversion.estado === "dado_de_baja") {
+        const asientosInversion =
+          asientosDepreciacion?.filter((asiento) => {
+            const num = asiento?.numero_asiento || "";
+            return num.includes(inversion.id) && num.startsWith("DEP-");
+          }) || [];
+
+        asientosInversion.forEach((asiento) => {
+          // Formato esperado: DEP-{id}-YYYYMM (pero tu código soporta variantes)
+          const match = String(asiento.numero_asiento || "").match(/DEP-.+-(\d{4})(\d{2})/);
+          const anio = match?.[1] ?? "";
+          const mes = match?.[2] ?? "";
+
+          // Fecha: último día del mes del periodo (si match), si no usar asiento.fecha
+          const fechaDepreciacion = match
+            ? new Date(parseInt(anio, 10), parseInt(mes, 10), 0) // último día del mes
             : new Date(asiento.fecha);
-          
-          const mesAno = match 
-            ? new Date(parseInt(año), parseInt(mes) - 1).toLocaleString('es-MX', { 
-                month: 'long', 
-                year: 'numeric' 
+
+          // mes_ano "mes largo año"
+          const mesAno = match
+            ? new Date(parseInt(anio, 10), parseInt(mes, 10) - 1).toLocaleString("es-MX", {
+                month: "long",
+                year: "numeric",
               })
             : "";
-          
-          // Calcular monto de depreciación sumando DEBE de cuenta 5109
-          const montoDepreciacion = asiento.detalle_asientos
-            ?.filter((d: any) => d.cuenta_codigo === '5109')
-            .reduce((sum: number, d: any) => sum + d.debe, 0) || 0;
-          
+
+          // Monto depreciación = suma debe de cuenta 5109
+          const montoDepreciacion =
+            asiento.detalle_asientos
+              ?.filter((d) => String(d.cuenta_codigo) === "5109")
+              .reduce((sum, d) => sum + toNumber(d.debe), 0) || 0;
+
           resultado.push({
             id: `dep-${asiento.id}`,
-            tipo: 'depreciacion',
-            fecha: fechaDepreciacion.toISOString().split('T')[0],
+            tipo: "depreciacion",
+            fecha: toISODate(fechaDepreciacion),
             activo: inversion.producto_nombre,
             categoria: inversion.categoria_activo,
             monto: montoDepreciacion,
-            descripcion: asiento.descripcion,
+            descripcion: asiento.descripcion ?? undefined,
             numero_asiento: asiento.numero_asiento,
             mes_ano: mesAno,
             inversion_id: inversion.id,
@@ -116,12 +146,12 @@ export const useTransaccionesInversionesConDepreciaciones = () => {
           });
         });
       }
-      
-      // Transacción de baja o venta (si aplica)
-      if (inversion.estado === 'dado_de_baja' && inversion.fecha_baja) {
+
+      // Baja / Venta
+      if (inversion.estado === "dado_de_baja" && inversion.fecha_baja) {
         resultado.push({
           id: `baja-${inversion.id}`,
-          tipo: 'baja',
+          tipo: "baja",
           fecha: inversion.fecha_baja,
           activo: inversion.producto_nombre,
           categoria: inversion.categoria_activo,
@@ -129,10 +159,10 @@ export const useTransaccionesInversionesConDepreciaciones = () => {
           inversion_id: inversion.id,
           inversion,
         });
-      } else if (inversion.estado === 'vendido' && inversion.fecha_baja) {
+      } else if (inversion.estado === "vendido" && inversion.fecha_baja) {
         resultado.push({
           id: `venta-${inversion.id}`,
-          tipo: 'venta',
+          tipo: "venta",
           fecha: inversion.fecha_baja,
           activo: inversion.producto_nombre,
           categoria: inversion.categoria_activo,
@@ -143,13 +173,11 @@ export const useTransaccionesInversionesConDepreciaciones = () => {
         });
       }
     });
-    
-    // Ordenar por fecha descendente (más reciente primero)
-    return resultado.sort((a, b) => {
-      return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
-    });
+
+    // Orden por fecha desc
+    return resultado.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }, [inversiones, asientosDepreciacion]);
-  
+
   return {
     transacciones,
     isLoading: loadingInversiones || loadingAsientos,

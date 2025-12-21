@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
-interface Proveedor {
+export interface Proveedor {
   id: string;
   nombre: string;
   telefono: string | null;
@@ -15,6 +15,38 @@ interface Proveedor {
   created_at: string;
 }
 
+type AnyJson = any;
+
+const apiJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
+  const res: AnyJson = await apiFetch(url, init);
+  return (res?.data ?? res) as T;
+};
+
+const normalizeArray = <T,>(json: AnyJson): T[] => {
+  const data = json?.data ?? json ?? [];
+  return Array.isArray(data) ? (data as T[]) : [];
+};
+
+type ProveedorUpsert = Omit<Proveedor, "id" | "created_at" | "activo">;
+
+const mapBackendError = (err: any): string => {
+  // Nuestra convención recomendada: backend devuelve { error: { code, message } } o { message }
+  const code = err?.error?.code ?? err?.code;
+  const message = err?.error?.message ?? err?.message;
+
+  // Si tu backend implementa conflictos como 409 con codes:
+  if (code === "DUPLICATE_RFC") return "Ya existe un proveedor con este RFC";
+  if (code === "DUPLICATE_EMAIL") return "Ya existe un proveedor con este correo electrónico";
+  if (code === "DUPLICATE_TELEFONO") return "Ya existe un proveedor con este teléfono";
+
+  // Auth
+  if (code === "UNAUTHENTICATED" || code === 401) {
+    return "Usuario no autenticado. Por favor inicia sesión.";
+  }
+
+  return message || "Error desconocido";
+};
+
 export const useProveedores = () => {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,18 +57,16 @@ export const useProveedores = () => {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('proveedores')
-        .select('*')
-        .eq('activo', true)
-        .order('nombre', { ascending: true });
+      // ✅ E2E: backend filtra por owner en servidor
+      // Recomendado: ordenar por nombre ya desde backend, pero aquí también soportamos ordenar por si acaso
+      const json = await apiJson<AnyJson>("/api/proveedores?activo=true", { method: "GET" });
+      const arr = normalizeArray<Proveedor>(json);
 
-      if (fetchError) throw fetchError;
-
-      setProveedores((data as any) || []);
-    } catch (err) {
-      console.error('Error fetching proveedores:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      arr.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es"));
+      setProveedores(arr);
+    } catch (err: any) {
+      console.error("Error fetching proveedores:", err);
+      setError(mapBackendError(err));
     } finally {
       setLoading(false);
     }
@@ -44,158 +74,89 @@ export const useProveedores = () => {
 
   useEffect(() => {
     fetchProveedores();
-
-    const channel = supabase
-      .channel('proveedores-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'proveedores'
-        },
-        () => {
-          fetchProveedores();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    
   }, []);
 
-  const createProveedor = async (proveedor: Omit<Proveedor, 'id' | 'created_at' | 'activo'>) => {
+  const createProveedor = async (proveedor: ProveedorUpsert) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        return { data: null, error: 'Usuario no autenticado' };
-      }
-      
-      const { data, error: insertError } = await supabase
-        .from('proveedores')
-        .insert({
+      // ✅ validar sesión
+      await apiJson("/api/auth/me", { method: "GET" });
+
+      const data = await apiJson<Proveedor>("/api/proveedores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           nombre: proveedor.nombre,
-          telefono: proveedor.telefono,
-          email: proveedor.email,
-          rfc: proveedor.rfc,
-          direccion: proveedor.direccion,
-          ciudad: proveedor.ciudad,
-          estado: proveedor.estado,
-          codigo_postal: proveedor.codigo_postal,
-          user_id: user.id,
-          activo: true
-        })
-        .select()
-        .single();
+          telefono: proveedor.telefono ?? null,
+          email: proveedor.email ?? null,
+          rfc: proveedor.rfc ?? null,
+          direccion: proveedor.direccion ?? null,
+          ciudad: proveedor.ciudad ?? null,
+          estado: proveedor.estado ?? null,
+          codigo_postal: proveedor.codigo_postal ?? null,
+        }),
+      });
 
-      if (insertError) throw insertError;
-
-      return { data, error: null };
+      // refrescar lista
+      await fetchProveedores();
+      return { data, error: null as string | null };
     } catch (err: any) {
-      console.error('Error creating proveedor:', err);
-      
-      // Detectar errores de duplicados
-      if (err.code === '23505') {
-        if (err.message.includes('unique_rfc_per_user_idx')) {
-          return { data: null, error: 'Ya existe un proveedor con este RFC' };
-        }
-        if (err.message.includes('unique_email_per_user_idx')) {
-          return { data: null, error: 'Ya existe un proveedor con este correo electrónico' };
-        }
-        if (err.message.includes('unique_telefono_per_user_idx')) {
-          return { data: null, error: 'Ya existe un proveedor con este teléfono' };
-        }
-      }
-      
-      // Errores de RLS
-      if (err.code === '42501') {
-        return { data: null, error: 'No tienes permisos para crear proveedores. Por favor inicia sesión.' };
-      }
-      
-      return { data: null, error: err.message || 'Error al crear proveedor' };
+      console.error("Error creating proveedor:", err);
+      return { data: null, error: mapBackendError(err) };
     }
   };
 
-  const updateProveedor = async (id: string, proveedor: Omit<Proveedor, 'id' | 'created_at' | 'activo'>) => {
+  const updateProveedor = async (id: string, proveedor: ProveedorUpsert) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        return { data: null, error: 'Usuario no autenticado' };
-      }
-      
-      const { data, error: updateError } = await supabase
-        .from('proveedores')
-        .update({
+      await apiJson("/api/auth/me", { method: "GET" });
+
+      const data = await apiJson<Proveedor>(`/api/proveedores/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           nombre: proveedor.nombre,
-          telefono: proveedor.telefono,
-          email: proveedor.email,
-          rfc: proveedor.rfc,
-          direccion: proveedor.direccion,
-          ciudad: proveedor.ciudad,
-          estado: proveedor.estado,
-          codigo_postal: proveedor.codigo_postal
-        })
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .select()
-        .single();
+          telefono: proveedor.telefono ?? null,
+          email: proveedor.email ?? null,
+          rfc: proveedor.rfc ?? null,
+          direccion: proveedor.direccion ?? null,
+          ciudad: proveedor.ciudad ?? null,
+          estado: proveedor.estado ?? null,
+          codigo_postal: proveedor.codigo_postal ?? null,
+        }),
+      });
 
-      if (updateError) throw updateError;
-
-      return { data, error: null };
+      await fetchProveedores();
+      return { data, error: null as string | null };
     } catch (err: any) {
-      console.error('Error updating proveedor:', err);
-      
-      // Detectar errores de duplicados
-      if (err.code === '23505') {
-        if (err.message.includes('unique_rfc_per_user_idx')) {
-          return { data: null, error: 'Ya existe un proveedor con este RFC' };
-        }
-        if (err.message.includes('unique_email_per_user_idx')) {
-          return { data: null, error: 'Ya existe un proveedor con este correo electrónico' };
-        }
-        if (err.message.includes('unique_telefono_per_user_idx')) {
-          return { data: null, error: 'Ya existe un proveedor con este teléfono' };
-        }
-      }
-      
-      return { data: null, error: err.message || 'Error al actualizar proveedor' };
+      console.error("Error updating proveedor:", err);
+      return { data: null, error: mapBackendError(err) };
     }
   };
 
   const deleteProveedor = async (id: string) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        return { error: 'Usuario no autenticado' };
-      }
-      
-      const { error: deleteError } = await supabase
-        .from('proveedores')
-        .update({ activo: false })
-        .eq('id', id)
-        .eq('user_id', user.id);
+      await apiJson("/api/auth/me", { method: "GET" });
 
-      if (deleteError) throw deleteError;
+      // ✅ Soft delete desde backend
+      await apiJson(`/api/proveedores/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
 
-      return { error: null };
+      await fetchProveedores();
+      return { error: null as string | null };
     } catch (err: any) {
-      console.error('Error deleting proveedor:', err);
-      return { error: err.message || 'Error al eliminar proveedor' };
+      console.error("Error deleting proveedor:", err);
+      return { error: mapBackendError(err) };
     }
   };
 
-  return { 
-    proveedores, 
-    loading, 
-    error, 
+  return {
+    proveedores,
+    loading,
+    error,
     refetch: fetchProveedores,
     createProveedor,
     updateProveedor,
-    deleteProveedor
+    deleteProveedor,
   };
 };

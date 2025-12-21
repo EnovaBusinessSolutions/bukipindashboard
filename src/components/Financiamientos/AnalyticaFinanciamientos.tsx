@@ -95,7 +95,7 @@ const AnalyticaFinanciamientos = () => {
   const [tipoDeudaAcreedor, setTipoDeudaAcreedor] = useState<TipoDeudaAcreedor>("total");
   const [acreedorSeleccionado, setAcreedorSeleccionado] = useState<string | null>(null);
 
-  // ✅ SIN SUPABASE: gastos financieros (cuenta 5201)
+ 
   const {
     data: gastosFinancieros = [],
     isLoading: isLoadingGastos,

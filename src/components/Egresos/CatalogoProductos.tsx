@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
 
-// ✅ Supabase eliminado (no se usa aquí)
+
 import {
   useProductosEgresos,
   useCreateProductoEgreso,
@@ -555,7 +555,7 @@ const CatalogoProductos = () => {
 
           {editingProduct && (
             <form onSubmit={handleUpdateProduct} className="space-y-4">
-              {/* (tu formulario de edición sigue igual, no tocamos lógica de supabase aquí) */}
+              {/* (tu formulario de edición sigue igual, no tocamos lógica de s aquí) */}
               {/* ... */}
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>

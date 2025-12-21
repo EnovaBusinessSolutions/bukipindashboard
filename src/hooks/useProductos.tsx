@@ -88,10 +88,7 @@ async function lookupProductoPorNombre(nombre: string): Promise<Producto | null>
 }
 
 function mapProductoConSubcuenta(p: any): ProductoConSubcuenta {
-  // Soporta diferentes shapes:
-  // - { subcuentas: { nombre } } (estilo Supabase)
-  // - { subcuenta: { nombre } } (backend propio)
-  // - { subcuenta_nombre } ya plano
+  
   const subcuentaNombre =
     p?.subcuentas?.nombre ?? p?.subcuenta?.nombre ?? p?.subcuenta_nombre ?? null;
 

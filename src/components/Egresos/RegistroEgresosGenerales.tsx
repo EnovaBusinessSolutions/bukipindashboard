@@ -143,7 +143,7 @@ const RegistroEgresosGenerales = () => {
       const montoPendiente = montoTotal - montoPagado;
       const tipoEgreso = cuentaSeleccionada.startsWith("5") ? "costo" : "gasto";
 
-      // ✅ Antes: supabase.functions.invoke('registrar-egreso')
+      
       // ✅ Ahora: backend Mongo (sesión por cookies)
       const payload = {
         tipo_egreso: tipoEgreso,

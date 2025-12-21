@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface TransaccionIngreso {
   id: string;
@@ -14,14 +14,20 @@ interface TransaccionIngreso {
   subcuenta_id: string | null;
   created_at: string;
   comentarios?: string | null;
-  asiento_fecha?: string | null; // Fecha del asiento contable relacionado
-  subcuentas?: {
-    nombre: string;
-  } | null;
-  cuentas?: {
-    nombre: string;
-  } | null;
+
+  // ✅ en el frontend lo seguimos exponiendo igual
+  asiento_fecha?: string | null;
+
+  subcuentas?: { nombre: string } | null;
+  cuentas?: { nombre: string } | null;
 }
+
+type AnyJson = any;
+
+const normalizeArray = <T,>(json: AnyJson): T[] => {
+  const data = json?.data ?? json ?? [];
+  return Array.isArray(data) ? (data as T[]) : [];
+};
 
 export const useTransaccionesRecientes = (limit: number = 10) => {
   const [transacciones, setTransacciones] = useState<TransaccionIngreso[]>([]);
@@ -33,54 +39,57 @@ export const useTransaccionesRecientes = (limit: number = 10) => {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('transacciones_ingresos')
-        .select(`
-          *,
-          asiento:asientos_contables!transaccion_ingreso_id(fecha)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      /**
+       * ✅ Backend esperado (canonical):
+       * GET /api/transacciones/ingresos/recientes?limit=10
+       *
+       * Debe devolver:
+       * [
+       *  { ...transaccion, asiento_fecha, subcuentas?, cuentas? }
+       * ]
+       * o { ok:true, data:[...] }
+       */
+      const json: AnyJson = await apiFetch(
+        `/api/transacciones/ingresos/recientes?limit=${encodeURIComponent(String(limit))}`,
+        { method: "GET" }
+      );
 
-      if (fetchError) throw fetchError;
+      const rows = normalizeArray<TransaccionIngreso>(json);
 
-      // Mapear la fecha del asiento a la transacción
-      const transaccionesConFecha = (data || []).map((t: any) => ({
+      // Si backend aún no manda asiento_fecha, soportamos compat:
+      const safeRows = rows.map((t: any) => ({
         ...t,
-        asiento_fecha: Array.isArray(t.asiento) && t.asiento.length > 0 ? t.asiento[0].fecha : null
+        asiento_fecha:
+          t.asiento_fecha ??
+          (Array.isArray(t.asiento) && t.asiento.length > 0 ? t.asiento[0]?.fecha ?? null : null),
       }));
 
-      setTransacciones(transaccionesConFecha as any);
-    } catch (err) {
-      console.error('Error fetching transacciones:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      setTransacciones(safeRows);
+    } catch (err: any) {
+      console.error("Error fetching transacciones recientes:", err);
+      setError(err?.message || "Error desconocido");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    let mounted = true;
     fetchTransacciones();
 
-    // Configurar realtime para actualizaciones automáticas
-    const channel = supabase
-      .channel('transacciones-recientes-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transacciones_ingresos'
-        },
-        () => {
-          fetchTransacciones();
-        }
-      )
-      .subscribe();
+    
+    // Si no lo quieres, ponlo en null o comenta este bloque.
+    const intervalMs = 30_000; // 30s
+    const timer = window.setInterval(() => {
+      if (!mounted) return;
+      fetchTransacciones();
+    }, intervalMs);
 
     return () => {
-      supabase.removeChannel(channel);
+      mounted = false;
+      window.clearInterval(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [limit]);
 
   return { transacciones, loading, error, refetch: fetchTransacciones };

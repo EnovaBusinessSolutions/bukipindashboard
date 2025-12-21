@@ -37,7 +37,7 @@ interface TransaccionIngreso {
   estado: string;
 }
 
-// Soporta payloads tipo Supabase y tipo Mongo (camelCase)
+
 function normalizeTransaccionIngreso(raw: any): TransaccionIngreso {
   return {
     id: String(raw.id ?? raw._id ?? ""),
@@ -56,7 +56,7 @@ export default function AnalyticaClientesNueva() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("todos");
   const [tipoVisualizacion, setTipoVisualizacion] = useState<"ventas" | "unidades">("ventas");
 
-  // Fetch transacciones (SIN SUPABASE)
+
   const {
     data: transacciones = [],
     isLoading,

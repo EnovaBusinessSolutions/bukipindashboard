@@ -109,7 +109,7 @@ export const useInstitucionesFinancieras = () => {
 
   const eliminarInstitucion = useMutation({
     mutationFn: async (id: string) => {
-      // Validar si tiene créditos activos (E2E sin Supabase)
+      
       const p = new URLSearchParams();
       p.set("institucion_financiera_id", id);
       p.set("estado", "activo");

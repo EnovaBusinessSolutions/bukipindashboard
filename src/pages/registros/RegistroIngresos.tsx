@@ -27,7 +27,7 @@ import { useProductos, useProductosServicios, useCreateProducto, useUpdateProduc
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
 import { useClientes, useCreateCliente } from "@/hooks/useClientes";
 
-// ✅ Bukipin E2E (sin Supabase): helper de fetch con cookies + normalización
+
 async function apiJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
     credentials: "include",
@@ -45,7 +45,7 @@ async function apiJson<T = any>(url: string, options: RequestInit = {}): Promise
   return ((json as any)?.data ?? json) as T;
 }
 
-// ✅ Compat: reemplazo de supabase.functions.invoke(...)
+
 async function invokeServer(fnName: string, args: { body?: any } = {}): Promise<{ data: any; error: any }> {
   const body = args?.body ?? {};
   try {

@@ -45,7 +45,7 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["resumen-transacciones", start, end, filtroMetodoPago],
     queryFn: async () => {
-      // Traemos asientos ya con detalle_asientos en forma legacy (sin supabase)
+      
       const json = await apiFetch(
         `/api/flujo-efectivo/transacciones?start=${start}&end=${end}`
       );

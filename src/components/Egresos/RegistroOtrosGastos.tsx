@@ -9,12 +9,29 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Receipt, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
-import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
+
+type AnyJson = any;
+
+const apiJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
+  const res: AnyJson = await apiFetch(url, init);
+  return (res?.data ?? res) as T;
+};
+
+const onlyNumberDot = (v: string) => v.replace(/[^\d.]/g, "");
 
 const RegistroOtrosGastos = () => {
   const [concept, setConcept] = useState("");
@@ -29,159 +46,13 @@ const RegistroOtrosGastos = () => {
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [pendingSubmit, setPendingSubmit] = useState<any>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<{ montoPagado: number; montoTotal: number } | null>(null);
   const [esProveedorRecurrente, setEsProveedorRecurrente] = useState(false);
 
   const { data: tarjetasCredito } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!concept || !totalAmount || !paymentType) {
-      toast({
-        title: "⚠️ Campos requeridos",
-        description: "Completa todos los campos obligatorios",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validar proveedor si hay monto pendiente
-    if ((paymentType === "credito" || paymentType === "parcial") && !supplierName.trim()) {
-      toast({
-        title: "⚠️ Proveedor requerido",
-        description: "Debes proporcionar el nombre del proveedor para pagos a crédito o parciales",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast({
-          title: "❌ Error de autenticación",
-          description: "Debes iniciar sesión para registrar egresos",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const montoTotal = parseFloat(totalAmount);
-      const montoPagado = paymentType === "contado" ? montoTotal : (paymentType === "parcial" ? parseFloat(paidAmount) || 0 : 0);
-
-      // FASE 1: Verificar que los saldos se hayan cargado
-      if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
-        if (!saldosDisponibles) {
-          toast({
-            title: "⚠️ Error de validación",
-            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
-            variant: "destructive"
-          });
-          return;
-        }
-      }
-
-      // FASE 2: Validar saldo disponible para efectivo o bancos
-      if (paymentMethod === "efectivo") {
-        if (montoPagado > saldosDisponibles.efectivo) {
-          toast({
-            title: "💰 Saldo insuficiente en efectivo",
-            description: `Disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Necesitas: $${formatCurrency(montoPagado)}`,
-            variant: "destructive"
-          });
-          return;
-        }
-      }
-
-      if (paymentMethod === "tarjeta-transferencia") {
-        if (montoPagado > saldosDisponibles.bancos) {
-          toast({
-            title: "🏦 Saldo insuficiente en bancos",
-            description: `Disponible: $${formatCurrency(saldosDisponibles.bancos)} | Necesitas: $${formatCurrency(montoPagado)}`,
-            variant: "destructive"
-          });
-          return;
-        }
-      }
-
-      // Validar límite de crédito si se seleccionó tarjeta de crédito
-      if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
-        const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
-        const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
-        
-        if (!validacion.valido) {
-          toast({
-            title: "⚠️ Límite de crédito excedido",
-            description: validacion.mensaje,
-            variant: "destructive"
-          });
-          return;
-        }
-        
-        setPendingSubmit({ montoPagado, montoTotal });
-        setShowConfirmDialog(true);
-        return;
-      }
-
-      await processTransaction(montoPagado, montoTotal);
-    } catch (error) {
-      console.error('Error al registrar gasto:', error);
-      toast({
-        title: "❌ Error",
-        description: "No se pudo registrar el gasto. Intenta nuevamente.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const processTransaction = async (montoPagado: number, montoTotal: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const montoPendiente = montoTotal - montoPagado;
-
-    // TODOS los otros gastos van a la cuenta 5204
-    const cuentaCodigo = '5204';
-
-    // Llamar al edge function registrar-egreso
-    const { data: result, error } = await supabase.functions.invoke('registrar-egreso', {
-      body: {
-        tipo_egreso: 'otro',
-        subtipo_egreso: 'otros_gastos',
-        descripcion: concept,
-        concepto: concept,
-        cuenta_codigo: cuentaCodigo,
-        monto_total: montoTotal,
-        tipo_pago: paymentType,
-        metodo_pago: paymentMethod || null,
-        monto_pagado: montoPagado,
-        monto_pendiente: montoPendiente,
-        fecha_vencimiento: dueDate || null,
-        proveedor_nombre: supplierName || null,
-        proveedor_telefono: supplierPhone || null,
-        proveedor_email: supplierEmail || null,
-        proveedor_rfc: supplierRFC || null,
-        es_proveedor_recurrente: esProveedorRecurrente,
-        comentarios: description || null
-      }
-    });
-
-    if (error) {
-      console.error('Error en edge function:', error);
-      throw error;
-    }
-
-    console.log('Gasto registrado con asiento:', result);
-
-    toast({
-      title: "✅ Gasto registrado",
-      description: `Gasto registrado correctamente con asiento contable ${result?.numero_asiento || ''}`
-    });
-
-    // Reset form
+  const resetForm = () => {
     setConcept("");
     setTotalAmount("");
     setPaymentType("");
@@ -198,6 +69,161 @@ const RegistroOtrosGastos = () => {
     setEsProveedorRecurrente(false);
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!concept.trim() || !totalAmount || !paymentType) {
+      toast({
+        title: "⚠️ Campos requeridos",
+        description: "Completa todos los campos obligatorios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Método de pago requerido si hay pago (contado o parcial)
+    if ((paymentType === "contado" || paymentType === "parcial") && !paymentMethod) {
+      toast({
+        title: "⚠️ Método de pago requerido",
+        description: "Selecciona un método de pago para el monto pagado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar proveedor si hay monto pendiente
+    if ((paymentType === "credito" || paymentType === "parcial") && !supplierName.trim()) {
+      toast({
+        title: "⚠️ Proveedor requerido",
+        description: "Debes proporcionar el nombre del proveedor para pagos a crédito o parciales",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // ✅ Validar sesión por cookies (E2E backend)
+      await apiJson("/api/auth/me", { method: "GET" });
+
+      const montoTotal = parseFloat((totalAmount || "0").replace(/,/g, "")) || 0;
+      const montoPagado =
+        paymentType === "contado"
+          ? montoTotal
+          : paymentType === "parcial"
+          ? parseFloat((paidAmount || "0").replace(/,/g, "")) || 0
+          : 0;
+
+      // FASE 1: Verificar que los saldos se hayan cargado
+      if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
+        if (!saldosDisponibles) {
+          toast({
+            title: "⚠️ Error de validación",
+            description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // FASE 2: Validar saldo disponible para efectivo o bancos
+      if (paymentMethod === "efectivo" && saldosDisponibles) {
+        if (montoPagado > (saldosDisponibles.efectivo ?? 0)) {
+          toast({
+            title: "💰 Saldo insuficiente en efectivo",
+            description: `Disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Necesitas: $${formatCurrency(
+              montoPagado
+            )}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (paymentMethod === "tarjeta-transferencia" && saldosDisponibles) {
+        if (montoPagado > (saldosDisponibles.bancos ?? 0)) {
+          toast({
+            title: "🏦 Saldo insuficiente en bancos",
+            description: `Disponible: $${formatCurrency(saldosDisponibles.bancos)} | Necesitas: $${formatCurrency(
+              montoPagado
+            )}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // Validar límite de crédito si se seleccionó tarjeta de crédito
+      if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+        const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
+        const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
+
+        if (!validacion.valido) {
+          toast({
+            title: "⚠️ Límite de crédito excedido",
+            description: validacion.mensaje,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Confirmación antes de ejecutar el cargo
+        setPendingSubmit({ montoPagado, montoTotal });
+        setShowConfirmDialog(true);
+        return;
+      }
+
+      await processTransaction(montoPagado, montoTotal);
+    } catch (error) {
+      console.error("Error al registrar gasto:", error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo registrar el gasto. Intenta nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const processTransaction = async (montoPagado: number, montoTotal: number) => {
+    const montoPendiente = Math.max(0, montoTotal - montoPagado);
+
+    // TODOS los otros gastos van a la cuenta 5204
+    const cuentaCodigo = "5204";
+
+    
+    const payload = {
+      tipo_egreso: "otro",
+      subtipo_egreso: "otros_gastos",
+      descripcion: concept,
+      concepto: concept,
+      cuenta_codigo: cuentaCodigo,
+      monto_total: montoTotal,
+      tipo_pago: paymentType,
+      metodo_pago: paymentMethod || null,
+      monto_pagado: montoPagado,
+      monto_pendiente: montoPendiente,
+      fecha_vencimiento: dueDate || null,
+      proveedor_nombre: supplierName || null,
+      proveedor_telefono: supplierPhone || null,
+      proveedor_email: supplierEmail || null,
+      proveedor_rfc: supplierRFC || null,
+      es_proveedor_recurrente: esProveedorRecurrente,
+      comentarios: description || null,
+    };
+
+    const result = await apiJson<{ numero_asiento?: string }>(`/api/transacciones/egresos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    toast({
+      title: "✅ Gasto registrado",
+      description: `Gasto registrado correctamente con asiento contable ${result?.numero_asiento || ""}`,
+    });
+
+    resetForm();
+  };
+
   return (
     <>
       <Card className="max-w-5xl mx-auto border-0 shadow-none">
@@ -210,12 +236,13 @@ const RegistroOtrosGastos = () => {
             Registra gastos que están fuera de la operación normal para poder identificarlos separadamente
           </CardDescription>
         </CardHeader>
+
         <CardContent className="p-6 pt-0">
           <form onSubmit={handleSubmit} className="space-y-6 pb-4">
             {/* Información del Gasto */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Información del Gasto</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="concepto">Concepto del Gasto *</Label>
@@ -232,10 +259,9 @@ const RegistroOtrosGastos = () => {
                   <Label htmlFor="monto-total">Monto Total *</Label>
                   <Input
                     id="monto-total"
-                    type="number"
-                    step="0.01"
+                    type="text"
                     value={totalAmount}
-                    onChange={(e) => setTotalAmount(e.target.value)}
+                    onChange={(e) => setTotalAmount(onlyNumberDot(e.target.value))}
                     placeholder="0.00"
                     required
                   />
@@ -248,10 +274,26 @@ const RegistroOtrosGastos = () => {
             {/* Información de Pago */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Información de Pago</h3>
-              
+
               <div className="space-y-2">
                 <Label>Tipo de Pago *</Label>
-                <RadioGroup value={paymentType} onValueChange={setPaymentType}>
+                <RadioGroup
+                  value={paymentType}
+                  onValueChange={(v) => {
+                    setPaymentType(v);
+                    // reset relacionados
+                    setPaymentMethod("");
+                    setPaidAmount("");
+                    setDueDate("");
+                    if (v === "contado") {
+                      setSupplierName("");
+                      setSupplierPhone("");
+                      setSupplierEmail("");
+                      setSupplierRFC("");
+                      setEsProveedorRecurrente(false);
+                    }
+                  }}
+                >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="contado" id="contado" />
                     <Label htmlFor="contado">Contado</Label>
@@ -282,13 +324,11 @@ const RegistroOtrosGastos = () => {
                         <SelectItem value="tarjeta-transferencia">
                           Bancos - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
                         </SelectItem>
-                        {tarjetasCredito && tarjetasCredito.length > 0 ? (
-                          tarjetasCredito.map((tarjeta) => (
-                            <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                              {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible)}
-                            </SelectItem>
-                          ))
-                        ) : null}
+                        {tarjetasCredito?.map((tarjeta: any) => (
+                          <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
+                            {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -298,10 +338,9 @@ const RegistroOtrosGastos = () => {
                       <Label htmlFor="monto-pagado">Monto Pagado</Label>
                       <Input
                         id="monto-pagado"
-                        type="number"
-                        step="0.01"
+                        type="text"
                         value={paidAmount}
-                        onChange={(e) => setPaidAmount(e.target.value)}
+                        onChange={(e) => setPaidAmount(onlyNumberDot(e.target.value))}
                         placeholder="0.00"
                       />
                     </div>
@@ -331,7 +370,7 @@ const RegistroOtrosGastos = () => {
                 <p className="text-sm text-muted-foreground">
                   Requerido para pagos a crédito o parciales para gestionar cuentas por pagar
                 </p>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
@@ -391,13 +430,12 @@ const RegistroOtrosGastos = () => {
                         ¿Es un proveedor recurrente?
                       </Label>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Si marcas esta opción, guardaremos este proveedor en tu catálogo para futuras transacciones. 
-                        Útil para proveedores con los que trabajas regularmente.
+                        Si marcas esta opción, guardaremos este proveedor en tu catálogo para futuras transacciones.
                       </p>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="bg-muted/50 p-3 rounded-lg">
                   <p className="text-sm text-muted-foreground">
                     <strong>Nota:</strong> Esta información es necesaria para gestionar correctamente las cuentas por pagar.
@@ -418,7 +456,7 @@ const RegistroOtrosGastos = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" onClick={resetForm}>
                 Cancelar
               </Button>
               <Button type="submit" className="gap-2">
@@ -430,40 +468,69 @@ const RegistroOtrosGastos = () => {
         </CardContent>
       </Card>
 
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+      <AlertDialog
+        open={showConfirmDialog}
+        onOpenChange={(open) => {
+          setShowConfirmDialog(open);
+          if (!open) setPendingSubmit(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar pago con tarjeta de crédito</AlertDialogTitle>
             <AlertDialogDescription>
               {paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito && (() => {
                 const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
-                const tarjeta = tarjetasCredito.find(t => t.id === tarjetaId);
-                return tarjeta ? (
+                const tarjeta = tarjetasCredito.find((t: any) => t.id === tarjetaId);
+                if (!tarjeta) return null;
+
+                const cargo = pendingSubmit?.montoPagado || 0;
+                const despues = (tarjeta.limite_disponible ?? 0) - cargo;
+
+                return (
                   <>
                     <div className="space-y-2 my-4">
-                      <p><strong>Tarjeta:</strong> {tarjeta.nombre}</p>
-                      <p><strong>Límite disponible actual:</strong> ${tarjeta.limite_disponible.toFixed(2)}</p>
-                      <p><strong>Monto del cargo:</strong> ${pendingSubmit?.montoPagado?.toFixed(2)}</p>
-                      <p><strong>Límite disponible después:</strong> ${(tarjeta.limite_disponible - (pendingSubmit?.montoPagado || 0)).toFixed(2)}</p>
+                      <p>
+                        <strong>Tarjeta:</strong> {tarjeta.nombre}
+                      </p>
+                      <p>
+                        <strong>Límite disponible actual:</strong> ${(tarjeta.limite_disponible ?? 0).toFixed(2)}
+                      </p>
+                      <p>
+                        <strong>Monto del cargo:</strong> ${cargo.toFixed(2)}
+                      </p>
+                      <p>
+                        <strong>Límite disponible después:</strong> ${despues.toFixed(2)}
+                      </p>
                     </div>
                     <p>¿Deseas continuar con este pago?</p>
                   </>
-                ) : null;
+                );
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setShowConfirmDialog(false);
-              setPendingSubmit(null);
-            }}>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setPendingSubmit(null);
+              }}
+            >
               Cancelar
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (pendingSubmit) {
-                processTransaction(pendingSubmit.montoPagado, pendingSubmit.montoTotal);
-              }
-            }}>
+
+            <AlertDialogAction
+              onClick={async () => {
+                if (!pendingSubmit) return;
+                try {
+                  await processTransaction(pendingSubmit.montoPagado, pendingSubmit.montoTotal);
+                } finally {
+                  setShowConfirmDialog(false);
+                  setPendingSubmit(null);
+                }
+              }}
+            >
               Continuar
             </AlertDialogAction>
           </AlertDialogFooter>

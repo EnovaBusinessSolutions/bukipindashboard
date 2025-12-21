@@ -30,9 +30,7 @@ export default function ResumenTransaccionesProveedores() {
   const { data: transacciones, isLoading } = useQuery({
     queryKey: ["transacciones-proveedores"],
     queryFn: async () => {
-      // Endpoint backend (sin Supabase)
-      // Debe regresar: { data: TransaccionProveedor[] } o directamente TransaccionProveedor[]
-      // Debe incluir sólo owner=req.user._id
+      
       const json = await apiFetch("/api/proveedores/transacciones", { method: "GET" });
 
       const payload: any = (json as any)?.data ?? json;

@@ -152,7 +152,7 @@ const CuentasPorPagar = () => {
   const [formatoNumerosAnalitica] = useState<"normal" | "miles" | "millones">("normal");
   const [decimalesAnalitica] = useState<0 | 1 | 2>(2);
 
-  // Hooks de datos (OJO: estos hooks también deben estar sin Supabase)
+  
   const { data: tiposCxP, isLoading } = useCuentasPorPagarAgrupadas();
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
@@ -186,7 +186,7 @@ const CuentasPorPagar = () => {
     enabled: !!selectedTransaccionId && !!fuenteTransaccion && detalleContableOpen,
   });
 
-  // ✅ Query para historial de pagos (sin Supabase)
+ 
   const { data: historialPagos } = useQuery({
     queryKey: ["historial-pagos-cxp", selectedFactura?.id],
     queryFn: async () => {

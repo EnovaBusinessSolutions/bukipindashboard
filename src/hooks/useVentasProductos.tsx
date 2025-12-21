@@ -74,7 +74,7 @@ export const useVentasProductos = (enabled: boolean = true) => {
           safeNumber(mov?.producto_precio_venta) ||
           0;
 
-        // En Supabase “cantidad” venía negativa en ventas, aquí lo normalizamos
+        
         const volumen = Math.abs(safeNumber(mov?.cantidad));
         const monto = volumen * precioVenta;
 

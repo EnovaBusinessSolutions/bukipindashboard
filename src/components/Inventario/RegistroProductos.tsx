@@ -162,7 +162,7 @@ const RegistroProductos = () => {
     if (flowStep === "select_existing") setSearchTerm("");
   };
 
-  // ====== Validaciones de saldo (sin Supabase) ======
+  
   const getSaldoDisponible = () => {
     if (!saldosDisponibles) return 0;
     if (metodoPago === "efectivo") return saldosDisponibles.efectivo || 0;
@@ -204,7 +204,7 @@ const RegistroProductos = () => {
     return { ok: true as const };
   };
 
-  // ====== Backend: crear cuenta por pagar (sin Supabase) ======
+  
   async function crearCuentaPorPagarInventario(payload: {
     tipo_egreso: "compra_inventario";
     descripcion: string;
@@ -343,9 +343,7 @@ const RegistroProductos = () => {
       return;
     }
 
-    // ====== Crear/actualizar producto (sin Supabase) ======
-    // Nota: si selectedProducto existe, idealmente tu backend debe interpretarlo como "restock".
-    // Por eso envío productId opcional (si tu hook lo soporta).
+    
     await createProducto.mutateAsync({
       productId: selectedProducto?.id || undefined, // <- si tu hook no lo soporta, puedes ignorarlo en el backend
       nombre: data.nombre,
@@ -361,7 +359,7 @@ const RegistroProductos = () => {
     if ((tipoPago === "contado" || tipoPago === "parcial") && montoPagado > 0) {
       const tarjetaId = extraerIdTarjetaCredito(data.metodoPago);
       if (tarjetaId) {
-        // OJO: esta utilidad debe estar ya migrada a backend (si antes era Supabase).
+        
         await actualizarSaldoTarjetaCredito(
           tarjetaId,
           montoPagado,

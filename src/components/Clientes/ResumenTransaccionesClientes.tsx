@@ -42,7 +42,7 @@ export default function ResumenTransaccionesClientes() {
   const [periodoFiltro, setPeriodoFiltro] = useState("todos");
   const [clienteFiltro, setClienteFiltro] = useState("todos");
 
-  // Fetch transacciones con cliente (SIN SUPABASE)
+  
   const { data: transacciones = [], isLoading, isError, error } = useQuery({
     queryKey: ["transacciones-clientes"],
     queryFn: async () => {

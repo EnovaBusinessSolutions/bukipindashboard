@@ -1,9 +1,11 @@
 /**
  * Utilidades compartidas para clasificación de asientos en el Flujo de Efectivo
- * 
+ *
  * Este archivo contiene la ÚNICA FUENTE DE VERDAD para clasificar asientos contables
  * en las tres categorías del flujo de efectivo: Operativo, Inversión y Financiamiento
  */
+
+import { apiFetch } from "@/lib/api";
 
 export type CategoriaFlujo = "Operativo" | "Inversion" | "Financiamiento" | "Sin Clasificar";
 
@@ -22,23 +24,54 @@ export interface ResultadoClasificacion {
   impactoTotal: number;
 }
 
+type SaldoInicialResponse = {
+  efectivo: number;
+  bancos: number;
+  total: number;
+};
+
+/**
+ * Formatea fecha como YYYY-MM-DD usando hora local (evita desfases por timezone con toISOString()).
+ */
+function formatYYYYMMDD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await apiFetch(path, init);
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const msg =
+      (json && (json.error || json.message)) ||
+      `Error HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return (json?.data ?? json) as T;
+}
+
+
 /**
  * Clasifica un asiento contable en una de las tres categorías del flujo de efectivo
  * según las contrapartidas de efectivo/bancos
- * 
+ *
  * REGLAS DE CLASIFICACIÓN (basadas en el plan de cuentas):
- * 
+ *
  * OPERATIVO:
  * - Ingresos: 4XXX
  * - Costos: 1005, 1006, 5001
  * - Gastos: 51XX, 6XXX
  * - Cuentas por cobrar/pagar: 1003, 1004, 2001-2006
  * - Impuestos: 1007, 1008
- * 
+ *
  * INVERSIÓN:
  * - Activos fijos: 12XX (1201-1299)
  * - Activos diferidos: 13XX
- * 
+ *
  * FINANCIAMIENTO:
  * - Préstamos: 20XX, 21XX
  * - Capital: 3001, 3002, 3003
@@ -47,8 +80,8 @@ export const clasificarAsiento = (detalles: DetalleAsiento[]): ResultadoClasific
   // Calcular impacto en efectivo y bancos
   let impactoEfectivo = 0;
   let impactoBancos = 0;
-  
-  detalles.forEach(d => {
+
+  detalles.forEach((d) => {
     if (d.cuenta_codigo === "1001") {
       impactoEfectivo += (d.debe || 0) - (d.haber || 0);
     } else if (d.cuenta_codigo === "1002") {
@@ -64,11 +97,12 @@ export const clasificarAsiento = (detalles: DetalleAsiento[]): ResultadoClasific
 
   for (const d of detalles) {
     const codigo = d.cuenta_codigo;
+    if (!codigo) continue;
     if (codigo === "1001" || codigo === "1002") continue;
 
     // ============= OPERATIVO =============
     // Ingresos por ventas (4XXX)
-    if (codigo?.startsWith("4")) {
+    if (codigo.startsWith("4")) {
       categoria = "Operativo";
       subcategoria = impactoTotal > 0 ? "Cobro por Ventas/Ingresos" : "Devolución de Ventas";
       break;
@@ -92,7 +126,7 @@ export const clasificarAsiento = (detalles: DetalleAsiento[]): ResultadoClasific
       break;
     }
     // Gastos operativos (51XX, 6XXX)
-    else if (codigo?.startsWith("51") || codigo?.startsWith("6")) {
+    else if (codigo.startsWith("51") || codigo.startsWith("6")) {
       categoria = "Operativo";
       subcategoria = impactoTotal < 0 ? "Pago de Gastos Operativos" : "Reembolso de Gastos";
       break;
@@ -109,24 +143,24 @@ export const clasificarAsiento = (detalles: DetalleAsiento[]): ResultadoClasific
       subcategoria = impactoTotal < 0 ? "Pago de IVA/Anticipos" : "Recuperación de Anticipos";
       break;
     }
-    
+
     // ============= INVERSIÓN =============
     // Activos fijos (12XX)
-    else if (codigo?.startsWith("12") && parseInt(codigo) >= 1201) {
+    else if (codigo.startsWith("12") && Number.parseInt(codigo, 10) >= 1201) {
       categoria = "Inversion";
       subcategoria = impactoTotal < 0 ? "Adquisición de Activos Fijos" : "Venta de Activos Fijos";
       break;
     }
     // Activos diferidos (13XX)
-    else if (codigo?.startsWith("13")) {
+    else if (codigo.startsWith("13")) {
       categoria = "Inversion";
       subcategoria = impactoTotal < 0 ? "Gastos Diferidos" : "Recuperación de Diferidos";
       break;
     }
-    
+
     // ============= FINANCIAMIENTO =============
     // Préstamos y financiamientos (20XX, 21XX)
-    else if (codigo?.startsWith("20") || codigo?.startsWith("21")) {
+    else if (codigo.startsWith("20") || codigo.startsWith("21")) {
       categoria = "Financiamiento";
       subcategoria = impactoTotal > 0 ? "Disposición de Préstamo" : "Amortización de Préstamo";
       break;
@@ -144,7 +178,7 @@ export const clasificarAsiento = (detalles: DetalleAsiento[]): ResultadoClasific
     subcategoria,
     impactoEfectivo,
     impactoBancos,
-    impactoTotal
+    impactoTotal,
   };
 };
 
@@ -156,7 +190,7 @@ export const agruparPorCategoria = (clasificaciones: ResultadoClasificacion[]) =
   const inversion = { efectivo: 0, bancos: 0, total: 0, detalles: [] as ResultadoClasificacion[] };
   const financiamiento = { efectivo: 0, bancos: 0, total: 0, detalles: [] as ResultadoClasificacion[] };
 
-  clasificaciones.forEach(c => {
+  clasificaciones.forEach((c) => {
     if (c.categoria === "Operativo") {
       operativo.efectivo += c.impactoEfectivo;
       operativo.bancos += c.impactoBancos;
@@ -180,29 +214,31 @@ export const agruparPorCategoria = (clasificaciones: ResultadoClasificacion[]) =
 
 /**
  * Calcula el saldo inicial de efectivo/bancos antes de una fecha
+ *
+
+ * - Llama al backend con cookies (credentials: include) vía apiFetch()
+ *
+ * Endpoint requerido:
+ * GET /api/asientos/saldo-inicial?before=YYYY-MM-DD&accounts=1001,1002
+ *
+ * Respuesta esperada:
+ * { ok:true, data:{ efectivo:number, bancos:number, total:number } }
+ * (o payload plano con esos campos)
  */
 export const calcularSaldoInicial = async (
-  supabase: any,
   fechaInicio: Date,
   cuentas: string[] = ["1001", "1002"]
-) => {
-  const { data } = await supabase
-    .from("detalle_asientos")
-    .select("cuenta_codigo, debe, haber, asientos_contables!inner(fecha)")
-    .in("cuenta_codigo", cuentas)
-    .lt("asientos_contables.fecha", fechaInicio.toISOString().split('T')[0]);
+): Promise<SaldoInicialResponse> => {
+  const before = formatYYYYMMDD(fechaInicio);
+  const accounts = encodeURIComponent(cuentas.join(","));
 
-  let efectivo = 0;
-  let bancos = 0;
+  const data = await apiJson<SaldoInicialResponse>(
+    `/api/asientos/saldo-inicial?before=${before}&accounts=${accounts}`
+  );
 
-  data?.forEach((detalle: any) => {
-    const saldo = (detalle.debe || 0) - (detalle.haber || 0);
-    if (detalle.cuenta_codigo === "1001") {
-      efectivo += saldo;
-    } else if (detalle.cuenta_codigo === "1002") {
-      bancos += saldo;
-    }
-  });
-
-  return { efectivo, bancos, total: efectivo + bancos };
+  return {
+    efectivo: Number(data.efectivo || 0),
+    bancos: Number(data.bancos || 0),
+    total: Number(data.total || 0),
+  };
 };

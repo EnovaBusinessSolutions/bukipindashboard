@@ -349,8 +349,7 @@ const ResumenEgresos = () => {
     setCurrentAsientos(null);
 
     try {
-      // Antes: supabase.from('asientos_contables'...) + detalle_asientos + cuentas
-      // Ahora: backend te regresa el asiento ya "armado" con detalles + nombre cuenta
+      
       const numeroAsientoBuscado = `EGR-${transaccionId}`;
 
       const json = await apiFetch(`/api/journal/asientos/by-ref/${encodeURIComponent(numeroAsientoBuscado)}`, {

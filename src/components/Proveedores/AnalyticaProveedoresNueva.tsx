@@ -51,8 +51,7 @@ export default function AnalyticaProveedoresNueva() {
   const { data: transacciones, isLoading } = useQuery({
     queryKey: ["transacciones-egresos-analytics"],
     queryFn: async () => {
-      // Endpoint backend (sin supabase)
-      // Debe regresar: { data: TransaccionEgreso[] } o directamente TransaccionEgreso[]
+      
       const json = await apiFetch("/api/analytics/proveedores/egresos", {
         method: "GET",
       });
