@@ -2,63 +2,101 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
-export type Subcuenta = {
-  id: string;
-  nombre: string;
-  cuenta_madre_codigo: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type SubcuentaWithCuentaMadre = Subcuenta & {
-  nombreCuentaMadre: string;
-};
-
 type AnyJson = any;
+
+/**
+ * Normaliza respuestas del backend:
+ * - payload plano: [...]
+ * - { data: [...] }
+ * - { ok:true, data:[...] }
+ */
+const normalizeArray = <T,>(json: AnyJson): T[] => {
+  const data = json?.data ?? json ?? [];
+  return Array.isArray(data) ? (data as T[]) : [];
+};
 
 const normalize = <T,>(json: AnyJson, fallback: T): T => {
   return (json?.data ?? json ?? fallback) as T;
 };
 
-const normalizeArray = <T,>(json: AnyJson): T[] => {
-  shown: {
-    // (noop) just to keep TS from complaining in some setups
-  };
-  const data = json?.data ?? json ?? [];
-  return Array.isArray(data) ? (data as T[]) : [];
+// -----------------------------
+// Types (compat + backend nuevo)
+// -----------------------------
+
+export type SubcuentaWithCuentaMadre = {
+  id: string;
+
+  // display
+  nombre: string;
+
+  // compat legacy UI
+  cuenta_madre_codigo: string;
+  nombreCuentaMadre?: string;
+
+  // backend nuevo / útil para debug
+  codigo?: string;
+  type?: string;
+  category?: string;
+
+  created_at?: string;
+  updated_at?: string;
 };
+
+// Helpers de normalización de fields
+const str = (v: any) => (v == null ? "" : String(v));
+const pickId = (x: any) => str(x?.id ?? x?._id);
+const pickNombre = (x: any) => str(x?.nombre ?? x?.name ?? "");
+const pickCodigo = (x: any) => str(x?.codigo ?? x?.code ?? "");
+const pickParent = (x: any) => str(x?.cuenta_madre_codigo ?? x?.cuentaMadreCodigo ?? x?.parentCode ?? "");
+const pickCreated = (x: any) => str(x?.created_at ?? x?.createdAt ?? "");
+const pickUpdated = (x: any) => str(x?.updated_at ?? x?.updatedAt ?? "");
+
+// -----------------------------
+// Queries
+// -----------------------------
 
 export const useSubcuentas = () => {
   return useQuery<SubcuentaWithCuentaMadre[]>({
     queryKey: ["subcuentas"],
     queryFn: async () => {
       /**
-       * ✅ Backend esperado:
+       * Backend real (nuevo):
        *   GET /api/subcuentas
        * Respuesta:
-       *   [{ id, nombre, cuenta_madre_codigo, cuentaMadre?: { nombre } }]
-       *   o { data: [...] }
+       *   { ok:true, data:[ AccountSubcuenta ] }
+       * donde AccountSubcuenta típicamente trae:
+       *   { _id, code/codigo, name/nombre, type, category, parentCode, createdAt, updatedAt }
        */
       const json: AnyJson = await apiFetch("/api/subcuentas", { method: "GET" });
       const items = normalizeArray<any>(json);
 
-      const mapped: SubcuentaWithCuentaMadre[] = items.map((s: any) => ({
-        id: String(s.id),
-        nombre: String(s.nombre ?? ""),
-        cuenta_madre_codigo: String(s.cuenta_madre_codigo ?? s.cuentaMadreCodigo ?? ""),
-        created_at: String(s.created_at ?? ""),
-        updated_at: String(s.updated_at ?? ""),
-        // soporta varios shapes:
-        nombreCuentaMadre:
-          s?.cuentaMadre?.nombre ||
-          s?.cuentas?.nombre || // compat si en backend lo llamas "cuentas"
-          s?.nombreCuentaMadre ||
-          "Cuenta no encontrada",
-      }));
+      const mapped: SubcuentaWithCuentaMadre[] = items.map((s: any) => {
+        const id = pickId(s);
+        const parentCode = pickParent(s);
 
-      // Orden desc por created_at (si tu backend ya lo manda ordenado, esto no estorba)
+        return {
+          id,
+          nombre: pickNombre(s),
+
+          // compat con UI anterior:
+          cuenta_madre_codigo: parentCode,
+
+          // backend nuevo:
+          codigo: pickCodigo(s),
+          type: str(s?.type ?? ""),
+          category: str(s?.category ?? "general"),
+
+          created_at: pickCreated(s),
+          updated_at: pickUpdated(s),
+
+          // si no viene el nombre de la madre, dejamos vacío/placeholder
+          nombreCuentaMadre:
+            str(s?.cuentaMadre?.nombre ?? s?.cuentas?.nombre ?? s?.nombreCuentaMadre ?? ""),
+        };
+      });
+
+      // Orden: más nuevas primero (si hay created_at/createdAt)
       mapped.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-
       return mapped;
     },
     staleTime: 60 * 1000,
@@ -68,39 +106,47 @@ export const useSubcuentas = () => {
   });
 };
 
-// Hook específico para subcuentas de inventario
+/**
+ * Subcuentas inventario:
+ * Antes estabas llamando:
+ *   /api/subcuentas?cuenta_madre_codigo=1005,1006
+ *
+ * Pero tu backend nuevo soporta:
+ *   ?parentCode=XXXX (uno solo)
+ *
+ * Para dejarlo E2E sin tocar backend, hacemos:
+ *  - GET /api/subcuentas
+ *  - filtramos client-side por parentCode in [1005, 1006]
+ */
 export const useSubcuentasInventario = () => {
   return useQuery<SubcuentaWithCuentaMadre[]>({
     queryKey: ["subcuentas-inventario"],
     queryFn: async () => {
-      /**
-       * ✅ Backend esperado:
-       *   GET /api/subcuentas?cuenta_madre_codigo=1005,1006
-       * o si prefieres:
-       *   GET /api/subcuentas/inventario
-       */
-      const json: AnyJson = await apiFetch(
-        "/api/subcuentas?cuenta_madre_codigo=1005,1006",
-        { method: "GET" }
-      );
-
+      const json: AnyJson = await apiFetch("/api/subcuentas", { method: "GET" });
       const items = normalizeArray<any>(json);
 
-      const mapped: SubcuentaWithCuentaMadre[] = items.map((s: any) => ({
-        id: String(s.id),
-        nombre: String(s.nombre ?? ""),
-        cuenta_madre_codigo: String(s.cuenta_madre_codigo ?? s.cuentaMadreCodigo ?? ""),
-        created_at: String(s.created_at ?? ""),
-        updated_at: String(s.updated_at ?? ""),
-        nombreCuentaMadre:
-          s?.cuentaMadre?.nombre ||
-          s?.cuentas?.nombre ||
-          s?.nombreCuentaMadre ||
-          "Cuenta no encontrada",
-      }));
+      const mapped: SubcuentaWithCuentaMadre[] = items.map((s: any) => {
+        const id = pickId(s);
+        const parentCode = pickParent(s);
 
-      mapped.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-      return mapped;
+        return {
+          id,
+          nombre: pickNombre(s),
+          cuenta_madre_codigo: parentCode,
+          codigo: pickCodigo(s),
+          type: str(s?.type ?? ""),
+          category: str(s?.category ?? "general"),
+          created_at: pickCreated(s),
+          updated_at: pickUpdated(s),
+          nombreCuentaMadre: str(s?.nombreCuentaMadre ?? ""),
+        };
+      });
+
+      const allowed = new Set(["1005", "1006"]);
+      const filtered = mapped.filter((s) => allowed.has(String(s.cuenta_madre_codigo)));
+
+      filtered.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      return filtered;
     },
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
@@ -108,6 +154,10 @@ export const useSubcuentasInventario = () => {
     retry: 1,
   });
 };
+
+// -----------------------------
+// Mutations
+// -----------------------------
 
 export const useCreateSubcuenta = () => {
   const queryClient = useQueryClient();
@@ -115,27 +165,36 @@ export const useCreateSubcuenta = () => {
 
   return useMutation({
     mutationFn: async ({
-      nombre,
-      cuentaMadreCodigo,
+      code,
+      name,
+      type,
+      parentCode,
+      category,
     }: {
-      nombre: string;
-      cuentaMadreCodigo: string;
+      code: string;
+      name: string;
+      type: string;
+      parentCode: string;
+      category?: string;
     }) => {
       /**
-       * ✅ Backend esperado:
+       * Backend real (nuevo):
        *   POST /api/subcuentas
-       * Body: { nombre, cuenta_madre_codigo }
-       * Respuesta: objeto creado o { data: objeto }
+       * Body:
+       *   { code, name, type, parentCode, category? }
        */
       const json: AnyJson = await apiFetch("/api/subcuentas", {
         method: "POST",
         body: JSON.stringify({
-          nombre,
-          cuenta_madre_codigo: cuentaMadreCodigo,
+          code,
+          name,
+          type,
+          parentCode,
+          category: category ?? "general",
         }),
       });
 
-      return normalize<Subcuenta>(json, {} as any);
+      return normalize<any>(json, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subcuentas"] });
@@ -149,8 +208,7 @@ export const useCreateSubcuenta = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description:
-          "Error al crear la subcuenta: " + (error?.message || "Error desconocido"),
+        description: "Error al crear la subcuenta: " + (error?.message || "Error desconocido"),
         variant: "destructive",
       });
     },
@@ -163,10 +221,6 @@ export const useDeleteSubcuenta = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      /**
-       * ✅ Backend esperado:
-       *   DELETE /api/subcuentas/:id
-       */
       await apiFetch(`/api/subcuentas/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
