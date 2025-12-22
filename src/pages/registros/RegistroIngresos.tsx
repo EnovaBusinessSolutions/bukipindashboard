@@ -74,26 +74,44 @@ async function invokeServer(fnName: string, args: { body?: any } = {}): Promise<
 
 
 // Función helper para formatear montos con separador de comas
-const formatMonto = (value: number | string): string => {
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
-  return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Helpers numéricos seguros (evitan toLocaleString sobre undefined/null/string basura)
+const toNum = (v: unknown): number => {
+  if (v === null || v === undefined) return 0;
+  const n = typeof v === "string" ? Number(v) : (v as number);
+  return Number.isFinite(n) ? n : 0;
 };
 
-// Función para formatear cifras según la escala seleccionada
-const formatCifra = (value: number, scale: "general" | "miles" | "millones"): string => {
-  let scaledValue = value;
+// Función helper para formatear montos con separador de comas (SEGURA)
+const formatMonto = (value: unknown): string => {
+  const numValue = toNum(value);
+  return numValue.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+// Función para formatear cifras según la escala seleccionada (SEGURA)
+const formatCifra = (value: unknown, scale: "general" | "miles" | "millones"): string => {
+  const base = toNum(value);
+  let scaledValue = base;
   let suffix = "";
-  
+
   if (scale === "miles") {
-    scaledValue = value / 1000;
+    scaledValue = base / 1000;
     suffix = " K";
   } else if (scale === "millones") {
-    scaledValue = value / 1000000;
+    scaledValue = base / 1_000_000;
     suffix = " M";
   }
-  
-  return scaledValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
+
+  return (
+    scaledValue.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + suffix
+  );
 };
+
 
 // Función helper para obtener el valor de métrica según el tipo seleccionado
 const getMetricValue = (transaction: any, metricType: "brutas" | "descuentos" | "netas"): number => {
