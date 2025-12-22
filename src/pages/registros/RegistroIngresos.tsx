@@ -319,6 +319,8 @@ const RegistroIngresos = () => {
     loading: loadingTransacciones,
     refetch: refetchTransacciones
   } = useTransaccionesRecientes(1000);
+    // ✅ Normalizar transacciones (camelCase ↔ snake_case, id, created_at, montos)
+  const transaccionesNorm = (transacciones ?? []).map(normalizeTx);
   const {
     data: subcuentas = []
   } = useSubcuentas();
@@ -2969,9 +2971,10 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                           });
 
                           const todasLasTransacciones = [
-                            ...transacciones,
-                            ...asientosComoTransacciones
+                           ...transaccionesNorm,
+                           ...asientosComoTransacciones
                           ];
+
 
                           const filtered = todasLasTransacciones.filter(t => {
                             const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
@@ -3003,8 +3006,8 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                           });
 
                           const todasLasTransacciones = [
-                            ...transacciones,
-                            ...asientosComoTransacciones
+                          ...transaccionesNorm,
+                          ...asientosComoTransacciones
                           ];
 
                           const filtered = todasLasTransacciones.filter(t => {
@@ -3034,7 +3037,7 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                       );
                       
                       return {
-                        id: asiento.id,
+                        id: asiento.id ?? asiento._id,
                         descripcion: asiento.descripcion,
                         monto_total: Number(detalleIngreso?.haber) || 0,
                         monto_neto: Number(detalleIngreso?.haber) || 0,
@@ -3055,9 +3058,9 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
 
                     // Combinar transacciones normales + asientos directos
                     const todasLasTransacciones = [
-                      ...transacciones,
-                      ...asientosComoTransacciones
-                    ];
+                    ...transaccionesNorm,
+                    ...asientosComoTransacciones.map(normalizeTx)
+                   ];
 
                     const transaccionesFiltradas = todasLasTransacciones.filter(t => {
                       const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
@@ -3080,9 +3083,9 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                       
                       // Si está cancelada, buscar su transacción de reversión
                       if (esCancelada && (transaccion as any).transaccion_cancelacion_id) {
-                        transaccionReversion = transacciones.find(t => 
-                          t.id === (transaccion as any).transaccion_cancelacion_id
-                        );
+                        transaccionReversion = transaccionesNorm.find(t =>
+                        t.id === (transaccion as any).transaccion_cancelacion_id
+                       );
                       }
                       
                       return {
@@ -3399,7 +3402,7 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                                    size="sm" 
                                    className="mt-2 text-xs border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
                                    onClick={() => {
-                                     setTransaccionACancelar(transaccion);
+                                     setTransaccionACancelar(normalizeTx(transaccion));
                                      setIsCancelDialogOpen(true);
                                    }}
                                  >
