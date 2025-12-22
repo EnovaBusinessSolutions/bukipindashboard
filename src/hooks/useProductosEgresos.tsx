@@ -4,23 +4,22 @@ import { toast } from "@/hooks/use-toast";
 
 export type ProductoEgreso = {
   id: string;
-  user_id?: string; // en Mongo normalmente no se expone, pero lo dejo opcional por compat
+  user_id?: string;
   nombre: string;
   descripcion?: string;
   tipo: "gasto" | "costo";
   unidad: string;
   proveedor_principal?: string;
   es_recurrente: boolean;
-  subcuenta_id?: string;
+  subcuenta_id?: string | null;
   cuenta_contable: string;
 
-  imagen_url?: string;
+  imagen_url?: string | null;
 
-  // métricas calculadas (pueden venir del backend)
   precio_promedio: number;
   variacion_precio: number;
   total_transacciones: number;
-  ultima_compra: string;
+  ultima_compra: string | null;
 
   activo: boolean;
   created_at: string;
@@ -53,6 +52,16 @@ export type UpdateProductoEgresoData = {
 };
 
 /**
+ * ✅ Unwrap universal:
+ * Soporta backend que responde:
+ * - { ok:true, data: ... }
+ * - payload directo (...)
+ */
+function unwrap<T>(json: any): T {
+  return (json?.data ?? json) as T;
+}
+
+/**
  * Helper: fetch multipart (FormData) con cookies.
  * - NO seteamos Content-Type; el browser pone el boundary.
  */
@@ -68,31 +77,32 @@ async function apiFetchForm<T = any>(
   });
 
   const text = await res.text();
-  let data: any = null;
+  let json: any = null;
+
   try {
-    data = text ? JSON.parse(text) : null;
+    json = text ? JSON.parse(text) : null;
   } catch {
-    data = text;
+    json = text;
   }
 
   if (!res.ok) {
-    const msg = data?.message || data?.error || `HTTP ${res.status}`;
-    throw Object.assign(new Error(msg), { status: res.status, data });
+    const msg = json?.message || json?.error || `HTTP ${res.status}`;
+    throw Object.assign(new Error(msg), { status: res.status, data: json });
   }
 
-  return data as T;
+  // ✅ importantísimo: devolver el objeto real, no el wrapper
+  return unwrap<T>(json);
 }
 
 export const useProductosEgresos = () => {
   return useQuery({
     queryKey: ["productos-egresos"],
     queryFn: async () => {
-      // ✅ Backend recomendado: GET /api/productos-egresos?activo=true
-      // (y el backend filtra por owner=req.user._id)
-      const data = await apiFetch<ProductoEgreso[]>(
-        "/api/productos-egresos?activo=true"
-      );
-      return data || [];
+      const json = await apiFetch<any>("/api/productos-egresos?activo=true");
+      const items = unwrap<any>(json);
+
+      // ✅ Garantiza que siempre sea array
+      return Array.isArray(items) ? (items as ProductoEgreso[]) : [];
     },
   });
 };
@@ -102,7 +112,6 @@ export const useCreateProductoEgreso = () => {
 
   return useMutation({
     mutationFn: async (productData: CreateProductoEgresoData) => {
-      // ✅ Si hay imagen => multipart
       const hasImage = !!productData.imagen;
 
       if (hasImage) {
@@ -117,16 +126,9 @@ export const useCreateProductoEgreso = () => {
         form.append("cuenta_contable", productData.cuenta_contable);
         form.append("imagen", productData.imagen as File);
 
-        // ✅ Backend recomendado: POST /api/productos-egresos (multipart)
-        return await apiFetchForm<ProductoEgreso>(
-          "/api/productos-egresos",
-          "POST",
-          form
-        );
+        return await apiFetchForm<ProductoEgreso>("/api/productos-egresos", "POST", form);
       }
 
-      // ✅ Sin imagen => JSON normal
-      // Backend recomendado: POST /api/productos-egresos (json)
       const payload = {
         nombre: productData.nombre,
         descripcion: productData.descripcion,
@@ -138,16 +140,20 @@ export const useCreateProductoEgreso = () => {
         cuenta_contable: productData.cuenta_contable,
       };
 
-      return await apiFetch<ProductoEgreso>("/api/productos-egresos", {
+      const json = await apiFetch<any>("/api/productos-egresos", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
+      return unwrap<ProductoEgreso>(json);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
       toast({
         title: "✅ Producto agregado",
-        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" agregado al catálogo${data.imagen_url ? " con imagen" : ""}`,
+        description: `${data.tipo === "gasto" ? "Gasto" : "Costo"} "${data.nombre}" agregado al catálogo${
+          data.imagen_url ? " con imagen" : ""
+        }`,
       });
     },
     onError: (error: any) => {
@@ -180,15 +186,9 @@ export const useUpdateProductoEgreso = () => {
         if (productData.cuenta_contable !== undefined) form.append("cuenta_contable", productData.cuenta_contable);
         form.append("imagen", productData.imagen as File);
 
-        // ✅ Backend recomendado: PATCH /api/productos-egresos/:id (multipart)
-        return await apiFetchForm<ProductoEgreso>(
-          `/api/productos-egresos/${productData.id}`,
-          "PATCH",
-          form
-        );
+        return await apiFetchForm<ProductoEgreso>(`/api/productos-egresos/${productData.id}`, "PATCH", form);
       }
 
-      // ✅ Sin imagen => JSON normal
       const payload: any = {};
       if (productData.nombre !== undefined) payload.nombre = productData.nombre;
       if (productData.descripcion !== undefined) payload.descripcion = productData.descripcion;
@@ -199,11 +199,12 @@ export const useUpdateProductoEgreso = () => {
       if (productData.subcuenta_id !== undefined) payload.subcuenta_id = productData.subcuenta_id || null;
       if (productData.cuenta_contable !== undefined) payload.cuenta_contable = productData.cuenta_contable;
 
-      // ✅ Backend recomendado: PATCH /api/productos-egresos/:id (json)
-      return await apiFetch<ProductoEgreso>(`/api/productos-egresos/${productData.id}`, {
+      const json = await apiFetch<any>(`/api/productos-egresos/${productData.id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
+
+      return unwrap<ProductoEgreso>(json);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["productos-egresos"] });
@@ -228,8 +229,6 @@ export const useDeleteProductoEgreso = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // ✅ Borrado lógico
-      // Backend recomendado: PATCH /api/productos-egresos/:id {activo:false}
       await apiFetch(`/api/productos-egresos/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ activo: false }),

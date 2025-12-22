@@ -36,6 +36,26 @@ const formatNumber = (value: string) => {
 
 const onlyNumberDot = (v: string) => v.replace(/[^\d.]/g, "");
 
+const toNum = (v: any, def = 0) => {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : def;
+};
+
+// Helpers para soportar varios shapes (snake/camel) del catálogo
+const getProductCuentaContable = (p: any) =>
+  p?.cuenta_contable ?? p?.cuentaContable ?? p?.cuentaCodigo ?? p?.cuenta_codigo ?? "";
+
+const getProductSubcuentaId = (p: any) =>
+  p?.subcuenta_id ?? p?.subcuentaId ?? p?.subcuenta_id ?? "";
+
+const getProductProveedor = (p: any) =>
+  p?.proveedor_principal ?? p?.proveedorPrincipal ?? p?.proveedor ?? "";
+
+const getProductPrecioPromedio = (p: any) =>
+  p?.precio_promedio ?? p?.precioPromedio ?? p?.precio_promedio ?? 0;
+
+const getProductUnidad = (p: any) => p?.unidad ?? p?.unidadMedida ?? p?.unidad_medida ?? "";
+
 const RegistroEgresosPrecargados = () => {
   const { data: productos = [] } = useProductosEgresos();
   const { proveedores, createProveedor } = useProveedores();
@@ -79,20 +99,42 @@ const RegistroEgresosPrecargados = () => {
     }
   }, [paymentType]);
 
+  // Mantener totalAmount consistente aunque el usuario edite inputs
+  useEffect(() => {
+    const q = toNum(quantity, 0);
+    const up = toNum(unitPrice, 0);
+    if (q > 0 && up > 0) {
+      setTotalAmount((q * up).toFixed(2));
+    } else {
+      setTotalAmount("");
+    }
+  }, [quantity, unitPrice]);
+
   const handleTypeChange = (type: string) => {
     setSelectedType(type);
     setVistaSeleccion(false);
+
     // Reset product selection when type changes
     setSelectedProductId("");
     setSelectedProduct(null);
+
+    // Reset some fields
     setSupplierName("");
     setUnitPrice("");
     setTotalAmount("");
+    setPaymentType("");
+    setPaymentMethod("");
+    setPaidAmount("");
+    setDueDate("");
+    setRegistrarProveedor(false);
+    setTipoProveedor("");
+    setProveedorSeleccionado("");
   };
 
   const handleVolverSeleccion = () => {
     setVistaSeleccion(true);
     setSelectedType("");
+
     // Resetear todos los campos del formulario
     setSelectedProductId("");
     setSelectedProduct(null);
@@ -120,34 +162,22 @@ const RegistroEgresosPrecargados = () => {
 
     if (product) {
       // Auto-fill data from catalog
-      setSupplierName(product.proveedor_principal || "");
-      setUnitPrice(product.precio_promedio?.toString() || "");
+      setSupplierName(getProductProveedor(product) || "");
+      const pp = toNum(getProductPrecioPromedio(product), 0);
+      setUnitPrice(pp > 0 ? String(pp) : "");
 
-      // Recalculate total
-      const q = parseFloat(quantity || "0");
-      const up = parseFloat((product.precio_promedio ?? 0).toString());
-      if (q > 0 && up > 0) {
-        setTotalAmount((up * q).toFixed(2));
-      }
+      // totalAmount se recalcula por useEffect(quantity, unitPrice)
     }
   };
 
   const handleQuantityChange = (newQuantity: string) => {
     const cleanValue = onlyNumberDot(newQuantity);
     setQuantity(cleanValue);
-
-    const q = parseFloat(cleanValue || "0");
-    const up = parseFloat(unitPrice || "0");
-    if (q > 0 && up > 0) setTotalAmount((up * q).toFixed(2));
   };
 
   const handleUnitPriceChange = (price: string) => {
     const cleanValue = onlyNumberDot(price);
     setUnitPrice(cleanValue);
-
-    const q = parseFloat(quantity || "0");
-    const up = parseFloat(cleanValue || "0");
-    if (q > 0 && up > 0) setTotalAmount((up * q).toFixed(2));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,16 +197,6 @@ const RegistroEgresosPrecargados = () => {
       toast({
         title: "⚠️ Método de pago requerido",
         description: "Selecciona un método de pago para el monto pagado.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validar proveedor obligatorio para crédito y parcial
-    if ((paymentType === "credito" || paymentType === "parcial") && !registrarProveedor) {
-      toast({
-        title: "⚠️ Proveedor requerido",
-        description: "Para pagos a crédito o parciales es obligatorio registrar el proveedor",
         variant: "destructive",
       });
       return;
@@ -213,8 +233,7 @@ const RegistroEgresosPrecargados = () => {
     }
 
     try {
-      // ✅ Validar sesión por cookies (E2E backend). Si 401, apiFetch debe lanzar o devolverte error.
-      // Endpoint sugerido: GET /api/auth/me
+      // ✅ Validar sesión por cookies (E2E backend). Si 401, apiFetch debe lanzar.
       await apiJson("/api/auth/me", { method: "GET" });
 
       let proveedorId: string | null = null;
@@ -250,14 +269,38 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      const montoTotal = parseFloat((totalAmount || "0").replace(/,/g, "")) || 0;
+      // ✅ MONTO TOTAL: SIEMPRE se calcula en submit (no depende de totalAmount)
+      const qNum = toNum(quantity, 0);
+      const upNum = toNum(unitPrice, 0);
+
+      if (!(qNum > 0) || !(upNum > 0)) {
+        toast({
+          title: "⚠️ Cantidad/Precio inválidos",
+          description: "Cantidad y precio unitario deben ser mayores a 0.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const montoTotal = Number((qNum * upNum).toFixed(2));
 
       const montoPagado =
         paymentType === "contado"
           ? montoTotal
           : paymentType === "parcial"
-          ? parseFloat((paidAmount || "0").replace(/,/g, "")) || 0
+          ? toNum(paidAmount, 0)
           : 0;
+
+      if (paymentType === "parcial") {
+        if (!(montoPagado > 0) || montoPagado >= montoTotal) {
+          toast({
+            title: "⚠️ Monto pagado inválido",
+            description: "En pago parcial, el monto pagado debe ser mayor a 0 y menor al total.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
 
       const montoPendiente = Math.max(0, montoTotal - montoPagado);
 
@@ -278,7 +321,9 @@ const RegistroEgresosPrecargados = () => {
         if (montoPagado > (saldosDisponibles.efectivo ?? 0)) {
           toast({
             title: "💰 Saldo insuficiente en efectivo",
-            description: `Disponible: $${(saldosDisponibles.efectivo ?? 0).toFixed(2)} | Necesitas: $${montoPagado.toFixed(2)}`,
+            description: `Disponible: $${(saldosDisponibles.efectivo ?? 0).toFixed(2)} | Necesitas: $${montoPagado.toFixed(
+              2
+            )}`,
             variant: "destructive",
           });
           return;
@@ -289,7 +334,9 @@ const RegistroEgresosPrecargados = () => {
         if (montoPagado > (saldosDisponibles.bancos ?? 0)) {
           toast({
             title: "🏦 Saldo insuficiente en bancos",
-            description: `Disponible: $${(saldosDisponibles.bancos ?? 0).toFixed(2)} | Necesitas: $${montoPagado.toFixed(2)}`,
+            description: `Disponible: $${(saldosDisponibles.bancos ?? 0).toFixed(2)} | Necesitas: $${montoPagado.toFixed(
+              2
+            )}`,
             variant: "destructive",
           });
           return;
@@ -311,30 +358,44 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // ✅ Registrar egreso en tu backend (reemplazo del edge function registrar-egreso)
-      // Endpoint sugerido (alineado a lo que ya usamos): POST /api/transacciones/egresos
+      // ✅ Para costo: subcuenta es MUY importante (sale del catálogo)
+      const subcuentaIdToSend =
+        selectedType === "costo" ? (getProductSubcuentaId(selectedProduct) || null) : null;
+
+      const cuentaCodigoToSend =
+        getProductCuentaContable(selectedProduct) || (selectedType === "costo" ? "5001" : "5101");
+
+      // ✅ Registrar egreso en tu backend
       const payload = {
         tipo_egreso: selectedType,
         subtipo_egreso:
           selectedType === "costo" && (selectedProduct?.nombre || "").toLowerCase().includes("inventario")
             ? "compra_inventario"
             : "precargado",
+
         descripcion: selectedProduct?.nombre || "",
-        cuenta_codigo: selectedProduct?.cuenta_contable || (selectedType === "costo" ? "5001" : "6001"),
-        subcuenta_id: null,
+
+        cuenta_codigo: cuentaCodigoToSend,
+        subcuenta_id: subcuentaIdToSend,
+
         monto_total: montoTotal,
-        cantidad: parseFloat(quantity || "0") || 0,
-        precio_unitario: parseFloat(unitPrice || "0") || 0,
+        cantidad: qNum,
+        precio_unitario: upNum,
+
         tipo_pago: paymentType,
         metodo_pago: paymentMethod || null,
+
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
-        fecha_vencimiento: dueDate || null,
+
+        fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
+
         proveedor_id: proveedorId,
         proveedor_nombre: supplierName || null,
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
+
         producto_egreso_id: selectedProductId,
         comentarios: description || null,
       };
@@ -348,47 +409,9 @@ const RegistroEgresosPrecargados = () => {
         }
       );
 
-      if (selectedProduct?.cuenta_contable === "1005" || selectedProduct?.cuenta_contable === "1006") {
-        try {
-          const invProd = await apiJson<{ id: string }>(
-            `/api/inventario/productos/resolve?nombre=${encodeURIComponent(selectedProduct.nombre)}&cuenta_codigo=${encodeURIComponent(
-              selectedProduct.cuenta_contable
-            )}`,
-            { method: "GET" }
-          );
-
-          if (invProd?.id) {
-            const cantidadComprada = parseFloat(quantity || "0") || 0;
-            const costoUnitario = parseFloat(unitPrice || "0") || 0;
-
-            await apiJson("/api/inventario/movimientos", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tipo_movimiento: "compra",
-                producto_id: invProd.id,
-                cantidad: cantidadComprada,
-                costo_unitario: costoUnitario,
-                costo_total: cantidadComprada * costoUnitario,
-                descripcion: `Compra de ${selectedProduct.nombre} - Proveedor: ${supplierName || "No especificado"}`,
-              }),
-            });
-          }
-        } catch (err) {
-          console.warn("No se pudo crear movimiento de inventario (resolve/movimiento):", err);
-          // No tumbamos el egreso (ya se registró), solo avisamos
-          toast({
-            title: "⚠️ Inventario no actualizado",
-            description:
-              "El egreso se registró, pero no se pudo crear el movimiento de inventario. Revisa endpoints /api/inventario/…",
-            variant: "destructive",
-          });
-        }
-      }
-
       toast({
         title: "✅ Egreso registrado",
-        description: `Egreso registrado correctamente con asiento contable ${result?.numero_asiento || ""}`,
+        description: `Egreso registrado correctamente${result?.numero_asiento ? ` con asiento ${result.numero_asiento}` : ""}`,
       });
 
       // Limpiar formulario
@@ -444,10 +467,7 @@ const RegistroEgresosPrecargados = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* TARJETA DE COSTO */}
-              <Card
-                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
-                onClick={() => handleTypeChange("costo")}
-              >
+              <Card className="cursor-pointer hover:border-primary hover:shadow-lg transition-all" onClick={() => handleTypeChange("costo")}>
                 <CardHeader className="text-center">
                   <div className="flex justify-center mb-4">
                     <div className="p-4 bg-red-100 rounded-full">
@@ -455,17 +475,12 @@ const RegistroEgresosPrecargados = () => {
                     </div>
                   </div>
                   <CardTitle className="text-lg">Costo</CardTitle>
-                  <CardDescription>
-                    Directamente relacionado con la producción o venta de productos/servicios
-                  </CardDescription>
+                  <CardDescription>Directamente relacionado con la producción o venta de productos/servicios</CardDescription>
                 </CardHeader>
               </Card>
 
               {/* TARJETA DE GASTO */}
-              <Card
-                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
-                onClick={() => handleTypeChange("gasto")}
-              >
+              <Card className="cursor-pointer hover:border-primary hover:shadow-lg transition-all" onClick={() => handleTypeChange("gasto")}>
                 <CardHeader className="text-center">
                   <div className="flex justify-center mb-4">
                     <div className="p-4 bg-orange-100 rounded-full">
@@ -488,9 +503,7 @@ const RegistroEgresosPrecargados = () => {
 
             <Alert className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Los productos deben estar registrados en el catálogo para poder seleccionarlos aquí.
-              </AlertDescription>
+              <AlertDescription>Los productos deben estar registrados en el catálogo para poder seleccionarlos aquí.</AlertDescription>
             </Alert>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -502,9 +515,7 @@ const RegistroEgresosPrecargados = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="producto">
-                      {selectedType === "costo" ? "Costo" : "Gasto"} Precargado *
-                    </Label>
+                    <Label htmlFor="producto">{selectedType === "costo" ? "Costo" : "Gasto"} Precargado *</Label>
                     <Select value={selectedProductId} onValueChange={handleProductChange}>
                       <SelectTrigger>
                         <SelectValue placeholder={`Seleccionar ${selectedType} del catálogo`} />
@@ -515,7 +526,7 @@ const RegistroEgresosPrecargados = () => {
                             <SelectItem key={producto.id} value={producto.id}>
                               <div className="flex items-center space-x-2">
                                 <span>{producto.nombre}</span>
-                                <span className="text-muted-foreground text-xs">- {producto.unidad}</span>
+                                <span className="text-muted-foreground text-xs">- {getProductUnidad(producto) || "unidad"}</span>
                               </div>
                             </SelectItem>
                           ))
@@ -529,20 +540,14 @@ const RegistroEgresosPrecargados = () => {
 
                     {filteredProducts.length === 0 && (
                       <p className="text-sm text-yellow-600">
-                        No hay {selectedType}s precargados. Ve al catálogo de costos y gastos para agregar{" "}
-                        {selectedType}s.
+                        No hay {selectedType}s precargados. Ve al catálogo de costos y gastos para agregar {selectedType}s.
                       </p>
                     )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="unidad">Unidad de Medida</Label>
-                    <Input
-                      id="unidad"
-                      value={selectedProduct?.unidad || ""}
-                      placeholder="Se completa automáticamente"
-                      disabled
-                    />
+                    <Input id="unidad" value={getProductUnidad(selectedProduct) || ""} placeholder="Se completa automáticamente" disabled />
                   </div>
 
                   <div className="space-y-2">
@@ -567,9 +572,9 @@ const RegistroEgresosPrecargados = () => {
                       placeholder="Ej: 100 o 100.50"
                       required
                     />
-                    {selectedProduct && selectedProduct.precio_promedio > 0 && (
+                    {selectedProduct && toNum(getProductPrecioPromedio(selectedProduct), 0) > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        Precio promedio del catálogo: ${formatNumber(selectedProduct.precio_promedio.toString())}
+                        Precio promedio del catálogo: ${formatNumber(String(getProductPrecioPromedio(selectedProduct)))}
                       </p>
                     )}
                   </div>
@@ -659,12 +664,7 @@ const RegistroEgresosPrecargados = () => {
                     {(paymentType === "credito" || paymentType === "parcial") && (
                       <div className="space-y-2">
                         <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
-                        <Input
-                          id="fecha-vencimiento"
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                        />
+                        <Input id="fecha-vencimiento" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                       </div>
                     )}
                   </div>
