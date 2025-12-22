@@ -3365,8 +3365,8 @@ const RegistroIngresos = () => {
                          })}
                              </span>
                              <span className="font-medium text-green-600">
-                               Neto: ${transaccion.monto_neto.toFixed(2)}
-                             </span>
+  Neto: ${formatMonto(getMetricValue(transaccion, "netas"))}
+</span>
                             </div>
                            </div>
                          );
