@@ -112,21 +112,94 @@ const formatCifra = (value: unknown, scale: "general" | "miles" | "millones"): s
   );
 };
 
+// ✅ Normaliza transacciones: soporta camelCase y snake_case + arregla fechas/números
+const normalizeTx = (tx: any) => {
+  if (!tx) return tx;
+
+  // id
+  const id = tx.id ?? tx._id;
+
+  // fecha: puede venir como fecha (ISO) o created_at (YYYY-MM-DD)
+  const rawDate = tx.fecha ?? tx.createdAt ?? tx.created_at ?? tx.updatedAt ?? tx.updated_at;
+  const rawDateStr = rawDate ? String(rawDate) : undefined;
+
+  // Para tu parseDateSafe (YYYY-MM-DD), si viene ISO lo recortamos a 10 chars
+  const created_at = rawDateStr ? rawDateStr.slice(0, 10) : tx.created_at;
+
+  // números (muchos vienen camelCase en tu backend actual)
+  const monto_total = toNum(tx.monto_total ?? tx.montoTotal ?? tx.total ?? tx.monto_total);
+  const monto_descuento = toNum(tx.monto_descuento ?? tx.montoDescuento ?? tx.descuento);
+  const monto_neto = toNum(
+    tx.monto_neto ?? tx.montoNeto ?? tx.neto ?? (monto_total - monto_descuento)
+  );
+  const monto_pagado = toNum(tx.monto_pagado ?? tx.montoPagado ?? tx.pagado ?? monto_neto);
+  const saldo_pendiente = toNum(
+    tx.saldo_pendiente ?? tx.saldoPendiente ?? tx.pendiente ?? Math.max(0, monto_neto - monto_pagado)
+  );
+
+  const tipo_ingreso = tx.tipo_ingreso ?? tx.tipoIngreso ?? tx.tipo;
+  const metodo_pago = tx.metodo_pago ?? tx.metodoPago;
+  const tipo_pago = tx.tipo_pago ?? tx.tipoPago;
+
+  return {
+    ...tx,
+
+    // ids
+    id,
+    _id: tx._id ?? id,
+
+    // fechas (dejamos ambas)
+    created_at: tx.created_at ?? created_at,
+    fecha: tx.fecha ?? rawDateStr,
+
+    // tipos (dejamos ambas)
+    tipo_ingreso,
+    tipoIngreso: tx.tipoIngreso ?? tipo_ingreso,
+    metodo_pago,
+    metodoPago: tx.metodoPago ?? metodo_pago,
+    tipo_pago,
+    tipoPago: tx.tipoPago ?? tipo_pago,
+
+    // montos (dejamos ambas)
+    monto_total,
+    montoTotal: tx.montoTotal ?? monto_total,
+    total: tx.total ?? monto_total,
+
+    monto_descuento,
+    montoDescuento: tx.montoDescuento ?? monto_descuento,
+
+    monto_neto,
+    montoNeto: tx.montoNeto ?? monto_neto,
+    neto: tx.neto ?? monto_neto,
+
+    monto_pagado,
+    montoPagado: tx.montoPagado ?? monto_pagado,
+    pagado: tx.pagado ?? monto_pagado,
+
+    saldo_pendiente,
+    saldoPendiente: tx.saldoPendiente ?? saldo_pendiente,
+    pendiente: tx.pendiente ?? saldo_pendiente,
+  };
+};
 
 // Función helper para obtener el valor de métrica según el tipo seleccionado
 const getMetricValue = (transaction: any, metricType: "brutas" | "descuentos" | "netas"): number => {
-  if (metricType === "brutas") return transaction.monto_total || 0;
-  if (metricType === "descuentos") return transaction.monto_descuento || 0;
-  if (metricType === "netas") return transaction.monto_neto || transaction.monto_total || 0;
+  const t = normalizeTx(transaction);
+  if (metricType === "brutas") return t.monto_total || 0;
+  if (metricType === "descuentos") return t.monto_descuento || 0;
+  if (metricType === "netas") return t.monto_neto || t.monto_total || 0;
   return 0;
 };
 
+
 // Función para parsear fechas DATE correctamente (evita problemas de zona horaria UTC)
 const parseDateSafe = (dateString: string): Date => {
-  // Forzar interpretación local, no UTC
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day);
+  // ✅ si viene ISO, nos quedamos con YYYY-MM-DD
+  const clean = (dateString ?? "").toString().slice(0, 10);
+  const [year, month, day] = clean.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
 };
+
 
 // Función para ajustar proporcionalmente los datos para que sumen el total real de asientos contables
 const ajustarProporcionalmente = (
@@ -2859,10 +2932,12 @@ const RegistroIngresos = () => {
                             };
                           });
 
-                          const todasLasTransacciones = [
-                            ...transacciones,
-                            ...asientosComoTransacciones
-                          ];
+                          const todasLasTransaccionesRaw = [
+  ...(transacciones ?? []),
+  ...(asientosComoTransacciones ?? []),
+];
+
+const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
 
                           const filtered = todasLasTransacciones.filter(t => {
                             const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
