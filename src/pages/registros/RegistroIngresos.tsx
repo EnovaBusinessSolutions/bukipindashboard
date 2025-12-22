@@ -1062,24 +1062,47 @@ const RegistroIngresos = () => {
   }, [fechaAnalisisDiario, fechaAnalisisMensual, periodFilter, transacciones]);
 
   // Función para cargar asientos contables relacionados con una transacción
-  const loadAsientosContables = async (transaccionId: string) => {
-    setLoadingAsientos(true);
-    setCurrentAsientos(null);
-    try {
-      const resp = await apiJson<any>(`/api/asientos/by-transaccion?source=ingreso&id=${encodeURIComponent(transaccionId)}`);
-      const asiento = resp?.asiento ?? resp?.data?.asiento ?? resp;
-      setCurrentAsientos(asiento);
-    } catch (error) {
+  const loadAsientosContables = async (transaccionId?: string) => {
+  const id = String(transaccionId ?? "").trim();
+
+  setLoadingAsientos(true);
+  setCurrentAsientos(null);
+
+  // ✅ Si no hay id, no llames al backend
+  if (!id || id === "undefined" || id === "null") {
+    setLoadingAsientos(false);
+    return;
+  }
+
+  try {
+    const resp = await apiJson<any>(
+      `/api/asientos/by-transaccion?source=ingreso&id=${encodeURIComponent(id)}`
+    );
+
+    const asiento = resp?.asiento ?? resp?.data?.asiento ?? resp ?? null;
+    setCurrentAsientos(asiento);
+  } catch (error: any) {
+    // ✅ Si es 404, significa "no hay asientos", NO es error fatal
+    const msg = String(error?.message ?? "");
+    const is404 =
+      error?.status === 404 ||
+      error?.response?.status === 404 ||
+      msg.includes("404");
+
+    if (!is404) {
       console.error("Error en loadAsientosContables:", error);
       toast({
         title: "Error",
         description: "Error inesperado al cargar asientos",
-        variant: "destructive"
+        variant: "destructive",
       });
-    } finally {
-      setLoadingAsientos(false);
     }
-  };
+
+    setCurrentAsientos(null);
+  } finally {
+    setLoadingAsientos(false);
+  }
+};
 
   // Función para registrar el ingreso
   const handleSubmitIngreso = async () => {
@@ -3066,13 +3089,16 @@ const RegistroIngresos = () => {
                                        </span>
                                      )}
                                      
-                                     <Dialog onOpenChange={(open) => {
-                                       if (open) {
-                                         loadAsientosContables(transaccion.id);
-                                       } else {
-                                         setCurrentAsientos(null);
-                                       }
-                                     }}>
+                                     <Dialog
+  onOpenChange={(open) => {
+    if (open) {
+      const txId = String((transaccion as any)._id ?? (transaccion as any).id ?? "");
+      loadAsientosContables(txId);
+    } else {
+      setCurrentAsientos(null);
+    }
+  }}
+>
                                        <DialogTrigger asChild>
                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                                            <FileText className="h-3 w-3" />
