@@ -1,3 +1,4 @@
+// bukipin-dashboard/src/components/Egresos/RegistroEgresosPrecargados.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,11 +23,33 @@ type AnyJson = any;
 
 const apiJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
   const res: AnyJson = await apiFetch(url, init);
-  // Tu backend / apiFetch a veces regresa {ok:true,data:{...}} o payload plano
+  // Backend a veces regresa {ok:true,data:{...}} o payload plano
   return (res?.data ?? res) as T;
 };
 
-// Función para formatear números con separador de miles (solo para display)
+// -------------------- Helpers robustos (id/_id + snake/camel) --------------------
+const getId = (x: any) => String(x?.id ?? x?._id ?? "");
+const getProductTipo = (p: any) => p?.tipo ?? p?.tipo_egreso ?? p?.tipoEgreso ?? "";
+const getProductNombre = (p: any) => p?.nombre ?? p?.name ?? p?.descripcion ?? "";
+
+const getProductCuentaContable = (p: any) =>
+  p?.cuenta_contable ?? p?.cuentaContable ?? p?.cuentaCodigo ?? p?.cuenta_codigo ?? "";
+
+const getProductSubcuentaId = (p: any) => p?.subcuenta_id ?? p?.subcuentaId ?? "";
+
+const getProductProveedor = (p: any) =>
+  p?.proveedor_principal ?? p?.proveedorPrincipal ?? p?.proveedor ?? "";
+
+const getProductPrecioPromedio = (p: any) => p?.precio_promedio ?? p?.precioPromedio ?? 0;
+
+const getProductUnidad = (p: any) => p?.unidad ?? p?.unidadMedida ?? p?.unidad_medida ?? "";
+
+const getProveedorNombre = (p: any) => p?.nombre ?? p?.name ?? "";
+const getProveedorTelefono = (p: any) => p?.telefono ?? p?.phone ?? "";
+const getProveedorEmail = (p: any) => p?.email ?? "";
+const getProveedorRFC = (p: any) => p?.rfc ?? p?.taxId ?? "";
+
+// Formateo SOLO display
 const formatNumber = (value: string) => {
   if (!value) return "";
   const num = parseFloat(value.replace(/,/g, ""));
@@ -34,36 +57,38 @@ const formatNumber = (value: string) => {
   return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const onlyNumberDot = (v: string) => v.replace(/[^\d.]/g, "");
+// Acepta números y 1 solo punto decimal
+const onlyNumberDot = (v: string) => {
+  const cleaned = String(v ?? "").replace(/[^\d.]/g, "");
+  const [a, ...rest] = cleaned.split(".");
+  return rest.length ? `${a}.${rest.join("")}` : a;
+};
 
 const toNum = (v: any, def = 0) => {
   const n = Number(String(v ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : def;
 };
 
-// Helpers para soportar varios shapes (snake/camel) del catálogo
-const getProductCuentaContable = (p: any) =>
-  p?.cuenta_contable ?? p?.cuentaContable ?? p?.cuentaCodigo ?? p?.cuenta_codigo ?? "";
-
-const getProductSubcuentaId = (p: any) =>
-  p?.subcuenta_id ?? p?.subcuentaId ?? p?.subcuenta_id ?? "";
-
-const getProductProveedor = (p: any) =>
-  p?.proveedor_principal ?? p?.proveedorPrincipal ?? p?.proveedor ?? "";
-
-const getProductPrecioPromedio = (p: any) =>
-  p?.precio_promedio ?? p?.precioPromedio ?? p?.precio_promedio ?? 0;
-
-const getProductUnidad = (p: any) => p?.unidad ?? p?.unidadMedida ?? p?.unidad_medida ?? "";
+// Normaliza método de pago para alinear FE/BE (evita "tarjeta-transferencia")
+const normalizeMetodoPago = (m: string) => {
+  if (!m) return "";
+  if (m === "tarjeta-transferencia") return "bancos"; // compat legado
+  return m; // "efectivo" | "bancos" | "tarjeta_credito_<id>"
+};
 
 const RegistroEgresosPrecargados = () => {
-  const { data: productos = [] } = useProductosEgresos();
-  const { proveedores, createProveedor } = useProveedores();
-  const { data: tarjetasCredito } = useTarjetasCredito();
+  const { data: productosRaw = [] } = useProductosEgresos();
+  const { proveedores: proveedoresRaw = [], createProveedor } = useProveedores();
+  const { data: tarjetasCreditoRaw = [] } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
-  const [vistaSeleccion, setVistaSeleccion] = useState(true); // true = mostrar tarjetas, false = mostrar formulario
-  const [selectedType, setSelectedType] = useState(""); // "costo" or "gasto"
+  // Normalizamos en memoria para que TODO el componente use ids consistentes
+  const productos = useMemo(() => productosRaw ?? [], [productosRaw]);
+  const proveedores = useMemo(() => proveedoresRaw ?? [], [proveedoresRaw]);
+  const tarjetasCredito = useMemo(() => tarjetasCreditoRaw ?? [], [tarjetasCreditoRaw]);
+
+  const [vistaSeleccion, setVistaSeleccion] = useState(true); // true = tarjetas, false = formulario
+  const [selectedType, setSelectedType] = useState(""); // "costo" | "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
@@ -71,8 +96,8 @@ const RegistroEgresosPrecargados = () => {
   const [unitPrice, setUnitPrice] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
 
-  const [paymentType, setPaymentType] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentType, setPaymentType] = useState(""); // contado|credito|parcial
+  const [paymentMethod, setPaymentMethod] = useState(""); // efectivo|bancos|tarjeta_credito_*
   const [paidAmount, setPaidAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
 
@@ -82,24 +107,23 @@ const RegistroEgresosPrecargados = () => {
   const [supplierRFC, setSupplierRFC] = useState("");
   const [description, setDescription] = useState("");
 
-  // Nuevos estados para el manejo de proveedores
   const [registrarProveedor, setRegistrarProveedor] = useState(false);
-  const [tipoProveedor, setTipoProveedor] = useState(""); // "nuevo" o "existente"
+  const [tipoProveedor, setTipoProveedor] = useState(""); // "nuevo" | "existente"
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState("");
 
-  const filteredProducts = useMemo(
-    () => productos.filter((p: any) => p.tipo === selectedType),
-    [productos, selectedType]
-  );
+  const filteredProducts = useMemo(() => {
+    return (productos || []).filter((p: any) => getProductTipo(p) === selectedType);
+  }, [productos, selectedType]);
 
-  // Para crédito/parcial: proveedor siempre obligatorio (sin setState en render)
+  // Para crédito/parcial: proveedor obligatorio
   useEffect(() => {
     if (paymentType === "credito" || paymentType === "parcial") {
       setRegistrarProveedor(true);
+      // Si no hay tipo, no lo seteamos forzado; pero evitamos que quede "apagado"
     }
   }, [paymentType]);
 
-  // Mantener totalAmount consistente aunque el usuario edite inputs
+  // Mantener totalAmount consistente (solo display)
   useEffect(() => {
     const q = toNum(quantity, 0);
     const up = toNum(unitPrice, 0);
@@ -110,78 +134,72 @@ const RegistroEgresosPrecargados = () => {
     }
   }, [quantity, unitPrice]);
 
-  const handleTypeChange = (type: string) => {
-    setSelectedType(type);
-    setVistaSeleccion(false);
-
-    // Reset product selection when type changes
-    setSelectedProductId("");
-    setSelectedProduct(null);
-
-    // Reset some fields
-    setSupplierName("");
-    setUnitPrice("");
-    setTotalAmount("");
-    setPaymentType("");
-    setPaymentMethod("");
-    setPaidAmount("");
-    setDueDate("");
-    setRegistrarProveedor(false);
-    setTipoProveedor("");
-    setProveedorSeleccionado("");
-  };
-
-  const handleVolverSeleccion = () => {
-    setVistaSeleccion(true);
-    setSelectedType("");
-
-    // Resetear todos los campos del formulario
+  const resetForm = () => {
     setSelectedProductId("");
     setSelectedProduct(null);
     setQuantity("1");
     setUnitPrice("");
     setTotalAmount("");
+
     setPaymentType("");
     setPaymentMethod("");
     setPaidAmount("");
     setDueDate("");
+
     setSupplierName("");
     setSupplierPhone("");
     setSupplierEmail("");
     setSupplierRFC("");
     setDescription("");
+
     setRegistrarProveedor(false);
     setTipoProveedor("");
     setProveedorSeleccionado("");
   };
 
+  const handleTypeChange = (type: string) => {
+    setSelectedType(type);
+    setVistaSeleccion(false);
+    resetForm();
+  };
+
+  const handleVolverSeleccion = () => {
+    setVistaSeleccion(true);
+    setSelectedType("");
+    resetForm();
+  };
+
   const handleProductChange = (productId: string) => {
-    setSelectedProductId(productId);
-    const product = productos.find((p: any) => p.id === productId);
+    const pid = String(productId ?? "");
+    setSelectedProductId(pid);
+
+    const product = (productos || []).find((p: any) => getId(p) === pid) ?? null;
     setSelectedProduct(product);
 
     if (product) {
-      // Auto-fill data from catalog
       setSupplierName(getProductProveedor(product) || "");
       const pp = toNum(getProductPrecioPromedio(product), 0);
       setUnitPrice(pp > 0 ? String(pp) : "");
-
-      // totalAmount se recalcula por useEffect(quantity, unitPrice)
+      // totalAmount se recalcula con useEffect
+    } else {
+      setSupplierName("");
+      setUnitPrice("");
+      setTotalAmount("");
     }
   };
 
   const handleQuantityChange = (newQuantity: string) => {
-    const cleanValue = onlyNumberDot(newQuantity);
-    setQuantity(cleanValue);
+    setQuantity(onlyNumberDot(newQuantity));
   };
 
   const handleUnitPriceChange = (price: string) => {
-    const cleanValue = onlyNumberDot(price);
-    setUnitPrice(cleanValue);
+    setUnitPrice(onlyNumberDot(price));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const metodoPagoNorm = normalizeMetodoPago(paymentMethod);
 
     if (!selectedProductId || !quantity || !unitPrice || !paymentType) {
       toast({
@@ -193,10 +211,20 @@ const RegistroEgresosPrecargados = () => {
     }
 
     // Método de pago requerido si hay pago (contado o parcial)
-    if ((paymentType === "contado" || paymentType === "parcial") && !paymentMethod) {
+    if ((paymentType === "contado" || paymentType === "parcial") && !metodoPagoNorm) {
       toast({
         title: "⚠️ Método de pago requerido",
         description: "Selecciona un método de pago para el monto pagado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Para crédito/parcial, fecha vencimiento normalmente requerida (E2E contable)
+    if ((paymentType === "credito" || paymentType === "parcial") && !dueDate) {
+      toast({
+        title: "⚠️ Fecha de vencimiento requerida",
+        description: "Para crédito o pago parcial, selecciona una fecha de vencimiento.",
         variant: "destructive",
       });
       return;
@@ -212,7 +240,6 @@ const RegistroEgresosPrecargados = () => {
       return;
     }
 
-    // Validar datos del proveedor si es nuevo
     if (registrarProveedor && tipoProveedor === "nuevo" && !supplierName.trim()) {
       toast({
         title: "⚠️ Nombre del proveedor requerido",
@@ -222,7 +249,6 @@ const RegistroEgresosPrecargados = () => {
       return;
     }
 
-    // Validar selección de proveedor existente
     if (registrarProveedor && tipoProveedor === "existente" && !proveedorSeleccionado) {
       toast({
         title: "⚠️ Proveedor no seleccionado",
@@ -233,7 +259,7 @@ const RegistroEgresosPrecargados = () => {
     }
 
     try {
-      // ✅ Validar sesión por cookies (E2E backend). Si 401, apiFetch debe lanzar.
+      // ✅ Validar sesión por cookies. Si 401, apiFetch debe lanzar.
       await apiJson("/api/auth/me", { method: "GET" });
 
       let proveedorId: string | null = null;
@@ -241,18 +267,16 @@ const RegistroEgresosPrecargados = () => {
       // Crear o seleccionar proveedor si se decidió registrarlo
       if (registrarProveedor) {
         if (tipoProveedor === "nuevo") {
-          const nuevoProveedor = {
-            nombre: supplierName.trim(),
+          // Mandamos shape compatible (name + nombre)
+          const nuevoProveedor: any = {
+            name: supplierName.trim(),
+            nombre: supplierName.trim(), // compat
             telefono: supplierPhone || null,
             email: supplierEmail || null,
             rfc: supplierRFC || null,
-            direccion: null,
-            ciudad: null,
-            estado: null,
-            codigo_postal: null,
           };
 
-          const { data: proveedorData, error: proveedorError } = await createProveedor(nuevoProveedor);
+          const { data: proveedorData, error: proveedorError }: any = await createProveedor(nuevoProveedor);
 
           if (proveedorError) {
             toast({
@@ -263,13 +287,13 @@ const RegistroEgresosPrecargados = () => {
             return;
           }
 
-          proveedorId = proveedorData?.id ?? null;
+          proveedorId = proveedorData ? getId(proveedorData) : null;
         } else if (tipoProveedor === "existente") {
           proveedorId = proveedorSeleccionado;
         }
       }
 
-      // ✅ MONTO TOTAL: SIEMPRE se calcula en submit (no depende de totalAmount)
+      // ✅ MONTO TOTAL: SIEMPRE se calcula en submit
       const qNum = toNum(quantity, 0);
       const upNum = toNum(unitPrice, 0);
 
@@ -304,8 +328,8 @@ const RegistroEgresosPrecargados = () => {
 
       const montoPendiente = Math.max(0, montoTotal - montoPagado);
 
-      // FASE 1: Verificar que los saldos se hayan cargado
-      if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
+      // Si hay pago y el método consume saldos, verifica que saldos estén
+      if (montoPagado > 0 && (metodoPagoNorm === "efectivo" || metodoPagoNorm === "bancos")) {
         if (!saldosDisponibles) {
           toast({
             title: "⚠️ Error de validación",
@@ -316,27 +340,25 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // FASE 2: Validar saldo disponible para efectivo o bancos
-      if (paymentMethod === "efectivo" && saldosDisponibles) {
-        if (montoPagado > (saldosDisponibles.efectivo ?? 0)) {
+      // Validar saldo disponible para efectivo / bancos
+      if (metodoPagoNorm === "efectivo" && saldosDisponibles) {
+        const disponible = toNum(saldosDisponibles.efectivo, 0);
+        if (montoPagado > disponible) {
           toast({
             title: "💰 Saldo insuficiente en efectivo",
-            description: `Disponible: $${(saldosDisponibles.efectivo ?? 0).toFixed(2)} | Necesitas: $${montoPagado.toFixed(
-              2
-            )}`,
+            description: `Disponible: $${disponible.toFixed(2)} | Necesitas: $${montoPagado.toFixed(2)}`,
             variant: "destructive",
           });
           return;
         }
       }
 
-      if (paymentMethod === "tarjeta-transferencia" && saldosDisponibles) {
-        if (montoPagado > (saldosDisponibles.bancos ?? 0)) {
+      if (metodoPagoNorm === "bancos" && saldosDisponibles) {
+        const disponible = toNum(saldosDisponibles.bancos, 0);
+        if (montoPagado > disponible) {
           toast({
             title: "🏦 Saldo insuficiente en bancos",
-            description: `Disponible: $${(saldosDisponibles.bancos ?? 0).toFixed(2)} | Necesitas: $${montoPagado.toFixed(
-              2
-            )}`,
+            description: `Disponible: $${disponible.toFixed(2)} | Necesitas: $${montoPagado.toFixed(2)}`,
             variant: "destructive",
           });
           return;
@@ -344,8 +366,8 @@ const RegistroEgresosPrecargados = () => {
       }
 
       // Validar límite de crédito si se seleccionó tarjeta de crédito
-      if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
-        const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
+      if (metodoPagoNorm?.startsWith("tarjeta_credito_") && tarjetasCredito?.length) {
+        const tarjetaId = metodoPagoNorm.replace("tarjeta_credito_", "");
         const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
 
         if (!validacion.valido) {
@@ -358,46 +380,76 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // ✅ Para costo: subcuenta es MUY importante (sale del catálogo)
-      const subcuentaIdToSend =
-        selectedType === "costo" ? (getProductSubcuentaId(selectedProduct) || null) : null;
+      // ✅ Para costo: subcuenta es muy importante
+      const subcuentaIdToSend = selectedType === "costo" ? (getProductSubcuentaId(selectedProduct) || null) : null;
 
-      const cuentaCodigoToSend =
-        getProductCuentaContable(selectedProduct) || (selectedType === "costo" ? "5001" : "5101");
+      if (selectedType === "costo" && !subcuentaIdToSend) {
+        toast({
+          title: "⚠️ Falta subcuenta en el catálogo",
+          description: "Este costo no tiene subcuenta asignada. Revisa el catálogo para evitar registros contables incorrectos.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      // ✅ Registrar egreso en tu backend
-      const payload = {
+      const cuentaCodigoToSend = getProductCuentaContable(selectedProduct) || (selectedType === "costo" ? "5001" : "5101");
+
+      const productName = getProductNombre(selectedProduct);
+
+      const subtipo =
+        selectedType === "costo" && String(productName || "").toLowerCase().includes("inventario")
+          ? "compra_inventario"
+          : "precargado";
+
+      // ✅ Payload CANÓNICO camelCase + espejos snake_case para compat (alineación FE/BE)
+      const payload: any = {
+        // Canon
+        tipoEgreso: selectedType,
+        subtipoEgreso: subtipo,
+        descripcion: productName || "",
+
+        cuentaCodigo: cuentaCodigoToSend,
+        subcuentaId: subcuentaIdToSend,
+
+        montoTotal,
+        cantidad: qNum,
+        precioUnitario: upNum,
+
+        tipoPago: paymentType,
+        metodoPago: metodoPagoNorm || null,
+
+        montoPagado,
+        montoPendiente,
+
+        fechaVencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
+
+        proveedorId: proveedorId,
+        proveedorNombre: supplierName || null,
+        proveedorTelefono: supplierPhone || null,
+        proveedorEmail: supplierEmail || null,
+        proveedorRFC: supplierRFC || null,
+
+        productoEgresoId: selectedProductId,
+        comentarios: description || null,
+
+        // Compat legacy (si tu backend aún lee snake_case)
         tipo_egreso: selectedType,
-        subtipo_egreso:
-          selectedType === "costo" && (selectedProduct?.nombre || "").toLowerCase().includes("inventario")
-            ? "compra_inventario"
-            : "precargado",
-
-        descripcion: selectedProduct?.nombre || "",
-
+        subtipo_egreso: subtipo,
         cuenta_codigo: cuentaCodigoToSend,
         subcuenta_id: subcuentaIdToSend,
-
         monto_total: montoTotal,
-        cantidad: qNum,
         precio_unitario: upNum,
-
         tipo_pago: paymentType,
-        metodo_pago: paymentMethod || null,
-
+        metodo_pago: metodoPagoNorm || null,
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
-
         fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
-
         proveedor_id: proveedorId,
         proveedor_nombre: supplierName || null,
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
-
         producto_egreso_id: selectedProductId,
-        comentarios: description || null,
       };
 
       const result = await apiJson<{ numero_asiento?: string; egreso_id?: string }>(
@@ -414,26 +466,13 @@ const RegistroEgresosPrecargados = () => {
         description: `Egreso registrado correctamente${result?.numero_asiento ? ` con asiento ${result.numero_asiento}` : ""}`,
       });
 
-      // Limpiar formulario
+      // Disparar evento para que otras vistas refresquen (tablas/gráficas)
+      window.dispatchEvent(new CustomEvent("bukipin:egreso-creado"));
+
+      // Reset completo y volver a selección
       setSelectedType("");
-      setSelectedProductId("");
-      setSelectedProduct(null);
-      setQuantity("1");
-      setUnitPrice("");
-      setTotalAmount("");
-      setPaymentType("");
-      setPaymentMethod("");
-      setPaidAmount("");
-      setDueDate("");
-      setSupplierName("");
-      setSupplierPhone("");
-      setSupplierEmail("");
-      setSupplierRFC("");
-      setDescription("");
-      setRegistrarProveedor(false);
-      setTipoProveedor("");
-      setProveedorSeleccionado("");
       setVistaSeleccion(true);
+      resetForm();
     } catch (error) {
       console.error("Error al registrar egreso:", error);
       toast({
@@ -458,7 +497,6 @@ const RegistroEgresosPrecargados = () => {
 
       <CardContent className="px-6 pb-6">
         {vistaSeleccion ? (
-          // VISTA DE SELECCIÓN CON TARJETAS
           <div className="space-y-4">
             <Alert className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -466,8 +504,10 @@ const RegistroEgresosPrecargados = () => {
             </Alert>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* TARJETA DE COSTO */}
-              <Card className="cursor-pointer hover:border-primary hover:shadow-lg transition-all" onClick={() => handleTypeChange("costo")}>
+              <Card
+                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
+                onClick={() => handleTypeChange("costo")}
+              >
                 <CardHeader className="text-center">
                   <div className="flex justify-center mb-4">
                     <div className="p-4 bg-red-100 rounded-full">
@@ -475,12 +515,16 @@ const RegistroEgresosPrecargados = () => {
                     </div>
                   </div>
                   <CardTitle className="text-lg">Costo</CardTitle>
-                  <CardDescription>Directamente relacionado con la producción o venta de productos/servicios</CardDescription>
+                  <CardDescription>
+                    Directamente relacionado con la producción o venta de productos/servicios
+                  </CardDescription>
                 </CardHeader>
               </Card>
 
-              {/* TARJETA DE GASTO */}
-              <Card className="cursor-pointer hover:border-primary hover:shadow-lg transition-all" onClick={() => handleTypeChange("gasto")}>
+              <Card
+                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
+                onClick={() => handleTypeChange("gasto")}
+              >
                 <CardHeader className="text-center">
                   <div className="flex justify-center mb-4">
                     <div className="p-4 bg-orange-100 rounded-full">
@@ -494,7 +538,6 @@ const RegistroEgresosPrecargados = () => {
             </div>
           </div>
         ) : (
-          // VISTA DE FORMULARIO
           <div className="space-y-4">
             <Button variant="ghost" onClick={handleVolverSeleccion} className="mb-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -509,7 +552,6 @@ const RegistroEgresosPrecargados = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <Separator />
 
-              {/* Selección de Producto */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Información del Producto</h3>
 
@@ -522,14 +564,19 @@ const RegistroEgresosPrecargados = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {filteredProducts.length > 0 ? (
-                          filteredProducts.map((producto: any) => (
-                            <SelectItem key={producto.id} value={producto.id}>
-                              <div className="flex items-center space-x-2">
-                                <span>{producto.nombre}</span>
-                                <span className="text-muted-foreground text-xs">- {getProductUnidad(producto) || "unidad"}</span>
-                              </div>
-                            </SelectItem>
-                          ))
+                          filteredProducts.map((producto: any) => {
+                            const pid = getId(producto);
+                            return (
+                              <SelectItem key={pid} value={pid}>
+                                <div className="flex items-center space-x-2">
+                                  <span>{getProductNombre(producto) || "Sin nombre"}</span>
+                                  <span className="text-muted-foreground text-xs">
+                                    - {getProductUnidad(producto) || "unidad"}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })
                         ) : (
                           <SelectItem value="no-products" disabled>
                             No hay {selectedType}s en el catálogo
@@ -547,7 +594,12 @@ const RegistroEgresosPrecargados = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="unidad">Unidad de Medida</Label>
-                    <Input id="unidad" value={getProductUnidad(selectedProduct) || ""} placeholder="Se completa automáticamente" disabled />
+                    <Input
+                      id="unidad"
+                      value={selectedProduct ? getProductUnidad(selectedProduct) || "" : ""}
+                      placeholder="Se completa automáticamente"
+                      disabled
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -600,7 +652,6 @@ const RegistroEgresosPrecargados = () => {
                 <>
                   <Separator />
 
-                  {/* Información de Pago */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold">Información de Pago</h3>
 
@@ -626,7 +677,10 @@ const RegistroEgresosPrecargados = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="metodo-pago">Método de Pago</Label>
-                          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                          <Select
+                            value={paymentMethod}
+                            onValueChange={(v) => setPaymentMethod(normalizeMetodoPago(v))}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Seleccionar método" />
                             </SelectTrigger>
@@ -634,14 +688,22 @@ const RegistroEgresosPrecargados = () => {
                               <SelectItem value="efectivo">
                                 Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo)}
                               </SelectItem>
-                              <SelectItem value="tarjeta-transferencia">
-                                Bancos - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
+
+                              {/* CANÓNICO: bancos */}
+                              <SelectItem value="bancos">
+                                Bancos / Transferencia - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
                               </SelectItem>
-                              {tarjetasCredito?.map((tarjeta: any) => (
-                                <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                                  {tarjeta.nombre} - Disponible: ${formatCurrency(tarjeta.limite_disponible)}
-                                </SelectItem>
-                              ))}
+
+                              {tarjetasCredito?.map((tarjeta: any) => {
+                                const tid = getId(tarjeta);
+                                const limite = tarjeta?.limite_disponible ?? tarjeta?.limiteDisponible ?? 0;
+                                return (
+                                  <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
+                                    {tarjeta?.nombre ?? tarjeta?.name ?? "Tarjeta"} - Disponible: $
+                                    {formatCurrency(limite)}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         </div>
@@ -663,19 +725,22 @@ const RegistroEgresosPrecargados = () => {
 
                     {(paymentType === "credito" || paymentType === "parcial") && (
                       <div className="space-y-2">
-                        <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento</Label>
-                        <Input id="fecha-vencimiento" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                        <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
+                        <Input
+                          id="fecha-vencimiento"
+                          type="date"
+                          value={dueDate}
+                          onChange={(e) => setDueDate(e.target.value)}
+                        />
                       </div>
                     )}
                   </div>
 
                   <Separator />
 
-                  {/* Información del Proveedor */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold">Información del Proveedor</h3>
 
-                    {/* Solo mostrar opción de registrar para pago total */}
                     {paymentType === "contado" && (
                       <div className="space-y-2">
                         <Label>¿Deseas registrar información del proveedor?</Label>
@@ -706,7 +771,6 @@ const RegistroEgresosPrecargados = () => {
                       </div>
                     )}
 
-                    {/* Para crédito y parcial, siempre obligatorio */}
                     {(paymentType === "credito" || paymentType === "parcial") && (
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
@@ -716,7 +780,6 @@ const RegistroEgresosPrecargados = () => {
                       </Alert>
                     )}
 
-                    {/* Selección de tipo de proveedor */}
                     {registrarProveedor && (
                       <div className="space-y-2">
                         <Label>Tipo de Proveedor *</Label>
@@ -750,7 +813,6 @@ const RegistroEgresosPrecargados = () => {
                       </div>
                     )}
 
-                    {/* Seleccionar proveedor existente */}
                     {registrarProveedor && tipoProveedor === "existente" && (
                       <div className="space-y-2">
                         <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
@@ -758,12 +820,12 @@ const RegistroEgresosPrecargados = () => {
                           value={proveedorSeleccionado}
                           onValueChange={(val) => {
                             setProveedorSeleccionado(val);
-                            const proveedor = proveedores.find((p: any) => p.id === val);
+                            const proveedor = proveedores.find((p: any) => getId(p) === val);
                             if (proveedor) {
-                              setSupplierName(proveedor.nombre);
-                              setSupplierPhone(proveedor.telefono || "");
-                              setSupplierEmail(proveedor.email || "");
-                              setSupplierRFC(proveedor.rfc || "");
+                              setSupplierName(getProveedorNombre(proveedor));
+                              setSupplierPhone(getProveedorTelefono(proveedor));
+                              setSupplierEmail(getProveedorEmail(proveedor));
+                              setSupplierRFC(getProveedorRFC(proveedor));
                             }
                           }}
                         >
@@ -772,12 +834,16 @@ const RegistroEgresosPrecargados = () => {
                           </SelectTrigger>
                           <SelectContent>
                             {proveedores.length > 0 ? (
-                              proveedores.map((proveedor: any) => (
-                                <SelectItem key={proveedor.id} value={proveedor.id}>
-                                  {proveedor.nombre}
-                                  {proveedor.rfc && ` - ${proveedor.rfc}`}
-                                </SelectItem>
-                              ))
+                              proveedores.map((proveedor: any) => {
+                                const pid = getId(proveedor);
+                                const nombre = getProveedorNombre(proveedor);
+                                const rfc = getProveedorRFC(proveedor);
+                                return (
+                                  <SelectItem key={pid} value={pid}>
+                                    {nombre || "Proveedor"}{rfc ? ` - ${rfc}` : ""}
+                                  </SelectItem>
+                                );
+                              })
                             ) : (
                               <SelectItem value="no-proveedores" disabled>
                                 No hay proveedores registrados
@@ -788,7 +854,6 @@ const RegistroEgresosPrecargados = () => {
                       </div>
                     )}
 
-                    {/* Formulario para nuevo proveedor */}
                     {registrarProveedor && tipoProveedor === "nuevo" && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -838,7 +903,6 @@ const RegistroEgresosPrecargados = () => {
                       </div>
                     )}
 
-                    {/* Mostrar datos del proveedor existente seleccionado */}
                     {registrarProveedor && tipoProveedor === "existente" && proveedorSeleccionado && (
                       <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                         <p className="font-semibold">Datos del proveedor seleccionado:</p>
