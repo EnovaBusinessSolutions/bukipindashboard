@@ -90,6 +90,10 @@ const formatMonto = (value: unknown): string => {
   });
 };
 
+const getClientId = (c: any) => String(c?.id ?? c?._id ?? "");
+const getClientNombre = (c: any) => c?.nombre ?? c?.name ?? "Sin nombre";
+const getClientTelefono = (c: any) => c?.telefono ?? c?.phone ?? "";
+
 // Función para formatear cifras según la escala seleccionada (SEGURA)
 const formatCifra = (value: unknown, scale: "general" | "miles" | "millones"): string => {
   const base = toNum(value);
@@ -2652,39 +2656,72 @@ const RegistroIngresos = () => {
                          </div>
 
                         {/* Cliente recurrente - selector */}
-                        {tipoCliente === "recurrente" && <div className="space-y-2">
-                            <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
-                            <Select value={clienteSeleccionado} onValueChange={value => {
-                       setClienteSeleccionado(value);
-                       const cliente = clientes.find(c => c.id === value);
-                       if (cliente) {
-                         setClienteNombre(cliente.nombre);
-                         setClienteTelefono(cliente.telefono || "");
-                         setClienteEmail(cliente.email || "");
-                         setClienteRFC(cliente.rfc || "");
-                       }
-                     }}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Buscar cliente existente" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {loadingClientes ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Cargando clientes...</div> : clientes.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay clientes registrados</div> : clientes.map(cliente => <SelectItem key={cliente.id} value={cliente.id}>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">{cliente.nombre}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          {cliente.telefono && `Tel: ${cliente.telefono}`}
-                                          {cliente.email && ` • Email: ${cliente.email}`}
-                                          {cliente.source === 'transaction' && ' • (De transacción)'}
-                                        </span>
-                                      </div>
-                                    </SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            {clienteSeleccionado && <p className="text-xs text-muted-foreground text-green-600">
-                                ✓ Datos del cliente cargados automáticamente
-                              </p>}
-                          </div>}
+{tipoCliente === "recurrente" && (
+  <div className="space-y-2">
+    <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
 
+    <Select
+      value={String(clienteSeleccionado ?? "")} // ✅ nunca undefined/null
+      onValueChange={(value) => {
+        const v = String(value ?? "");
+        setClienteSeleccionado(v);
+
+        const cliente = (clientes || []).find((c: any) => getClientId(c) === v);
+        if (cliente) {
+          setClienteNombre(getClientNombre(cliente));
+          setClienteTelefono(getClientTelefono(cliente));
+          setClienteEmail(cliente.email || "");
+          setClienteRFC(cliente.rfc || "");
+        }
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Buscar cliente existente" />
+      </SelectTrigger>
+
+      <SelectContent>
+        {loadingClientes ? (
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+            Cargando clientes...
+          </div>
+        ) : !clientes || clientes.length === 0 ? (
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+            No hay clientes registrados
+          </div>
+        ) : (
+          (clientes as any[])
+            .map((cliente) => {
+              const id = getClientId(cliente);
+              if (!id) return null; // ✅ evita SelectItem con value undefined
+
+              const tel = getClientTelefono(cliente);
+              const nombre = getClientNombre(cliente);
+
+              return (
+                <SelectItem key={id} value={id}>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{nombre}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {tel ? `Tel: ${tel}` : ""}
+                      {cliente.email ? ` • Email: ${cliente.email}` : ""}
+                      {cliente.source === "transaction" ? " • (De transacción)" : ""}
+                    </span>
+                  </div>
+                </SelectItem>
+              );
+            })
+            .filter(Boolean)
+        )}
+      </SelectContent>
+    </Select>
+
+    {clienteSeleccionado && (
+      <p className="text-xs text-muted-foreground text-green-600">
+        ✓ Datos del cliente cargados automáticamente
+      </p>
+    )}
+  </div>
+)}
                         {/* Campos de cliente - solo si es nuevo o si se seleccionó uno recurrente */}
                         {(tipoCliente === "nuevo" || tipoCliente === "recurrente" && clienteSeleccionado) && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
