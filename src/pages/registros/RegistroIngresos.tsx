@@ -2660,65 +2660,68 @@ const RegistroIngresos = () => {
   <div className="space-y-2">
     <Label htmlFor="cliente-existente">Seleccionar Cliente</Label>
 
-    <Select
-      value={String(clienteSeleccionado ?? "")} // ✅ nunca undefined/null
-      onValueChange={(value) => {
-        const v = String(value ?? "");
-        setClienteSeleccionado(v);
+    {(() => {
+      const selectedCliente = clientes.find((c) => c.id === clienteSeleccionado);
 
-        const cliente = (clientes || []).find((c: any) => getClientId(c) === v);
-        if (cliente) {
-          setClienteNombre(getClientNombre(cliente));
-          setClienteTelefono(getClientTelefono(cliente));
-          setClienteEmail(cliente.email || "");
-          setClienteRFC(cliente.rfc || "");
-        }
-      }}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Buscar cliente existente" />
-      </SelectTrigger>
+      return (
+        <Select
+          value={clienteSeleccionado ?? ""} // ✅ evita warning controlled/uncontrolled
+          onValueChange={(value) => {
+            setClienteSeleccionado(value);
 
-      <SelectContent>
-        {loadingClientes ? (
-          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-            Cargando clientes...
-          </div>
-        ) : !clientes || clientes.length === 0 ? (
-          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-            No hay clientes registrados
-          </div>
-        ) : (
-          (clientes as any[])
-            .map((cliente) => {
-              const id = getClientId(cliente);
-              if (!id) return null; // ✅ evita SelectItem con value undefined
+            const cliente = clientes.find((c) => c.id === value);
+            if (cliente) {
+              setClienteNombre(cliente.nombre);
+              setClienteTelefono(cliente.telefono || "");
+              setClienteEmail(cliente.email || "");
+              setClienteRFC(cliente.rfc || "");
+            }
+          }}
+        >
+          <SelectTrigger className="h-auto py-2">
+            {/* ✅ Render custom como Bukipin 2 */}
+            {selectedCliente ? (
+              <div className="flex flex-col text-left leading-tight">
+                <span className="font-medium">{selectedCliente.nombre}</span>
+                <span className="text-xs text-muted-foreground">
+                  {selectedCliente.telefono ? `Tel: ${selectedCliente.telefono}` : ""}
+                  {selectedCliente.telefono && selectedCliente.email ? " • " : ""}
+                  {selectedCliente.email ? `Email: ${selectedCliente.email}` : ""}
+                  {selectedCliente.source === "transaction" ? " • (De transacción)" : ""}
+                </span>
+              </div>
+            ) : (
+              <span className="text-muted-foreground">Buscar cliente existente...</span>
+            )}
+          </SelectTrigger>
 
-              const tel = getClientTelefono(cliente);
-              const nombre = getClientNombre(cliente);
-
-              return (
-                <SelectItem key={id} value={id}>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{nombre}</span>
+          <SelectContent className="p-1">
+            {loadingClientes ? (
+              <div className="px-2 py-2 text-sm text-muted-foreground">Cargando clientes...</div>
+            ) : clientes.length === 0 ? (
+              <div className="px-2 py-2 text-sm text-muted-foreground">No hay clientes registrados</div>
+            ) : (
+              clientes.map((cliente) => (
+                <SelectItem key={cliente.id} value={cliente.id} className="py-2">
+                  <div className="flex flex-col text-left leading-tight">
+                    <span className="font-medium">{cliente.nombre}</span>
                     <span className="text-xs text-muted-foreground">
-                      {tel ? `Tel: ${tel}` : ""}
-                      {cliente.email ? ` • Email: ${cliente.email}` : ""}
+                      {cliente.telefono ? `Tel: ${cliente.telefono}` : ""}
+                      {cliente.telefono && cliente.email ? " • " : ""}
+                      {cliente.email ? `Email: ${cliente.email}` : ""}
                       {cliente.source === "transaction" ? " • (De transacción)" : ""}
                     </span>
                   </div>
                 </SelectItem>
-              );
-            })
-            .filter(Boolean)
-        )}
-      </SelectContent>
-    </Select>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+      );
+    })()}
 
-    {clienteSeleccionado && (
-      <p className="text-xs text-muted-foreground text-green-600">
-        ✓ Datos del cliente cargados automáticamente
-      </p>
+    {!!clienteSeleccionado && (
+      <p className="text-xs text-green-600">✓ Datos del cliente cargados automáticamente</p>
     )}
   </div>
 )}
