@@ -1465,12 +1465,17 @@ const RegistroIngresos = () => {
             fechaVencimiento: fechaVencimiento || null,
             comentarios: comentarios.trim() || null,
             // Datos adicionales para inventario (flujo antiguo, no debería llegar aquí)
-            ...(selectedIncomeType === 'inventariados' && selectedInventoryProduct && {
-              productoId: selectedInventoryProduct.id,
-              cantidadVendida: Number(inventoryQuantity || '1'),
-              precioVenta: Number(inventoryProductPrice || '0'),
-              costoPersonalizado: tipoCostoInventarioNegativo === 'personalizado' && costoPersonalizado ? Number(costoPersonalizado) : undefined
-            })
+            ...(selectedIncomeType === "inventariados" && selectedInventoryProduct
+  ? {
+      productoId: selectedInventoryProduct.id,
+      cantidadVendida: Number(inventoryQuantity || "1"),
+      precioVenta: Number(inventoryProductPrice || "0"),
+      costoPersonalizado:
+        tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado
+          ? Number(costoPersonalizado)
+          : undefined,
+    }
+  : {})
           }
         });
         if (error) {
