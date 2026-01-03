@@ -25,7 +25,9 @@ import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useUpdateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
-import { useClientes, useCreateCliente } from "@/hooks/useClientes";
+import { useClientes, useCreateCliente } from "@/hooks/useClientes";import { DateRange } from "react-day-picker";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+
 
 
 async function apiJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
@@ -428,6 +430,48 @@ const RegistroIngresos = () => {
   // Estados para filtros del resumen
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
   const [filtroFechaFin, setFiltroFechaFin] = useState("");
+  const [filtroRangoFechas, setFiltroRangoFechas] = useState<DateRange | undefined>(undefined);
+
+// ✅ formatea fecha en LOCAL a YYYY-MM-DD (sin UTC/toISOString)
+function ymdLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dateOnlyToLocalStart(s: string) {
+  const [y, m, d] = String(s).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function dateOnlyToLocalEnd(s: string) {
+  const [y, m, d] = String(s).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d, 23, 59, 59, 999);
+}
+
+// ✅ esto reemplaza el new Date(...) directo en TODOS tus filtros
+const matchRangoFechas = (createdAt: any) => {
+  const dt = parseDateSafe(createdAt);
+  const start = filtroFechaInicio ? dateOnlyToLocalStart(filtroFechaInicio) : null;
+  const end = filtroFechaFin ? dateOnlyToLocalEnd(filtroFechaFin) : null;
+
+  if (start && dt < start) return false;
+  if (end && dt > end) return false;
+  return true;
+};
+
+const handleRangoChange = (range?: DateRange) => {
+  setFiltroRangoFechas(range);
+
+  const from = range?.from;
+  const to = range?.to;
+
+  setFiltroFechaInicio(from ? ymdLocal(from) : "");
+  setFiltroFechaFin(to ? ymdLocal(to) : "");
+};
   const [filtroTipoIngreso, setFiltroTipoIngreso] = useState("todos");
   const [filtroCuenta, setFiltroCuenta] = useState("todas");
   const [filtroSubcuenta, setFiltroSubcuenta] = useState("");
@@ -2883,24 +2927,10 @@ const RegistroIngresos = () => {
                 {/* Filtros */}
                 <div className="mb-6 p-4 border rounded-lg bg-muted/30 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="filtro-fecha-inicio">Fecha Inicio</Label>
-                      <Input 
-                        id="filtro-fecha-inicio"
-                        type="date" 
-                        value={filtroFechaInicio}
-                        onChange={(e) => setFiltroFechaInicio(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="filtro-fecha-fin">Fecha Fin</Label>
-                      <Input 
-                        id="filtro-fecha-fin"
-                        type="date" 
-                        value={filtroFechaFin}
-                        onChange={(e) => setFiltroFechaFin(e.target.value)}
-                      />
-                    </div>
+                    <div className="space-y-2 lg:col-span-2">
+                     <Label>Rango de fechas</Label>
+                     <DateRangePicker value={filtroRangoFechas} onChange={handleRangoChange} />
+                   </div>
                     <div className="space-y-2">
                       <Label htmlFor="filtro-tipo">Tipo de Ingreso</Label>
                       <Select value={filtroTipoIngreso} onValueChange={setFiltroTipoIngreso}>
@@ -2956,12 +2986,13 @@ const RegistroIngresos = () => {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        setFiltroFechaInicio("");
-                        setFiltroFechaFin("");
-                        setFiltroTipoIngreso("todos");
-                        setFiltroCuenta("todas");
-                        setFiltroSubcuenta("");
-                      }}
+  setFiltroRangoFechas(undefined);
+  setFiltroFechaInicio("");
+  setFiltroFechaFin("");
+  setFiltroTipoIngreso("todos");
+  setFiltroCuenta("todas");
+  setFiltroSubcuenta("");
+}}
                     >
                       Limpiar Filtros
                     </Button>
@@ -2989,8 +3020,7 @@ const RegistroIngresos = () => {
 const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
 
                           const filtered = todasLasTransacciones.filter(t => {
-                            const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
-                                             (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                            const fechaMatch = matchRangoFechas(t.created_at);
                             const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
                             const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
                             const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
@@ -3024,8 +3054,7 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
 
 
                           const filtered = todasLasTransacciones.filter(t => {
-                            const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
-                                             (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                            const fechaMatch = matchRangoFechas(t.created_at);
                             const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
                             const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
                             const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' ||
@@ -3058,8 +3087,7 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                           ];
 
                           const filtered = todasLasTransacciones.filter(t => {
-                            const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
-                                             (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                            const fechaMatch = matchRangoFechas(t.created_at);
                             const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
                             const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
                             const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
@@ -3110,8 +3138,7 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                    ];
 
                     const transaccionesFiltradas = todasLasTransacciones.filter(t => {
-                      const fechaMatch = (!filtroFechaInicio || new Date(t.created_at) >= new Date(filtroFechaInicio)) &&
-                                       (!filtroFechaFin || new Date(t.created_at) <= new Date(filtroFechaFin + 'T23:59:59'));
+                      const fechaMatch = matchRangoFechas(t.created_at);
                       const tipoMatch = !filtroTipoIngreso || filtroTipoIngreso === 'todos' || t.tipo_ingreso === filtroTipoIngreso;
                       const cuentaMatch = !filtroCuenta || filtroCuenta === 'todas' || t.cuenta_principal_codigo === filtroCuenta;
                       const subcuentaMatch = !filtroSubcuenta || filtroSubcuenta === 'todas' || 
