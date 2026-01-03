@@ -2913,7 +2913,7 @@ const RegistroIngresos = () => {
                           <SelectItem value="inventariados">Inventariados</SelectItem>
                           <SelectItem value="general">General</SelectItem>
                           <SelectItem value="otros">Otros</SelectItem>
-                          <SelectItem value="asiento_directo">Asientos Directos</SelectItem>
+                          <SelectItem value="asiento_directo">Venta de activo fijo</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2930,6 +2930,8 @@ const RegistroIngresos = () => {
                           <SelectItem value="4101">4101 - Productos Financieros</SelectItem>
                           <SelectItem value="4102">4102 - Otros Productos</SelectItem>
                           <SelectItem value="4103">4103 - Ganancia en Venta de Activos</SelectItem>
+                          <SelectItem value="4103">4002 - Devoluciones sobre ventas</SelectItem>
+                          <SelectItem value="4103">4002 - Descuentos sobre ventas</SelectItem>      
                         </SelectContent>
                       </Select>
                     </div>
