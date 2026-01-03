@@ -3263,163 +3263,174 @@ const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
                                             Información completa y asientos contables en balanza
                                           </DialogDescription>
                                         </DialogHeader>
-                                        <div className="space-y-4">
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                              <h4 className="font-semibold text-sm">Información General</h4>
-                                              <div className="space-y-1 text-sm">
-                                                <p><span className="font-medium">Descripción:</span> {transaccion.descripcion}</p>
-                                                <p><span className="font-medium">Tipo:</span> {transaccion.tipo_ingreso}</p>
-                                                <p><span className="font-medium">Método de Pago:</span> {transaccion.metodo_pago || 'N/A'}</p>
-                                                <p><span className="font-medium">Tipo de Pago:</span> {transaccion.tipo_pago}</p>
-                                                <p><span className="font-medium">Fecha:</span> {new Date(transaccion.created_at).toLocaleDateString('es-ES', {
-                                                  day: '2-digit',
-                                                  month: '2-digit', 
-                                                  year: 'numeric',
-                                                  hour: '2-digit',
-                                                  minute: '2-digit'
-                                                })}</p>
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <h4 className="font-semibold text-sm">Montos</h4>
-                                              <div className="space-y-1 text-sm">
-                                            <p><span className="font-medium">Total:</span> ${formatMonto(transaccion.monto_total)}</p>
-                                            <p><span className="font-medium">Descuento:</span> ${formatMonto(transaccion.monto_descuento)}</p>
-                                            <p><span className="font-medium">Neto:</span> ${formatMonto(transaccion.monto_neto)}</p>
-                                             <p><span className="font-medium">Pagado:</span> ${formatMonto((transaccion as any).monto_pagado || 0)}</p>
-                                             <p><span className="font-medium">Pendiente:</span> ${formatMonto((transaccion as any).monto_pendiente || 0)}</p>
-                                              </div>
-                                            </div>
-                                          </div>
+                                        <Tabs defaultValue="general" className="w-full">
+  <TabsList className="grid w-full grid-cols-2">
+    <TabsTrigger value="general">Información General</TabsTrigger>
+    <TabsTrigger value="contable">Registros Contables</TabsTrigger>
+  </TabsList>
 
-                                           {/* Información del Cliente */}
-                                           {((transaccion as any).cliente_nombre || (transaccion as any).cliente_telefono || (transaccion as any).cliente_email) && (
-                                             <div>
-                                               <h4 className="font-semibold text-sm mb-2">Información del Cliente</h4>
-                                               <div className="grid grid-cols-2 gap-4 text-sm">
-                                                 {(transaccion as any).cliente_nombre && <p><span className="font-medium">Nombre:</span> {(transaccion as any).cliente_nombre}</p>}
-                                                 {(transaccion as any).cliente_telefono && <p><span className="font-medium">Teléfono:</span> {(transaccion as any).cliente_telefono}</p>}
-                                                 {(transaccion as any).cliente_email && <p><span className="font-medium">Email:</span> {(transaccion as any).cliente_email}</p>}
-                                                 {(transaccion as any).cliente_rfc && <p><span className="font-medium">RFC:</span> {(transaccion as any).cliente_rfc}</p>}
-                                               </div>
-                                             </div>
-                                           )}
+  {/* TAB 1: Información General */}
+  <TabsContent value="general" className="mt-4 space-y-4">
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <h4 className="font-semibold text-sm">Información General</h4>
+        <div className="space-y-1 text-sm">
+          <p><span className="font-medium">Descripción:</span> {transaccion.descripcion}</p>
+          <p><span className="font-medium">Tipo:</span> {transaccion.tipo_ingreso}</p>
+          <p><span className="font-medium">Método de Pago:</span> {transaccion.metodo_pago || "N/A"}</p>
+          <p><span className="font-medium">Tipo de Pago:</span> {transaccion.tipo_pago}</p>
+          <p>
+            <span className="font-medium">Fecha:</span>{" "}
+            {new Date(transaccion.created_at).toLocaleString("es-ES", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
+      </div>
 
-                                          {/* Información Contable */}
-                                          <div>
-                                            <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
-                                            <div className="text-sm space-y-1">
-                                              <p><span className="font-medium">Cuenta Principal:</span> {transaccion.cuenta_principal_codigo} - {transaccion.cuenta_principal_codigo === '4001' ? 'Ventas' : transaccion.cuenta_principal_codigo === '4004' ? 'Otros Ingresos' : ''}</p>
-                                              {transaccion.subcuenta_id ? (
-                                                <p><span className="font-medium">Subcuenta:</span> {transaccion.subcuentas?.nombre || (() => {
-                                                  const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
-                                                  return subcuenta?.nombre || 'Subcuenta no encontrada';
-                                                })()}</p>
-                                              ) : (
-                                                <p><span className="font-medium">Subcuenta:</span> Sin subcuenta asignada</p>
-                                              )}
-                                            </div>
-                                          </div>
+      <div>
+        <h4 className="font-semibold text-sm">Montos</h4>
+        <div className="space-y-1 text-sm">
+          <p><span className="font-medium">Total:</span> ${formatMonto(transaccion.monto_total)}</p>
+          <p><span className="font-medium">Descuento:</span> ${formatMonto(transaccion.monto_descuento)}</p>
+          <p><span className="font-medium">Neto:</span> ${formatMonto(transaccion.monto_neto)}</p>
+          <p><span className="font-medium">Pagado:</span> ${formatMonto((transaccion as any).monto_pagado || 0)}</p>
+          <p><span className="font-medium">Pendiente:</span> ${formatMonto((transaccion as any).monto_pendiente || 0)}</p>
+        </div>
+      </div>
+    </div>
 
-                                           {/* Comentarios */}
-                                           {(transaccion as any).comentarios && (
-                                             <div>
-                                               <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
-                                               <div className="p-3 bg-muted rounded-md">
-                                                 <p className="text-sm">{(transaccion as any).comentarios}</p>
-                                               </div>
-                                             </div>
-                                           )}
+    {/* Información del Cliente */}
+    {((transaccion as any).cliente_nombre || (transaccion as any).cliente_telefono || (transaccion as any).cliente_email) && (
+      <div>
+        <h4 className="font-semibold text-sm mb-2">Información del Cliente</h4>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          {(transaccion as any).cliente_nombre && <p><span className="font-medium">Nombre:</span> {(transaccion as any).cliente_nombre}</p>}
+          {(transaccion as any).cliente_telefono && <p><span className="font-medium">Teléfono:</span> {(transaccion as any).cliente_telefono}</p>}
+          {(transaccion as any).cliente_email && <p><span className="font-medium">Email:</span> {(transaccion as any).cliente_email}</p>}
+          {(transaccion as any).cliente_rfc && <p><span className="font-medium">RFC:</span> {(transaccion as any).cliente_rfc}</p>}
+        </div>
+      </div>
+    )}
 
-                                           {/* Asientos Contables en Balanza */}
-                                           <div className="pt-4 border-t">
-                                             <h4 className="font-semibold text-sm mb-3">Asientos en Balanza de Comprobación</h4>
-                                             {loadingAsientos ? (
-                                               <div className="text-center py-8 text-muted-foreground">
-                                                 Cargando asientos contables...
-                                               </div>
-                                             ) : !currentAsientos ? (
-                                               <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center">
-                                                 No se encontraron asientos contables para esta transacción
-                                               </div>
-                                             ) : (
-                                               <div className="space-y-4">
-                                                 <div className="p-4 bg-muted rounded-lg">
-                                                   <div className="grid grid-cols-2 gap-4 text-sm">
-                                                     <div>
-                                                       <span className="font-medium">Número de Asiento:</span> {currentAsientos.numero_asiento}
-                                                     </div>
-                                                     <div>
-                                                       <span className="font-medium">Fecha:</span>{' '}
-                                                       {new Date(currentAsientos.fecha).toLocaleDateString('es-ES')}
-                                                     </div>
-                                                     <div className="col-span-2">
-                                                       <span className="font-medium">Descripción:</span> {currentAsientos.descripcion}
-                                                     </div>
-                                                   </div>
-                                                 </div>
+    {/* Información Contable */}
+    <div>
+      <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
+      <div className="text-sm space-y-1">
+        <p>
+          <span className="font-medium">Cuenta Principal:</span>{" "}
+          {transaccion.cuenta_principal ?? `${transaccion.cuenta_principal_codigo}`}
+        </p>
 
-                                                 <div className="border rounded-lg overflow-hidden">
-                                                   <table className="w-full">
-                                                     <thead className="bg-muted">
-                                                       <tr>
-                                                         <th className="text-left p-3 text-sm font-medium">Cuenta</th>
-                                                         <th className="text-left p-3 text-sm font-medium">Descripción</th>
-                                                         <th className="text-right p-3 text-sm font-medium">Debe</th>
-                                                         <th className="text-right p-3 text-sm font-medium">Haber</th>
-                                                       </tr>
-                                                     </thead>
-                                                     <tbody>
-                                                       {currentAsientos.detalles?.map((detalle: any, idx: number) => (
-                                                         <tr key={idx} className="border-t">
-                                                           <td className="p-3 text-sm">
-                                                             <div className="font-medium">{detalle.cuenta_codigo}</div>
-                                                             <div className="text-xs text-muted-foreground">
-                                                               {detalle.cuenta_nombre}
-                                                             </div>
-                                                           </td>
-                                                           <td className="p-3 text-sm">{detalle.descripcion}</td>
-                                                        <td className="p-3 text-sm text-right font-medium">
-                                                          {detalle.debe > 0 ? `$${formatMonto(detalle.debe)}` : '-'}
-                                                        </td>
-                                                        <td className="p-3 text-sm text-right font-medium">
-                                                          {detalle.haber > 0 ? `$${formatMonto(detalle.haber)}` : '-'}
-                                                        </td>
-                                                         </tr>
-                                                       ))}
-                                                       <tr className="border-t-2 bg-muted/50 font-bold">
-                                                         <td colSpan={2} className="p-3 text-sm">
-                                                           TOTALES
-                                                         </td>
-                                                      <td className="p-3 text-sm text-right">
-                                                        $
-                                                        {formatMonto(currentAsientos.detalles
-                                                          ?.reduce((sum: number, d: any) => sum + Number(d.debe), 0))}
-                                                      </td>
-                                                      <td className="p-3 text-sm text-right">
-                                                        $
-                                                        {formatMonto(currentAsientos.detalles
-                                                          ?.reduce((sum: number, d: any) => sum + Number(d.haber), 0))}
-                                                      </td>
-                                                       </tr>
-                                                     </tbody>
-                                                   </table>
-                                                 </div>
+        {transaccion.subcuenta_id ? (
+          <p>
+            <span className="font-medium">Subcuenta:</span>{" "}
+            {transaccion.subcuentas?.nombre || (() => {
+              const subcuenta = subcuentas.find(s => s.id === transaccion.subcuenta_id);
+              return subcuenta?.nombre || "Subcuenta no encontrada";
+            })()}
+          </p>
+        ) : (
+          <p><span className="font-medium">Subcuenta:</span> Sin subcuenta asignada</p>
+        )}
+      </div>
+    </div>
 
-                                                 <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
-                                                   <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                                     💡 Información
-                                                   </p>
-                                                   <p className="text-blue-600 dark:text-blue-400">
-                                                     Este asiento contable refleja cómo esta transacción afecta a las diferentes
-                                                     cuentas en la balanza de comprobación y posteriormente en los estados financieros.
-                                                   </p>
-                                                 </div>
-                                               </div>
-                                             )}
-                                           </div>
-                                        </div>
+    {/* Comentarios */}
+    {(transaccion as any).comentarios && (
+      <div>
+        <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
+        <div className="p-3 bg-muted rounded-md">
+          <p className="text-sm">{(transaccion as any).comentarios}</p>
+        </div>
+      </div>
+    )}
+  </TabsContent>
+
+  {/* TAB 2: Registros Contables */}
+  <TabsContent value="contable" className="mt-4">
+    <h4 className="font-semibold text-sm mb-3">Asientos en Balanza de Comprobación</h4>
+
+    {loadingAsientos ? (
+      <div className="text-center py-8 text-muted-foreground">
+        Cargando asientos contables...
+      </div>
+    ) : !currentAsientos ? (
+      <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center">
+        No se encontraron asientos contables para esta transacción
+      </div>
+    ) : (
+      <div className="space-y-4">
+        <div className="p-4 bg-muted rounded-lg">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Número de Asiento:</span> {currentAsientos.numero_asiento}
+            </div>
+            <div>
+              <span className="font-medium">Fecha:</span>{" "}
+              {new Date(currentAsientos.fecha).toLocaleDateString("es-ES")}
+            </div>
+            <div className="col-span-2">
+              <span className="font-medium">Descripción:</span> {currentAsientos.descripcion}
+            </div>
+          </div>
+        </div>
+
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-muted">
+              <tr>
+                <th className="text-left p-3 text-sm font-medium">Cuenta</th>
+                <th className="text-left p-3 text-sm font-medium">Descripción</th>
+                <th className="text-right p-3 text-sm font-medium">Debe</th>
+                <th className="text-right p-3 text-sm font-medium">Haber</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentAsientos.detalles?.map((detalle: any, idx: number) => (
+                <tr key={idx} className="border-t">
+                  <td className="p-3 text-sm">
+                    <div className="font-medium">{detalle.cuenta_codigo}</div>
+                    <div className="text-xs text-muted-foreground">{detalle.cuenta_nombre}</div>
+                  </td>
+                  <td className="p-3 text-sm">{detalle.descripcion}</td>
+                  <td className="p-3 text-sm text-right font-medium">
+                    {detalle.debe > 0 ? `$${formatMonto(detalle.debe)}` : "-"}
+                  </td>
+                  <td className="p-3 text-sm text-right font-medium">
+                    {detalle.haber > 0 ? `$${formatMonto(detalle.haber)}` : "-"}
+                  </td>
+                </tr>
+              ))}
+
+              <tr className="border-t-2 bg-muted/50 font-bold">
+                <td colSpan={2} className="p-3 text-sm">TOTALES</td>
+                <td className="p-3 text-sm text-right">
+                  ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.debe), 0))}
+                </td>
+                <td className="p-3 text-sm text-right">
+                  ${formatMonto(currentAsientos.detalles?.reduce((sum: number, d: any) => sum + Number(d.haber), 0))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
+          <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Información</p>
+          <p className="text-blue-600 dark:text-blue-400">
+            Este asiento contable refleja cómo esta transacción afecta a las diferentes
+            cuentas en la balanza de comprobación y posteriormente en los estados financieros.
+          </p>
+        </div>
+      </div>
+    )}
+  </TabsContent>
+</Tabs>
                                       </DialogContent>
                                     </Dialog>
                                   </div>
