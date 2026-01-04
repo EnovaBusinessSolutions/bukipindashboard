@@ -4471,232 +4471,251 @@ const handleRangoChange = (range?: DateRange) => {
   </CardHeader>
 
   <CardContent>
-    {loadingTransacciones ? (
-      <div className="h-80 flex items-center justify-center text-muted-foreground">
-        Cargando datos...
-      </div>
-    ) : (
-      (() => {
-        // ====== 1) Construir data REAL desde filteredTransactions (mínimo cambio) ======
-        const toNum = (v: any) => (Number(v) || 0);
+    {(() => {
+      // 1) Total real (para decidir si mostramos “no hay datos”)
+      const totalReal =
+        tipoIngresoAnalisis === "ventas"
+          ? metricType === "brutas"
+            ? Number(datosAnaliticas.ventasBrutas || 0)
+            : metricType === "descuentos"
+            ? Number(datosAnaliticas.descuentos || 0)
+            : Number(datosAnaliticas.ventasNetas || 0)
+          : Number(datosAnaliticas.otrosIngresos || 0);
 
-        const targetDate =
-          periodFilter === "diario"
-            ? fechaAnalisisDiario
-            : periodFilter === "mensual"
-            ? fechaAnalisisMensual
-            : new Date();
+      // 2) Construir fallback cuando detallesPorPeriodo viene vacío
+      const buildFallbackFromTransactions = () => {
+        const txs = (filteredTransactions || []) as any[];
 
-        const targetYear = targetDate.getFullYear();
-        const targetMonth = targetDate.getMonth();
-
-        // Map por período
-        const map = new Map<string, { ventas: number; descuentos: number; neto: number; otrosIngresos: number }>();
-
-        // Helper label periodo
-        const getKey = (dt: Date) => {
-          if (periodFilter === "diario") return "Día";
-          if (periodFilter === "mensual") return `Día ${dt.getDate()}`;
-          return `Mes ${dt.getMonth() + 1}`;
+        const pushValue = (bucket: any, v: number) => {
+          if (tipoIngresoAnalisis === "otros") {
+            bucket.otrosIngresos += v;
+            return;
+          }
+          if (metricType === "brutas") bucket.ventasBrutas += v;
+          else if (metricType === "descuentos") bucket.descuentos += v;
+          else bucket.ventasNetas += v;
         };
 
-        // Acumular desde filteredTransactions (YA viene filtrado por tu función)
-        for (const t of filteredTransactions as any[]) {
-          const asientoFecha = (t as any).asiento_fecha;
-          if (!asientoFecha) continue;
+        // Diario: 1 punto (fecha seleccionada)
+        if (periodFilter === "diario") {
+          const selectedDateStr = fechaAnalisisDiario.toISOString().split("T")[0];
+          const bucket = {
+            periodo: selectedDateStr,
+            ventasBrutas: 0,
+            descuentos: 0,
+            ventasNetas: 0,
+            otrosIngresos: 0,
+          };
 
-          const dt = parseDateSafe(asientoFecha);
-          if (Number.isNaN(dt.getTime())) continue;
+          txs.forEach((t) => {
+            const f = (t as any).asiento_fecha;
+            if (!f) return;
+            const fStr = String(f).slice(0, 10);
+            if (fStr !== selectedDateStr) return;
+            pushValue(bucket, Number(getMetricValue(t, metricType) || 0));
+          });
 
-          // Asegurar que cae en el periodo seleccionado
-          if (periodFilter === "diario") {
-            const sel = fechaAnalisisDiario.toISOString().split("T")[0];
-            if (asientoFecha !== sel) continue;
-          } else if (periodFilter === "mensual") {
-            if (dt.getFullYear() !== targetYear || dt.getMonth() !== targetMonth) continue;
-          } else {
-            if (dt.getFullYear() !== targetYear) continue;
+          // Si no hay tx pero sí total real, lo mostramos como punto único
+          if (
+            txs.length === 0 &&
+            totalReal > 0 &&
+            bucket.ventasBrutas + bucket.descuentos + bucket.ventasNetas + bucket.otrosIngresos === 0
+          ) {
+            pushValue(bucket, totalReal);
           }
 
-          const key = getKey(dt);
-          const prev = map.get(key) || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
-
-          // Ventas: llenamos ventas/descuentos/neto
-          if (tipoIngresoAnalisis === "ventas") {
-            prev.ventas += toNum(getMetricValue(t, "brutas"));
-            prev.descuentos += toNum(getMetricValue(t, "descuentos"));
-            prev.neto += toNum(getMetricValue(t, "netas"));
-          } else {
-            // Otros ingresos: los graficamos en otrosIngresos según métrica seleccionada
-            // (para "otros", tú ya ocultas descuentos, así que esto queda bien)
-            prev.otrosIngresos += toNum(getMetricValue(t, metricType));
-          }
-
-          map.set(key, prev);
+          return [bucket];
         }
 
-        // Rellenar huecos (para mensual/anual) y que NO se vea desfazada
-        let chartData: Array<{
-          periodo: string;
-          ventas: number;
-          descuentos: number;
-          neto: number;
-          otrosIngresos: number;
-        }> = [];
-
+        // Mensual: puntos por día del mes seleccionado
         if (periodFilter === "mensual") {
-          const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-          chartData = Array.from({ length: daysInMonth }, (_, i) => {
-            const label = `Día ${i + 1}`;
-            const val = map.get(label) || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
-            return { periodo: label, ...val };
+          const month = fechaAnalisisMensual.getMonth();
+          const year = fechaAnalisisMensual.getFullYear();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+          const buckets = Array.from({ length: daysInMonth }, (_, i) => ({
+            periodo: `Día ${i + 1}`,
+            ventasBrutas: 0,
+            descuentos: 0,
+            ventasNetas: 0,
+            otrosIngresos: 0,
+            __day: i + 1,
+          }));
+
+          txs.forEach((t) => {
+            const f = (t as any).asiento_fecha;
+            if (!f) return;
+            const d = parseDateSafe(f);
+            if (d.getFullYear() !== year || d.getMonth() !== month) return;
+
+            const idx = d.getDate() - 1;
+            if (idx < 0 || idx >= buckets.length) return;
+
+            pushValue(buckets[idx], Number(getMetricValue(t, metricType) || 0));
           });
-        } else if (periodFilter === "anual") {
-          chartData = Array.from({ length: 12 }, (_, i) => {
-            const label = `Mes ${i + 1}`;
-            const val = map.get(label) || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
-            return { periodo: label, ...val };
-          });
-        } else {
-          const val = map.get("Día") || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
-          chartData = [{ periodo: "Día", ...val }];
-        }
 
-        // ====== 2) Fallback: si el chart sale en 0 pero tus KPIs tienen total ======
-        const totalReal =
-          tipoIngresoAnalisis === "ventas"
-            ? metricType === "brutas"
-              ? toNum(datosAnaliticas.ventasBrutas)
-              : metricType === "descuentos"
-              ? toNum(datosAnaliticas.descuentos)
-              : toNum(datosAnaliticas.ventasNetas)
-            : toNum(datosAnaliticas.otrosIngresos);
-
-        const totalSerie = chartData.reduce((s, r) => {
-          if (metricType === "descuentos") return s + toNum(r.descuentos);
-          if (tipoIngresoAnalisis === "otros") return s + toNum(r.otrosIngresos);
-          if (metricType === "brutas") return s + toNum(r.ventas);
-          return s + toNum(r.neto);
-        }, 0);
-
-        if (totalSerie <= 0 && totalReal > 0) {
-          chartData = [
-            {
-              periodo: periodFilter === "anual" ? "Total" : "Día",
-              ventas: metricType === "brutas" ? totalReal : 0,
-              descuentos: metricType === "descuentos" ? totalReal : 0,
-              neto: metricType === "netas" ? totalReal : 0,
-              otrosIngresos: tipoIngresoAnalisis === "otros" ? totalReal : 0,
-            },
-          ];
-        }
-
-        // ====== 3) Si neta neta NO hay data ======
-        const hayAlgo =
-          chartData.some((r) => toNum(r.ventas) > 0 || toNum(r.neto) > 0 || toNum(r.descuentos) > 0 || toNum(r.otrosIngresos) > 0);
-
-        if (!hayAlgo) {
-          return (
-            <div className="h-80 flex items-center justify-center text-muted-foreground">
-              No hay datos para mostrar
-            </div>
+          // Si no hay tx pero hay total real -> 1 punto “Total del mes”
+          const sum = buckets.reduce(
+            (acc, b) => acc + b.ventasBrutas + b.descuentos + b.ventasNetas + b.otrosIngresos,
+            0
           );
+          if (sum === 0 && totalReal > 0) {
+            const one = {
+              periodo: `Mes ${month + 1}/${year}`,
+              ventasBrutas: 0,
+              descuentos: 0,
+              ventasNetas: 0,
+              otrosIngresos: 0,
+            };
+            pushValue(one, totalReal);
+            return [one];
+          }
+
+          return buckets;
         }
 
-        // ====== 4) Render chart (misma estructura que ya tenías) ======
-        return (
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis
-                  dataKey="periodo"
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "hsl(var(--border))" }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tickFormatter={(value) => formatCifra(Number(value), scaleFormat)}
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "hsl(var(--border))" }}
-                />
-                <Tooltip
-                  formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, ""]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "10px",
-                    color: "hsl(var(--foreground))",
-                    boxShadow: "0 8px 24px rgba(0,0,0,.12)",
-                  }}
-                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
-                  wrapperStyle={{ zIndex: 1000 }}
-                />
-                <Legend />
+        // Anual: puntos por mes del año actual (o del sistema)
+        const today = new Date();
+        const year = today.getFullYear();
+        const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-                {metricType === "descuentos" && (
-                  <Line
-                    type="monotone"
-                    dataKey="descuentos"
-                    stroke="hsl(0 72% 55%)"
-                    name="Descuentos"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                )}
+        const buckets = Array.from({ length: 12 }, (_, i) => ({
+          periodo: monthNames[i],
+          ventasBrutas: 0,
+          descuentos: 0,
+          ventasNetas: 0,
+          otrosIngresos: 0,
+          __month: i,
+        }));
 
-                {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
-                  <Line
-                    type="monotone"
-                    dataKey="ventas"
-                    stroke="hsl(var(--primary))"
-                    name="Ventas Brutas"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                )}
+        txs.forEach((t) => {
+          const f = (t as any).asiento_fecha;
+          if (!f) return;
+          const d = parseDateSafe(f);
+          if (d.getFullYear() !== year) return;
 
-                {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
-                  <Line
-                    type="monotone"
-                    dataKey="neto"
-                    stroke="hsl(180 45% 45%)"
-                    name="Ventas Netas"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                )}
+          const idx = d.getMonth();
+          pushValue(buckets[idx], Number(getMetricValue(t, metricType) || 0));
+        });
 
-                {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
-                  <Line
-                    type="monotone"
-                    dataKey="otrosIngresos"
-                    stroke="hsl(140 50% 45%)"
-                    name="Otros Ingresos"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        const sum = buckets.reduce(
+          (acc, b) => acc + b.ventasBrutas + b.descuentos + b.ventasNetas + b.otrosIngresos,
+          0
         );
-      })()
-    )}
+        if (sum === 0 && totalReal > 0) {
+          const one = {
+            periodo: `${year}`,
+            ventasBrutas: 0,
+            descuentos: 0,
+            ventasNetas: 0,
+            otrosIngresos: 0,
+          };
+          pushValue(one, totalReal);
+          return [one];
+        }
+
+        return buckets;
+      };
+
+      // 3) Serie principal o fallback
+      const base = Array.isArray(datosAnaliticas.detallesPorPeriodo) ? datosAnaliticas.detallesPorPeriodo : [];
+      const detalles = base.length > 0 ? base : buildFallbackFromTransactions();
+
+      // 4) Adaptar al shape del chart
+      const chartData = (detalles || []).map((d: any) => ({
+        periodo: d.periodo,
+        ventas: Number(d.ventasBrutas || 0),
+        descuentos: Number(d.descuentos || 0),
+        neto: Number(d.ventasNetas || 0),
+        otrosIngresos: Number(d.otrosIngresos || 0),
+        __day: d.__day,
+        __month: d.__month,
+      }));
+
+      // 5) ¿Hay algo distinto de 0?
+      const hasAnyValue = chartData.some(
+        (p) => (p.ventas || 0) + (p.descuentos || 0) + (p.neto || 0) + (p.otrosIngresos || 0) > 0
+      );
+
+      if (loadingTransacciones) {
+        return <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando datos...</div>;
+      }
+
+      if (!hasAnyValue && totalReal <= 0) {
+        return <div className="h-80 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>;
+      }
+
+      return (
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="periodo" />
+              <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
+              <Tooltip
+                formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, ""]}
+                contentStyle={{
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #ccc",
+                  borderRadius: "10px",
+                }}
+                wrapperStyle={{ zIndex: 1000 }}
+              />
+              <Legend />
+
+              {metricType === "descuentos" && (
+                <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2} dot={false}>
+                  <LabelList
+                    dataKey="descuentos"
+                    position="top"
+                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
+                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                  />
+                </Line>
+              )}
+
+              {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
+                <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2} dot={false}>
+                  <LabelList
+                    dataKey="ventas"
+                    position="top"
+                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
+                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                  />
+                </Line>
+              )}
+
+              {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
+                <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2} dot={false}>
+                  <LabelList
+                    dataKey="neto"
+                    position="top"
+                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
+                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                  />
+                </Line>
+              )}
+
+              {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
+                <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2} dot={false}>
+                  <LabelList
+                    dataKey="otrosIngresos"
+                    position="top"
+                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
+                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                  />
+                </Line>
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    })()}
   </CardContent>
 </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
             {/* Gráfico de Ventas por Tipo */}
             <Card>
               <CardHeader>
