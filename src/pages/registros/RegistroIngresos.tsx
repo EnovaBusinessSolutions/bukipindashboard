@@ -841,13 +841,14 @@ const handleRangoChange = (range?: DateRange) => {
         if (!asientos) return;
 
         // Filtrar solo los que tienen cuentas de ingresos (4XXX excepto 4003) con HABER
-        const asientosIngresos = asientos.filter(asiento => 
-          asiento.detalle_asientos.some((d: any) => 
-            d.cuenta_codigo.startsWith('4') && 
-            d.cuenta_codigo !== '4003' && 
-            Number(d.haber) > 0
-          )
-        );
+        const asientosIngresos = (asientos || []).filter((asiento: any) => {
+  const dets = Array.isArray(asiento?.detalle_asientos) ? asiento.detalle_asientos : [];
+  return dets.some((d: any) =>
+    String(d?.cuenta_codigo || "").startsWith("4") &&
+    String(d?.cuenta_codigo || "") !== "4003" &&
+    Number(d?.haber) > 0
+  );
+});
 
         setAsientosIngresosDirectos(asientosIngresos);
       } catch (error) {
@@ -857,6 +858,15 @@ const handleRangoChange = (range?: DateRange) => {
 
     cargarAsientosDirectos();
   }, []);
+
+  // ✅ Helper: YYYY-MM-DD en horario LOCAL (evita bug UTC)
+const toYMDLocal = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 
  // useEffect para calcular analíticas desde asientos contables
 useEffect(() => {
@@ -892,8 +902,9 @@ useEffect(() => {
         fechaFin = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999);
       }
 
-      const start = fechaInicio.toISOString().split("T")[0];
-      const end = fechaFin.toISOString().split("T")[0];
+      const start = toYMDLocal(fechaInicio);
+      const end = toYMDLocal(fechaFin);
+
 
       // Helpers robustos (para evitar mismatch de llaves)
       const toNum = (v: any) => {
@@ -904,8 +915,11 @@ useEffect(() => {
       const getCuenta = (d: any) =>
         String(d?.cuenta_codigo ?? d?.cuentaCodigo ?? d?.cuenta ?? "");
 
-      const getDetalleFecha = (d: any) =>
-        parseDateSafe(d?.fecha ?? d?.createdAt ?? d?.created_at);
+      const getDetalleFecha = (d: any) => {
+  const raw = d?.asiento_fecha ?? d?.fecha ?? d?.createdAt ?? d?.created_at;
+  if (!raw) return null;
+  return parseDateSafe(raw);
+};
 
       const getAsientoId = (a: any) => String(a?.id ?? a?._id ?? "");
       const getDetalleAsientoId = (d: any) =>
@@ -939,14 +953,22 @@ useEffect(() => {
 
       // 1) Intentar por asientos (ideal)
       const resp = await apiJson<any>(
-        `/api/ingresos/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
-      );
+  `/api/ingresos/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+);
 
-      const asientos = resp?.asientos ?? resp?.data?.asientos ?? [];
-      const detalles = resp?.detalles ?? resp?.data?.detalles ?? [];
+const asientos = resp?.asientos ?? resp?.data?.asientos ?? [];
+let detalles = resp?.detalles ?? resp?.data?.detalles ?? [];
+
+// ✅ FIX CLAVE: si /asientos NO trae detalles, usa /detalles aunque sí existan asientos
+if (!Array.isArray(detalles) || detalles.length === 0) {
+  const respDet = await apiJson<any>(
+    `/api/ingresos/detalles?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+  );
+  detalles = respDet?.detalles ?? respDet?.data?.detalles ?? [];
+}
 
       // 2) Fallback E2E: si asientos no trae data, usa /detalles (que ya te funciona para resúmenes)
-      if (!asientos || asientos.length === 0) {
+      if (!Array.isArray(asientos) || asientos.length === 0) {
         const respDet = await apiJson<any>(
           `/api/ingresos/detalles?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
         );
