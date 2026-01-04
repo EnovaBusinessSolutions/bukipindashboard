@@ -858,177 +858,268 @@ const handleRangoChange = (range?: DateRange) => {
     cargarAsientosDirectos();
   }, []);
 
-  // useEffect para calcular analíticas desde asientos contables
-  useEffect(() => {
-    const calcularAnaliticasDesdeAsientos = async () => {
+ // useEffect para calcular analíticas desde asientos contables
+useEffect(() => {
+  const calcularAnaliticasDesdeAsientos = async () => {
+    try {
+      // Determinar el rango de fechas según el período seleccionado
+      let fechaInicio: Date;
+      let fechaFin: Date;
 
-      try {
-        // Determinar el rango de fechas según el período seleccionado
-        let fechaInicio: Date;
-        let fechaFin: Date;
+      if (periodFilter === "diario") {
+        fechaInicio = new Date(fechaAnalisisDiario);
+        fechaInicio.setHours(0, 0, 0, 0);
+        fechaFin = new Date(fechaAnalisisDiario);
+        fechaFin.setHours(23, 59, 59, 999);
+      } else if (periodFilter === "mensual") {
+        fechaInicio = new Date(
+          fechaAnalisisMensual.getFullYear(),
+          fechaAnalisisMensual.getMonth(),
+          1
+        );
+        fechaFin = new Date(
+          fechaAnalisisMensual.getFullYear(),
+          fechaAnalisisMensual.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999
+        );
+      } else {
+        // Anual
+        fechaInicio = new Date(new Date().getFullYear(), 0, 1);
+        fechaFin = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999);
+      }
 
-        if (periodFilter === "diario") {
-          fechaInicio = new Date(fechaAnalisisDiario);
-          fechaInicio.setHours(0, 0, 0, 0);
-          fechaFin = new Date(fechaAnalisisDiario);
-          fechaFin.setHours(23, 59, 59, 999);
-        } else if (periodFilter === "mensual") {
-          fechaInicio = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth(), 1);
-          fechaFin = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 0, 23, 59, 59, 999);
-        } else {
-          // Anual
-          fechaInicio = new Date(new Date().getFullYear(), 0, 1);
-          fechaFin = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999);
+      const start = fechaInicio.toISOString().split("T")[0];
+      const end = fechaFin.toISOString().split("T")[0];
+
+      // Helpers robustos (para evitar mismatch de llaves)
+      const toNum = (v: any) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const getCuenta = (d: any) =>
+        String(d?.cuenta_codigo ?? d?.cuentaCodigo ?? d?.cuenta ?? "");
+
+      const getDetalleFecha = (d: any) =>
+        parseDateSafe(d?.fecha ?? d?.createdAt ?? d?.created_at);
+
+      const getAsientoId = (a: any) => String(a?.id ?? a?._id ?? "");
+      const getDetalleAsientoId = (d: any) =>
+        String(d?.asiento_id ?? d?.asientoId ?? d?.asiento ?? "");
+
+      const getAsientoFecha = (a: any) =>
+        parseDateSafe(a?.fecha ?? a?.createdAt ?? a?.created_at);
+
+      const periodKeyFromDate = (fecha: Date) => {
+        if (periodFilter === "diario") return "Hoy";
+        if (periodFilter === "mensual") return `Día ${fecha.getDate()}`;
+        const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        return meses[fecha.getMonth()];
+      };
+
+      // Acumuladores + mapa por periodo
+      let ventasBrutasTotal = 0;
+      let descuentosTotal = 0;
+      let otrosIngresosTotal = 0;
+
+      const detallesPorPeriodoMap: Record<
+        string,
+        { ventasBrutas: number; descuentos: number; otrosIngresos: number }
+      > = {};
+
+      const ensureBucket = (key: string) => {
+        if (!detallesPorPeriodoMap[key]) {
+          detallesPorPeriodoMap[key] = { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
         }
+      };
 
-        // Consultar asientos contables en el rango de fechas
-        const resp = await apiJson<any>(`/api/ingresos/asientos?start=${encodeURIComponent(fechaInicio.toISOString().split('T')[0])}&end=${encodeURIComponent(fechaFin.toISOString().split('T')[0])}`);
-        const asientos = resp?.asientos ?? resp?.data?.asientos ?? [];
-        const detalles = resp?.detalles ?? resp?.data?.detalles ?? [];
-        const asientosError: any = null;
+      // 1) Intentar por asientos (ideal)
+      const resp = await apiJson<any>(
+        `/api/ingresos/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+      );
 
-        if (asientosError) throw asientosError;
-        if (!asientos || asientos.length === 0) {
+      const asientos = resp?.asientos ?? resp?.data?.asientos ?? [];
+      const detalles = resp?.detalles ?? resp?.data?.detalles ?? [];
+
+      // 2) Fallback E2E: si asientos no trae data, usa /detalles (que ya te funciona para resúmenes)
+      if (!asientos || asientos.length === 0) {
+        const respDet = await apiJson<any>(
+          `/api/ingresos/detalles?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+        );
+        const detallesSolo = respDet?.detalles ?? respDet?.data?.detalles ?? [];
+
+        if (!detallesSolo || detallesSolo.length === 0) {
           setDatosAnaliticas({
             ventasBrutas: 0,
             descuentos: 0,
             ventasNetas: 0,
             otrosIngresos: 0,
-            detallesPorPeriodo: []
+            detallesPorPeriodo: [],
           });
           return;
         }
 
-        // Obtener detalles de asientos
-        const asientoIds = asientos.map(a => a.id);
+        // Construir analítica por fecha del detalle
+        for (const det of detallesSolo) {
+          const fecha = getDetalleFecha(det);
+          if (!fecha || isNaN(fecha.getTime())) continue;
 
-        // Calcular totales según tipo de ingreso
-        let ventasBrutasTotal = 0;
-        let descuentosTotal = 0;
-        let otrosIngresosTotal = 0;
+          const key = periodKeyFromDate(fecha);
+          ensureBucket(key);
 
-        // Agrupar detalles por período para la gráfica
-        const detallesPorPeriodoMap: Record<string, {
-          ventasBrutas: number;
-          descuentos: number;
-          otrosIngresos: number;
-        }> = {};
+          const cuenta = getCuenta(det);
+          const debe = toNum(det?.debe);
+          const haber = toNum(det?.haber);
 
-        asientos.forEach(asiento => {
-          const detallesAsiento = detalles.filter(d => d.asiento_id === asiento.id);
-          const fecha = parseDateSafe(asiento.fecha);
-          
-          // Determinar la clave del período
-          let periodKey: string;
-          if (periodFilter === "diario") {
-            periodKey = "Hoy";
-          } else if (periodFilter === "mensual") {
-            periodKey = `Día ${fecha.getDate()}`;
+          if (!cuenta) continue;
+
+          if (tipoIngresoAnalisis === "ventas") {
+            // Ventas brutas (cuenta 4001) => HABER - DEBE
+            if (cuenta === "4001") {
+              const monto = haber - debe;
+              ventasBrutasTotal += monto;
+              detallesPorPeriodoMap[key].ventasBrutas += monto;
+            }
+
+            // Descuentos (cuenta 4003) => DEBE - HABER
+            if (cuenta === "4003") {
+              const monto = debe - haber;
+              descuentosTotal += monto;
+              detallesPorPeriodoMap[key].descuentos += monto;
+            }
           } else {
-            const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-            periodKey = meses[fecha.getMonth()];
+            // Otros ingresos (4XXX excepto 4001/4003)
+            if (cuenta.startsWith("4") && cuenta !== "4001" && cuenta !== "4003") {
+              const monto = haber - debe;
+              otrosIngresosTotal += monto;
+              detallesPorPeriodoMap[key].otrosIngresos += monto;
+            }
           }
+        }
+      } else {
+        // 3) Camino normal: asientos + detalles
+        for (const asiento of asientos) {
+          const asientoId = getAsientoId(asiento);
+          const fecha = getAsientoFecha(asiento);
+          if (!fecha || isNaN(fecha.getTime())) continue;
 
-          if (!detallesPorPeriodoMap[periodKey]) {
-            detallesPorPeriodoMap[periodKey] = {
-              ventasBrutas: 0,
-              descuentos: 0,
-              otrosIngresos: 0
-            };
-          }
+          const key = periodKeyFromDate(fecha);
+          ensureBucket(key);
 
-          detallesAsiento.forEach(detalle => {
-            const debe = detalle.debe || 0;
-            const haber = detalle.haber || 0;
-            const cuenta = detalle.cuenta_codigo;
+          const detallesAsiento = (detalles || []).filter(
+            (d: any) => getDetalleAsientoId(d) === asientoId
+          );
+
+          for (const det of detallesAsiento) {
+            const cuenta = getCuenta(det);
+            const debe = toNum(det?.debe);
+            const haber = toNum(det?.haber);
+
+            if (!cuenta) continue;
 
             if (tipoIngresoAnalisis === "ventas") {
-              // Ventas brutas (cuenta 4001)
-              if (cuenta === '4001') {
+              if (cuenta === "4001") {
                 const monto = haber - debe;
                 ventasBrutasTotal += monto;
-                detallesPorPeriodoMap[periodKey].ventasBrutas += monto;
+                detallesPorPeriodoMap[key].ventasBrutas += monto;
               }
-              // Descuentos (cuenta 4003)
-              if (cuenta === '4003') {
+              if (cuenta === "4003") {
                 const monto = debe - haber;
                 descuentosTotal += monto;
-                detallesPorPeriodoMap[periodKey].descuentos += monto;
+                detallesPorPeriodoMap[key].descuentos += monto;
               }
             } else {
-              // Otros ingresos (cuentas 4XXX excepto 4001 y 4003)
-              if (cuenta.startsWith('4') && cuenta !== '4001' && cuenta !== '4003') {
+              if (cuenta.startsWith("4") && cuenta !== "4001" && cuenta !== "4003") {
                 const monto = haber - debe;
                 otrosIngresosTotal += monto;
-                detallesPorPeriodoMap[periodKey].otrosIngresos += monto;
+                detallesPorPeriodoMap[key].otrosIngresos += monto;
               }
             }
-          });
-        });
+          }
+        }
+      }
 
-        // Construir array de detalles por período
-        let detallesPorPeriodo: Array<{
-          periodo: string;
-          ventasBrutas: number;
-          descuentos: number;
-          ventasNetas: number;
-          otrosIngresos: number;
-        }> = [];
+      // Construir array de detalles por período (igual que tu lógica)
+      let detallesPorPeriodo: Array<{
+        periodo: string;
+        ventasBrutas: number;
+        descuentos: number;
+        ventasNetas: number;
+        otrosIngresos: number;
+      }> = [];
 
-        if (periodFilter === "diario") {
-          // Un solo punto para el día
-          const data = detallesPorPeriodoMap["Hoy"] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
-          detallesPorPeriodo = [{
+      if (periodFilter === "diario") {
+        const data = detallesPorPeriodoMap["Hoy"] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
+        detallesPorPeriodo = [
+          {
             periodo: "Hoy",
             ventasBrutas: data.ventasBrutas,
             descuentos: data.descuentos,
             ventasNetas: data.ventasBrutas - data.descuentos,
-            otrosIngresos: data.otrosIngresos
-          }];
-        } else if (periodFilter === "mensual") {
-          // Días del mes
-          const daysInMonth = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 0).getDate();
-          detallesPorPeriodo = Array.from({ length: daysInMonth }, (_, i) => {
-            const day = i + 1;
-            const periodKey = `Día ${day}`;
-            const data = detallesPorPeriodoMap[periodKey] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
-            return {
-              periodo: periodKey,
-              ventasBrutas: data.ventasBrutas,
-              descuentos: data.descuentos,
-              ventasNetas: data.ventasBrutas - data.descuentos,
-              otrosIngresos: data.otrosIngresos
-            };
-          });
-        } else {
-          // Meses del año
-          const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-          detallesPorPeriodo = meses.map(mes => {
-            const data = detallesPorPeriodoMap[mes] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
-            return {
-              periodo: mes,
-              ventasBrutas: data.ventasBrutas,
-              descuentos: data.descuentos,
-              ventasNetas: data.ventasBrutas - data.descuentos,
-              otrosIngresos: data.otrosIngresos
-            };
-          });
-        }
+            otrosIngresos: data.otrosIngresos,
+          },
+        ];
+      } else if (periodFilter === "mensual") {
+        const daysInMonth = new Date(
+          fechaAnalisisMensual.getFullYear(),
+          fechaAnalisisMensual.getMonth() + 1,
+          0
+        ).getDate();
 
-        setDatosAnaliticas({
-          ventasBrutas: ventasBrutasTotal,
-          descuentos: descuentosTotal,
-          ventasNetas: ventasBrutasTotal - descuentosTotal,
-          otrosIngresos: otrosIngresosTotal,
-          detallesPorPeriodo
+        detallesPorPeriodo = Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const key = `Día ${day}`;
+          const data = detallesPorPeriodoMap[key] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
+          return {
+            periodo: key,
+            ventasBrutas: data.ventasBrutas,
+            descuentos: data.descuentos,
+            ventasNetas: data.ventasBrutas - data.descuentos,
+            otrosIngresos: data.otrosIngresos,
+          };
         });
-      } catch (error) {
-        console.error('Error calculando analíticas desde asientos:', error);
+      } else {
+        const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        detallesPorPeriodo = meses.map((mes) => {
+          const data = detallesPorPeriodoMap[mes] || { ventasBrutas: 0, descuentos: 0, otrosIngresos: 0 };
+          return {
+            periodo: mes,
+            ventasBrutas: data.ventasBrutas,
+            descuentos: data.descuentos,
+            ventasNetas: data.ventasBrutas - data.descuentos,
+            otrosIngresos: data.otrosIngresos,
+          };
+        });
       }
-    };
 
-    calcularAnaliticasDesdeAsientos();
-  }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual, tipoIngresoAnalisis]);
+      // IMPORTANTE: aquí decides si quieres mostrar aunque todo sea 0
+      // Yo recomiendo NO bloquearla por length, porque mensual siempre tendrá 30/31 puntos.
+      setDatosAnaliticas({
+        ventasBrutas: ventasBrutasTotal,
+        descuentos: descuentosTotal,
+        ventasNetas: ventasBrutasTotal - descuentosTotal,
+        otrosIngresos: otrosIngresosTotal,
+        detallesPorPeriodo,
+      });
+    } catch (error) {
+      console.error("Error calculando analíticas desde asientos:", error);
+      // en caso de error, no dejes el state viejo “pegado”
+      setDatosAnaliticas({
+        ventasBrutas: 0,
+        descuentos: 0,
+        ventasNetas: 0,
+        otrosIngresos: 0,
+        detallesPorPeriodo: [],
+      });
+    }
+  };
+
+  calcularAnaliticasDesdeAsientos();
+}, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual, tipoIngresoAnalisis]);
 
   // useEffect para calcular totales desde asientos contables
   useEffect(() => {
