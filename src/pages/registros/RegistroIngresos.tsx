@@ -3995,1403 +3995,1421 @@ const handleRangoChange = (range?: DateRange) => {
 
 
           {/* TAB 3: ANALÍTICA DE VENTAS - GRÁFICAS Y DESTACADOS */}
-          <TabsContent value="analitica" className="mt-6">
-            {/* Función para filtrar transacciones según el período y tipo de ingreso */}
-            {(() => {
-              const getFilteredTransactions = () => {
-                const today = new Date();
-                const currentMonth = today.getMonth();
-                const currentYear = today.getFullYear();
+<TabsContent value="analitica" className="mt-6">
+  {/* Función para filtrar transacciones según el período y tipo de ingreso */}
+  {(() => {
+    // ----------------------------
+    // ✅ FIX TS (evitar unknown)
+    // ----------------------------
+    type NumMap = Record<string, number>;
+    type BoolMap = Record<string, boolean>;
 
-                // Primero filtrar por período y excluir canceladas y reversiones
-                let filtered = transacciones.filter(t => 
-                  (t as any).estado !== 'cancelado' && 
-                  !t.descripcion.includes('CANCELACIÓN:')
-                );
-                
-                if (periodFilter === "diario") {
-                  // Usar la fecha seleccionada para análisis diario desde asiento contable
-                  const selectedDateStr = fechaAnalisisDiario.toISOString().split('T')[0];
-                  filtered = filtered.filter(t => {
-                    const asientoFecha = (t as any).asiento_fecha;
-                    return asientoFecha === selectedDateStr;
-                  });
-                } else if (periodFilter === "mensual") {
-                  // Usar el mes y año de la fecha seleccionada desde asiento contable
-                  const selectedMonth = fechaAnalisisMensual.getMonth();
-                  const selectedYear = fechaAnalisisMensual.getFullYear();
-                  filtered = filtered.filter(t => {
-                    const asientoFecha = (t as any).asiento_fecha;
-                    if (!asientoFecha) return false;
-                    const tDate = parseDateSafe(asientoFecha);
-                    return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
-                  });
-                } else {
-                  // Anual desde asiento contable
-                  filtered = filtered.filter(t => {
-                    const asientoFecha = (t as any).asiento_fecha;
-                    if (!asientoFecha) return false;
-                    const tDate = parseDateSafe(asientoFecha);
-                    return tDate.getFullYear() === currentYear;
-                  });
-                }
+    type MetodoPagoItem = { name: string; value: number; porcentaje: string };
+    type PieTipoItem = { tipo: string; monto: number; porcentaje: string };
+    type PieEstadoItem = { estado: string; monto: number; porcentaje: string };
 
-                // Luego filtrar por tipo de ingreso
-                if (tipoIngresoAnalisis === "ventas") {
-                  // Solo ventas (cuenta 4001)
-                  return filtered.filter(t => t.cuenta_principal_codigo === '4001');
-                } else {
-                  // Otros ingresos (cuentas 4XXX excepto 4001 y 4003)
-                  return filtered.filter(t => 
-                    t.cuenta_principal_codigo?.startsWith('4') && 
-                    t.cuenta_principal_codigo !== '4001' && 
-                    t.cuenta_principal_codigo !== '4003'
-                  );
-                }
-              };
+    type ClienteVenta = {
+      nombre: string;
+      transacciones: number;
+      monto: number;
+      email?: string;
+      telefono?: string;
+    };
 
-              const filteredTransactions = getFilteredTransactions();
+    const valuesNum = (obj: NumMap) => Object.values(obj) as number[];
+    const entriesNum = (obj: NumMap) => Object.entries(obj) as Array<[string, number]>;
 
-              // Función para procesar datos de métodos de pago (solo para transacciones con pago recibido)
-              const getMetodosPagoData = () => {
-                // Filtrar solo transacciones que tienen método de pago asignado (contado o parcial)
-                const transaccionesConPago = filteredTransactions.filter(t => 
-                  t.tipo_pago === "contado" || t.tipo_pago === "parcial"
-                );
+    const asientosDir: any[] = Array.isArray(asientosIngresosDirectos) ? asientosIngresosDirectos : [];
 
-                if (transaccionesConPago.length === 0) {
-                  return [];
-                }
+    const getFilteredTransactions = () => {
+      const today = new Date();
+      const currentYear = today.getFullYear();
 
-                // Agrupar por método de pago
-                const metodosPago: { [key: string]: number } = {};
-                transaccionesConPago.forEach(t => {
-                  const metodo = t.metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta";
-                  metodosPago[metodo] = (metodosPago[metodo] || 0) + getMetricValue(t, metricType);
-                });
+      // Primero filtrar por período y excluir canceladas y reversiones
+      let filtered = transacciones.filter((t) =>
+        (t as any).estado !== "cancelado" &&
+        !(t as any).descripcion?.includes("CANCELACIÓN:")
+      );
 
-                // Calcular total y porcentajes
-                const total = Object.values(metodosPago).reduce((sum, val) => sum + val, 0);
-                
-                return Object.entries(metodosPago).map(([name, value]) => ({
-                  name,
-                  value,
-                  porcentaje: total > 0 ? ((value / total) * 100).toFixed(1) : "0.0"
-                }));
-              };
+      if (periodFilter === "diario") {
+        // Usar la fecha seleccionada para análisis diario desde asiento contable
+        const selectedDateStr = fechaAnalisisDiario.toISOString().split("T")[0];
+        filtered = filtered.filter((t) => {
+          const asientoFecha = (t as any).asiento_fecha;
+          return asientoFecha === selectedDateStr;
+        });
+      } else if (periodFilter === "mensual") {
+        // Usar el mes y año de la fecha seleccionada desde asiento contable
+        const selectedMonth = fechaAnalisisMensual.getMonth();
+        const selectedYear = fechaAnalisisMensual.getFullYear();
+        filtered = filtered.filter((t) => {
+          const asientoFecha = (t as any).asiento_fecha;
+          if (!asientoFecha) return false;
+          const tDate = parseDateSafe(asientoFecha);
+          return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
+        });
+      } else {
+        // Anual desde asiento contable
+        filtered = filtered.filter((t) => {
+          const asientoFecha = (t as any).asiento_fecha;
+          if (!asientoFecha) return false;
+          const tDate = parseDateSafe(asientoFecha);
+          return tDate.getFullYear() === currentYear;
+        });
+      }
 
-              const datosMetodosPago = getMetodosPagoData();
+      // Luego filtrar por tipo de ingreso
+      if (tipoIngresoAnalisis === "ventas") {
+        // Solo ventas (cuenta 4001)
+        return filtered.filter((t) => (t as any).cuenta_principal_codigo === "4001");
+      } else {
+        // Otros ingresos (cuentas 4XXX excepto 4001 y 4003)
+        return filtered.filter((t) =>
+          (t as any).cuenta_principal_codigo?.startsWith("4") &&
+          (t as any).cuenta_principal_codigo !== "4001" &&
+          (t as any).cuenta_principal_codigo !== "4003"
+        );
+      }
+    };
 
-              // Función para verificar si hay datos disponibles
-              const hayDatosDisponibles = () => {
-                if (tipoIngresoAnalisis === "ventas") {
-                  return filteredTransactions.length > 0 || 
-                         datosAnaliticas.ventasBrutas > 0 || 
-                         datosAnaliticas.descuentos > 0;
-                } else {
-                  // Otros ingresos
-                  return filteredTransactions.length > 0 || datosAnaliticas.otrosIngresos > 0;
-                }
-              };
+    const filteredTransactions = getFilteredTransactions();
 
-              return (
-                <>
-                  {/* HIGHLIGHTS - Resumen Completo (sin filtros) */}
-                  <div className="mb-8">
-                    <h3 className="text-xl font-bold text-foreground mb-4">
-                      Highlights de Ingresos
-                    </h3>
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Día */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesDia.ventasBrutas, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesDia.descuentos, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
-                    <span className="text-lg font-bold text-foreground">
-                      ${formatCifra(totalesDia.ventasNetas, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesDia.otrosIngresos, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
-                    <span className="text-xl font-bold text-primary">
-                      ${formatCifra(totalesDia.totalIngresos, scaleFormat)}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+    // Función para procesar datos de métodos de pago (solo para transacciones con pago recibido)
+    const getMetodosPagoData = (): MetodoPagoItem[] => {
+      // Filtrar solo transacciones que tienen método de pago asignado (contado o parcial)
+      const transaccionesConPago = filteredTransactions.filter((t) =>
+        (t as any).tipo_pago === "contado" || (t as any).tipo_pago === "parcial"
+      );
 
-              {/* Mes */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesMes.ventasBrutas, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesMes.descuentos, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
-                    <span className="text-lg font-bold text-foreground">
-                      ${formatCifra(totalesMes.ventasNetas, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesMes.otrosIngresos, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
-                    <span className="text-xl font-bold text-primary">
-                      ${formatCifra(totalesMes.totalIngresos, scaleFormat)}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+      if (transaccionesConPago.length === 0) return [];
 
-              {/* Año */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesAno.ventasBrutas, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-destructive">Descuentos:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesAno.descuentos, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
-                    <span className="text-lg font-bold text-foreground">
-                      ${formatCifra(totalesAno.ventasNetas, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Otros Ingresos:</span>
-                    <span className="font-semibold text-foreground">
-                      ${formatCifra(totalesAno.otrosIngresos, scaleFormat)}
-                    </span>
-                  </div>
-                  <div className="h-px bg-border"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-primary">Total Ingresos:</span>
-                    <span className="text-xl font-bold text-primary">
-                      ${formatCifra(totalesAno.totalIngresos, scaleFormat)}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-                  </div>
+      // Agrupar por método de pago
+      const metodosPago: NumMap = {};
+      transaccionesConPago.forEach((t) => {
+        const metodo = (t as any).metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta";
+        metodosPago[metodo] = (metodosPago[metodo] || 0) + (Number(getMetricValue(t as any, metricType)) || 0);
+      });
 
-            {/* SEPARADOR */}
-            <div className="my-8 border-t-2 border-primary/20"></div>
+      const total = (Object.values(metodosPago) as number[]).reduce((sum, val) => sum + (Number(val) || 0), 0);
 
-            {/* ANALÍTICA - Sección de análisis detallado */}
-            <div>
-              <h3 className="text-xl font-bold text-foreground mb-6">
-                Analítica de {tipoIngresoAnalisis === "ventas" ? "Ventas" : "Otros Ingresos"}
-              </h3>
+      return (Object.entries(metodosPago) as Array<[string, number]>).map(([name, value]) => ({
+        name,
+        value,
+        porcentaje: total > 0 ? ((value / total) * 100).toFixed(1) : "0.0",
+      }));
+    };
 
-            {/* Selector de Período, Formato de Cifras, Tipo de Métrica y Tipo de Ingreso */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tipo de Ingreso</CardTitle>
-                  <CardDescription>Selecciona qué analizar</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup value={tipoIngresoAnalisis} onValueChange={(v) => setTipoIngresoAnalisis(v as "ventas" | "otros")} className="flex flex-col gap-3">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="ventas" id="tipo-ventas" />
-                      <Label htmlFor="tipo-ventas" className="cursor-pointer">Ventas</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="otros" id="tipo-otros" />
-                      <Label htmlFor="tipo-otros" className="cursor-pointer">Otros Ingresos</Label>
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Período de Análisis</CardTitle>
-                  <CardDescription>Selecciona el período</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")} className="flex flex-col gap-3">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="diario" id="period-daily" />
-                      <Label htmlFor="period-daily" className="cursor-pointer">Diario</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="mensual" id="period-monthly" />
-                      <Label htmlFor="period-monthly" className="cursor-pointer">Mensual</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="anual" id="period-annual" />
-                      <Label htmlFor="period-annual" className="cursor-pointer">Anual</Label>
-                    </div>
-                  </RadioGroup>
-                  
-                  {/* Selector de fecha para análisis diario */}
-                  {periodFilter === "diario" && (
-                    <div className="pt-2 border-t">
-                      <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !fechaAnalisisDiario && "text-muted-foreground"
-                            )}
-                            size="sm"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {format(fechaAnalisisDiario, "PPP", { locale: es })}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={fechaAnalisisDiario}
-                            onSelect={(date) => date && setFechaAnalisisDiario(date)}
-                            initialFocus
-                            className="pointer-events-auto"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
-                  
-                  {/* Selector de mes para análisis mensual */}
-                  {periodFilter === "mensual" && (
-                    <div className="pt-2 border-t">
-                      <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !fechaAnalisisMensual && "text-muted-foreground"
-                            )}
-                            size="sm"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={fechaAnalisisMensual}
-                            onSelect={(date) => date && setFechaAnalisisMensual(date)}
-                            initialFocus
-                            className="pointer-events-auto"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Formato de Cifras</CardTitle>
-                  <CardDescription>Visualización de montos</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup value={scaleFormat} onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")} className="flex flex-col gap-3">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="general" id="scale-general" />
-                      <Label htmlFor="scale-general" className="cursor-pointer">General</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="miles" id="scale-thousands" />
-                      <Label htmlFor="scale-thousands" className="cursor-pointer">Miles (K)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="millones" id="scale-millions" />
-                      <Label htmlFor="scale-millions" className="cursor-pointer">Millones (M)</Label>
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
+    const datosMetodosPago = getMetodosPagoData();
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tipo de Métrica</CardTitle>
-                  <CardDescription>Datos a visualizar</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup value={metricType} onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")} className="flex flex-col gap-3">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="brutas" id="metric-brutas" />
-                      <Label htmlFor="metric-brutas" className="cursor-pointer">Ventas Brutas</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="descuentos" id="metric-descuentos" />
-                      <Label htmlFor="metric-descuentos" className="cursor-pointer">Descuentos</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="netas" id="metric-netas" />
-                      <Label htmlFor="metric-netas" className="cursor-pointer">Ventas Netas</Label>
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-            </div>
+    // Función para verificar si hay datos disponibles
+    const hayDatosDisponibles = () => {
+      if (tipoIngresoAnalisis === "ventas") {
+        return (
+          filteredTransactions.length > 0 ||
+          (Number(datosAnaliticas.ventasBrutas) || 0) > 0 ||
+          (Number(datosAnaliticas.descuentos) || 0) > 0
+        );
+      } else {
+        // Otros ingresos
+        return filteredTransactions.length > 0 || (Number(datosAnaliticas.otrosIngresos) || 0) > 0;
+      }
+    };
 
-            {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>
-                  Evolución de {
-                    metricType === "descuentos" ? "Descuentos" :
-                    tipoIngresoAnalisis === "otros" ? "Otros Ingresos" :
-                    metricType === "brutas" ? "Ventas Brutas" : "Ventas Netas"
-                  }
-                </CardTitle>
-                <CardDescription>
-                  {
-                    metricType === "descuentos" ? "Descuentos aplicados" :
-                    tipoIngresoAnalisis === "otros" ? "Otros ingresos" :
-                    metricType === "brutas" ? "Ventas brutas" : "Ventas netas"
-                  } - {periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año"}
-                </CardDescription>
+    return (
+      <>
+        {/* HIGHLIGHTS - Resumen Completo (sin filtros) */}
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-foreground mb-4">Highlights de Ingresos</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Día */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
               </CardHeader>
-               <CardContent>
-                {loadingTransacciones ? (
-                  <div className="h-80 flex items-center justify-center text-muted-foreground">
-                    Cargando datos...
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesDia.ventasBrutas, scaleFormat)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-destructive">Descuentos:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesDia.descuentos, scaleFormat)}
+                  </span>
+                </div>
+                <div className="h-px bg-border"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
+                  <span className="text-lg font-bold text-foreground">
+                    ${formatCifra(totalesDia.ventasNetas, scaleFormat)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesDia.otrosIngresos, scaleFormat)}
+                  </span>
+                </div>
+                <div className="h-px bg-border"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                  <span className="text-xl font-bold text-primary">
+                    ${formatCifra(totalesDia.totalIngresos, scaleFormat)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mes */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesMes.ventasBrutas, scaleFormat)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-destructive">Descuentos:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesMes.descuentos, scaleFormat)}
+                  </span>
+                </div>
+                <div className="h-px bg-border"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
+                  <span className="text-lg font-bold text-foreground">
+                    ${formatCifra(totalesMes.ventasNetas, scaleFormat)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesMes.otrosIngresos, scaleFormat)}
+                  </span>
+                </div>
+                <div className="h-px bg-border"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                  <span className="text-xl font-bold text-primary">
+                    ${formatCifra(totalesMes.totalIngresos, scaleFormat)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Año */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesAno.ventasBrutas, scaleFormat)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-destructive">Descuentos:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesAno.descuentos, scaleFormat)}
+                  </span>
+                </div>
+                <div className="h-px bg-border"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
+                  <span className="text-lg font-bold text-foreground">
+                    ${formatCifra(totalesAno.ventasNetas, scaleFormat)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-blue-600">Otros Ingresos:</span>
+                  <span className="font-semibold text-foreground">
+                    ${formatCifra(totalesAno.otrosIngresos, scaleFormat)}
+                  </span>
+                </div>
+                <div className="h-px bg-border"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-primary">Total Ingresos:</span>
+                  <span className="text-xl font-bold text-primary">
+                    ${formatCifra(totalesAno.totalIngresos, scaleFormat)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* SEPARADOR */}
+        <div className="my-8 border-t-2 border-primary/20"></div>
+
+        {/* ANALÍTICA - Sección de análisis detallado */}
+        <div>
+          <h3 className="text-xl font-bold text-foreground mb-6">
+            Analítica de {tipoIngresoAnalisis === "ventas" ? "Ventas" : "Otros Ingresos"}
+          </h3>
+
+          {/* Selector de Período, Formato de Cifras, Tipo de Métrica y Tipo de Ingreso */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Tipo de Ingreso</CardTitle>
+                <CardDescription>Selecciona qué analizar</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={tipoIngresoAnalisis}
+                  onValueChange={(v) => setTipoIngresoAnalisis(v as "ventas" | "otros")}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="ventas" id="tipo-ventas" />
+                    <Label htmlFor="tipo-ventas" className="cursor-pointer">
+                      Ventas
+                    </Label>
                   </div>
-                ) : datosAnaliticas.detallesPorPeriodo.length === 0 ? (
-                  <div className="h-80 flex items-center justify-center text-muted-foreground">
-                    No hay datos para mostrar
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="otros" id="tipo-otros" />
+                    <Label htmlFor="tipo-otros" className="cursor-pointer">
+                      Otros Ingresos
+                    </Label>
                   </div>
-                ) : (
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={datosAnaliticas.detallesPorPeriodo.map(d => ({
+                </RadioGroup>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Período de Análisis</CardTitle>
+                <CardDescription>Selecciona el período</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <RadioGroup
+                  value={periodFilter}
+                  onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="diario" id="period-daily" />
+                    <Label htmlFor="period-daily" className="cursor-pointer">
+                      Diario
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="mensual" id="period-monthly" />
+                    <Label htmlFor="period-monthly" className="cursor-pointer">
+                      Mensual
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="anual" id="period-annual" />
+                    <Label htmlFor="period-annual" className="cursor-pointer">
+                      Anual
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                {/* Selector de fecha para análisis diario */}
+                {periodFilter === "diario" && (
+                  <div className="pt-2 border-t">
+                    <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn("w-full justify-start text-left font-normal", !fechaAnalisisDiario && "text-muted-foreground")}
+                          size="sm"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(fechaAnalisisDiario, "PPP", { locale: es })}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={fechaAnalisisDiario}
+                          onSelect={(date) => date && setFechaAnalisisDiario(date)}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+
+                {/* Selector de mes para análisis mensual */}
+                {periodFilter === "mensual" && (
+                  <div className="pt-2 border-t">
+                    <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn("w-full justify-start text-left font-normal", !fechaAnalisisMensual && "text-muted-foreground")}
+                          size="sm"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={fechaAnalisisMensual}
+                          onSelect={(date) => date && setFechaAnalisisMensual(date)}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Formato de Cifras</CardTitle>
+                <CardDescription>Visualización de montos</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={scaleFormat}
+                  onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="general" id="scale-general" />
+                    <Label htmlFor="scale-general" className="cursor-pointer">
+                      General
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="miles" id="scale-thousands" />
+                    <Label htmlFor="scale-thousands" className="cursor-pointer">
+                      Miles (K)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="millones" id="scale-millions" />
+                    <Label htmlFor="scale-millions" className="cursor-pointer">
+                      Millones (M)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Tipo de Métrica</CardTitle>
+                <CardDescription>Datos a visualizar</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={metricType}
+                  onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="brutas" id="metric-brutas" />
+                    <Label htmlFor="metric-brutas" className="cursor-pointer">
+                      Ventas Brutas
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="descuentos" id="metric-descuentos" />
+                    <Label htmlFor="metric-descuentos" className="cursor-pointer">
+                      Descuentos
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="netas" id="metric-netas" />
+                    <Label htmlFor="metric-netas" className="cursor-pointer">
+                      Ventas Netas
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>
+                Evolución de{" "}
+                {metricType === "descuentos"
+                  ? "Descuentos"
+                  : tipoIngresoAnalisis === "otros"
+                  ? "Otros Ingresos"
+                  : metricType === "brutas"
+                  ? "Ventas Brutas"
+                  : "Ventas Netas"}
+              </CardTitle>
+              <CardDescription>
+                {(metricType === "descuentos"
+                  ? "Descuentos aplicados"
+                  : tipoIngresoAnalisis === "otros"
+                  ? "Otros ingresos"
+                  : metricType === "brutas"
+                  ? "Ventas brutas"
+                  : "Ventas netas") +
+                  " - " +
+                  (periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingTransacciones ? (
+                <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando datos...</div>
+              ) : datosAnaliticas.detallesPorPeriodo.length === 0 ? (
+                <div className="h-80 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+              ) : (
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={datosAnaliticas.detallesPorPeriodo.map((d) => ({
                         periodo: d.periodo,
                         ventas: d.ventasBrutas,
                         descuentos: d.descuentos,
                         neto: d.ventasNetas,
-                        otrosIngresos: d.otrosIngresos
-                      }))}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="periodo" tick={{ fill: '#000000' }} />
-                        <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: '#000000' }} />
-                        <Tooltip 
-                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, '']}
-                          contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
-                          itemStyle={{ color: '#000000', fontWeight: 'bold' }}
-                          labelStyle={{ color: '#000000', fontWeight: 'bold' }}
+                        otrosIngresos: d.otrosIngresos,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="periodo" tick={{ fill: "#000000" }} />
+                      <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: "#000000" }} />
+                      <Tooltip
+                        formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, ""]}
+                        contentStyle={{
+                          backgroundColor: "#ffffff",
+                          border: "1px solid #ccc",
+                          borderRadius: "4px",
+                          color: "#000000",
+                        }}
+                        itemStyle={{ color: "#000000", fontWeight: "bold" }}
+                        labelStyle={{ color: "#000000", fontWeight: "bold" }}
+                        wrapperStyle={{ zIndex: 1000 }}
+                      />
+                      <Legend />
+
+                      {metricType === "descuentos" && (
+                        <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
+                          <LabelList
+                            dataKey="descuentos"
+                            position="top"
+                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
+                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                          />
+                        </Line>
+                      )}
+
+                      {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
+                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
+                          <LabelList
+                            dataKey="ventas"
+                            position="top"
+                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
+                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                          />
+                        </Line>
+                      )}
+
+                      {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
+                        <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
+                          <LabelList
+                            dataKey="neto"
+                            position="top"
+                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
+                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                          />
+                        </Line>
+                      )}
+
+                      {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
+                        <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2}>
+                          <LabelList
+                            dataKey="otrosIngresos"
+                            position="top"
+                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
+                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
+                          />
+                        </Line>
+                      )}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Gráfico de Ventas por Tipo */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Tipo
+                </CardTitle>
+                <CardDescription>
+                  Distribución de{" "}
+                  {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por categoría
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
+                ) : !hayDatosDisponibles() ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={((): PieTipoItem[] => {
+                            const totalRealPie =
+                              tipoIngresoAnalisis === "ventas"
+                                ? metricType === "brutas"
+                                  ? datosAnaliticas.ventasBrutas
+                                  : metricType === "descuentos"
+                                  ? datosAnaliticas.descuentos
+                                  : datosAnaliticas.ventasNetas
+                                : datosAnaliticas.otrosIngresos;
+
+                            if (filteredTransactions.length === 0 && (Number(totalRealPie) || 0) > 0) {
+                              return [{ tipo: "Otros Ingresos", monto: Number(totalRealPie) || 0, porcentaje: "100.0" }];
+                            }
+
+                            const distribucionTransacciones = filteredTransactions.reduce<NumMap>((acc, t: any) => {
+                              const key = (t?.tipo_ingreso || "sin_tipo") as string;
+                              acc[key] = (acc[key] || 0) + (Number(getMetricValue(t, metricType)) || 0);
+                              return acc;
+                            }, {} as NumMap);
+
+                            const totalTransacciones = (Object.values(distribucionTransacciones) as number[]).reduce(
+                              (sum, val) => sum + (Number(val) || 0),
+                              0
+                            );
+
+                            return (Object.entries(distribucionTransacciones) as Array<[string, number]>).map(([tipo, monto]) => ({
+                              tipo: String(tipo).charAt(0).toUpperCase() + String(tipo).slice(1),
+                              monto: Number(monto) || 0,
+                              porcentaje: totalTransacciones > 0 ? (((Number(monto) || 0) / totalTransacciones) * 100).toFixed(1) : "0.0",
+                            }));
+                          })()}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ tipo, porcentaje, monto }: any) => `${tipo}\n${porcentaje}%\n$${formatCifra(Number(monto) || 0, scaleFormat)}`}
+                          innerRadius={60}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="monto"
+                        >
+                          {Object.keys(
+                            filteredTransactions.reduce((acc: BoolMap, t: any) => {
+                              acc[t?.tipo_ingreso || "sin_tipo"] = true;
+                              return acc;
+                            }, {} as BoolMap)
+                          ).map((entry, index) => {
+                            const colors = [
+                              "hsl(180 50% 55%)",
+                              "hsl(180 45% 45%)",
+                              "hsl(180 55% 65%)",
+                              "hsl(180 40% 40%)",
+                            ];
+                            return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
+                          })}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
+                          contentStyle={{
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #ccc",
+                            borderRadius: "4px",
+                            color: "#000000",
+                          }}
+                          itemStyle={{ color: "#000000", fontWeight: "bold" }}
+                          labelStyle={{ color: "#000000", fontWeight: "bold" }}
                           wrapperStyle={{ zIndex: 1000 }}
                         />
-                        <Legend />
-                        {metricType === "descuentos" && (
-                          <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
-                            <LabelList dataKey="descuentos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Line>
-                        )}
-                        {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
-                          <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
-                            <LabelList dataKey="ventas" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Line>
-                        )}
-                        {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
-                          <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
-                            <LabelList dataKey="neto" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Line>
-                        )}
-                        {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
-                          <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2}>
-                            <LabelList dataKey="otrosIngresos" position="top" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Line>
-                        )}
-                      </LineChart>
+                      </PieChart>
                     </ResponsiveContainer>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Gráfico de Ventas por Tipo */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Tipo</CardTitle>
-                  <CardDescription>Distribución de {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por categoría</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      Cargando gráfico...
-                    </div>
-                  ) : !hayDatosDisponibles() ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay datos para mostrar
-                    </div>
-                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay descuentos en otros ingresos
-                    </div>
-                  ) : (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={(() => {
-                              // Obtener total real desde asientos contables
-                              const totalRealPie = tipoIngresoAnalisis === "ventas"
-                                ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                                   : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                                   : datosAnaliticas.ventasNetas)
+            {/* Gráfico de Estado de Pago */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Estado de Pagos - {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"}
+                </CardTitle>
+                <CardDescription>Distribución por estado de pago</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
+                ) : !hayDatosDisponibles() ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={((): PieEstadoItem[] => {
+                            const totalRealEstado =
+                              tipoIngresoAnalisis === "ventas"
+                                ? metricType === "brutas"
+                                  ? datosAnaliticas.ventasBrutas
+                                  : metricType === "descuentos"
+                                  ? datosAnaliticas.descuentos
+                                  : datosAnaliticas.ventasNetas
                                 : datosAnaliticas.otrosIngresos;
-                              
-                              // Si no hay transacciones pero hay monto en asientos (otros ingresos)
-                              if (filteredTransactions.length === 0 && totalRealPie > 0) {
-                                return [{
-                                  tipo: "Otros Ingresos",
-                                  monto: totalRealPie,
-                                  porcentaje: "100.0"
-                                }];
+
+                            if (filteredTransactions.length === 0 && (Number(totalRealEstado) || 0) > 0) {
+                              return [{ estado: "Pagado Total", monto: Number(totalRealEstado) || 0, porcentaje: "100.0" }];
+                            }
+
+                            const estadoPagos = filteredTransactions.reduce<NumMap>((acc, t: any) => {
+                              let estado = "Por Cobrar";
+                              if (t.tipo_pago === "contado" || (t.monto_pagado && t.monto_pendiente === 0)) {
+                                estado = "Pagado Total";
+                              } else if (t.tipo_pago === "parcial" || (t.monto_pagado > 0 && t.monto_pendiente > 0)) {
+                                estado = "Pago Parcial";
                               }
-                              
-                              // Calcular distribución desde transacciones
-                              const distribucionTransacciones = filteredTransactions.reduce((acc, t) => {
-                                acc[t.tipo_ingreso] = (acc[t.tipo_ingreso] || 0) + getMetricValue(t, metricType);
-                                return acc;
-                              }, {} as Record<string, number>);
-                              
-                              const totalTransacciones = Object.values(distribucionTransacciones).reduce((sum, val) => sum + val, 0);
-                              
-                              return Object.entries(distribucionTransacciones).map(([tipo, monto]) => ({
-                                tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1),
-                                monto,
-                                porcentaje: totalTransacciones > 0 ? ((monto / totalTransacciones) * 100).toFixed(1) : '0.0'
-                              }));
-                            })()}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ tipo, porcentaje, monto }) => `${tipo}\n${porcentaje}%\n$${formatCifra(monto, scaleFormat)}`}
-                            innerRadius={60}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="monto"
-                          >
-                            {Object.keys(filteredTransactions.reduce((acc, t) => {
-                              acc[t.tipo_ingreso] = true;
+                              acc[estado] = (acc[estado] || 0) + (Number(getMetricValue(t, metricType)) || 0);
                               return acc;
-                            }, {} as Record<string, boolean>)).map((entry, index) => {
-                              const colors = [
-                                "hsl(180 50% 55%)", // Teal medio
-                                "hsl(180 45% 45%)", // Teal oscuro
-                                "hsl(180 55% 65%)", // Teal claro
-                                "hsl(180 40% 40%)"  // Teal más oscuro
-                              ];
-                              return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
-                            })}
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
-                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
-                            itemStyle={{ color: '#000000', fontWeight: 'bold' }}
-                            labelStyle={{ color: '#000000', fontWeight: 'bold' }}
-                            wrapperStyle={{ zIndex: 1000 }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                            }, {} as NumMap);
 
-              {/* Gráfico de Estado de Pago */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Estado de Pagos - {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"}</CardTitle>
-                  <CardDescription>Distribución por estado de pago</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      Cargando gráfico...
-                    </div>
-                  ) : !hayDatosDisponibles() ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay datos para mostrar
-                    </div>
-                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay descuentos en otros ingresos
-                    </div>
-                  ) : (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={(() => {
-                              // Obtener total real desde asientos contables
-                              const totalRealEstado = tipoIngresoAnalisis === "ventas"
-                                ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                                   : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                                   : datosAnaliticas.ventasNetas)
-                                : datosAnaliticas.otrosIngresos;
-                              
-                              // Si no hay transacciones pero hay monto en asientos (otros ingresos)
-                              if (filteredTransactions.length === 0 && totalRealEstado > 0) {
-                                return [{
-                                  estado: "Pagado Total",
-                                  monto: totalRealEstado,
-                                  porcentaje: "100.0"
-                                }];
-                              }
-                              
-                              // Calcular distribución por estado desde transacciones
-                              const estadoPagos = filteredTransactions.reduce((acc, t: any) => {
-                                let estado = "Por Cobrar";
-                                if (t.tipo_pago === "contado" || (t.monto_pagado && t.monto_pendiente === 0)) {
-                                  estado = "Pagado Total";
-                                } else if (t.tipo_pago === "parcial" || (t.monto_pagado > 0 && t.monto_pendiente > 0)) {
-                                  estado = "Pago Parcial";
-                                }
-                                acc[estado] = (acc[estado] || 0) + getMetricValue(t, metricType);
-                                return acc;
-                              }, {} as Record<string, number>);
-                              
-                              const totalEstadoPagos = Object.values(estadoPagos).reduce((sum, val) => sum + val, 0);
-                              
-                              return Object.entries(estadoPagos).map(([estado, monto]) => ({
-                                estado,
-                                monto,
-                                porcentaje: totalEstadoPagos > 0 ? ((monto / totalEstadoPagos) * 100).toFixed(1) : '0.0'
-                              }));
-                            })()}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ estado, porcentaje, monto }) => `${estado}\n${porcentaje}%\n$${formatCifra(monto, scaleFormat)}`}
-                            innerRadius={60}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="monto"
-                          >
-                            <Cell fill="hsl(180 50% 55%)" />
-                            <Cell fill="hsl(180 55% 65%)" />
-                            <Cell fill="hsl(180 45% 45%)" />
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
-                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
-                            itemStyle={{ color: '#000000', fontWeight: 'bold' }}
-                            labelStyle={{ color: '#000000', fontWeight: 'bold' }}
-                            wrapperStyle={{ zIndex: 1000 }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                            const totalEstadoPagos = (Object.values(estadoPagos) as number[]).reduce((sum, val) => sum + (Number(val) || 0), 0);
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico por Subcuenta/Cuenta Contable */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <div className="space-y-1">
-                    <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por {vistaGraficaBarras === "subcuenta" ? "Subcuenta" : "Cuenta"}</CardTitle>
-                    <CardDescription>Distribución por {vistaGraficaBarras === "subcuenta" ? "subcuentas" : "cuentas"} contables</CardDescription>
+                            return (Object.entries(estadoPagos) as Array<[string, number]>).map(([estado, monto]) => ({
+                              estado,
+                              monto: Number(monto) || 0,
+                              porcentaje: totalEstadoPagos > 0 ? (((Number(monto) || 0) / totalEstadoPagos) * 100).toFixed(1) : "0.0",
+                            }));
+                          })()}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ estado, porcentaje, monto }: any) => `${estado}\n${porcentaje}%\n$${formatCifra(Number(monto) || 0, scaleFormat)}`}
+                          innerRadius={60}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="monto"
+                        >
+                          <Cell fill="hsl(180 50% 55%)" />
+                          <Cell fill="hsl(180 55% 65%)" />
+                          <Cell fill="hsl(180 45% 45%)" />
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
+                          contentStyle={{
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #ccc",
+                            borderRadius: "4px",
+                            color: "#000000",
+                          }}
+                          itemStyle={{ color: "#000000", fontWeight: "bold" }}
+                          labelStyle={{ color: "#000000", fontWeight: "bold" }}
+                          wrapperStyle={{ zIndex: 1000 }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                  <Select value={vistaGraficaBarras} onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}>
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
-                      <SelectItem value="cuenta">Por Cuenta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      Cargando gráfico...
-                    </div>
-                  ) : !hayDatosDisponibles() ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay datos para mostrar
-                    </div>
-                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay descuentos en otros ingresos
-                    </div>
-                  ) : (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={(() => {
-                          const totalRealBarSub = tipoIngresoAnalisis === "ventas"
-                            ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                               : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                               : datosAnaliticas.ventasNetas)
-                            : datosAnaliticas.otrosIngresos;
-                          
-                          if (filteredTransactions.length === 0 && totalRealBarSub > 0) {
-                            return [{subcuenta: "Sin detalle", monto: totalRealBarSub}];
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Gráfico por Subcuenta/Cuenta Contable */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="space-y-1">
+                  <CardTitle>
+                    {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por{" "}
+                    {vistaGraficaBarras === "subcuenta" ? "Subcuenta" : "Cuenta"}
+                  </CardTitle>
+                  <CardDescription>
+                    Distribución por {vistaGraficaBarras === "subcuenta" ? "subcuentas" : "cuentas"} contables
+                  </CardDescription>
+                </div>
+                <Select value={vistaGraficaBarras} onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
+                    <SelectItem value="cuenta">Por Cuenta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
+                ) : !hayDatosDisponibles() ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={(() => {
+                          const totalRealBarSub =
+                            tipoIngresoAnalisis === "ventas"
+                              ? metricType === "brutas"
+                                ? datosAnaliticas.ventasBrutas
+                                : metricType === "descuentos"
+                                ? datosAnaliticas.descuentos
+                                : datosAnaliticas.ventasNetas
+                              : datosAnaliticas.otrosIngresos;
+
+                          if (filteredTransactions.length === 0 && (Number(totalRealBarSub) || 0) > 0) {
+                            return [{ subcuenta: "Sin detalle", monto: Number(totalRealBarSub) || 0 }];
                           }
-                          
-                          const chartData = filteredTransactions.reduce((acc, t) => {
+
+                          const chartData = filteredTransactions.reduce<NumMap>((acc, t: any) => {
                             let key: string;
                             if (vistaGraficaBarras === "subcuenta") {
-                              key = t.subcuenta_id 
-                                ? (subcuentas.find(s => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida")
+                              key = t.subcuenta_id
+                                ? subcuentas.find((s) => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida"
                                 : "Sin subcuenta asignada";
                             } else {
-                              // Agrupar por cuenta contable
-                              const cuenta = cuentas.find(c => c.codigo === t.cuenta_principal_codigo);
+                              const cuenta = cuentas.find((c) => c.codigo === t.cuenta_principal_codigo);
                               key = cuenta ? `${t.cuenta_principal_codigo} - ${cuenta.nombre}` : t.cuenta_principal_codigo || "Sin cuenta";
                             }
-                            acc[key] = (acc[key] || 0) + getMetricValue(t, metricType);
+
+                            acc[key] = (acc[key] || 0) + (Number(getMetricValue(t, metricType)) || 0);
                             return acc;
-                          }, {} as Record<string, number>);
-                          
-                          // Agregar ingresos de otros módulos (identificar origen real)
-                          const totalTransacciones = Object.values(chartData).reduce((sum, v) => sum + v, 0);
-                          const diferencia = totalRealBarSub - totalTransacciones;
+                          }, {} as NumMap);
+
+                          const totalTransacciones = (Object.values(chartData) as number[]).reduce((sum, v) => sum + (Number(v) || 0), 0);
+                          const diferencia = (Number(totalRealBarSub) || 0) - totalTransacciones;
+
                           if (diferencia > 0.01) {
-                            // Identificar el origen real de los ingresos
-                            const ingresosPorOrigen: Record<string, number> = {};
-                            
-                            asientosIngresosDirectos.forEach(asiento => {
-                              // Extraer el detalle de ingreso (cuenta 4XXX con HABER)
-                              const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
-                                d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
-                              );
+                            const ingresosPorOrigen: NumMap = {};
+
+                            asientosDir.forEach((asiento: any) => {
+                              const detalles = Array.isArray(asiento.detalle_asientos) ? asiento.detalle_asientos : [];
+                              const detalleIngreso = detalles.find((d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0);
                               if (!detalleIngreso) return;
-                              
+
                               const monto = Number(detalleIngreso.haber) || 0;
-                              const cuentaCodigo = detalleIngreso.cuenta_codigo;
-                              const cuentaInfo = cuentas.find(c => c.codigo === cuentaCodigo);
+                              const cuentaCodigo = String(detalleIngreso.cuenta_codigo || "");
+                              const cuentaInfo = cuentas.find((c) => c.codigo === cuentaCodigo);
                               const cuentaNombre = cuentaInfo?.nombre || "Otros ingresos";
-                              
+
                               let origen: string;
                               if (vistaGraficaBarras === "cuenta") {
                                 origen = `${cuentaCodigo} - ${cuentaNombre}`;
-                              } else if (vistaGraficaBarras === "subcuenta") {
-                                // Buscar subcuenta si existe
-                                const subcuentaId = detalleIngreso.subcuenta_id;
-                                const subcuentaInfo = subcuentas.find(s => s.id === subcuentaId);
-                                origen = subcuentaInfo?.nombre || "Sin subcuenta asignada";
                               } else {
-                                // Vista por tipo de ingreso
-                                origen = cuentaNombre;
+                                const subcuentaId = detalleIngreso.subcuenta_id;
+                                const subcuentaInfo = subcuentas.find((s) => s.id === subcuentaId);
+                                origen = subcuentaInfo?.nombre || "Sin subcuenta asignada";
                               }
-                              
+
                               ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + monto;
                             });
-                            
-                            // Agregar cada origen como entrada separada en chartData
-                            Object.entries(ingresosPorOrigen).forEach(([origen, monto]) => {
-                              chartData[origen] = (chartData[origen] || 0) + monto;
+
+                            (Object.entries(ingresosPorOrigen) as Array<[string, number]>).forEach(([origen, monto]) => {
+                              chartData[origen] = (chartData[origen] || 0) + (Number(monto) || 0);
                             });
                           }
-                          
-                          return Object.entries(chartData).map(([subcuenta, monto]) => ({
+
+                          return (Object.entries(chartData) as Array<[string, number]>).map(([subcuenta, monto]) => ({
                             subcuenta,
-                            monto
+                            monto: Number(monto) || 0,
                           }));
-                        })()} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            type="number" 
-                            tickFormatter={(value) => formatCifra(value, scaleFormat)} 
-                            tick={{ fill: '#000000' }}
-                            domain={[0, (dataMax: number) => dataMax * 1.2]}
+                        })()}
+                        layout="vertical"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          type="number"
+                          tickFormatter={(value) => formatCifra(value, scaleFormat)}
+                          tick={{ fill: "#000000" }}
+                          domain={[0, (dataMax: number) => dataMax * 1.2]}
+                        />
+                        <YAxis type="category" dataKey="subcuenta" width={150} tick={{ fill: "#000000" }} />
+                        <Tooltip
+                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
+                          contentStyle={{
+                            backgroundColor: "#ffffff",
+                            border: "1px solid #ccc",
+                            borderRadius: "4px",
+                            color: "#000000",
+                          }}
+                          itemStyle={{ color: "#000000", fontWeight: "bold" }}
+                          labelStyle={{ color: "#000000", fontWeight: "bold" }}
+                          wrapperStyle={{ zIndex: 1000 }}
+                        />
+                        <Bar dataKey="monto" fill="hsl(180 50% 55%)">
+                          <LabelList
+                            dataKey="monto"
+                            position="right"
+                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
+                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
                           />
-                          <YAxis type="category" dataKey="subcuenta" width={150} tick={{ fill: '#000000' }} />
-                          <Tooltip 
-                            formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, 'Monto']}
-                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #ccc', borderRadius: '4px', color: '#000000' }}
-                            itemStyle={{ color: '#000000', fontWeight: 'bold' }}
-                            labelStyle={{ color: '#000000', fontWeight: 'bold' }}
-                            wrapperStyle={{ zIndex: 1000 }}
-                          />
-                          <Bar dataKey="monto" fill="hsl(180 50% 55%)">
-                            <LabelList dataKey="monto" position="right" formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`} style={{ fill: '#000000', fontWeight: 'bold', fontSize: '12px' }} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* TreeMap de Métodos de Pago */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Métodos de Pago Recibidos</CardTitle>
-                  <CardDescription>
-                    Distribución de {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por método de pago
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      Cargando gráfico...
-                    </div>
-                  ) : !hayDatosDisponibles() ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay datos para mostrar
-                    </div>
-                  ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay descuentos en otros ingresos
-                    </div>
-                  ) : datosMetodosPago.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No hay transacciones con método de pago en este período
-                      <br />
-                      <span className="text-xs mt-2 block">Las ventas a crédito no tienen método de pago asignado</span>
-                    </div>
-                  ) : (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <Treemap
-                          data={datosMetodosPago}
-                          dataKey="value"
-                          aspectRatio={4/3}
-                          stroke="#fff"
-                          fill="#8884d8"
-                          content={<CustomTreemapContent />}
-                        >
-                          <Tooltip content={<CustomTreemapTooltip scaleFormat={scaleFormat} />} />
-                        </Treemap>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            {/* TreeMap de Métodos de Pago */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Métodos de Pago Recibidos</CardTitle>
+                <CardDescription>
+                  Distribución de{" "}
+                  {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por método de pago
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
+                ) : !hayDatosDisponibles() ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
+                ) : datosMetodosPago.length === 0 ? (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    No hay transacciones con método de pago en este período
+                    <br />
+                    <span className="text-xs mt-2 block">Las ventas a crédito no tienen método de pago asignado</span>
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <Treemap
+                        data={datosMetodosPago}
+                        dataKey="value"
+                        aspectRatio={4 / 3}
+                        stroke="#fff"
+                        fill="#8884d8"
+                        content={<CustomTreemapContent />}
+                      >
+                        <Tooltip content={<CustomTreemapTooltip scaleFormat={scaleFormat} />} />
+                      </Treemap>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Tablas de análisis */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-              {/* Tabla de Ventas por Producto */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Producto</CardTitle>
-                  <CardDescription>Ranking de productos {metricType === "descuentos" ? "con más descuentos" : "más vendidos"}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Cargando datos...
-                    </div>
-                  ) : !hayDatosDisponibles() ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No hay datos para mostrar
-                    </div>
-                  ) : (
-                     <div className="space-y-3">
-                      {(() => {
-                        // Si estamos en "Otros Ingresos" y seleccionamos "Descuentos", no hay nada que mostrar
-                        if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
-                          return (
-                            <div className="text-center py-8 text-muted-foreground">
-                              No hay descuentos en otros ingresos
-                            </div>
-                          );
-                        }
-                        
-                        // Obtener total real desde asientos contables
-                        const totalRealProductos = tipoIngresoAnalisis === "ventas"
-                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                             : datosAnaliticas.ventasNetas)
+          {/* Tablas de análisis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            {/* Tabla de Ventas por Producto */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Producto
+                </CardTitle>
+                <CardDescription>
+                  Ranking de productos {metricType === "descuentos" ? "con más descuentos" : "más vendidos"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="text-center py-8 text-muted-foreground">Cargando datos...</div>
+                ) : !hayDatosDisponibles() ? (
+                  <div className="text-center py-8 text-muted-foreground">No hay datos para mostrar</div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
+                        return <div className="text-center py-8 text-muted-foreground">No hay descuentos en otros ingresos</div>;
+                      }
+
+                      const totalRealProductos =
+                        tipoIngresoAnalisis === "ventas"
+                          ? metricType === "brutas"
+                            ? datosAnaliticas.ventasBrutas
+                            : metricType === "descuentos"
+                            ? datosAnaliticas.descuentos
+                            : datosAnaliticas.ventasNetas
                           : datosAnaliticas.otrosIngresos;
-                        
-                        // Si no hay transacciones pero hay monto en asientos (otros ingresos)
-                        if (filteredTransactions.length === 0 && totalRealProductos > 0) {
-                          return (
-                            <>
-                              <div className="flex items-center gap-3 p-3 border rounded-lg">
-                                <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <Package className="w-5 h-5 text-primary" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium">Sin detalle de producto</p>
-                                  <p className="text-sm text-muted-foreground">Otros Ingresos</p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="font-bold text-foreground">
-                                    ${formatCifra(totalRealProductos, scaleFormat)}
-                                  </p>
-                                </div>
-                                <div className="flex-shrink-0">
-                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
-                                    100%
-                                  </div>
-                                </div>
+
+                      if (filteredTransactions.length === 0 && (Number(totalRealProductos) || 0) > 0) {
+                        return (
+                          <>
+                            <div className="flex items-center gap-3 p-3 border rounded-lg">
+                              <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <Package className="w-5 h-5 text-primary" />
                               </div>
-                              {/* Fila de Total */}
-                              <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                                <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                  <Package className="w-5 h-5 text-primary" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                  <p className="text-sm text-muted-foreground">1 registro</p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="font-bold text-lg text-primary">
-                                    ${formatCifra(totalRealProductos, scaleFormat)}
-                                  </p>
-                                </div>
-                                <div className="flex-shrink-0">
-                                  <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
-                                    100%
-                                  </div>
-                                </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium">Sin detalle de producto</p>
+                                <p className="text-sm text-muted-foreground">Otros Ingresos</p>
                               </div>
-                            </>
-                          );
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-foreground">${formatCifra(Number(totalRealProductos) || 0, scaleFormat)}</p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">100%</div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                              <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                <Package className="w-5 h-5 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                <p className="text-sm text-muted-foreground">1 registro</p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-lg text-primary">${formatCifra(Number(totalRealProductos) || 0, scaleFormat)}</p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      }
+
+                      const productosVentas: Record<
+                        string,
+                        { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }
+                      > = {};
+
+                      filteredTransactions.forEach((t: any) => {
+                        if (t.tipo_ingreso === "inventariados" && String(t.descripcion || "").startsWith("Venta de ")) {
+                          const productoNombre = String(t.descripcion).replace("Venta de ", "").trim();
+                          const productoEnCatalogo = productosInventario.find((p) => p.nombre.toLowerCase() === productoNombre.toLowerCase());
+
+                          if (!productosVentas[productoNombre]) {
+                            productosVentas[productoNombre] = {
+                              nombre: productoNombre,
+                              transacciones: 0,
+                              monto: 0,
+                              imagen: productoEnCatalogo?.imagen_url,
+                              tieneAsignacion: true,
+                            };
+                          }
+
+                          productosVentas[productoNombre].transacciones += 1;
+                          productosVentas[productoNombre].monto += Number(getMetricValue(t, metricType)) || 0;
                         }
-                        
-                        // Calcular distribución por producto desde transacciones
-                        const productosVentas: Record<string, { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }> = {};
-                        
-                        // Procesar transacciones tipo 'inventariados' directamente
-                        filteredTransactions.forEach(t => {
-                          if (t.tipo_ingreso === 'inventariados' && t.descripcion.startsWith('Venta de ')) {
-                            const productoNombre = t.descripcion.replace('Venta de ', '').trim();
-                            
-                            // Buscar imagen del producto en catálogo
-                            const productoEnCatalogo = productosInventario.find(p => 
-                              p.nombre.toLowerCase() === productoNombre.toLowerCase()
-                            );
-                            
-                            if (!productosVentas[productoNombre]) {
-                              productosVentas[productoNombre] = {
-                                nombre: productoNombre,
+                      });
+
+                      filteredTransactions.forEach((t: any) => {
+                        if (t.tipo_ingreso === "precargados") {
+                          let productosPorProcesar: Array<{ nombre: string; cantidad: number }> = [];
+
+                          if (String(t.descripcion || "").startsWith("Venta: ")) {
+                            const productosSplit = String(t.descripcion).replace("Venta: ", "").split(", ");
+                            productosPorProcesar = productosSplit.map((productoStr) => {
+                              const match = productoStr.match(/^(.+?) \(x(\d+)\)$/);
+                              if (match) return { nombre: match[1].trim(), cantidad: parseInt(match[2]) };
+                              return { nombre: productoStr.trim(), cantidad: 1 };
+                            });
+                          } else if (String(t.descripcion || "").startsWith("Venta de ")) {
+                            const nombreProducto = String(t.descripcion).replace("Venta de ", "").trim();
+                            productosPorProcesar = [{ nombre: nombreProducto, cantidad: 1 }];
+                          } else {
+                            productosPorProcesar = [{ nombre: String(t.descripcion || "Sin descripción"), cantidad: 1 }];
+                          }
+
+                          const montoTransaccion = Number(getMetricValue(t, metricType)) || 0;
+
+                          const preciosProductos: Array<{ nombre: string; cantidad: number; precioBase: number }> = [];
+                          let sumaPreciosCatalogo = 0;
+
+                          productosPorProcesar.forEach(({ nombre, cantidad }) => {
+                            const productoEnCatalogo = productosServicios.find((p) => p.nombre.toLowerCase() === nombre.toLowerCase());
+                            const precioBase = Number(productoEnCatalogo?.precio) || 0;
+
+                            preciosProductos.push({ nombre, cantidad, precioBase });
+                            sumaPreciosCatalogo += precioBase * cantidad;
+                          });
+
+                          preciosProductos.forEach(({ nombre, cantidad, precioBase }) => {
+                            const productoEnCatalogo = productosServicios.find((p) => p.nombre.toLowerCase() === nombre.toLowerCase());
+                            const subtotalProductoCatalogo = precioBase * cantidad;
+
+                            const proporcion =
+                              sumaPreciosCatalogo > 0 ? subtotalProductoCatalogo / sumaPreciosCatalogo : 1 / Math.max(preciosProductos.length, 1);
+
+                            const montoProducto = montoTransaccion * proporcion;
+
+                            if (!productosVentas[nombre]) {
+                              productosVentas[nombre] = {
+                                nombre,
                                 transacciones: 0,
                                 monto: 0,
                                 imagen: productoEnCatalogo?.imagen_url,
-                                tieneAsignacion: true
+                                tieneAsignacion: !!productoEnCatalogo,
                               };
                             }
-                            
-                            productosVentas[productoNombre].transacciones += 1;
-                            productosVentas[productoNombre].monto += getMetricValue(t, metricType);
-                          }
-                        });
 
-                        // Agregar también productos precargados (servicios) desde transacciones
-                        filteredTransactions.forEach(t => {
-                          // Solo procesar si es tipo precargados
-                          if (t.tipo_ingreso === 'precargados') {
-                            // Parsear la descripción para extraer todos los productos
-                            let productosPorProcesar: Array<{ nombre: string; cantidad: number }> = [];
-                            
-                            // Patrón 1: "Venta: Producto A (x2), Producto B (x1), Producto C (x3)"
-                            if (t.descripcion.startsWith('Venta: ')) {
-                              const productosSplit = t.descripcion.replace('Venta: ', '').split(', ');
-                              productosPorProcesar = productosSplit.map(productoStr => {
-                                const match = productoStr.match(/^(.+?) \(x(\d+)\)$/);
-                                if (match) {
-                                  return {
-                                    nombre: match[1].trim(),
-                                    cantidad: parseInt(match[2])
-                                  };
-                                }
-                                return {
-                                  nombre: productoStr.trim(),
-                                  cantidad: 1
-                                };
-                              });
-                            }
-                            // Patrón 2: "Venta de Producto A" (venta única)
-                            else if (t.descripcion.startsWith('Venta de ')) {
-                              const nombreProducto = t.descripcion.replace('Venta de ', '').trim();
-                              productosPorProcesar = [{
-                                nombre: nombreProducto,
-                                cantidad: 1
-                              }];
-                            }
-                            // Patrón 3: Cualquier otro formato
-                            else {
-                              productosPorProcesar = [{
-                                nombre: t.descripcion,
-                                cantidad: 1
-                              }];
-                            }
-                            
-                            // Calcular el monto total de esta transacción según la métrica
-                            const montoTransaccion = getMetricValue(t, metricType);
-                            
-                            // Calcular el precio base de cada producto en esta transacción
-                            const preciosProductos: Array<{ nombre: string; cantidad: number; precioBase: number }> = [];
-                            let sumaPreciosCatalogo = 0;
-                            
-                            productosPorProcesar.forEach(({ nombre, cantidad }) => {
-                              const productoEnCatalogo = productosServicios.find(p => 
-                                p.nombre.toLowerCase() === nombre.toLowerCase()
-                              );
-                              
-                              const precioBase = productoEnCatalogo?.precio || 0;
-                              preciosProductos.push({
-                                nombre: nombre,
-                                cantidad: cantidad,
-                                precioBase: precioBase
-                              });
-                              
-                              sumaPreciosCatalogo += precioBase * cantidad;
-                            });
-                            
-                            // Distribuir el monto de la transacción proporcionalmente entre los productos
-                            preciosProductos.forEach(({ nombre, cantidad, precioBase }) => {
-                              const productoEnCatalogo = productosServicios.find(p => 
-                                p.nombre.toLowerCase() === nombre.toLowerCase()
-                              );
-                              
-                              // Calcular proporción de este producto
-                              const subtotalProductoCatalogo = precioBase * cantidad;
-                              const proporcion = sumaPreciosCatalogo > 0 
-                                ? subtotalProductoCatalogo / sumaPreciosCatalogo 
-                                : 1 / preciosProductos.length; // Si no hay precios en catálogo, dividir equitativamente
-                              
-                              const montoProducto = montoTransaccion * proporcion;
-                              
-                              if (!productosVentas[nombre]) {
-                                productosVentas[nombre] = {
-                                  nombre: nombre,
-                                  transacciones: 0,
-                                  monto: 0,
-                                  imagen: productoEnCatalogo?.imagen_url,
-                                  tieneAsignacion: !!productoEnCatalogo
-                                };
-                              }
-                              
-                              productosVentas[nombre].transacciones += 1; // Contar cada producto como transacción
-                              productosVentas[nombre].monto += montoProducto;
-                            });
-                          }
-                          
-                          // Agregar transacciones tipo 'general' e 'inventariados' sin producto específico
-                          if (t.tipo_ingreso === 'general' || 
-                              (t.tipo_ingreso === 'inventariados' && !t.descripcion.startsWith('Venta de'))) {
-                            const nombre = "Ingresos sin producto asignado";
-                            if (!productosVentas[nombre]) {
-                              productosVentas[nombre] = {
-                                nombre,
-                                transacciones: 0,
-                                monto: 0,
-                                tieneAsignacion: false
-                              };
-                            }
                             productosVentas[nombre].transacciones += 1;
-                            productosVentas[nombre].monto += getMetricValue(t, metricType);
-                          }
-                          
-                          // Agregar transacciones tipo 'otros'
-                          if (t.tipo_ingreso === 'otros') {
-                            const nombre = t.descripcion || "Otros ingresos";
-                            if (!productosVentas[nombre]) {
-                              productosVentas[nombre] = {
-                                nombre,
-                                transacciones: 0,
-                                monto: 0,
-                                tieneAsignacion: false
-                              };
-                            }
-                            productosVentas[nombre].transacciones += 1;
-                            productosVentas[nombre].monto += getMetricValue(t, metricType);
-                          }
-                        });
-                        
-                        // Usar montos reales sin ajuste proporcional
-                        const productosArray = Object.values(productosVentas).sort((a: any, b: any) => b.monto - a.monto) as Array<{ nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }>;
-                        const totalGeneralProductos = productosArray.reduce((sum, p) => sum + p.monto, 0);
-                        
-                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, agregar por origen real
-                        if (tipoIngresoAnalisis === "otros") {
-                          const totalTransaccionesOtros = filteredTransactions.filter(t => t.tipo_ingreso === 'otros').reduce((sum, t) => sum + getMetricValue(t, metricType), 0);
-                          const diferencia = totalRealProductos - totalTransaccionesOtros;
-                          if (diferencia > 0.01) {
-                            // Agrupar asientos sin transacción por su origen real
-                            const ingresosPorOrigen: Record<string, { monto: number; count: number }> = {};
-                            
-                            asientosIngresosDirectos.forEach(asiento => {
-                              // Extraer el detalle de ingreso (cuenta 4XXX con HABER)
-                              const detalleIngreso = asiento.detalle_asientos.find((d: any) => 
-                                d.cuenta_codigo.startsWith('4') && Number(d.haber) > 0
-                              );
-                              if (!detalleIngreso) return;
-                              
-                              const monto = Number(detalleIngreso.haber) || 0;
-                              const cuentaCodigo = detalleIngreso.cuenta_codigo;
-                              const cuentaInfo = cuentas.find(c => c.codigo === cuentaCodigo);
-                              
-                              // Usar el nombre de la cuenta como identificador del "producto/concepto"
-                              let nombre: string;
-                              if (asiento.numero_asiento?.startsWith('BAJA-')) {
-                                nombre = cuentaInfo?.nombre || "Ganancia en Venta de Activos";
-                              } else {
-                                nombre = asiento.descripcion || cuentaInfo?.nombre || "Otros ingresos";
-                              }
-                              
-                              if (!ingresosPorOrigen[nombre]) {
-                                ingresosPorOrigen[nombre] = { monto: 0, count: 0 };
-                              }
-                              ingresosPorOrigen[nombre].monto += monto;
-                              ingresosPorOrigen[nombre].count += 1;
-                            });
-                            
-                            // Agregar cada origen como entrada separada
-                            Object.entries(ingresosPorOrigen).forEach(([nombre, data]) => {
-                              if (data.monto > 0.01) {
-                                productosArray.push({
-                                  nombre,
-                                  transacciones: data.count,
-                                  monto: data.monto,
-                                  tieneAsignacion: false
-                                });
-                              }
-                            });
-                          }
+                            productosVentas[nombre].monto += Number(montoProducto) || 0;
+                          });
                         }
-                        
-                        const top10 = productosArray.slice(0, 10);
-                        
-                          return (
-                          <>
-                            {top10.map((producto) => {
-                              const totalConAsientos = productosArray.reduce((sum, p) => sum + p.monto, 0);
-                              const porcentaje = totalConAsientos > 0 ? ((producto.monto / totalConAsientos) * 100).toFixed(1) : '0.0';
-                              return (
-                                <div key={producto.nombre} className={`flex items-center gap-3 p-3 border rounded-lg ${!producto.tieneAsignacion ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                                  {producto.imagen ? (
-                                    <img 
-                                      src={producto.imagen} 
-                                      alt={producto.nombre} 
-                                      className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+
+                        if (t.tipo_ingreso === "general" || (t.tipo_ingreso === "inventariados" && !String(t.descripcion || "").startsWith("Venta de "))) {
+                          const nombre = "Ingresos sin producto asignado";
+                          if (!productosVentas[nombre]) {
+                            productosVentas[nombre] = { nombre, transacciones: 0, monto: 0, tieneAsignacion: false };
+                          }
+                          productosVentas[nombre].transacciones += 1;
+                          productosVentas[nombre].monto += Number(getMetricValue(t, metricType)) || 0;
+                        }
+
+                        if (t.tipo_ingreso === "otros") {
+                          const nombre = String(t.descripcion || "Otros ingresos");
+                          if (!productosVentas[nombre]) {
+                            productosVentas[nombre] = { nombre, transacciones: 0, monto: 0, tieneAsignacion: false };
+                          }
+                          productosVentas[nombre].transacciones += 1;
+                          productosVentas[nombre].monto += Number(getMetricValue(t, metricType)) || 0;
+                        }
+                      });
+
+                      const productosArray = (Object.values(productosVentas) as Array<{
+                        nombre: string;
+                        transacciones: number;
+                        monto: number;
+                        imagen?: string;
+                        tieneAsignacion: boolean;
+                      }>).sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
+
+                      if (tipoIngresoAnalisis === "otros") {
+                        const totalTransaccionesOtros = filteredTransactions
+                          .filter((t: any) => t.tipo_ingreso === "otros")
+                          .reduce((sum, t: any) => sum + (Number(getMetricValue(t, metricType)) || 0), 0);
+
+                        const diferencia = (Number(totalRealProductos) || 0) - totalTransaccionesOtros;
+
+                        if (diferencia > 0.01) {
+                          const ingresosPorOrigen: Record<string, { monto: number; count: number }> = {};
+
+                          asientosDir.forEach((asiento: any) => {
+                            const detalles = Array.isArray(asiento.detalle_asientos) ? asiento.detalle_asientos : [];
+                            const detalleIngreso = detalles.find((d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0);
+                            if (!detalleIngreso) return;
+
+                            const monto = Number(detalleIngreso.haber) || 0;
+                            const cuentaCodigo = String(detalleIngreso.cuenta_codigo || "");
+                            const cuentaInfo = cuentas.find((c) => c.codigo === cuentaCodigo);
+
+                            let nombre: string;
+                            if (String(asiento.numero_asiento || "").startsWith("BAJA-")) {
+                              nombre = cuentaInfo?.nombre || "Ganancia en Venta de Activos";
+                            } else {
+                              nombre = String(asiento.descripcion || cuentaInfo?.nombre || "Otros ingresos");
+                            }
+
+                            if (!ingresosPorOrigen[nombre]) ingresosPorOrigen[nombre] = { monto: 0, count: 0 };
+                            ingresosPorOrigen[nombre].monto += monto;
+                            ingresosPorOrigen[nombre].count += 1;
+                          });
+
+                          Object.entries(ingresosPorOrigen).forEach(([nombre, data]) => {
+                            if ((Number(data.monto) || 0) > 0.01) {
+                              productosArray.push({
+                                nombre,
+                                transacciones: data.count,
+                                monto: data.monto,
+                                tieneAsignacion: false,
+                              });
+                            }
+                          });
+                        }
+                      }
+
+                      const top10 = productosArray.slice(0, 10);
+
+                      return (
+                        <>
+                          {top10.map((producto) => {
+                            const totalConAsientos = productosArray.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+                            const porcentaje = totalConAsientos > 0 ? (((Number(producto.monto) || 0) / totalConAsientos) * 100).toFixed(1) : "0.0";
+
+                            return (
+                              <div
+                                key={producto.nombre}
+                                className={`flex items-center gap-3 p-3 border rounded-lg ${
+                                  !producto.tieneAsignacion ? "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20" : ""
+                                }`}
+                              >
+                                {producto.imagen ? (
+                                  <img src={producto.imagen} alt={producto.nombre} className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                                ) : (
+                                  <div
+                                    className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                      !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
+                                    }`}
+                                  >
+                                    <Package
+                                      className={`w-5 h-5 ${!producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                                     />
-                                  ) : (
-                                    <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${!producto.tieneAsignacion ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted'}`}>
-                                      <Package className={`w-5 h-5 ${!producto.tieneAsignacion ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
-                                    </div>
-                                  )}
+                                  </div>
+                                )}
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium truncate">{producto.nombre}</p>
+                                    {!producto.tieneAsignacion && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                                        Sin asignar
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {producto.transacciones} {producto.transacciones === 1 ? "transacción" : "transacciones"}
+                                  </p>
+                                </div>
+
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-bold text-foreground">${formatCifra(Number(producto.monto) || 0, scaleFormat)}</p>
+                                </div>
+
+                                <div className="flex-shrink-0">
+                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">{porcentaje}%</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {(() => {
+                            const totalGeneralMonto = productosArray.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+                            if (totalGeneralMonto > 0) {
+                              return (
+                                <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                                  <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                    <Package className="w-5 h-5 text-primary" />
+                                  </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <p className="font-medium truncate">{producto.nombre}</p>
-                                      {!producto.tieneAsignacion && (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
-                                          Sin asignar
-                                        </span>
-                                      )}
-                                    </div>
+                                    <p className="font-bold text-foreground">TOTAL GENERAL</p>
                                     <p className="text-sm text-muted-foreground">
-                                      {producto.transacciones} {producto.transacciones === 1 ? 'transacción' : 'transacciones'}
+                                      {productosArray.reduce((sum, p) => sum + (Number(p.transacciones) || 0), 0)} transacciones
                                     </p>
                                   </div>
                                   <div className="text-right flex-shrink-0">
-                                    <p className="font-bold text-foreground">
-                                      ${formatCifra(producto.monto, scaleFormat)}
-                                    </p>
+                                    <p className="font-bold text-lg text-primary">${formatCifra(totalGeneralMonto, scaleFormat)}</p>
                                   </div>
                                   <div className="flex-shrink-0">
-                                    <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
-                                      {porcentaje}%
-                                    </div>
+                                    <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
                                   </div>
                                 </div>
                               );
-                            })}
-                            {/* Fila de Total - solo mostrar si hay monto */}
-                            {(() => {
-                              const totalGeneralMonto = productosArray.reduce((sum, p) => sum + p.monto, 0);
-                              if (totalGeneralMonto > 0) {
-                                return (
-                                  <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                                    <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                      <Package className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {productosArray.reduce((sum, p) => sum + p.transacciones, 0)} transacciones
-                                      </p>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                      <p className="font-bold text-lg text-primary">
-                                        ${formatCifra(totalGeneralMonto, scaleFormat)}
-                                      </p>
-                                    </div>
-                                    <div className="flex-shrink-0">
-                                      <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
-                                        100%
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
+                            }
+                            return null;
+                          })()}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Tabla de Ventas por Cliente */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Cliente
+                </CardTitle>
+                <CardDescription>
+                  Ranking de {metricType === "descuentos" ? "clientes con más descuentos" : "mejores clientes"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingTransacciones ? (
+                  <div className="text-center py-8 text-muted-foreground">Cargando datos...</div>
+                ) : !hayDatosDisponibles() ? (
+                  <div className="text-center py-8 text-muted-foreground">No hay datos para mostrar</div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
+                        return <div className="text-center py-8 text-muted-foreground">No hay descuentos en otros ingresos</div>;
+                      }
+
+                      const totalRealClientes =
+                        tipoIngresoAnalisis === "ventas"
+                          ? metricType === "brutas"
+                            ? datosAnaliticas.ventasBrutas
+                            : metricType === "descuentos"
+                            ? datosAnaliticas.descuentos
+                            : datosAnaliticas.ventasNetas
+                          : datosAnaliticas.otrosIngresos;
+
+                      if (filteredTransactions.length === 0 && (Number(totalRealClientes) || 0) > 0) {
+                        return (
+                          <>
+                            <div className="flex items-center gap-3 p-3 border rounded-lg">
+                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <Users className="w-6 h-6 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium">Sin cliente asignado</p>
+                                <p className="text-sm text-muted-foreground">Otros Ingresos</p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-foreground">${formatCifra(Number(totalRealClientes) || 0, scaleFormat)}</p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">100%</div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                <Users className="w-6 h-6 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                <p className="text-sm text-muted-foreground">1 registro</p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-lg text-primary">${formatCifra(Number(totalRealClientes) || 0, scaleFormat)}</p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
+                              </div>
+                            </div>
                           </>
                         );
-                      })()}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                      }
 
-              {/* Tabla de Ventas por Cliente */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>{metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Cliente</CardTitle>
-                  <CardDescription>Ranking de {metricType === "descuentos" ? "clientes con más descuentos" : "mejores clientes"}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingTransacciones ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Cargando datos...
-                    </div>
-                  ) : !hayDatosDisponibles() ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No hay datos para mostrar
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {(() => {
-                        // Si estamos en "Otros Ingresos" y seleccionamos "Descuentos", no hay nada que mostrar
-                        if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
-                          return (
-                            <div className="text-center py-8 text-muted-foreground">
-                              No hay descuentos en otros ingresos
-                            </div>
-                          );
+                      const clientesVentas = filteredTransactions.reduce<Record<string, ClienteVenta>>((acc, t: any) => {
+                        const clienteNombre = String(t?.cliente_nombre || "Sin cliente asignado");
+
+                        if (!acc[clienteNombre]) {
+                          acc[clienteNombre] = {
+                            nombre: clienteNombre,
+                            transacciones: 0,
+                            monto: 0,
+                            email: t?.cliente_email,
+                            telefono: t?.cliente_telefono,
+                          };
                         }
-                        
-                        // Obtener total real desde asientos contables
-                        const totalRealClientes = tipoIngresoAnalisis === "ventas"
-                          ? (metricType === "brutas" ? datosAnaliticas.ventasBrutas 
-                             : metricType === "descuentos" ? datosAnaliticas.descuentos 
-                             : datosAnaliticas.ventasNetas)
-                          : datosAnaliticas.otrosIngresos;
-                        
-                        // Si no hay transacciones pero hay monto en asientos (otros ingresos)
-                        if (filteredTransactions.length === 0 && totalRealClientes > 0) {
-                          return (
-                            <>
-                              <div className="flex items-center gap-3 p-3 border rounded-lg">
+
+                        acc[clienteNombre].transacciones += 1;
+                        acc[clienteNombre].monto += Number(getMetricValue(t, metricType)) || 0;
+
+                        return acc;
+                      }, {} as Record<string, ClienteVenta>);
+
+                      const clientesArray = (Object.values(clientesVentas) as ClienteVenta[]).sort(
+                        (a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0)
+                      );
+
+                      const totalGeneralClientes = clientesArray.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
+
+                      if (tipoIngresoAnalisis === "otros") {
+                        const diferencia = (Number(totalRealClientes) || 0) - totalGeneralClientes;
+                        if (diferencia > 0.01) {
+                          const existente = clientesArray.find((c) => c.nombre === "Sin cliente asignado");
+                          if (existente) {
+                            existente.monto += diferencia;
+                            existente.transacciones += asientosDir.length;
+                          } else {
+                            clientesArray.push({
+                              nombre: "Sin cliente asignado",
+                              transacciones: asientosDir.length,
+                              monto: diferencia,
+                            });
+                          }
+                          clientesArray.sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
+                        }
+                      }
+
+                      const top10 = clientesArray.slice(0, 10);
+
+                      return (
+                        <>
+                          {top10.map((cliente: ClienteVenta) => {
+                            const totalConAsientos = clientesArray.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
+                            const porcentaje =
+                              totalConAsientos > 0 ? (((Number(cliente.monto) || 0) / totalConAsientos) * 100).toFixed(1) : "0.0";
+
+                            return (
+                              <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
                                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                                   <Users className="w-6 h-6 text-primary" />
                                 </div>
+
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-medium">Sin cliente asignado</p>
-                                  <p className="text-sm text-muted-foreground">Otros Ingresos</p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="font-bold text-foreground">
-                                    ${formatCifra(totalRealClientes, scaleFormat)}
-                                  </p>
-                                </div>
-                                <div className="flex-shrink-0">
-                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
-                                    100%
+                                  <p className="font-medium truncate">{cliente.nombre}</p>
+                                  <div className="text-sm text-muted-foreground space-y-0.5">
+                                    <p>
+                                      {cliente.transacciones} {cliente.transacciones === 1 ? "compra" : "compras"}
+                                    </p>
+                                    {cliente.telefono && <p className="text-xs">{cliente.telefono}</p>}
+                                    {cliente.email && <p className="text-xs truncate">{cliente.email}</p>}
                                   </div>
                                 </div>
-                              </div>
-                              {/* Fila de Total */}
-                              <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                  <Users className="w-6 h-6 text-primary" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                  <p className="text-sm text-muted-foreground">1 registro</p>
-                                </div>
+
                                 <div className="text-right flex-shrink-0">
-                                  <p className="font-bold text-lg text-primary">
-                                    ${formatCifra(totalRealClientes, scaleFormat)}
-                                  </p>
+                                  <p className="font-bold text-foreground">${formatCifra(Number(cliente.monto) || 0, scaleFormat)}</p>
                                 </div>
+
                                 <div className="flex-shrink-0">
-                                  <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
-                                    100%
-                                  </div>
+                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">{porcentaje}%</div>
                                 </div>
                               </div>
-                            </>
-                          );
-                        }
-                        
-                        // Calcular distribución por cliente desde transacciones
-                        const clientesVentas = filteredTransactions.reduce((acc, t: any) => {
-                          const clienteNombre = t.cliente_nombre || "Sin cliente asignado";
-                          if (!acc[clienteNombre]) {
-                            acc[clienteNombre] = {
-                              nombre: clienteNombre,
-                              transacciones: 0,
-                              monto: 0,
-                              email: t.cliente_email,
-                              telefono: t.cliente_telefono
-                            };
-                          }
-                          acc[clienteNombre].transacciones += 1;
-                          acc[clienteNombre].monto += getMetricValue(t, metricType);
-                          return acc;
-                        }, {} as Record<string, { nombre: string; transacciones: number; monto: number; email?: string; telefono?: string }>);
-                        
-                        // Usar montos reales sin ajuste proporcional
-                        const clientesArray = Object.values(clientesVentas).sort((a, b) => b.monto - a.monto);
-                        const totalGeneralClientes = clientesArray.reduce((sum, c) => sum + c.monto, 0);
-                        
-                        // Si estamos en "otros ingresos" y hay diferencia con asientos contables, consolidar en "Sin cliente asignado"
-                        if (tipoIngresoAnalisis === "otros") {
-                          const diferencia = totalRealClientes - totalGeneralClientes;
-                          if (diferencia > 0.01) {
-                            // Buscar si ya existe "Sin cliente asignado" y sumarle
-                            const existente = clientesArray.find(c => c.nombre === "Sin cliente asignado");
-                            if (existente) {
-                              existente.monto += diferencia;
-                              existente.transacciones += asientosIngresosDirectos.length;
-                            } else {
-                              clientesArray.push({
-                                nombre: "Sin cliente asignado",
-                                transacciones: asientosIngresosDirectos.length,
-                                monto: diferencia
-                              });
-                            }
-                            // Re-ordenar después de agregar
-                            clientesArray.sort((a, b) => b.monto - a.monto);
-                          }
-                        }
-                        
-                        const top10 = clientesArray.slice(0, 10);
-                        
-                          return (
-                          <>
-                            {top10.map((cliente) => {
-                              const totalConAsientos = clientesArray.reduce((sum, c) => sum + c.monto, 0);
-                              const porcentaje = totalConAsientos > 0 ? ((cliente.monto / totalConAsientos) * 100).toFixed(1) : '0.0';
+                            );
+                          })}
+
+                          {(() => {
+                            const totalGeneralMonto = clientesArray.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
+                            if (totalGeneralMonto > 0) {
                               return (
-                                <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
-                                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                                     <Users className="w-6 h-6 text-primary" />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate">{cliente.nombre}</p>
-                                    <div className="text-sm text-muted-foreground space-y-0.5">
-                                      <p>{cliente.transacciones} {cliente.transacciones === 1 ? 'compra' : 'compras'}</p>
-                                      {cliente.telefono && <p className="text-xs">{cliente.telefono}</p>}
-                                      {cliente.email && <p className="text-xs truncate">{cliente.email}</p>}
-                                    </div>
-                                  </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <p className="font-bold text-foreground">
-                                      ${formatCifra(cliente.monto, scaleFormat)}
+                                    <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {clientesArray.reduce((sum, c) => sum + (Number(c.transacciones) || 0), 0)} transacciones
                                     </p>
                                   </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="font-bold text-lg text-primary">${formatCifra(totalGeneralMonto, scaleFormat)}</p>
+                                  </div>
                                   <div className="flex-shrink-0">
-                                    <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
-                                      {porcentaje}%
-                                    </div>
+                                    <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
                                   </div>
                                 </div>
                               );
-                            })}
-                            {/* Fila de Total - solo mostrar si hay monto */}
-                            {(() => {
-                              const totalGeneralMonto = clientesArray.reduce((sum, c) => sum + c.monto, 0);
-                              if (totalGeneralMonto > 0) {
-                                return (
-                                  <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                      <Users className="w-6 h-6 text-primary" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {clientesArray.reduce((sum, c) => sum + c.transacciones, 0)} transacciones
-                                      </p>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                      <p className="font-bold text-lg text-primary">
-                                        ${formatCifra(totalGeneralMonto, scaleFormat)}
-                                      </p>
-                                    </div>
-                                    <div className="flex-shrink-0">
-                                      <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
-                                        100%
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-            </div>
-          </>
-        );
-      })()}
-          </TabsContent>
+                            }
+                            return null;
+                          })()}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </>
+    );
+  })()}
+</TabsContent>
+
 
           {/* TAB 4: CATÁLOGO DE PRODUCTOS */}
           <TabsContent value="catalogo" className="mt-6">
