@@ -4441,113 +4441,260 @@ const handleRangoChange = (range?: DateRange) => {
           </div>
 
           {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>
-                Evolución de{" "}
-                {metricType === "descuentos"
-                  ? "Descuentos"
-                  : tipoIngresoAnalisis === "otros"
-                  ? "Otros Ingresos"
-                  : metricType === "brutas"
-                  ? "Ventas Brutas"
-                  : "Ventas Netas"}
-              </CardTitle>
-              <CardDescription>
-                {(metricType === "descuentos"
-                  ? "Descuentos aplicados"
-                  : tipoIngresoAnalisis === "otros"
-                  ? "Otros ingresos"
-                  : metricType === "brutas"
-                  ? "Ventas brutas"
-                  : "Ventas netas") +
-                  " - " +
-                  (periodFilter === "diario" ? "del día" : periodFilter === "mensual" ? "por día del mes" : "por mes del año")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingTransacciones ? (
-                <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando datos...</div>
-              ) : datosAnaliticas.detallesPorPeriodo.length === 0 ? (
-                <div className="h-80 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
-              ) : (
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={datosAnaliticas.detallesPorPeriodo.map((d) => ({
-                        periodo: d.periodo,
-                        ventas: d.ventasBrutas,
-                        descuentos: d.descuentos,
-                        neto: d.ventasNetas,
-                        otrosIngresos: d.otrosIngresos,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="periodo" tick={{ fill: "#000000" }} />
-                      <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} tick={{ fill: "#000000" }} />
-                      <Tooltip
-                        formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, ""]}
-                        contentStyle={{
-                          backgroundColor: "#ffffff",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          color: "#000000",
-                        }}
-                        itemStyle={{ color: "#000000", fontWeight: "bold" }}
-                        labelStyle={{ color: "#000000", fontWeight: "bold" }}
-                        wrapperStyle={{ zIndex: 1000 }}
-                      />
-                      <Legend />
+<Card className="mb-6">
+  <CardHeader>
+    <CardTitle>
+      Evolución de{" "}
+      {metricType === "descuentos"
+        ? "Descuentos"
+        : tipoIngresoAnalisis === "otros"
+        ? "Otros Ingresos"
+        : metricType === "brutas"
+        ? "Ventas Brutas"
+        : "Ventas Netas"}
+    </CardTitle>
+    <CardDescription>
+      {(metricType === "descuentos"
+        ? "Descuentos aplicados"
+        : tipoIngresoAnalisis === "otros"
+        ? "Otros ingresos"
+        : metricType === "brutas"
+        ? "Ventas brutas"
+        : "Ventas netas") +
+        " - " +
+        (periodFilter === "diario"
+          ? "del día"
+          : periodFilter === "mensual"
+          ? "por día del mes"
+          : "por mes del año")}
+    </CardDescription>
+  </CardHeader>
 
-                      {metricType === "descuentos" && (
-                        <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2}>
-                          <LabelList
-                            dataKey="descuentos"
-                            position="top"
-                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
-                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                          />
-                        </Line>
-                      )}
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
+        Cargando datos...
+      </div>
+    ) : (
+      (() => {
+        // ====== 1) Construir data REAL desde filteredTransactions (mínimo cambio) ======
+        const toNum = (v: any) => (Number(v) || 0);
 
-                      {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
-                        <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2}>
-                          <LabelList
-                            dataKey="ventas"
-                            position="top"
-                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
-                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                          />
-                        </Line>
-                      )}
+        const targetDate =
+          periodFilter === "diario"
+            ? fechaAnalisisDiario
+            : periodFilter === "mensual"
+            ? fechaAnalisisMensual
+            : new Date();
 
-                      {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
-                        <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2}>
-                          <LabelList
-                            dataKey="neto"
-                            position="top"
-                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
-                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                          />
-                        </Line>
-                      )}
+        const targetYear = targetDate.getFullYear();
+        const targetMonth = targetDate.getMonth();
 
-                      {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
-                        <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2}>
-                          <LabelList
-                            dataKey="otrosIngresos"
-                            position="top"
-                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
-                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                          />
-                        </Line>
-                      )}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        // Map por período
+        const map = new Map<string, { ventas: number; descuentos: number; neto: number; otrosIngresos: number }>();
+
+        // Helper label periodo
+        const getKey = (dt: Date) => {
+          if (periodFilter === "diario") return "Día";
+          if (periodFilter === "mensual") return `Día ${dt.getDate()}`;
+          return `Mes ${dt.getMonth() + 1}`;
+        };
+
+        // Acumular desde filteredTransactions (YA viene filtrado por tu función)
+        for (const t of filteredTransactions as any[]) {
+          const asientoFecha = (t as any).asiento_fecha;
+          if (!asientoFecha) continue;
+
+          const dt = parseDateSafe(asientoFecha);
+          if (Number.isNaN(dt.getTime())) continue;
+
+          // Asegurar que cae en el periodo seleccionado
+          if (periodFilter === "diario") {
+            const sel = fechaAnalisisDiario.toISOString().split("T")[0];
+            if (asientoFecha !== sel) continue;
+          } else if (periodFilter === "mensual") {
+            if (dt.getFullYear() !== targetYear || dt.getMonth() !== targetMonth) continue;
+          } else {
+            if (dt.getFullYear() !== targetYear) continue;
+          }
+
+          const key = getKey(dt);
+          const prev = map.get(key) || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
+
+          // Ventas: llenamos ventas/descuentos/neto
+          if (tipoIngresoAnalisis === "ventas") {
+            prev.ventas += toNum(getMetricValue(t, "brutas"));
+            prev.descuentos += toNum(getMetricValue(t, "descuentos"));
+            prev.neto += toNum(getMetricValue(t, "netas"));
+          } else {
+            // Otros ingresos: los graficamos en otrosIngresos según métrica seleccionada
+            // (para "otros", tú ya ocultas descuentos, así que esto queda bien)
+            prev.otrosIngresos += toNum(getMetricValue(t, metricType));
+          }
+
+          map.set(key, prev);
+        }
+
+        // Rellenar huecos (para mensual/anual) y que NO se vea desfazada
+        let chartData: Array<{
+          periodo: string;
+          ventas: number;
+          descuentos: number;
+          neto: number;
+          otrosIngresos: number;
+        }> = [];
+
+        if (periodFilter === "mensual") {
+          const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+          chartData = Array.from({ length: daysInMonth }, (_, i) => {
+            const label = `Día ${i + 1}`;
+            const val = map.get(label) || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
+            return { periodo: label, ...val };
+          });
+        } else if (periodFilter === "anual") {
+          chartData = Array.from({ length: 12 }, (_, i) => {
+            const label = `Mes ${i + 1}`;
+            const val = map.get(label) || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
+            return { periodo: label, ...val };
+          });
+        } else {
+          const val = map.get("Día") || { ventas: 0, descuentos: 0, neto: 0, otrosIngresos: 0 };
+          chartData = [{ periodo: "Día", ...val }];
+        }
+
+        // ====== 2) Fallback: si el chart sale en 0 pero tus KPIs tienen total ======
+        const totalReal =
+          tipoIngresoAnalisis === "ventas"
+            ? metricType === "brutas"
+              ? toNum(datosAnaliticas.ventasBrutas)
+              : metricType === "descuentos"
+              ? toNum(datosAnaliticas.descuentos)
+              : toNum(datosAnaliticas.ventasNetas)
+            : toNum(datosAnaliticas.otrosIngresos);
+
+        const totalSerie = chartData.reduce((s, r) => {
+          if (metricType === "descuentos") return s + toNum(r.descuentos);
+          if (tipoIngresoAnalisis === "otros") return s + toNum(r.otrosIngresos);
+          if (metricType === "brutas") return s + toNum(r.ventas);
+          return s + toNum(r.neto);
+        }, 0);
+
+        if (totalSerie <= 0 && totalReal > 0) {
+          chartData = [
+            {
+              periodo: periodFilter === "anual" ? "Total" : "Día",
+              ventas: metricType === "brutas" ? totalReal : 0,
+              descuentos: metricType === "descuentos" ? totalReal : 0,
+              neto: metricType === "netas" ? totalReal : 0,
+              otrosIngresos: tipoIngresoAnalisis === "otros" ? totalReal : 0,
+            },
+          ];
+        }
+
+        // ====== 3) Si neta neta NO hay data ======
+        const hayAlgo =
+          chartData.some((r) => toNum(r.ventas) > 0 || toNum(r.neto) > 0 || toNum(r.descuentos) > 0 || toNum(r.otrosIngresos) > 0);
+
+        if (!hayAlgo) {
+          return (
+            <div className="h-80 flex items-center justify-center text-muted-foreground">
+              No hay datos para mostrar
+            </div>
+          );
+        }
+
+        // ====== 4) Render chart (misma estructura que ya tenías) ======
+        return (
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis
+                  dataKey="periodo"
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "hsl(var(--border))" }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tickFormatter={(value) => formatCifra(Number(value), scaleFormat)}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "hsl(var(--border))" }}
+                />
+                <Tooltip
+                  formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, ""]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "10px",
+                    color: "hsl(var(--foreground))",
+                    boxShadow: "0 8px 24px rgba(0,0,0,.12)",
+                  }}
+                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
+                  wrapperStyle={{ zIndex: 1000 }}
+                />
+                <Legend />
+
+                {metricType === "descuentos" && (
+                  <Line
+                    type="monotone"
+                    dataKey="descuentos"
+                    stroke="hsl(0 72% 55%)"
+                    name="Descuentos"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5 }}
+                  />
+                )}
+
+                {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
+                  <Line
+                    type="monotone"
+                    dataKey="ventas"
+                    stroke="hsl(var(--primary))"
+                    name="Ventas Brutas"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5 }}
+                  />
+                )}
+
+                {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
+                  <Line
+                    type="monotone"
+                    dataKey="neto"
+                    stroke="hsl(180 45% 45%)"
+                    name="Ventas Netas"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5 }}
+                  />
+                )}
+
+                {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
+                  <Line
+                    type="monotone"
+                    dataKey="otrosIngresos"
+                    stroke="hsl(140 50% 45%)"
+                    name="Otros Ingresos"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5 }}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()
+    )}
+  </CardContent>
+</Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Gráfico de Ventas por Tipo */}
