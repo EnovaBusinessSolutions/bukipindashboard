@@ -50,15 +50,20 @@ function nextSubcuentaCode(parentCode: string, subcuentas: any[]) {
  */
 function inferTypeByCodigo(codigo: string) {
   if (!codigo) return "general";
+
+  // México típico:
+  // 1 Activo, 2 Pasivo, 3 Capital, 4 Ingresos, 5 Egresos, 6 Impuestos, 7 Otros
   if (codigo.startsWith("1")) return "activo";
   if (codigo.startsWith("2")) return "pasivo";
   if (codigo.startsWith("3")) return "capital";
   if (codigo.startsWith("4")) return "ingreso";
   if (codigo.startsWith("5")) return "gasto";
-  if (codigo.startsWith("6")) return "otro"; // lo separamos de egresos
-  if (codigo.startsWith("7")) return "impuesto";
+  if (codigo.startsWith("6")) return "impuesto";
+  if (codigo.startsWith("7")) return "otro";
+
   return "general";
 }
+
 
 /**
  * 🔥 FIX CLAVE:
@@ -77,13 +82,83 @@ function buildEstadosFinancierosFromFlat(cuentasFlat: any[]) {
     if (!out[estado][grupo][subgrupo]) out[estado][grupo][subgrupo] = [];
   };
 
-  const estadoOrden = ["Balance General", "Estado de Resultados"];
-  const grupoOrdenBalance = ["Activos", "Pasivos", "Capital Contable"];
-  const grupoOrdenResultados = ["Ingresos", "Egresos", "Otros Ingresos y Gastos", "Impuestos"];
+  // ✅ Pre-seed para que SIEMPRE existan los subgrupos como Bukipin 2
+  const seed = () => {
+    // Balance General
+    ensure("Balance General", "Activos", "Activo Circulante");
+    ensure("Balance General", "Activos", "Activo No Circulante");
+    ensure("Balance General", "Activos", "Activo Diferido");
+
+    ensure("Balance General", "Pasivos", "Pasivo Corto Plazo");
+    ensure("Balance General", "Pasivos", "Pasivo Largo Plazo");
+    ensure("Balance General", "Pasivos", "Pasivo Diferido");
+
+    ensure("Balance General", "Capital Contable", "Capital Contribuido");
+    ensure("Balance General", "Capital Contable", "Capital Ganado");
+
+    // Estado de Resultados
+    ensure("Estado de Resultados", "Ingresos", "Ingresos Operativos");
+    ensure("Estado de Resultados", "Ingresos", "Otros Ingresos");
+
+    ensure("Estado de Resultados", "Egresos", "Costo de Ventas");
+    ensure("Estado de Resultados", "Egresos", "Gastos Operativos");
+    ensure("Estado de Resultados", "Egresos", "Gastos Financieros");
+
+    ensure("Estado de Resultados", "Otros Ingresos y Gastos", "Otros");
+    ensure("Estado de Resultados", "Impuestos", "Impuestos");
+  };
+
+  const inferSubgrupo = (codigo: string, grupo: string) => {
+    const c = String(codigo || "").replace(/\s+/g, "");
+
+    // ✅ Si ya viene del backend, úsalo
+    // (muchas veces lovable lo guardaba como cuenta.subgrupo)
+    // ojo: esto se evalúa arriba en la llamada, aquí solo mapeo por código
+
+    if (grupo === "Activos") {
+      if (c.startsWith("11")) return "Activo Circulante";
+      if (c.startsWith("12")) return "Activo No Circulante";
+      if (c.startsWith("13")) return "Activo Diferido";
+      return "Activo Circulante"; // fallback razonable
+    }
+
+    if (grupo === "Pasivos") {
+      if (c.startsWith("21")) return "Pasivo Corto Plazo";
+      if (c.startsWith("22")) return "Pasivo Largo Plazo";
+      if (c.startsWith("23")) return "Pasivo Diferido";
+      return "Pasivo Corto Plazo";
+    }
+
+    if (grupo === "Capital Contable") {
+      if (c.startsWith("31")) return "Capital Contribuido";
+      if (c.startsWith("32")) return "Capital Ganado";
+      return "Capital Contribuido";
+    }
+
+    if (grupo === "Ingresos") {
+      if (c.startsWith("41")) return "Ingresos Operativos";
+      if (c.startsWith("42")) return "Otros Ingresos";
+      return "Ingresos Operativos";
+    }
+
+    if (grupo === "Egresos") {
+      if (c.startsWith("51")) return "Costo de Ventas";
+      if (c.startsWith("52")) return "Gastos Operativos";
+      if (c.startsWith("53")) return "Gastos Financieros";
+      return "Gastos Operativos";
+    }
+
+    if (grupo === "Impuestos") return "Impuestos";
+    if (grupo === "Otros Ingresos y Gastos") return "Otros";
+
+    return "General";
+  };
+
+  seed();
 
   const safeArr = Array.isArray(cuentasFlat) ? cuentasFlat : [];
 
-  // Ordena por código numérico si se puede (para que se vea “bonito” como Bukipin 2)
+  // ordena por código
   const sorted = [...safeArr].sort((a, b) => {
     const ca = getCodigo(a);
     const cb = getCodigo(b);
@@ -97,14 +172,25 @@ function buildEstadosFinancierosFromFlat(cuentasFlat: any[]) {
     const codigo = getCodigo(cuenta);
     if (!codigo) continue;
 
+    // ✅ Si el backend ya trae estos campos, aprovéchalos
+    const estadoBackend =
+      String(
+        (cuenta as any)?.estado_financiero ??
+          (cuenta as any)?.estadoFinanciero ??
+          ""
+      ).trim();
+
+    const subgrupoBackend =
+      String((cuenta as any)?.subgrupo ?? (cuenta as any)?.subGrupo ?? "").trim();
+
     const tipo = (getType(cuenta) || inferTypeByCodigo(codigo)).toLowerCase();
 
-    // Estado
-    const estado = ["activo", "pasivo", "capital"].includes(tipo)
-      ? "Balance General"
-      : "Estado de Resultados";
+    const estado =
+      estadoBackend ||
+      (["activo", "pasivo", "capital"].includes(tipo)
+        ? "Balance General"
+        : "Estado de Resultados");
 
-    // Grupo (exactamente como Bukipin 2)
     let grupo = "Otros Ingresos y Gastos";
     if (tipo === "activo") grupo = "Activos";
     else if (tipo === "pasivo") grupo = "Pasivos";
@@ -114,26 +200,15 @@ function buildEstadosFinancierosFromFlat(cuentasFlat: any[]) {
     else if (tipo === "impuesto") grupo = "Impuestos";
     else if (tipo === "otro") grupo = "Otros Ingresos y Gastos";
 
-    // Subgrupo (tu UI tiene 3er nivel; aquí lo dejamos simple y estable)
-    const subgrupo = "General";
+    const subgrupo = subgrupoBackend || inferSubgrupo(codigo, grupo);
 
     ensure(estado, grupo, subgrupo);
     out[estado][grupo][subgrupo].push(cuenta);
   }
 
-  // Asegura que existan las secciones aunque no haya cuentas (para que el UI no se rompa)
-  for (const est of estadoOrden) {
-    if (!out[est]) out[est] = {};
-  }
-  for (const g of grupoOrdenBalance) {
-    if (!out["Balance General"][g]) out["Balance General"][g] = { General: [] };
-  }
-  for (const g of grupoOrdenResultados) {
-    if (!out["Estado de Resultados"][g]) out["Estado de Resultados"][g] = { General: [] };
-  }
-
   return out;
 }
+
 
 const PlanCuentas = () => {
   // Hooks para datos
