@@ -18,10 +18,10 @@ import MatrizContable from "@/components/PlanCuentas/MatrizContable";
  * - backend legacy: { id, nombre, cuenta_madre_codigo, nombreCuentaMadre }
  */
 const getId = (x: any) => String(x?.id ?? x?._id ?? "");
-const getCodigo = (x: any) => String(x?.codigo ?? x?.code ?? x?.cuenta_codigo ?? "");
-const getNombre = (x: any) => String(x?.nombre ?? x?.name ?? x?.descripcion ?? "");
-const getParentCode = (x: any) => String(x?.parentCode ?? x?.cuenta_madre_codigo ?? "");
-const getType = (x: any) => String(x?.type ?? x?.tipo ?? "");
+const getCodigo = (x: any) => String(x?.codigo ?? x?.code ?? x?.cuenta_codigo ?? "").trim();
+const getNombre = (x: any) => String(x?.nombre ?? x?.name ?? x?.descripcion ?? "").trim();
+const getParentCode = (x: any) => String(x?.parentCode ?? x?.cuenta_madre_codigo ?? "").trim();
+const getType = (x: any) => String(x?.type ?? x?.tipo ?? "").trim();
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /**
@@ -36,7 +36,6 @@ function nextSubcuentaCode(parentCode: string, subcuentas: any[]) {
   for (const s of siblings) {
     const code = getCodigo(s) || "";
     const m = code.match(new RegExp(`^${parentCode}[-./](\\d+)$`)) || code.match(/[-./](\d+)$/);
-
     if (m?.[1]) {
       const num = parseInt(m[1], 10);
       if (!Number.isNaN(num)) max = Math.max(max, num);
@@ -55,9 +54,85 @@ function inferTypeByCodigo(codigo: string) {
   if (codigo.startsWith("2")) return "pasivo";
   if (codigo.startsWith("3")) return "capital";
   if (codigo.startsWith("4")) return "ingreso";
-  if (codigo.startsWith("5") || codigo.startsWith("6")) return "gasto";
+  if (codigo.startsWith("5")) return "gasto";
+  if (codigo.startsWith("6")) return "otro"; // lo separamos de egresos
   if (codigo.startsWith("7")) return "impuesto";
   return "general";
+}
+
+/**
+ * 🔥 FIX CLAVE:
+ * Si backend/hook NO manda estadosFinancieros bien armado (o manda "Sin estado"),
+ * lo reconstruimos a partir de cuentasFlat usando el código contable.
+ *
+ * Estructura esperada por tu UI:
+ * estadosFinancieros[estado][grupo][subgrupo] = cuentas[]
+ */
+function buildEstadosFinancierosFromFlat(cuentasFlat: any[]) {
+  const out: Record<string, Record<string, Record<string, any[]>>> = {};
+
+  const ensure = (estado: string, grupo: string, subgrupo: string) => {
+    if (!out[estado]) out[estado] = {};
+    if (!out[estado][grupo]) out[estado][grupo] = {};
+    if (!out[estado][grupo][subgrupo]) out[estado][grupo][subgrupo] = [];
+  };
+
+  const estadoOrden = ["Balance General", "Estado de Resultados"];
+  const grupoOrdenBalance = ["Activos", "Pasivos", "Capital Contable"];
+  const grupoOrdenResultados = ["Ingresos", "Egresos", "Otros Ingresos y Gastos", "Impuestos"];
+
+  const safeArr = Array.isArray(cuentasFlat) ? cuentasFlat : [];
+
+  // Ordena por código numérico si se puede (para que se vea “bonito” como Bukipin 2)
+  const sorted = [...safeArr].sort((a, b) => {
+    const ca = getCodigo(a);
+    const cb = getCodigo(b);
+    const na = parseInt(ca.replace(/\D/g, ""), 10);
+    const nb = parseInt(cb.replace(/\D/g, ""), 10);
+    if (Number.isNaN(na) || Number.isNaN(nb)) return ca.localeCompare(cb);
+    return na - nb;
+  });
+
+  for (const cuenta of sorted) {
+    const codigo = getCodigo(cuenta);
+    if (!codigo) continue;
+
+    const tipo = (getType(cuenta) || inferTypeByCodigo(codigo)).toLowerCase();
+
+    // Estado
+    const estado = ["activo", "pasivo", "capital"].includes(tipo)
+      ? "Balance General"
+      : "Estado de Resultados";
+
+    // Grupo (exactamente como Bukipin 2)
+    let grupo = "Otros Ingresos y Gastos";
+    if (tipo === "activo") grupo = "Activos";
+    else if (tipo === "pasivo") grupo = "Pasivos";
+    else if (tipo === "capital") grupo = "Capital Contable";
+    else if (tipo === "ingreso") grupo = "Ingresos";
+    else if (tipo === "gasto") grupo = "Egresos";
+    else if (tipo === "impuesto") grupo = "Impuestos";
+    else if (tipo === "otro") grupo = "Otros Ingresos y Gastos";
+
+    // Subgrupo (tu UI tiene 3er nivel; aquí lo dejamos simple y estable)
+    const subgrupo = "General";
+
+    ensure(estado, grupo, subgrupo);
+    out[estado][grupo][subgrupo].push(cuenta);
+  }
+
+  // Asegura que existan las secciones aunque no haya cuentas (para que el UI no se rompa)
+  for (const est of estadoOrden) {
+    if (!out[est]) out[est] = {};
+  }
+  for (const g of grupoOrdenBalance) {
+    if (!out["Balance General"][g]) out["Balance General"][g] = { General: [] };
+  }
+  for (const g of grupoOrdenResultados) {
+    if (!out["Estado de Resultados"][g]) out["Estado de Resultados"][g] = { General: [] };
+  }
+
+  return out;
 }
 
 const PlanCuentas = () => {
@@ -72,9 +147,41 @@ const PlanCuentas = () => {
   const [cuentaMadreSeleccionada, setCuentaMadreSeleccionada] = useState("");
   const [cuentasExpandidas, setCuentasExpandidas] = useState<Set<string>>(new Set());
 
-  // Extraer datos
-  const estadosFinancieros = cuentasData?.estadosFinancieros || {};
-  const todasLasCuentas = cuentasData?.cuentasFlat || [];
+  /**
+   * ✅ Normalizamos shapes posibles del hook:
+   * - cuentasData.cuentasFlat
+   * - cuentasData.data?.cuentasFlat
+   * - cuentasData.cuentas
+   */
+  const todasLasCuentas = useMemo(() => {
+    const raw =
+      (cuentasData as any)?.cuentasFlat ??
+      (cuentasData as any)?.data?.cuentasFlat ??
+      (cuentasData as any)?.cuentas ??
+      [];
+    return Array.isArray(raw) ? raw : [];
+  }, [cuentasData]);
+
+  /**
+   * ✅ Estados financieros:
+   * Si vienen bien del backend, los usamos.
+   * Si vienen vacíos o con "Sin estado", los reconstruimos desde cuentasFlat.
+   */
+  const estadosFinancieros = useMemo(() => {
+    const ef =
+      (cuentasData as any)?.estadosFinancieros ??
+      (cuentasData as any)?.data?.estadosFinancieros ??
+      {};
+
+    const keys = ef && typeof ef === "object" ? Object.keys(ef) : [];
+    const broken =
+      !keys.length ||
+      keys.some((k) => /sin estado/i.test(k)) ||
+      keys.some((k) => /sin grupo/i.test(k));
+
+    if (!broken) return ef;
+    return buildEstadosFinancierosFromFlat(todasLasCuentas);
+  }, [cuentasData, todasLasCuentas]);
 
   // Diccionario code -> nombre (para mostrar "4001 - Ventas")
   const cuentaNombreByCodigo = useMemo(() => {
@@ -98,7 +205,7 @@ const PlanCuentas = () => {
       cuenta_madre_codigo: getParentCode(s),
       // si backend no manda nombre de madre, lo resolvemos con el diccionario
       nombreCuentaMadre:
-        String(s?.nombreCuentaMadre ?? "") ||
+        String((s as any)?.nombreCuentaMadre ?? "") ||
         cuentaNombreByCodigo.get(getParentCode(s)) ||
         "",
     }));
@@ -117,7 +224,7 @@ const PlanCuentas = () => {
     if (!name || !parentCode) return;
 
     // type: herencia o inferencia
-    const inheritedTypeRaw = String(cuentaMadreObj?.type ?? "").trim();
+    const inheritedTypeRaw = String((cuentaMadreObj as any)?.type ?? "").trim();
     const type = inheritedTypeRaw || inferTypeByCodigo(parentCode);
 
     // code: autogenerado
@@ -382,11 +489,7 @@ const PlanCuentas = () => {
                   </p>
                 )}
 
-                {!!createErrorMsg && (
-                  <p className="text-xs text-destructive">
-                    {createErrorMsg}
-                  </p>
-                )}
+                {!!createErrorMsg && <p className="text-xs text-destructive">{createErrorMsg}</p>}
               </CardContent>
             </Card>
 
@@ -406,17 +509,14 @@ const PlanCuentas = () => {
                 ) : (
                   <div className="space-y-2">
                     {subcuentas.map((subcuenta) => {
-                      const parentCode = subcuenta.parentCode || subcuenta.cuenta_madre_codigo;
+                      const parentCode = subcuenta.parentCode || (subcuenta as any).cuenta_madre_codigo;
                       const parentName =
-                        subcuenta.nombreCuentaMadre ||
+                        (subcuenta as any).nombreCuentaMadre ||
                         cuentaNombreByCodigo.get(parentCode) ||
                         "";
 
                       return (
-                        <div
-                          key={subcuenta.id}
-                          className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                        >
+                        <div key={subcuenta.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                           <div className="space-y-1">
                             <div className="font-medium">
                               {subcuenta.codigo ? `${subcuenta.codigo} — ` : ""}
