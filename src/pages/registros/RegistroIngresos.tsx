@@ -3276,15 +3276,18 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                 <SelectItem value="4101">4101 - Productos Financieros</SelectItem>
                 <SelectItem value="4102">4102 - Otros Productos</SelectItem>
                 <SelectItem value="4103">4103 - Ganancia en Venta de Activos</SelectItem>
-                <SelectItem value="4103">4002 - Devoluciones sobre ventas</SelectItem>
-                <SelectItem value="4103">4002 - Descuentos sobre ventas</SelectItem>
+                <SelectItem value="4003">4003 - Devoluciones sobre ventas</SelectItem>
+                <SelectItem value="4002">4002 - Descuentos sobre ventas</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="filtro-subcuenta">Subcuenta</Label>
-            <Select value={filtroSubcuenta} onValueChange={setFiltroSubcuenta}>
+            <Select
+              value={filtroSubcuenta || "todas"}
+              onValueChange={(v) => setFiltroSubcuenta(v)}
+            >
               <SelectTrigger id="filtro-subcuenta">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
@@ -3292,7 +3295,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                 <SelectItem value="todas">Todas</SelectItem>
                 <SelectItem value="sin-subcuenta">Sin subcuenta</SelectItem>
                 {subcuentas.map((sub) => (
-                  <SelectItem key={sub.id} value={sub.id}>
+                  <SelectItem key={String(sub.id)} value={String(sub.id)}>
                     {sub.nombre}
                   </SelectItem>
                 ))}
@@ -3311,7 +3314,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
               setFiltroFechaFin("");
               setFiltroTipoIngreso("todos");
               setFiltroCuenta("todas");
-              setFiltroSubcuenta("");
+              setFiltroSubcuenta("todas");
             }}
           >
             Limpiar Filtros
@@ -3324,7 +3327,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                 // Transformar asientos directos a formato de transacción (para contar)
                 const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
                   const detalleIngreso = asiento.detalle_asientos.find(
-                    (d: any) => d.cuenta_codigo.startsWith("4") && Number(d.haber) > 0
+                    (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
                   );
                   return {
                     created_at: asiento.fecha,
@@ -3332,7 +3335,16 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                     fecha_fixed: asiento.fecha,
                     tipo_ingreso: "asiento_directo",
                     cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-                    subcuenta_id: detalleIngreso?.subcuenta_id,
+                    subcuenta_id:
+                      (detalleIngreso as any)?.subcuenta_id ??
+                      (detalleIngreso as any)?.subcuentaId ??
+                      (detalleIngreso as any)?.subcuenta ??
+                      null,
+                    subcuentaId:
+                      (detalleIngreso as any)?.subcuentaId ??
+                      (detalleIngreso as any)?.subcuenta_id ??
+                      (detalleIngreso as any)?.subcuenta ??
+                      null,
                   };
                 });
 
@@ -3346,6 +3358,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                 const filtered = todasLasTransacciones.filter((t) => {
                   const dt = (t as any).fecha_fixed ?? (t as any).fecha ?? (t as any).created_at;
                   const fechaMatch = matchRangoFechas(dt);
+
                   const tipoMatch =
                     !filtroTipoIngreso ||
                     filtroTipoIngreso === "todos" ||
@@ -3354,13 +3367,23 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                   const cuentaMatch =
                     !filtroCuenta ||
                     filtroCuenta === "todas" ||
-                    (t as any).cuenta_principal_codigo === filtroCuenta;
+                    String((t as any).cuenta_principal_codigo || "") === String(filtroCuenta);
+
+                  const subRef =
+                    (t as any).subcuenta_id ??
+                    (t as any).subcuentaId ??
+                    (t as any).subcuenta ??
+                    (t as any).subcuentaCodigo ??
+                    (t as any).subcuenta_codigo ??
+                    null;
+
+                  const subIdStr = subRef ? String(subRef) : "";
 
                   const subcuentaMatch =
                     !filtroSubcuenta ||
                     filtroSubcuenta === "todas" ||
-                    (filtroSubcuenta === "sin-subcuenta" && !(t as any).subcuenta_id) ||
-                    (t as any).subcuenta_id === filtroSubcuenta;
+                    (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
+                    subIdStr === String(filtroSubcuenta);
 
                   return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
                 });
@@ -3375,7 +3398,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                 // Transformar asientos directos a formato de transacción (para sumar)
                 const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
                   const detalleIngreso = asiento.detalle_asientos.find(
-                    (d: any) => d.cuenta_codigo.startsWith("4") && Number(d.haber) > 0
+                    (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
                   );
                   return {
                     created_at: asiento.fecha,
@@ -3383,7 +3406,16 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                     fecha_fixed: asiento.fecha,
                     tipo_ingreso: "asiento_directo",
                     cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-                    subcuenta_id: detalleIngreso?.subcuenta_id,
+                    subcuenta_id:
+                      (detalleIngreso as any)?.subcuenta_id ??
+                      (detalleIngreso as any)?.subcuentaId ??
+                      (detalleIngreso as any)?.subcuenta ??
+                      null,
+                    subcuentaId:
+                      (detalleIngreso as any)?.subcuentaId ??
+                      (detalleIngreso as any)?.subcuenta_id ??
+                      (detalleIngreso as any)?.subcuenta ??
+                      null,
                     monto_total: Number(detalleIngreso?.haber) || 0,
                   };
                 });
@@ -3402,18 +3434,30 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                   const cuentaMatch =
                     !filtroCuenta ||
                     filtroCuenta === "todas" ||
-                    t.cuenta_principal_codigo === filtroCuenta;
+                    String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
+
+                  const subRef =
+                    t.subcuenta_id ??
+                    t.subcuentaId ??
+                    t.subcuenta ??
+                    t.subcuentaCodigo ??
+                    t.subcuenta_codigo ??
+                    null;
+
+                  const subIdStr = subRef ? String(subRef) : "";
 
                   const subcuentaMatch =
                     !filtroSubcuenta ||
                     filtroSubcuenta === "todas" ||
-                    (filtroSubcuenta === "sin-subcuenta" && !t.subcuenta_id) ||
-                    t.subcuenta_id === filtroSubcuenta;
+                    (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
+                    subIdStr === String(filtroSubcuenta);
 
                   return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
                 });
 
-                return formatMonto(filtered.reduce((sum: number, t: any) => sum + Number(t.monto_total || 0), 0));
+                return formatMonto(
+                  filtered.reduce((sum: number, t: any) => sum + Number(t.monto_total || 0), 0)
+                );
               })()}
             </p>
 
@@ -3423,7 +3467,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                 // Transformar asientos directos a formato de transacción (para neto)
                 const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
                   const detalleIngreso = asiento.detalle_asientos.find(
-                    (d: any) => d.cuenta_codigo.startsWith("4") && Number(d.haber) > 0
+                    (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
                   );
                   return {
                     created_at: asiento.fecha,
@@ -3431,7 +3475,16 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                     fecha_fixed: asiento.fecha,
                     tipo_ingreso: "asiento_directo",
                     cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-                    subcuenta_id: detalleIngreso?.subcuenta_id,
+                    subcuenta_id:
+                      (detalleIngreso as any)?.subcuenta_id ??
+                      (detalleIngreso as any)?.subcuentaId ??
+                      (detalleIngreso as any)?.subcuenta ??
+                      null,
+                    subcuentaId:
+                      (detalleIngreso as any)?.subcuentaId ??
+                      (detalleIngreso as any)?.subcuenta_id ??
+                      (detalleIngreso as any)?.subcuenta ??
+                      null,
                     monto_neto: Number(detalleIngreso?.haber) || 0,
                   };
                 });
@@ -3450,18 +3503,30 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                   const cuentaMatch =
                     !filtroCuenta ||
                     filtroCuenta === "todas" ||
-                    t.cuenta_principal_codigo === filtroCuenta;
+                    String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
+
+                  const subRef =
+                    t.subcuenta_id ??
+                    t.subcuentaId ??
+                    t.subcuenta ??
+                    t.subcuentaCodigo ??
+                    t.subcuenta_codigo ??
+                    null;
+
+                  const subIdStr = subRef ? String(subRef) : "";
 
                   const subcuentaMatch =
                     !filtroSubcuenta ||
                     filtroSubcuenta === "todas" ||
-                    (filtroSubcuenta === "sin-subcuenta" && !t.subcuenta_id) ||
-                    t.subcuenta_id === filtroSubcuenta;
+                    (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
+                    subIdStr === String(filtroSubcuenta);
 
                   return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
                 });
 
-                return formatMonto(filtered.reduce((sum: number, t: any) => sum + Number(t.monto_neto || 0), 0));
+                return formatMonto(
+                  filtered.reduce((sum: number, t: any) => sum + Number(t.monto_neto || 0), 0)
+                );
               })()}
             </p>
           </div>
@@ -3474,7 +3539,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
           // Transformar asientos directos a formato de transacción
           const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
             const detalleIngreso = asiento.detalle_asientos.find(
-              (d: any) => d.cuenta_codigo.startsWith("4") && Number(d.haber) > 0
+              (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
             );
 
             return {
@@ -3489,7 +3554,16 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
               metodo_pago: "N/A",
               tipo_pago: "contado",
               cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-              subcuenta_id: detalleIngreso?.subcuenta_id,
+              subcuenta_id:
+                (detalleIngreso as any)?.subcuenta_id ??
+                (detalleIngreso as any)?.subcuentaId ??
+                (detalleIngreso as any)?.subcuenta ??
+                null,
+              subcuentaId:
+                (detalleIngreso as any)?.subcuentaId ??
+                (detalleIngreso as any)?.subcuenta_id ??
+                (detalleIngreso as any)?.subcuenta ??
+                null,
               // ✅ importante: fecha consistente para UI y filtros
               created_at: asiento.fecha,
               fecha: asiento.fecha,
@@ -3516,13 +3590,25 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
               t.tipo_ingreso === filtroTipoIngreso;
 
             const cuentaMatch =
-              !filtroCuenta || filtroCuenta === "todas" || t.cuenta_principal_codigo === filtroCuenta;
+              !filtroCuenta ||
+              filtroCuenta === "todas" ||
+              String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
+
+            const subRef =
+              t.subcuenta_id ??
+              t.subcuentaId ??
+              t.subcuenta ??
+              t.subcuentaCodigo ??
+              t.subcuenta_codigo ??
+              null;
+
+            const subIdStr = subRef ? String(subRef) : "";
 
             const subcuentaMatch =
               !filtroSubcuenta ||
               filtroSubcuenta === "todas" ||
-              (filtroSubcuenta === "sin-subcuenta" && !t.subcuenta_id) ||
-              t.subcuenta_id === filtroSubcuenta;
+              (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
+              subIdStr === String(filtroSubcuenta);
 
             return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
           });
@@ -3601,6 +3687,34 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
 
                         const netoRow = Number(getMetricValue(transaccion, "netas") || 0);
 
+                        const subRefRaw =
+                          (transaccion as any).subcuenta_id ??
+                          (transaccion as any).subcuentaId ??
+                          (transaccion as any).subcuenta ??
+                          (transaccion as any).subcuentaCodigo ??
+                          (transaccion as any).subcuenta_codigo ??
+                          null;
+
+                        const subIdStr = subRefRaw ? String(subRefRaw) : "";
+
+                        const subNombreDirecto =
+                          (transaccion as any).subcuentaNombre ??
+                          (transaccion as any).subcuenta_nombre ??
+                          null;
+
+                        const subCodigoDirecto =
+                          (transaccion as any).subcuentaCodigo ??
+                          (transaccion as any).subcuenta_codigo ??
+                          null;
+
+                        const subNombreLookup = (() => {
+                          if (!subIdStr) return null;
+                          const s = subcuentas.find((x) => String(x.id) === String(subIdStr));
+                          return s?.nombre ?? null;
+                        })();
+
+                        const subNombreFinal = subNombreDirecto ?? subNombreLookup;
+
                         return (
                           <tr
                             key={transaccion.id}
@@ -3637,19 +3751,17 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                                 <span className="capitalize">{transaccion.metodo_pago || "N/A"}</span>{" "}
                                 •{" "}
                                 <span className="capitalize">{transaccion.tipo_pago || "N/A"}</span>
-                                {transaccion.subcuenta_id ? (
+                                {subIdStr ? (
                                   <>
                                     {" "}
                                     •{" "}
                                     <span className="text-muted-foreground">
                                       Subcuenta:{" "}
-                                      {transaccion.subcuentas?.nombre ||
-                                        (() => {
-                                          const subcuenta = subcuentas.find(
-                                            (s) => s.id === transaccion.subcuenta_id
-                                          );
-                                          return subcuenta?.nombre || "Subcuenta no encontrada";
-                                        })()}
+                                      {subNombreFinal
+                                        ? `${subCodigoDirecto ? `${subCodigoDirecto} - ` : ""}${subNombreFinal}`
+                                        : subCodigoDirecto
+                                          ? subCodigoDirecto
+                                          : "Subcuenta no encontrada"}
                                     </span>
                                   </>
                                 ) : null}
@@ -3917,16 +4029,14 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
                                                 `${transaccion.cuenta_principal_codigo}`}
                                             </p>
 
-                                            {transaccion.subcuenta_id ? (
+                                            {subIdStr ? (
                                               <p>
                                                 <span className="font-medium">Subcuenta:</span>{" "}
-                                                {transaccion.subcuentas?.nombre ||
-                                                  (() => {
-                                                    const subcuenta = subcuentas.find(
-                                                      (s) => s.id === transaccion.subcuenta_id
-                                                    );
-                                                    return subcuenta?.nombre || "Subcuenta no encontrada";
-                                                  })()}
+                                                {subNombreFinal
+                                                  ? `${subCodigoDirecto ? `${subCodigoDirecto} - ` : ""}${subNombreFinal}`
+                                                  : subCodigoDirecto
+                                                    ? subCodigoDirecto
+                                                    : "Subcuenta no encontrada"}
                                               </p>
                                             ) : (
                                               <p>
@@ -4104,6 +4214,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
     </CardContent>
   </Card>
 </TabsContent>
+
 
 
 
