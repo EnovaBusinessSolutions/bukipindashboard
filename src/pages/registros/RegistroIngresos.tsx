@@ -379,6 +379,9 @@ const RegistroIngresos = () => {
   const [tipoCostoInventarioNegativo, setTipoCostoInventarioNegativo] = useState<"historico" | "personalizado">("historico");
   const [costoPersonalizado, setCostoPersonalizado] = useState("");
   
+  const PAGE_SIZE = 25;
+const [pageResumen, setPageResumen] = useState(1);
+
   // Estado para el período de análisis
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
   
@@ -753,6 +756,11 @@ const subcuentasVentas = useMemo(() => {
       setDescripcion(`Venta de ${selectedInventoryProducts.length} producto(s) de inventario`);
     }
   }, [selectedInventoryProducts, selectedIncomeType]);
+
+  useEffect(() => {
+  setPageResumen(1);
+}, [filtroRangoFechas, filtroTipoIngreso, filtroCuenta, filtroSubcuenta]);
+
 
   // Función para manejar selección de producto precargado (para actualizar precio)
   const handleProductSelection = (productId: string) => {
@@ -3623,6 +3631,16 @@ case "otros":
               return { ...transaccion, esCancelada, transaccionReversion };
             });
 
+          const totalItems = transaccionesAgrupadas.length;
+          const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+const safePage = Math.min(Math.max(pageResumen, 1), totalPages);
+const startIndex = (safePage - 1) * PAGE_SIZE;
+const endIndex = Math.min(startIndex + PAGE_SIZE, totalItems);
+
+const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex);
+  
+
           return transaccionesAgrupadas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No hay transacciones que coincidan con los filtros
@@ -3632,7 +3650,7 @@ case "otros":
               {/* Encabezado */}
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div className="text-sm font-medium text-muted-foreground">
-                  Mostrando {transaccionesAgrupadas.length} transacción(es)
+                  Mostrando {transaccionesPaginadas.length} de {transaccionesAgrupadas.length} transacción(es)
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Tip: da clic en el ícono 📄 para ver “Información general” y “Registro contable”
@@ -3657,7 +3675,7 @@ case "otros":
                     </thead>
 
                     <tbody>
-                      {transaccionesAgrupadas.map((item: any) => {
+                      {transaccionesPaginadas.map((item: any) => {
                         const transaccion = item;
                         const esCancelada = item.esCancelada;
                         const esReversion = false;
@@ -4173,6 +4191,38 @@ case "otros":
                     </tbody>
                   </table>
                 </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t p-3 bg-background">
+  <div className="text-xs text-muted-foreground">
+    Mostrando <span className="font-medium">{totalItems === 0 ? 0 : startIndex + 1}</span>–
+    <span className="font-medium">{endIndex}</span> de{" "}
+    <span className="font-medium">{totalItems}</span>
+  </div>
+
+  <div className="flex items-center justify-end gap-2">
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={safePage <= 1}
+      onClick={() => setPageResumen((p) => Math.max(1, p - 1))}
+    >
+      Anterior
+    </Button>
+
+    <div className="text-xs text-muted-foreground px-2">
+      Página <span className="font-medium">{safePage}</span> de{" "}
+      <span className="font-medium">{totalPages}</span>
+    </div>
+
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={safePage >= totalPages}
+      onClick={() => setPageResumen((p) => Math.min(totalPages, p + 1))}
+    >
+      Siguiente
+    </Button>
+  </div>
+</div>
               </div>
             </div>
           );
