@@ -1495,33 +1495,37 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
       }
       // Derivar valores por seguridad
       const selectedInventoryProduct = productosInventario.find(p => p.id === selectedInventoryProductId);
-      let descripcionToSend = descripcion;
-      let montoTotalDerived = Number(montoTotal || '0');
-      let subcuentaToSend = null;
-      let descuento = 0; // Inicializar variable de descuento
-      
-      if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
-        // Para múltiples productos, usar la primera subcuenta o null
-        const firstProduct = productosServicios.find(p => p.id === selectedProducts[0].id);
-        subcuentaToSend = firstProduct?.subcuenta_id || null;
-        // Calcular monto total SIN descuento y el descuento total
-        const subtotalSinDescuento = selectedProducts.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
-        const descuentoTotal = selectedProducts.reduce((sum, p) => sum + p.descuento, 0);
-        montoTotalDerived = subtotalSinDescuento; // El monto total es ANTES del descuento
-        descuento = descuentoTotal; // Guardar el descuento total para enviarlo
-        descripcionToSend = `Venta: ${selectedProducts.map(p => `${p.nombre} (x${p.cantidad})`).join(', ')}`;
-      } else if (selectedIncomeType === 'inventariados') {
-        // Para productos inventariados múltiples, procesaremos cada uno por separado
-        // Aquí solo preparamos valores por defecto que no se usarán en este flujo
-        descripcionToSend = `Venta de productos inventariados`;
-        montoTotalDerived = 0;
-        subcuentaToSend = null;
-      }
-      // Si no es precargados, usar el descuento del formulario general
-      if (selectedIncomeType !== 'precargados') {
-        descuento = hasDiscount ? Number(discountAmount || '0') : 0;
-      }
-      const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
+let descripcionToSend = descripcion;
+let montoTotalDerived = Number(montoTotal || '0');
+let subcuentaToSend: string | null = null;
+let descuento = 0; // Inicializar variable de descuento
+
+if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
+  const firstProduct = productosServicios.find(p => p.id === selectedProducts[0].id);
+  subcuentaToSend = firstProduct?.subcuenta_id || null;
+
+  const subtotalSinDescuento = selectedProducts.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+  const descuentoTotal = selectedProducts.reduce((sum, p) => sum + p.descuento, 0);
+  montoTotalDerived = subtotalSinDescuento;
+  descuento = descuentoTotal;
+  descripcionToSend = `Venta: ${selectedProducts.map(p => `${p.nombre} (x${p.cantidad})`).join(', ')}`;
+
+} else if (selectedIncomeType === 'inventariados') {
+  descripcionToSend = `Venta de productos inventariados`;
+  montoTotalDerived = 0;
+  subcuentaToSend = null;
+
+// ✅ FIX: si es "general", enviar la subcuenta seleccionada en el formulario
+} else if (selectedIncomeType === "general") {
+  subcuentaToSend = subcuentaGeneral ? String(subcuentaGeneral) : null;
+}
+
+// Si no es precargados, usar el descuento del formulario general
+if (selectedIncomeType !== 'precargados') {
+  descuento = hasDiscount ? Number(discountAmount || '0') : 0;
+}
+
+const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
 
       // Calcular monto pagado y pendiente según el tipo de pago
       let montoPagado = 0;
