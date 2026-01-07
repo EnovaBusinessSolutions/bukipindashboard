@@ -3420,215 +3420,110 @@ case "otros":
           </Button>
 
           <div className="text-right">
-            <p className="text-sm text-muted-foreground">
-              Resultados:{" "}
-              {(() => {
-                // Transformar asientos directos a formato de transacción (para contar)
-                const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
-                  const detalleIngreso = asiento.detalle_asientos.find(
-                    (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
-                  );
-                  return {
-                    created_at: asiento.fecha,
-                    fecha: asiento.fecha,
-                    fecha_fixed: asiento.fecha,
-                    tipo_ingreso: "asiento_directo",
-                    cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-                    subcuenta_id:
-                      (detalleIngreso as any)?.subcuenta_id ??
-                      (detalleIngreso as any)?.subcuentaId ??
-                      (detalleIngreso as any)?.subcuenta ??
-                      null,
-                    subcuentaId:
-                      (detalleIngreso as any)?.subcuentaId ??
-                      (detalleIngreso as any)?.subcuenta_id ??
-                      (detalleIngreso as any)?.subcuenta ??
-                      null,
-                  };
-                });
+  {(() => {
+    // 1) Asientos directos -> transacciones
+    const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
+      const detalleIngreso = asiento.detalle_asientos.find(
+        (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
+      );
 
-                const todasLasTransaccionesRaw = [
-                  ...(transacciones ?? []),
-                  ...(asientosComoTransacciones ?? []),
-                ];
+      return {
+        created_at: asiento.fecha,
+        fecha: asiento.fecha,
+        fecha_fixed: asiento.fecha,
+        tipo_ingreso: "asiento_directo",
+        cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
+        subcuenta_id:
+          (detalleIngreso as any)?.subcuenta_id ??
+          (detalleIngreso as any)?.subcuentaId ??
+          (detalleIngreso as any)?.subcuenta ??
+          null,
+        subcuentaId:
+          (detalleIngreso as any)?.subcuentaId ??
+          (detalleIngreso as any)?.subcuenta_id ??
+          (detalleIngreso as any)?.subcuenta ??
+          null,
 
-                const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
+        // Montos
+        monto_total: Number(detalleIngreso?.haber) || 0,
+        monto_neto: Number(detalleIngreso?.haber) || 0,
+        monto_descuento: 0,
+      };
+    });
 
-                const filtered = todasLasTransacciones.filter((t) => {
-                  const dt = (t as any).fecha_fixed ?? (t as any).fecha ?? (t as any).created_at;
-                  const fechaMatch = matchRangoFechas(dt);
+    // 2) Normalizar + combinar
+    const todasLasTransaccionesRaw = [
+      ...(transacciones ?? []),
+      ...(asientosComoTransacciones ?? []),
+    ];
+    const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
 
-                  const tipoMatch =
-                    !filtroTipoIngreso ||
-                    filtroTipoIngreso === "todos" ||
-                    (t as any).tipo_ingreso === filtroTipoIngreso;
+    // 3) Filtrar (UNA sola vez)
+    const filtered = todasLasTransacciones.filter((t: any) => {
+      const dt = t.fecha_fixed ?? t.fecha ?? t.created_at;
+      const fechaMatch = matchRangoFechas(dt);
 
-                  const cuentaMatch =
-                    !filtroCuenta ||
-                    filtroCuenta === "todas" ||
-                    String((t as any).cuenta_principal_codigo || "") === String(filtroCuenta);
+      const tipoMatch =
+        !filtroTipoIngreso ||
+        filtroTipoIngreso === "todos" ||
+        t.tipo_ingreso === filtroTipoIngreso;
 
-                  const subRef =
-                    (t as any).subcuenta_id ??
-                    (t as any).subcuentaId ??
-                    (t as any).subcuenta ??
-                    (t as any).subcuentaCodigo ??
-                    (t as any).subcuenta_codigo ??
-                    null;
+      const cuentaMatch =
+        !filtroCuenta ||
+        filtroCuenta === "todas" ||
+        String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
 
-                  const subIdStr = subRef ? String(subRef) : "";
+      const subRef =
+        t.subcuenta_id ??
+        t.subcuentaId ??
+        t.subcuenta ??
+        t.subcuentaCodigo ??
+        t.subcuenta_codigo ??
+        null;
 
-                  const subcuentaMatch =
-                    !filtroSubcuenta ||
-                    filtroSubcuenta === "todas" ||
-                    (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
-                    subIdStr === String(filtroSubcuenta);
+      const subIdStr = subRef ? String(subRef) : "";
 
-                  return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
-                });
+      const subcuentaMatch =
+        !filtroSubcuenta ||
+        filtroSubcuenta === "todas" ||
+        (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
+        subIdStr === String(filtroSubcuenta);
 
-                return filtered.length;
-              })()}
-            </p>
+      return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
+    });
 
-            <p className="text-lg font-bold text-primary">
-              Total: $
-              {(() => {
-                // Transformar asientos directos a formato de transacción (para sumar)
-                const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
-                  const detalleIngreso = asiento.detalle_asientos.find(
-                    (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
-                  );
-                  return {
-                    created_at: asiento.fecha,
-                    fecha: asiento.fecha,
-                    fecha_fixed: asiento.fecha,
-                    tipo_ingreso: "asiento_directo",
-                    cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-                    subcuenta_id:
-                      (detalleIngreso as any)?.subcuenta_id ??
-                      (detalleIngreso as any)?.subcuentaId ??
-                      (detalleIngreso as any)?.subcuenta ??
-                      null,
-                    subcuentaId:
-                      (detalleIngreso as any)?.subcuentaId ??
-                      (detalleIngreso as any)?.subcuenta_id ??
-                      (detalleIngreso as any)?.subcuenta ??
-                      null,
-                    monto_total: Number(detalleIngreso?.haber) || 0,
-                  };
-                });
+    // 4) Sumas
+    const total = filtered.reduce((sum: number, t: any) => sum + Number(t.monto_total || 0), 0);
+    const descuento = filtered.reduce(
+      (sum: number, t: any) => sum + Number(t.monto_descuento || 0),
+      0
+    );
 
-                const todasLasTransacciones = [...transaccionesNorm, ...asientosComoTransacciones];
+    // Neto: usa tu misma lógica (si tienes netas por getMetricValue, úsala; si no, monto_neto)
+    const neto = filtered.reduce(
+      (sum: number, t: any) => sum + Number(getMetricValue(t, "netas") ?? t.monto_neto ?? 0),
+      0
+    );
 
-                const filtered = todasLasTransacciones.filter((t: any) => {
-                  const dt = t.fecha_fixed ?? t.fecha ?? t.created_at;
-                  const fechaMatch = matchRangoFechas(dt);
+    return (
+      <>
+        <p className="text-sm text-muted-foreground">Resultados: {filtered.length}</p>
 
-                  const tipoMatch =
-                    !filtroTipoIngreso ||
-                    filtroTipoIngreso === "todos" ||
-                    t.tipo_ingreso === filtroTipoIngreso;
+        <p className="text-lg font-bold text-primary">
+          Total: ${formatMonto(total)}
+        </p>
 
-                  const cuentaMatch =
-                    !filtroCuenta ||
-                    filtroCuenta === "todas" ||
-                    String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
+        <p className="text-sm font-medium text-red-600">
+          Descuento: -${formatMonto(descuento)}
+        </p>
 
-                  const subRef =
-                    t.subcuenta_id ??
-                    t.subcuentaId ??
-                    t.subcuenta ??
-                    t.subcuentaCodigo ??
-                    t.subcuenta_codigo ??
-                    null;
-
-                  const subIdStr = subRef ? String(subRef) : "";
-
-                  const subcuentaMatch =
-                    !filtroSubcuenta ||
-                    filtroSubcuenta === "todas" ||
-                    (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
-                    subIdStr === String(filtroSubcuenta);
-
-                  return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
-                });
-
-                return formatMonto(
-                  filtered.reduce((sum: number, t: any) => sum + Number(t.monto_total || 0), 0)
-                );
-              })()}
-            </p>
-
-            <p className="text-sm font-medium text-green-600">
-              Neto: $
-              {(() => {
-                // Transformar asientos directos a formato de transacción (para neto)
-                const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
-                  const detalleIngreso = asiento.detalle_asientos.find(
-                    (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
-                  );
-                  return {
-                    created_at: asiento.fecha,
-                    fecha: asiento.fecha,
-                    fecha_fixed: asiento.fecha,
-                    tipo_ingreso: "asiento_directo",
-                    cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-                    subcuenta_id:
-                      (detalleIngreso as any)?.subcuenta_id ??
-                      (detalleIngreso as any)?.subcuentaId ??
-                      (detalleIngreso as any)?.subcuenta ??
-                      null,
-                    subcuentaId:
-                      (detalleIngreso as any)?.subcuentaId ??
-                      (detalleIngreso as any)?.subcuenta_id ??
-                      (detalleIngreso as any)?.subcuenta ??
-                      null,
-                    monto_neto: Number(detalleIngreso?.haber) || 0,
-                  };
-                });
-
-                const todasLasTransacciones = [...transaccionesNorm, ...asientosComoTransacciones];
-
-                const filtered = todasLasTransacciones.filter((t: any) => {
-                  const dt = t.fecha_fixed ?? t.fecha ?? t.created_at;
-                  const fechaMatch = matchRangoFechas(dt);
-
-                  const tipoMatch =
-                    !filtroTipoIngreso ||
-                    filtroTipoIngreso === "todos" ||
-                    t.tipo_ingreso === filtroTipoIngreso;
-
-                  const cuentaMatch =
-                    !filtroCuenta ||
-                    filtroCuenta === "todas" ||
-                    String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
-
-                  const subRef =
-                    t.subcuenta_id ??
-                    t.subcuentaId ??
-                    t.subcuenta ??
-                    t.subcuentaCodigo ??
-                    t.subcuenta_codigo ??
-                    null;
-
-                  const subIdStr = subRef ? String(subRef) : "";
-
-                  const subcuentaMatch =
-                    !filtroSubcuenta ||
-                    filtroSubcuenta === "todas" ||
-                    (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
-                    subIdStr === String(filtroSubcuenta);
-
-                  return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
-                });
-
-                return formatMonto(
-                  filtered.reduce((sum: number, t: any) => sum + Number(t.monto_neto || 0), 0)
-                );
-              })()}
-            </p>
-          </div>
+        <p className="text-sm font-medium text-green-600">
+          Neto: ${formatMonto(neto)}
+        </p>
+      </>
+    );
+  })()}
+</div>
         </div>
       </div>
 
@@ -4276,34 +4171,6 @@ case "otros":
                         );
                       })}
                     </tbody>
-
-                    <tfoot>
-                      <tr className="border-t bg-muted/40">
-                        <td className="p-3 text-sm font-medium" colSpan={4}>
-                          TOTALES
-                        </td>
-                        <td className="p-3 text-right font-bold text-primary whitespace-nowrap">
-                          ${formatMonto(
-                            transaccionesAgrupadas.reduce(
-                              (sum: number, t: any) => sum + Number(t.monto_total || 0),
-                              0
-                            )
-                          )}
-                        </td>
-                        <td className="p-3 text-right hidden md:table-cell whitespace-nowrap">
-                          <span className="font-bold text-green-600">
-                            ${formatMonto(
-                              transaccionesAgrupadas.reduce(
-                                (sum: number, t: any) => sum + Number(getMetricValue(t, "netas") || 0),
-                                0
-                              )
-                            )}
-                          </span>
-                        </td>
-                        <td className="p-3 hidden md:table-cell" />
-                        <td className="p-3" />
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
               </div>
