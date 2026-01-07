@@ -1780,7 +1780,7 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
       setIsCanceling(false);
     }
   };
-  const renderIncomeTypeForm = (type: string) => {
+  const renderIncomeTypeForm = (type: string) => {  
     switch (type) {
       case "precargados":
         return <div className="space-y-4">
@@ -2240,6 +2240,7 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
       case "general":
   return (
     <div className="space-y-4">
+      {/* Descripción */}
       <div className="space-y-2">
         <div className="flex items-center space-x-2">
           <Label htmlFor="descripcion-general">Descripción del Ingreso</Label>
@@ -2260,6 +2261,7 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
         />
       </div>
 
+      {/* Grid: Cuenta + Subcuenta */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Cuenta contable fija */}
         <div className="space-y-2">
@@ -2275,70 +2277,127 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
         </div>
 
         {/* Subcuentas reales */}
-<div className="space-y-2">
-  <Label htmlFor="subcuenta">Subcuenta (Opcional)</Label>
+        <div className="space-y-2">
+          <Label htmlFor="subcuenta">Subcuenta (Opcional)</Label>
 
-  <Select
-    value={subcuentaGeneral || "__none__"}
-    onValueChange={(v) => setSubcuentaGeneral(v === "__none__" ? "" : v)}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Seleccionar subcuenta" />
-    </SelectTrigger>
+          <Select
+            value={subcuentaGeneral || "__none__"}
+            onValueChange={(v) => setSubcuentaGeneral(v === "__none__" ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar subcuenta" />
+            </SelectTrigger>
 
-    <SelectContent>
-      {/* ✅ Radix NO permite value="" en SelectItem */}
-      <SelectItem value="__none__">Sin subcuenta</SelectItem>
+            <SelectContent>
+              <SelectItem value="__none__">Sin subcuenta</SelectItem>
 
-      {subcuentasVentas.length === 0 ? (
-        <SelectItem value="__empty" disabled>
-          No hay subcuentas en 4001
-        </SelectItem>
-      ) : (
-        subcuentasVentas
-          .map((sub: any) => {
-            // ✅ evitar romper Radix si viene id undefined/null
-            const id = String(sub?.id ?? sub?._id ?? "").trim();
-            if (!id) return null;
+              {subcuentasVentas.length === 0 ? (
+                <SelectItem value="__empty" disabled>
+                  No hay subcuentas en 4001
+                </SelectItem>
+              ) : (
+                subcuentasVentas
+                  .map((sub: any) => {
+                    const id = String(sub?.id ?? sub?._id ?? "").trim();
+                    if (!id) return null;
 
-            const code = String(sub?.codigo ?? sub?.code ?? "").trim();
-            const label = code ? `${code} - ${sub?.nombre}` : sub?.nombre;
+                    const code = String(sub?.codigo ?? sub?.code ?? "").trim();
+                    const label = code ? `${code} - ${sub?.nombre}` : sub?.nombre;
 
-            return (
-              <SelectItem key={id} value={id}>
-                {label}
-              </SelectItem>
-            );
-          })
-          .filter(Boolean)
-      )}
-    </SelectContent>
-  </Select>
-</div>
-</div>
-
-<div className="space-y-2">
-  <div className="flex items-center space-x-2">
-    <Label htmlFor="monto-general">Monto</Label>
-    {hasFieldError("Monto Total") && (
-      <div className="flex items-center text-destructive">
-        <AlertCircle className="h-4 w-4 mr-1" />
-        <span className="text-xs">Requerido</span>
+                    return (
+                      <SelectItem key={id} value={id}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })
+                  .filter(Boolean)
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-    )}
-  </div>
 
-  <Input
-    id="monto-general"
-    type="number"
-    placeholder="0.00"
-    value={montoTotal}
-    onChange={(e) => setMontoTotal(e.target.value)}
-    className={hasFieldError("Monto Total") ? "border-destructive" : ""}
-  />
-</div>
-</div>
-);
+      {/* Monto */}
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Label htmlFor="monto-general">Monto</Label>
+          {hasFieldError("Monto Total") && (
+            <div className="flex items-center text-destructive">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              <span className="text-xs">Requerido</span>
+            </div>
+          )}
+        </div>
+
+        <Input
+          id="monto-general"
+          type="number"
+          step="0.01"
+          placeholder="0.00"
+          value={montoTotal}
+          onChange={(e) => setMontoTotal(e.target.value)}
+          className={hasFieldError("Monto Total") ? "border-destructive" : ""}
+        />
+      </div>
+    </div>
+  );
+
+
+case "otros":
+  return (
+    <div className="space-y-4">
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Este ingreso se ligará a la cuenta <strong>4102 - Otros Productos</strong>.
+        </AlertDescription>
+      </Alert>
+
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Label htmlFor="descripcion-otros">Descripción del Ingreso Extraordinario</Label>
+          {hasFieldError("Descripción") && (
+            <div className="flex items-center text-destructive">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              <span className="text-xs">Requerido</span>
+            </div>
+          )}
+        </div>
+
+        <Textarea
+          id="descripcion-otros"
+          placeholder="Ej: Venta extraordinaria de equipo usado, donación recibida, etc."
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          className={hasFieldError("Descripción") ? "border-destructive" : ""}
+          rows={3}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Label htmlFor="monto-otros">Monto</Label>
+          {hasFieldError("Monto Total") && (
+            <div className="flex items-center text-destructive">
+              <AlertCircle className="h-4 w-4 mr-1" />
+              <span className="text-xs">Requerido</span>
+            </div>
+          )}
+        </div>
+
+        <Input
+          id="monto-otros"
+          type="number"
+          step="0.01"
+          placeholder="0.00"
+          value={montoTotal}
+          onChange={(e) => setMontoTotal(e.target.value)}
+          className={hasFieldError("Monto Total") ? "border-destructive" : ""}
+        />
+      </div>
+    </div>
+  );
+
       default:
         return null;
     }
