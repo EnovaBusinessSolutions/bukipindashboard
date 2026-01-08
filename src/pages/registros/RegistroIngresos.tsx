@@ -384,7 +384,7 @@ const RegistroIngresos = () => {
 const [pageResumen, setPageResumen] = useState(1);
 
   // Estado para el período de análisis
-  const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");
+  const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("diario");         
   
   // Estado para el formato de cifras
   const [scaleFormat, setScaleFormat] = useState<"general" | "miles" | "millones">("general");
@@ -394,41 +394,70 @@ const [pageResumen, setPageResumen] = useState(1);
   
   // Estado para el tipo de ingreso a analizar
   const [tipoIngresoAnalisis, setTipoIngresoAnalisis] = useState<"ventas" | "otros">("ventas");
-  
-  // Estados para fechas específicas de análisis
-  const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
-  const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
-  
-  const [highlightLabels, setHighlightLabels] = useState<{ dia: string; mes: string; ano: string } | null>(null);
 
-  // Estados para totales calculados desde asientos contables
-  const [totalesDia, setTotalesDia] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
-  const [totalesMes, setTotalesMes] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
-  const [totalesAno, setTotalesAno] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
+  // Estados para fechas específicas de análisis
+const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
+const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
+
+// ✅ Labels de highlights (solo 1 declaración)
+type HighlightLabels = { dia?: string; mes?: string; ano?: string };
+const [highlightLabels, setHighlightLabels] = useState<HighlightLabels>({});
+
+// ✅ Totales highlights
+type TotalesHighlights = {
+  ventasBrutas: number;
+  descuentos: number;
+  ventasNetas: number;
+  otrosIngresos: number;
+  totalIngresos: number;
+};
+
+const EMPTY_HIGHLIGHTS: TotalesHighlights = {
+  ventasBrutas: 0,
+  descuentos: 0,
+  ventasNetas: 0,
+  otrosIngresos: 0,
+  totalIngresos: 0,
+};
+
+const [highTotalesDia, setHighTotalesDia] = useState<TotalesHighlights>(EMPTY_HIGHLIGHTS);
+const [highTotalesMes, setHighTotalesMes] = useState<TotalesHighlights>(EMPTY_HIGHLIGHTS);
+const [highTotalesAno, setHighTotalesAno] = useState<TotalesHighlights>(EMPTY_HIGHLIGHTS);
+
+ 
 
  useEffect(() => {
-  const today = new Date();
+  let cancelled = false;
 
-  // 1) Títulos dinámicos (solo texto)
-  setHighlightLabels({
-    dia: format(today, "dd/MM/yyyy", { locale: es }),
-    mes: format(today, "MMMM yyyy", { locale: es }),
-    ano: format(today, "yyyy", { locale: es }),
-  });
-
-  // 2) Traer totales desde backend (endpoint que agregaste)
   (async () => {
     try {
-      const data = await apiJson("/api/ingresos/highlights"); // <-- aquí pon el endpoint REAL que agregaste
+      const json = await apiJson<any>("/api/ingresos/highlights");
+const payload = (json?.data ?? json) as any;
 
-      setTotalesDia(data?.dia ?? { ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
-      setTotalesMes(data?.mes ?? { ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
-      setTotalesAno(data?.ano ?? { ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
-    } catch (e) {
-      console.error(e);
+if (cancelled) return;
+
+setHighlightLabels(payload?.labels ?? {});
+setHighTotalesDia(payload?.dia ?? EMPTY_HIGHLIGHTS);
+setHighTotalesMes(payload?.mes ?? EMPTY_HIGHLIGHTS);
+setHighTotalesAno(payload?.ano ?? EMPTY_HIGHLIGHTS);
+
+    } catch (err) {
+      console.error("Error cargando highlights:", err);
+      if (cancelled) return;
+
+setHighlightLabels({});
+setHighTotalesDia(EMPTY_HIGHLIGHTS);
+setHighTotalesMes(EMPTY_HIGHLIGHTS);
+setHighTotalesAno(EMPTY_HIGHLIGHTS);
+
     }
   })();
+
+  return () => {
+    cancelled = true;
+  };
 }, []);
+
 
  
   // Estado para datos de analíticas calculados desde asientos contables
@@ -909,7 +938,7 @@ const subcuentasVentas = useMemo(() => {
   );
 });
 
-        setAsientosIngresosDirectos(asientosIngresos);
+        setAsientosIngresosDirectos(asientosIngresos);     
       } catch (error) {
         console.error('Error al cargar asientos directos:', error);
       }
@@ -935,7 +964,7 @@ useEffect(() => {
       let fechaInicio: Date;
       let fechaFin: Date;
 
-      if (periodFilter === "diario") {
+      if (periodFilter === "diario") {                 
         fechaInicio = new Date(fechaAnalisisDiario);
         fechaInicio.setHours(0, 0, 0, 0);
         fechaFin = new Date(fechaAnalisisDiario);
@@ -1034,7 +1063,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
         const detallesSolo = respDet?.detalles ?? respDet?.data?.detalles ?? [];
 
         if (!detallesSolo || detallesSolo.length === 0) {
-          setDatosAnaliticas({
+          setDatosAnaliticas({                 
             ventasBrutas: 0,
             descuentos: 0,
             ventasNetas: 0,
@@ -1299,15 +1328,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
           }
         };
 
-        const [dia, mes, ano] = await Promise.all([
-          calcularPeriodo('dia'),
-          calcularPeriodo('mes'),
-          calcularPeriodo('ano')
-        ]);
 
-        setTotalesDia(dia);
-        setTotalesMes(mes);
-        setTotalesAno(ano);
       } catch (error) {
         console.error('Error calculando totales:', error);
       }
@@ -4401,33 +4422,33 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesDia.ventasBrutas, scaleFormat)}
+                    ${formatCifra(highTotalesDia.ventasBrutas, scaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-destructive">Descuentos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesDia.descuentos, scaleFormat)}
+                    ${formatCifra(highTotalesDia.descuentos, scaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${formatCifra(totalesDia.ventasNetas, scaleFormat)}
+                    ${formatCifra(highTotalesDia.ventasNetas, scaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-600">Otros Ingresos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesDia.otrosIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesDia.otrosIngresos, scaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-primary">Total Ingresos:</span>
                   <span className="text-xl font-bold text-primary">
-                    ${formatCifra(totalesDia.totalIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesDia.totalIngresos, scaleFormat)}
                   </span>
                 </div>
               </CardContent>
@@ -4442,33 +4463,33 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesMes.ventasBrutas, scaleFormat)}
+                    ${formatCifra(highTotalesMes.ventasBrutas, scaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-destructive">Descuentos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesMes.descuentos, scaleFormat)}
+                    ${formatCifra(highTotalesMes.descuentos, scaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${formatCifra(totalesMes.ventasNetas, scaleFormat)}
+                    ${formatCifra(highTotalesMes.ventasNetas, scaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-600">Otros Ingresos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesMes.otrosIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesMes.otrosIngresos, scaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-primary">Total Ingresos:</span>
                   <span className="text-xl font-bold text-primary">
-                    ${formatCifra(totalesMes.totalIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesMes.totalIngresos, scaleFormat)}
                   </span>
                 </div>
               </CardContent>
@@ -4483,33 +4504,33 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesAno.ventasBrutas, scaleFormat)}
+                    ${formatCifra(highTotalesAno.ventasBrutas, scaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-destructive">Descuentos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesAno.descuentos, scaleFormat)}
+                    ${formatCifra(highTotalesAno.descuentos, scaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${formatCifra(totalesAno.ventasNetas, scaleFormat)}
+                    ${formatCifra(highTotalesAno.ventasNetas, scaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-600">Otros Ingresos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(totalesAno.otrosIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesAno.otrosIngresos, scaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-primary">Total Ingresos:</span>
                   <span className="text-xl font-bold text-primary">
-                    ${formatCifra(totalesAno.totalIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesAno.totalIngresos, scaleFormat)}
                   </span>
                 </div>
               </CardContent>
