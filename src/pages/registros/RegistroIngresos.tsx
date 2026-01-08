@@ -25,7 +25,8 @@ import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useProductos, useProductosServicios, useCreateProducto, useUpdateProducto, useDeleteProducto } from "@/hooks/useProductos";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
-import { useClientes, useCreateCliente } from "@/hooks/useClientes";import { DateRange } from "react-day-picker";
+import { useClientes, useCreateCliente } from "@/hooks/useClientes";
+import { DateRange } from "react-day-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 
@@ -398,11 +399,38 @@ const [pageResumen, setPageResumen] = useState(1);
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
   
+  const [highlightLabels, setHighlightLabels] = useState<{ dia: string; mes: string; ano: string } | null>(null);
+
   // Estados para totales calculados desde asientos contables
   const [totalesDia, setTotalesDia] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
   const [totalesMes, setTotalesMes] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
   const [totalesAno, setTotalesAno] = useState({ ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
 
+ useEffect(() => {
+  const today = new Date();
+
+  // 1) Títulos dinámicos (solo texto)
+  setHighlightLabels({
+    dia: format(today, "dd/MM/yyyy", { locale: es }),
+    mes: format(today, "MMMM yyyy", { locale: es }),
+    ano: format(today, "yyyy", { locale: es }),
+  });
+
+  // 2) Traer totales desde backend (endpoint que agregaste)
+  (async () => {
+    try {
+      const data = await apiJson("/api/ingresos/highlights"); // <-- aquí pon el endpoint REAL que agregaste
+
+      setTotalesDia(data?.dia ?? { ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
+      setTotalesMes(data?.mes ?? { ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
+      setTotalesAno(data?.ano ?? { ventasBrutas: 0, descuentos: 0, ventasNetas: 0, otrosIngresos: 0, totalIngresos: 0 });
+    } catch (e) {
+      console.error(e);
+    }
+  })();
+}, []);
+
+ 
   // Estado para datos de analíticas calculados desde asientos contables
   const [datosAnaliticas, setDatosAnaliticas] = useState<{
     ventasBrutas: number;
@@ -1174,6 +1202,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
   calcularAnaliticasDesdeAsientos();
 }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual, tipoIngresoAnalisis]);
 
+
   // useEffect para calcular totales desde asientos contables
   useEffect(() => {
     const calcularTotales = async () => {
@@ -1285,7 +1314,7 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
     };
 
     calcularTotales();
-    
+
     // Cargar movimientos de inventario para analítica
     const loadMovimientos = async () => {
       try {
@@ -4364,7 +4393,9 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
             {/* Día */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
+                <CardTitle className="text-lg font-semibold text-primary">
+  Resumen del Día {highlightLabels?.dia ? `(${highlightLabels.dia})` : ""}
+</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -4405,7 +4436,7 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
             {/* Mes */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
+                <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes {highlightLabels?.mes ? `(${highlightLabels.mes})` : ""}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -4446,7 +4477,7 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
             {/* Año */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
+                <CardTitle className="text-lg font-semibold text-primary">Resumen del Año {highlightLabels?.ano ? `(${highlightLabels.ano})` : ""}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
