@@ -4788,83 +4788,73 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
           else bucket.ventasNetas += v;
         };
 
+        // ✅ Usar la misma fecha “real” que usa la tabla (no asiento_fecha)
+const getTxFecha = (t: any) => {
+  const raw =
+    t?.fecha_fixed ??        // ideal (viene del backend mapeado)
+    t?.fecha ??              // fallback
+    t?.createdAt ??
+    t?.created_at ??
+    t?.asiento_fecha;        // último fallback, por si existiera en alguno
+  if (!raw) return null;
+  return parseDateSafe(raw); // usa tu helper existente
+};
+
+
         // Diario: 1 punto (fecha seleccionada)
         if (periodFilter === "diario") {
-          const selectedDateStr = fechaAnalisisDiario.toISOString().split("T")[0];
-          const bucket = {
-            periodo: selectedDateStr,
-            ventasBrutas: 0,
-            descuentos: 0,
-            ventasNetas: 0,
-            otrosIngresos: 0,
-          };
+  const selectedDateStr = ymdLocal(fechaAnalisisDiario);
 
-          txs.forEach((t) => {
-            const f = (t as any).asiento_fecha;
-            if (!f) return;
-            const fStr = String(f).slice(0, 10);
-            if (fStr !== selectedDateStr) return;
-            pushValue(bucket, Number(getMetricValue(t, metricType) || 0));
-          });
+  const bucket = {
+    periodo: "Hoy",
+    ventasBrutas: 0,
+    descuentos: 0,
+    ventasNetas: 0,
+    otrosIngresos: 0,
+  };
 
-          // Si no hay tx pero sí total real, lo mostramos como punto único
-          if (
-            txs.length === 0 &&
-            totalReal > 0 &&
-            bucket.ventasBrutas + bucket.descuentos + bucket.ventasNetas + bucket.otrosIngresos === 0
-          ) {
-            pushValue(bucket, totalReal);
-          }
+  txs.forEach((t) => {
+    const d = getTxFecha(t);
+    if (!d) return;
 
-          return [bucket];
-        }
+    // ✅ Comparación local (sin UTC), coherente con la tabla
+    if (ymdLocal(d) !== selectedDateStr) return;
+
+    pushValue(bucket, Number(getMetricValue(t, metricType) || 0));
+  });
+
+  return [bucket];
+}
 
         // Mensual: puntos por día del mes seleccionado
         if (periodFilter === "mensual") {
-          const month = fechaAnalisisMensual.getMonth();
-          const year = fechaAnalisisMensual.getFullYear();
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const month = fechaAnalisisMensual.getMonth();
+  const year = fechaAnalisisMensual.getFullYear();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-          const buckets = Array.from({ length: daysInMonth }, (_, i) => ({
-            periodo: `Día ${i + 1}`,
-            ventasBrutas: 0,
-            descuentos: 0,
-            ventasNetas: 0,
-            otrosIngresos: 0,
-            __day: i + 1,
-          }));
+  const buckets = Array.from({ length: daysInMonth }, (_, i) => ({
+    periodo: `Día ${i + 1}`,
+    ventasBrutas: 0,
+    descuentos: 0,
+    ventasNetas: 0,
+    otrosIngresos: 0,
+    __day: i + 1,
+  }));
 
-          txs.forEach((t) => {
-            const f = (t as any).asiento_fecha;
-            if (!f) return;
-            const d = parseDateSafe(f);
-            if (d.getFullYear() !== year || d.getMonth() !== month) return;
+  txs.forEach((t) => {
+    const d = getTxFecha(t);
+    if (!d) return;
 
-            const idx = d.getDate() - 1;
-            if (idx < 0 || idx >= buckets.length) return;
+    if (d.getFullYear() !== year || d.getMonth() !== month) return;
 
-            pushValue(buckets[idx], Number(getMetricValue(t, metricType) || 0));
-          });
+    const idx = d.getDate() - 1;
+    if (idx < 0 || idx >= buckets.length) return;
 
-          // Si no hay tx pero hay total real -> 1 punto “Total del mes”
-          const sum = buckets.reduce(
-            (acc, b) => acc + b.ventasBrutas + b.descuentos + b.ventasNetas + b.otrosIngresos,
-            0
-          );
-          if (sum === 0 && totalReal > 0) {
-            const one = {
-              periodo: `Mes ${month + 1}/${year}`,
-              ventasBrutas: 0,
-              descuentos: 0,
-              ventasNetas: 0,
-              otrosIngresos: 0,
-            };
-            pushValue(one, totalReal);
-            return [one];
-          }
+    pushValue(buckets[idx], Number(getMetricValue(t, metricType) || 0));
+  });
 
-          return buckets;
-        }
+  return buckets;
+}
 
         // Anual: puntos por mes del año actual (o del sistema)
         const today = new Date();
@@ -4881,10 +4871,9 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
         }));
 
         txs.forEach((t) => {
-          const f = (t as any).asiento_fecha;
-          if (!f) return;
-          const d = parseDateSafe(f);
-          if (d.getFullYear() !== year) return;
+  const d = getTxFecha(t);
+  if (!d) return;
+  if (d.getFullYear() !== year) return;
 
           const idx = d.getMonth();
           pushValue(buckets[idx], Number(getMetricValue(t, metricType) || 0));
@@ -4909,9 +4898,9 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
         return buckets;
       };
 
-      // 3) Serie principal o fallback
-      const base = Array.isArray(datosAnaliticas.detallesPorPeriodo) ? datosAnaliticas.detallesPorPeriodo : [];
-      const detalles = base.length > 0 ? base : buildFallbackFromTransactions();
+      // ✅ El gráfico siempre debe ser coherente con la tabla (filteredTransactions)
+      const detalles = buildFallbackFromTransactions();
+
 
       // 4) Adaptar al shape del chart
       const chartData = (detalles || []).map((d: any) => ({
