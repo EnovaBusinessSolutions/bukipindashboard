@@ -4311,58 +4311,76 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
 
     const asientosDir: any[] = Array.isArray(asientosIngresosDirectos) ? asientosIngresosDirectos : [];
 
+    // ✅ Helper: misma fecha “real” que usa la tabla (soporta varios shapes)
+const getTxFecha = (t: any) => {
+  const raw =
+    t?.fecha_fixed ??        // ideal (YYYY-MM-DD)
+    t?.fecha ??              // fallback
+    t?.createdAt ??
+    t?.created_at ??
+    t?.asiento_fecha;        // último fallback
+  if (!raw) return null;
+  return parseDateSafe(raw);
+};
+
+// ✅ Helper: normaliza cuenta principal a string (evita bug 4001 number vs "4001")
+const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
+
+
     const getFilteredTransactions = () => {
-      const today = new Date();
-      const currentYear = today.getFullYear();
+  const today = new Date();
+  const currentYear = today.getFullYear();
 
-      // Primero filtrar por período y excluir canceladas y reversiones
-      let filtered = transacciones.filter((t) =>
-        (t as any).estado !== "cancelado" &&
-        !(t as any).descripcion?.includes("CANCELACIÓN:")
-      );
+  // 1) Base: excluir canceladas y reversiones
+  let filtered = (transacciones || []).filter((t: any) => {
+    const estado = String(t?.estado || "").toLowerCase();
+    const desc = String(t?.descripcion || "");
+    return estado !== "cancelado" && !desc.includes("CANCELACIÓN:");
+  });
 
-      if (periodFilter === "diario") {
-        // Usar la fecha seleccionada para análisis diario desde asiento contable
-        const selectedDateStr = fechaAnalisisDiario.toISOString().split("T")[0];
-        filtered = filtered.filter((t) => {
-          const asientoFecha = (t as any).asiento_fecha;
-          return asientoFecha === selectedDateStr;
-        });
-      } else if (periodFilter === "mensual") {
-        // Usar el mes y año de la fecha seleccionada desde asiento contable
-        const selectedMonth = fechaAnalisisMensual.getMonth();
-        const selectedYear = fechaAnalisisMensual.getFullYear();
-        filtered = filtered.filter((t) => {
-          const asientoFecha = (t as any).asiento_fecha;
-          if (!asientoFecha) return false;
-          const tDate = parseDateSafe(asientoFecha);
-          return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
-        });
-      } else {
-        // Anual desde asiento contable
-        filtered = filtered.filter((t) => {
-          const asientoFecha = (t as any).asiento_fecha;
-          if (!asientoFecha) return false;
-          const tDate = parseDateSafe(asientoFecha);
-          return tDate.getFullYear() === currentYear;
-        });
-      }
+  // 2) Filtrar por período (usando misma fecha que la tabla)
+  if (periodFilter === "diario") {
+    const selected = ymdLocal(fechaAnalisisDiario);
 
-      // Luego filtrar por tipo de ingreso
-      if (tipoIngresoAnalisis === "ventas") {
-        // Solo ventas (cuenta 4001)
-        return filtered.filter((t) => (t as any).cuenta_principal_codigo === "4001");
-      } else {
-        // Otros ingresos (cuentas 4XXX excepto 4001 y 4003)
-        return filtered.filter((t) =>
-          (t as any).cuenta_principal_codigo?.startsWith("4") &&
-          (t as any).cuenta_principal_codigo !== "4001" &&
-          (t as any).cuenta_principal_codigo !== "4003"
-        );
-      }
-    };
+    filtered = filtered.filter((t: any) => {
+      const d = getTxFecha(t);
+      if (!d) return false;
+      return ymdLocal(d) === selected;
+    });
+  } else if (periodFilter === "mensual") {
+    const month = fechaAnalisisMensual.getMonth();
+    const year = fechaAnalisisMensual.getFullYear();
+
+    filtered = filtered.filter((t: any) => {
+      const d = getTxFecha(t);
+      if (!d) return false;
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+  } else {
+    // anual (año actual)
+    filtered = filtered.filter((t: any) => {
+      const d = getTxFecha(t);
+      if (!d) return false;
+      return d.getFullYear() === currentYear;
+    });
+  }
+
+  // 3) Filtrar por tipo de ingreso (ventas vs otros) usando cuenta como string
+  if (tipoIngresoAnalisis === "ventas") {
+    return filtered.filter((t: any) => getCuentaCodigo(t) === "4001");
+  } else {
+    const codeIsOtherIncome = (code: string) =>
+      code.startsWith("4") && code !== "4001" && code !== "4003";
+
+    return filtered.filter((t: any) => codeIsOtherIncome(getCuentaCodigo(t)));
+  }
+};
+
 
     const filteredTransactions = getFilteredTransactions();
+
+    console.log("[Analitica] filteredTransactions:", filteredTransactions.length, filteredTransactions.slice(0, 3));
+
 
     // Función para procesar datos de métodos de pago (solo para transacciones con pago recibido)
     const getMetodosPagoData = (): MetodoPagoItem[] => {
