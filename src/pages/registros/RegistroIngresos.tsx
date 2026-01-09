@@ -5285,9 +5285,7 @@ const getTxFecha = (t: any) => {
                 : datosAnaliticas.otrosIngresos;
 
             if (filteredTransactions.length === 0 && (Number(totalRealPie) || 0) > 0) {
-              return [
-                { tipo: "Sin detalle", monto: Number(totalRealPie) || 0, porcentaje: "100.0" },
-              ];
+              return [{ tipo: "Sin detalle", monto: Number(totalRealPie) || 0, porcentaje: "100.0" }];
             }
 
             const distribucion = filteredTransactions.reduce<NumMap>((acc, t: any) => {
@@ -5301,11 +5299,6 @@ const getTxFecha = (t: any) => {
               0
             );
 
-            const prettyTipo = (tipo: string) =>
-              String(tipo || "sin_tipo")
-                .replace(/_/g, " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase());
-
             return (Object.entries(distribucion) as Array<[string, number]>)
               .map(([tipo, monto]) => ({
                 tipo: prettyTipoIngreso(tipo),
@@ -5318,55 +5311,70 @@ const getTxFecha = (t: any) => {
           const totalPie = pieTipoData.reduce((s, d) => s + (Number(d.monto) || 0), 0);
 
           return (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieTipoData}
-                  dataKey="monto"
-                  nameKey="tipo"
-                  cx="50%"
-                  cy="46%"
-                  innerRadius={64}
-                  outerRadius={92}
-                  paddingAngle={2}
-                  cornerRadius={10}
-                  stroke={hsl("border")}
-                  strokeWidth={2}
-                  labelLine={false}
-                  label={false}
-                >
-                  <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
+            <div className="h-full flex flex-col">
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieTipoData}
+                      dataKey="monto"
+                      nameKey="tipo"
+                      cx="50%"
+                      cy="46%"
+                      innerRadius={64}
+                      outerRadius={92}
+                      paddingAngle={2}
+                      cornerRadius={10}
+                      stroke={hsl("border")}
+                      strokeWidth={2}
+                      labelLine={false}
+                      label={false}
+                    >
+                      <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
 
-                  {pieTipoData.map((_, idx) => (
-                    <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
+                      {pieTipoData.map((_, idx) => (
+                        <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
 
-                <RechartsTooltip
-                  formatter={(value: any) => [
-                    `$${formatCifra(Number(value) || 0, scaleFormat)}`,
-                    "Monto",
-                  ]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "10px",
-                    color: "hsl(var(--foreground))",
-                    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
-                  }}
-                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
-                />
+                    <RechartsTooltip
+                      formatter={(value: any) => [
+                        `$${formatCifra(Number(value) || 0, scaleFormat)}`,
+                        "Monto",
+                      ]}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "10px",
+                        color: "hsl(var(--foreground))",
+                        boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+                      }}
+                      itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
+                    />
 
-                <Legend verticalAlign="bottom" align="center" content={makeLegend("tipo")} />
-              </PieChart>
-            </ResponsiveContainer>
+                    <Legend verticalAlign="bottom" align="center" content={makeLegend("tipo")} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* ✅ Nota aclaratoria (solo cuando estás analizando "ventas") */}
+              {tipoIngresoAnalisis === "ventas" && (
+                <div className="mt-2 px-3 py-2 rounded-lg border bg-muted/30 text-xs text-muted-foreground flex items-start gap-2">
+                  <span className="mt-0.5">⚠️</span>
+                  <span className="leading-relaxed">
+                    Este <b>Total</b> corresponde únicamente a <b>Ventas</b> (no incluye <b>Otros ingresos</b>).
+                  </span>
+                </div>
+              )}
+            </div>
           );
         })()}
       </div>
     )}
   </CardContent>
 </Card>
+
             {/* Gráfico de Estado de Pago */}
 <Card>
   <CardHeader>
