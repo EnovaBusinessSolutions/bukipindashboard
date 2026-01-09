@@ -3627,7 +3627,7 @@ case "otros":
         <p className="text-sm text-muted-foreground">Resultados: {filtered.length}</p>
 
         <p className="text-lg font-bold text-primary">
-          Total general: ${formatMonto(total)}
+          General: ${formatMonto(total)}
         </p>
 
         <p className="text-sm font-medium text-red-600">
@@ -3635,7 +3635,7 @@ case "otros":
         </p>
 
         <p className="text-sm font-medium text-green-600">
-          Total ingresos: ${formatMonto(neto)}
+          Ingreso: ${formatMonto(neto)}
         </p>
       </>
     );
@@ -3776,8 +3776,8 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
                         <th className="text-left p-3 font-medium min-w-[320px]">Descripción</th>
                         <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Tipo</th>
                         <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">Cuenta</th>
-                        <th className="text-right p-3 font-medium whitespace-nowrap">Total G.</th>
-                        <th className="text-right p-3 font-medium whitespace-nowrap hidden md:table-cell">Total I.</th>
+                        <th className="text-right p-3 font-medium whitespace-nowrap">General</th>
+                        <th className="text-right p-3 font-medium whitespace-nowrap hidden md:table-cell">Ingreso</th>
                         <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Estado</th>
                         <th className="text-right p-3 font-medium whitespace-nowrap">Acciones</th>
                       </tr>
