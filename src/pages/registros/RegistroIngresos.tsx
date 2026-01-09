@@ -35,7 +35,9 @@ import {
   Brush,
   LabelList,
   Legend,
+  Label as RechartsLabel, // ✅ ESTE
 } from "recharts";
+
 
 
 import { useVentasResumen } from "@/hooks/useVentasResumen";
@@ -4480,6 +4482,71 @@ const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
       }
     };
 
+    const hsl = (v: string) => `hsl(var(--${v}))`;
+
+const PIE_COLORS = [
+  hsl("primary"),
+  hsl("chart-1"),
+  hsl("chart-2"),
+  hsl("chart-3"),
+  hsl("muted-foreground"),
+];
+
+const makeLegend =
+  (nameKey: "tipo" | "estado") =>
+  ({ payload }: any) => {
+    if (!payload?.length) return null;
+
+    return (
+      <div className="mt-3 grid grid-cols-1 gap-2">
+        {payload.map((item: any, idx: number) => {
+          const raw = item?.payload?.payload ?? item?.payload ?? {};
+          const label = String(raw?.[nameKey] ?? item?.value ?? "—");
+          const monto = Number(raw?.monto ?? raw?.value ?? 0) || 0;
+          const pct = String(raw?.porcentaje ?? "");
+
+          return (
+            <div key={idx} className="flex items-center justify-between gap-3 text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ background: item.color || PIE_COLORS[idx % PIE_COLORS.length] }}
+                />
+                <span className="truncate text-foreground/90">{label}</span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-muted-foreground">{pct ? `${pct}%` : ""}</span>
+                <span className="font-medium text-foreground">
+                  ${formatCifra(monto, scaleFormat)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+const CenterLabel =
+  (title: string, total: number) =>
+  ({ viewBox }: any) => {
+    const cx = viewBox?.cx ?? 0;
+    const cy = viewBox?.cy ?? 0;
+
+    return (
+      <g>
+        <text x={cx} y={cy - 6} textAnchor="middle" fill={hsl("muted-foreground")} fontSize="12">
+          {title}
+        </text>
+        <text x={cx} y={cy + 16} textAnchor="middle" fill={hsl("foreground")} fontSize="16" fontWeight="700">
+          ${formatCifra(total, scaleFormat)}
+        </text>
+      </g>
+    );
+  };
+
+
     return (
       <>
         {/* HIGHLIGHTS - Resumen Completo (sin filtros) */}
@@ -5141,189 +5208,274 @@ const getTxFecha = (t: any) => {
 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
             {/* Gráfico de Ventas por Tipo */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Tipo
-                </CardTitle>
-                <CardDescription>
-                  Distribución de{" "}
-                  {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por categoría
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
-                ) : !hayDatosDisponibles() ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
-                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
-                ) : (
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={((): PieTipoItem[] => {
-                            const totalRealPie =
-                              tipoIngresoAnalisis === "ventas"
-                                ? metricType === "brutas"
-                                  ? datosAnaliticas.ventasBrutas
-                                  : metricType === "descuentos"
-                                  ? datosAnaliticas.descuentos
-                                  : datosAnaliticas.ventasNetas
-                                : datosAnaliticas.otrosIngresos;
+<Card>
+  <CardHeader>
+    <CardTitle>
+      {metricType === "brutas"
+        ? "Ventas Brutas"
+        : metricType === "descuentos"
+        ? "Descuentos"
+        : "Ventas Netas"}{" "}
+      por Tipo
+    </CardTitle>
+    <CardDescription>
+      Distribución de{" "}
+      {metricType === "brutas"
+        ? "ventas brutas"
+        : metricType === "descuentos"
+        ? "descuentos"
+        : "ventas netas"}{" "}
+      por categoría
+    </CardDescription>
+  </CardHeader>
 
-                            if (filteredTransactions.length === 0 && (Number(totalRealPie) || 0) > 0) {
-                              return [{ tipo: "Otros Ingresos", monto: Number(totalRealPie) || 0, porcentaje: "100.0" }];
-                            }
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        Cargando gráfico...
+      </div>
+    ) : !hayDatosDisponibles() ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        No hay datos para mostrar
+      </div>
+    ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        No hay descuentos en otros ingresos
+      </div>
+    ) : (
+      <div className="h-64">
+        {(() => {
+          const pieTipoData: PieTipoItem[] = (() => {
+            const totalRealPie =
+              tipoIngresoAnalisis === "ventas"
+                ? metricType === "brutas"
+                  ? datosAnaliticas.ventasBrutas
+                  : metricType === "descuentos"
+                  ? datosAnaliticas.descuentos
+                  : datosAnaliticas.ventasNetas
+                : datosAnaliticas.otrosIngresos;
 
-                            const distribucionTransacciones = filteredTransactions.reduce<NumMap>((acc, t: any) => {
-                              const key = (t?.tipo_ingreso || "sin_tipo") as string;
-                              acc[key] = (acc[key] || 0) + (Number(getMetricValue(t, metricType)) || 0);
-                              return acc;
-                            }, {} as NumMap);
+            if (filteredTransactions.length === 0 && (Number(totalRealPie) || 0) > 0) {
+              return [
+                { tipo: "Sin detalle", monto: Number(totalRealPie) || 0, porcentaje: "100.0" },
+              ];
+            }
 
-                            const totalTransacciones = (Object.values(distribucionTransacciones) as number[]).reduce(
-                              (sum, val) => sum + (Number(val) || 0),
-                              0
-                            );
+            const distribucion = filteredTransactions.reduce<NumMap>((acc, t: any) => {
+              const rawKey = String(t?.tipo_ingreso || "sin_tipo");
+              acc[rawKey] = (acc[rawKey] || 0) + (Number(getMetricValue(t, metricType)) || 0);
+              return acc;
+            }, {} as NumMap);
 
-                            return (Object.entries(distribucionTransacciones) as Array<[string, number]>).map(([tipo, monto]) => ({
-                              tipo: String(tipo).charAt(0).toUpperCase() + String(tipo).slice(1),
-                              monto: Number(monto) || 0,
-                              porcentaje: totalTransacciones > 0 ? (((Number(monto) || 0) / totalTransacciones) * 100).toFixed(1) : "0.0",
-                            }));
-                          })()}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ tipo, porcentaje, monto }: any) => `${tipo}\n${porcentaje}%\n$${formatCifra(Number(monto) || 0, scaleFormat)}`}
-                          innerRadius={60}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="monto"
-                        >
-                          {Object.keys(
-                            filteredTransactions.reduce((acc: BoolMap, t: any) => {
-                              acc[t?.tipo_ingreso || "sin_tipo"] = true;
-                              return acc;
-                            }, {} as BoolMap)
-                          ).map((entry, index) => {
-                            const colors = [
-                              "hsl(180 50% 55%)",
-                              "hsl(180 45% 45%)",
-                              "hsl(180 55% 65%)",
-                              "hsl(180 40% 40%)",
-                            ];
-                            return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
-                          })}
-                        </Pie>
-                        <RechartsTooltip
-                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
-                          contentStyle={{
-                            backgroundColor: "#ffffff",
-                            border: "1px solid #ccc",
-                            borderRadius: "4px",
-                            color: "#000000",
-                          }}
-                          itemStyle={{ color: "#000000", fontWeight: "bold" }}
-                          labelStyle={{ color: "#000000", fontWeight: "bold" }}
-                          wrapperStyle={{ zIndex: 1000 }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            const total = (Object.values(distribucion) as number[]).reduce(
+              (sum, v) => sum + (Number(v) || 0),
+              0
+            );
 
+            const prettyTipo = (tipo: string) =>
+              String(tipo || "sin_tipo")
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+
+            return (Object.entries(distribucion) as Array<[string, number]>)
+              .map(([tipo, monto]) => ({
+                tipo: prettyTipo(tipo), // ✅ AQUÍ
+                monto: Number(monto) || 0,
+                porcentaje: total > 0 ? (((Number(monto) || 0) / total) * 100).toFixed(1) : "0.0",
+              }))
+              .sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
+          })();
+
+          const totalPie = pieTipoData.reduce((s, d) => s + (Number(d.monto) || 0), 0);
+
+          return (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieTipoData}
+                  dataKey="monto"
+                  nameKey="tipo"
+                  cx="50%"
+                  cy="46%"
+                  innerRadius={64}
+                  outerRadius={92}
+                  paddingAngle={2}
+                  cornerRadius={10}
+                  stroke={hsl("border")}
+                  strokeWidth={2}
+                  labelLine={false}
+                  label={false}
+                >
+                  <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
+
+                  {pieTipoData.map((_, idx) => (
+                    <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+
+                <RechartsTooltip
+                  formatter={(value: any) => [
+                    `$${formatCifra(Number(value) || 0, scaleFormat)}`,
+                    "Monto",
+                  ]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "10px",
+                    color: "hsl(var(--foreground))",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+                  }}
+                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
+                />
+
+                <Legend verticalAlign="bottom" align="center" content={makeLegend("tipo")} />
+              </PieChart>
+            </ResponsiveContainer>
+          );
+        })()}
+      </div>
+    )}
+  </CardContent>
+</Card>
             {/* Gráfico de Estado de Pago */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Estado de Pagos - {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"}
-                </CardTitle>
-                <CardDescription>Distribución por estado de pago</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
-                ) : !hayDatosDisponibles() ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
-                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
-                ) : (
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={((): PieEstadoItem[] => {
-                            const totalRealEstado =
-                              tipoIngresoAnalisis === "ventas"
-                                ? metricType === "brutas"
-                                  ? datosAnaliticas.ventasBrutas
-                                  : metricType === "descuentos"
-                                  ? datosAnaliticas.descuentos
-                                  : datosAnaliticas.ventasNetas
-                                : datosAnaliticas.otrosIngresos;
+<Card>
+  <CardHeader>
+    <CardTitle>
+      Estado de Pagos -{" "}
+      {metricType === "brutas"
+        ? "Ventas Brutas"
+        : metricType === "descuentos"
+        ? "Descuentos"
+        : "Ventas Netas"}
+    </CardTitle>
+    <CardDescription>Distribución por estado de pago</CardDescription>
+  </CardHeader>
 
-                            if (filteredTransactions.length === 0 && (Number(totalRealEstado) || 0) > 0) {
-                              return [{ estado: "Pagado Total", monto: Number(totalRealEstado) || 0, porcentaje: "100.0" }];
-                            }
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        Cargando gráfico...
+      </div>
+    ) : !hayDatosDisponibles() ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        No hay datos para mostrar
+      </div>
+    ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        No hay descuentos en otros ingresos
+      </div>
+    ) : (
+      <div className="h-64">
+        {(() => {
+          const pieEstadoData: PieEstadoItem[] = (() => {
+            const totalRealEstado =
+              tipoIngresoAnalisis === "ventas"
+                ? metricType === "brutas"
+                  ? datosAnaliticas.ventasBrutas
+                  : metricType === "descuentos"
+                  ? datosAnaliticas.descuentos
+                  : datosAnaliticas.ventasNetas
+                : datosAnaliticas.otrosIngresos;
 
-                            const estadoPagos = filteredTransactions.reduce<NumMap>((acc, t: any) => {
-                              let estado = "Por Cobrar";
-                              if (t.tipo_pago === "contado" || (t.monto_pagado && t.monto_pendiente === 0)) {
-                                estado = "Pagado Total";
-                              } else if (t.tipo_pago === "parcial" || (t.monto_pagado > 0 && t.monto_pendiente > 0)) {
-                                estado = "Pago Parcial";
-                              }
-                              acc[estado] = (acc[estado] || 0) + (Number(getMetricValue(t, metricType)) || 0);
-                              return acc;
-                            }, {} as NumMap);
+            // Si no hay detalle pero sí hay total, mostramos “Pagado Total” como 100%
+            if (filteredTransactions.length === 0 && (Number(totalRealEstado) || 0) > 0) {
+              return [
+                { estado: "Pagado Total", monto: Number(totalRealEstado) || 0, porcentaje: "100.0" },
+              ];
+            }
 
-                            const totalEstadoPagos = (Object.values(estadoPagos) as number[]).reduce((sum, val) => sum + (Number(val) || 0), 0);
+            const estadoPagos = filteredTransactions.reduce<NumMap>((acc, t: any) => {
+              let estado = "Por Cobrar";
 
-                            return (Object.entries(estadoPagos) as Array<[string, number]>).map(([estado, monto]) => ({
-                              estado,
-                              monto: Number(monto) || 0,
-                              porcentaje: totalEstadoPagos > 0 ? (((Number(monto) || 0) / totalEstadoPagos) * 100).toFixed(1) : "0.0",
-                            }));
-                          })()}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ estado, porcentaje, monto }: any) => `${estado}\n${porcentaje}%\n$${formatCifra(Number(monto) || 0, scaleFormat)}`}
-                          innerRadius={60}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="monto"
-                        >
-                          <Cell fill="hsl(180 50% 55%)" />
-                          <Cell fill="hsl(180 55% 65%)" />
-                          <Cell fill="hsl(180 45% 45%)" />
-                        </Pie>
-                        <RechartsTooltip
-                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
-                          contentStyle={{
-                            backgroundColor: "#ffffff",
-                            border: "1px solid #ccc",
-                            borderRadius: "4px",
-                            color: "#000000",
-                          }}
-                          itemStyle={{ color: "#000000", fontWeight: "bold" }}
-                          labelStyle={{ color: "#000000", fontWeight: "bold" }}
-                          wrapperStyle={{ zIndex: 1000 }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              const pagado = Number(t?.monto_pagado) || 0;
+              const pendiente = Number(t?.monto_pendiente) || 0;
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              if (t?.tipo_pago === "contado" || (pagado > 0 && pendiente === 0)) {
+                estado = "Pagado Total";
+              } else if (t?.tipo_pago === "parcial" || (pagado > 0 && pendiente > 0)) {
+                estado = "Pago Parcial";
+              }
+
+              acc[estado] = (acc[estado] || 0) + (Number(getMetricValue(t, metricType)) || 0);
+              return acc;
+            }, {} as NumMap);
+
+            const total = (Object.values(estadoPagos) as number[]).reduce(
+              (sum, v) => sum + (Number(v) || 0),
+              0
+            );
+
+            return (Object.entries(estadoPagos) as Array<[string, number]>)
+              .map(([estado, monto]) => ({
+                estado,
+                monto: Number(monto) || 0,
+                porcentaje: total > 0 ? (((Number(monto) || 0) / total) * 100).toFixed(1) : "0.0",
+              }))
+              .sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
+          })();
+
+          const totalPie = pieEstadoData.reduce((s, d) => s + (Number(d.monto) || 0), 0);
+
+          const ESTADO_COLORS: Record<string, string> = {
+            "Pagado Total": "hsl(180 50% 55%)",
+            "Pago Parcial": "hsl(180 55% 65%)",
+            "Por Cobrar": "hsl(180 45% 45%)",
+          };
+
+          return (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieEstadoData}
+                  dataKey="monto"
+                  nameKey="estado"
+                  cx="50%"
+                  cy="46%"
+                  innerRadius={64}
+                  outerRadius={92}
+                  paddingAngle={2}
+                  cornerRadius={10}
+                  stroke={hsl("border")}
+                  strokeWidth={2}
+                  labelLine={false}
+                  label={false}
+                >
+                  <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
+
+                  {pieEstadoData.map((item, idx) => (
+                    <Cell
+                      key={`estado-cell-${idx}`}
+                      fill={ESTADO_COLORS[item.estado] ?? PIE_COLORS[idx % PIE_COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+
+                <RechartsTooltip
+                  formatter={(value: any) => [
+                    `$${formatCifra(Number(value) || 0, scaleFormat)}`,
+                    "Monto",
+                  ]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "10px",
+                    color: "hsl(var(--foreground))",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+                  }}
+                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
+                />
+
+                <Legend verticalAlign="bottom" align="center" content={makeLegend("estado")} />
+              </PieChart>
+            </ResponsiveContainer>
+          );
+        })()}
+      </div>
+    )}
+  </CardContent>
+</Card>
             {/* Gráfico por Subcuenta/Cuenta Contable */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
