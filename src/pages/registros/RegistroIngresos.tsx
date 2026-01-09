@@ -3627,7 +3627,7 @@ case "otros":
         <p className="text-sm text-muted-foreground">Resultados: {filtered.length}</p>
 
         <p className="text-lg font-bold text-primary">
-          General: ${formatMonto(total)}
+          Total: ${formatMonto(total)}
         </p>
 
         <p className="text-sm font-medium text-red-600">
@@ -3776,7 +3776,7 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
                         <th className="text-left p-3 font-medium min-w-[320px]">Descripción</th>
                         <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Tipo</th>
                         <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">Cuenta</th>
-                        <th className="text-right p-3 font-medium whitespace-nowrap">General</th>
+                        <th className="text-right p-3 font-medium whitespace-nowrap">Total</th>
                         <th className="text-right p-3 font-medium whitespace-nowrap hidden md:table-cell">Ingreso</th>
                         <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Estado</th>
                         <th className="text-right p-3 font-medium whitespace-nowrap">Acciones</th>
