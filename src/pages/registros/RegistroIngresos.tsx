@@ -5260,19 +5260,13 @@ const getTxFecha = (t: any) => {
 
   <CardContent>
     {loadingTransacciones ? (
-      <div className="h-64 flex items-center justify-center text-muted-foreground">
-        Cargando gráfico...
-      </div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
     ) : !hayDatosDisponibles() ? (
-      <div className="h-64 flex items-center justify-center text-muted-foreground">
-        No hay datos para mostrar
-      </div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
     ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-      <div className="h-64 flex items-center justify-center text-muted-foreground">
-        No hay descuentos en otros ingresos
-      </div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
     ) : (
-      <div className="h-64">
+      <div className="h-80">
         {(() => {
           const pieTipoData: PieTipoItem[] = (() => {
             const totalRealPie =
@@ -5294,10 +5288,7 @@ const getTxFecha = (t: any) => {
               return acc;
             }, {} as NumMap);
 
-            const total = (Object.values(distribucion) as number[]).reduce(
-              (sum, v) => sum + (Number(v) || 0),
-              0
-            );
+            const total = (Object.values(distribucion) as number[]).reduce((sum, v) => sum + (Number(v) || 0), 0);
 
             return (Object.entries(distribucion) as Array<[string, number]>)
               .map(([tipo, monto]) => ({
@@ -5312,17 +5303,18 @@ const getTxFecha = (t: any) => {
 
           return (
             <div className="h-full flex flex-col">
+              {/* ⬇️ El chart ocupa el aire disponible */}
               <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart margin={{ top: 6, right: 10, bottom: 6, left: 10 }}>
                     <Pie
                       data={pieTipoData}
                       dataKey="monto"
                       nameKey="tipo"
                       cx="50%"
-                      cy="46%"
+                      cy="44%"              // ✅ un poco más arriba (más aire para la leyenda)
                       innerRadius={64}
-                      outerRadius={92}
+                      outerRadius={88}      // ✅ un pelín menor para evitar recortes con 3+ segmentos
                       paddingAngle={2}
                       cornerRadius={10}
                       stroke={hsl("border")}
@@ -5331,17 +5323,13 @@ const getTxFecha = (t: any) => {
                       label={false}
                     >
                       <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
-
                       {pieTipoData.map((_, idx) => (
                         <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                       ))}
                     </Pie>
 
                     <RechartsTooltip
-                      formatter={(value: any) => [
-                        `$${formatCifra(Number(value) || 0, scaleFormat)}`,
-                        "Monto",
-                      ]}
+                      formatter={(value: any) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
                       contentStyle={{
                         backgroundColor: "hsl(var(--background))",
                         border: "1px solid hsl(var(--border))",
@@ -5353,12 +5341,13 @@ const getTxFecha = (t: any) => {
                       labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
                     />
 
+                    {/* ✅ la leyenda abajo sin empujar a lo loco */}
                     <Legend verticalAlign="bottom" align="center" content={makeLegend("tipo")} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
 
-              {/* ✅ Nota aclaratoria (solo cuando estás analizando "ventas") */}
+              {/* ✅ Nota aclaratoria */}
               {tipoIngresoAnalisis === "ventas" && (
                 <div className="mt-2 px-3 py-2 rounded-lg border bg-muted/30 text-xs text-muted-foreground flex items-start gap-2">
                   <span className="mt-0.5">⚠️</span>
@@ -5374,6 +5363,7 @@ const getTxFecha = (t: any) => {
     )}
   </CardContent>
 </Card>
+
 
             {/* Gráfico de Estado de Pago */}
 <Card>
@@ -5391,19 +5381,13 @@ const getTxFecha = (t: any) => {
 
   <CardContent>
     {loadingTransacciones ? (
-      <div className="h-64 flex items-center justify-center text-muted-foreground">
-        Cargando gráfico...
-      </div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
     ) : !hayDatosDisponibles() ? (
-      <div className="h-64 flex items-center justify-center text-muted-foreground">
-        No hay datos para mostrar
-      </div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
     ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-      <div className="h-64 flex items-center justify-center text-muted-foreground">
-        No hay descuentos en otros ingresos
-      </div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
     ) : (
-      <div className="h-64">
+      <div className="h-80">
         {(() => {
           const pieEstadoData: PieEstadoItem[] = (() => {
             const totalRealEstado =
@@ -5415,33 +5399,23 @@ const getTxFecha = (t: any) => {
                   : datosAnaliticas.ventasNetas
                 : datosAnaliticas.otrosIngresos;
 
-            // Si no hay detalle pero sí hay total, mostramos “Pagado Total” como 100%
             if (filteredTransactions.length === 0 && (Number(totalRealEstado) || 0) > 0) {
-              return [
-                { estado: "Pagado Total", monto: Number(totalRealEstado) || 0, porcentaje: "100.0" },
-              ];
+              return [{ estado: "Pagado Total", monto: Number(totalRealEstado) || 0, porcentaje: "100.0" }];
             }
 
             const estadoPagos = filteredTransactions.reduce<NumMap>((acc, t: any) => {
               let estado = "Por Cobrar";
-
               const pagado = Number(t?.monto_pagado) || 0;
               const pendiente = Number(t?.monto_pendiente) || 0;
 
-              if (t?.tipo_pago === "contado" || (pagado > 0 && pendiente === 0)) {
-                estado = "Pagado Total";
-              } else if (t?.tipo_pago === "parcial" || (pagado > 0 && pendiente > 0)) {
-                estado = "Pago Parcial";
-              }
+              if (t?.tipo_pago === "contado" || (pagado > 0 && pendiente === 0)) estado = "Pagado Total";
+              else if (t?.tipo_pago === "parcial" || (pagado > 0 && pendiente > 0)) estado = "Pago Parcial";
 
               acc[estado] = (acc[estado] || 0) + (Number(getMetricValue(t, metricType)) || 0);
               return acc;
             }, {} as NumMap);
 
-            const total = (Object.values(estadoPagos) as number[]).reduce(
-              (sum, v) => sum + (Number(v) || 0),
-              0
-            );
+            const total = (Object.values(estadoPagos) as number[]).reduce((sum, v) => sum + (Number(v) || 0), 0);
 
             return (Object.entries(estadoPagos) as Array<[string, number]>)
               .map(([estado, monto]) => ({
@@ -5461,58 +5435,59 @@ const getTxFecha = (t: any) => {
           };
 
           return (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieEstadoData}
-                  dataKey="monto"
-                  nameKey="estado"
-                  cx="50%"
-                  cy="46%"
-                  innerRadius={64}
-                  outerRadius={92}
-                  paddingAngle={2}
-                  cornerRadius={10}
-                  stroke={hsl("border")}
-                  strokeWidth={2}
-                  labelLine={false}
-                  label={false}
-                >
-                  <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
+            <div className="h-full flex flex-col">
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 6, right: 10, bottom: 6, left: 10 }}>
+                    <Pie
+                      data={pieEstadoData}
+                      dataKey="monto"
+                      nameKey="estado"
+                      cx="50%"
+                      cy="44%"         // ✅ aire para leyenda
+                      innerRadius={64}
+                      outerRadius={88} // ✅ evitar recorte con 3+ estados
+                      paddingAngle={2}
+                      cornerRadius={10}
+                      stroke={hsl("border")}
+                      strokeWidth={2}
+                      labelLine={false}
+                      label={false}
+                    >
+                      <RechartsLabel content={CenterLabel("Total", totalPie)} position="center" />
+                      {pieEstadoData.map((item, idx) => (
+                        <Cell
+                          key={`estado-cell-${idx}`}
+                          fill={ESTADO_COLORS[item.estado] ?? PIE_COLORS[idx % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
 
-                  {pieEstadoData.map((item, idx) => (
-                    <Cell
-                      key={`estado-cell-${idx}`}
-                      fill={ESTADO_COLORS[item.estado] ?? PIE_COLORS[idx % PIE_COLORS.length]}
+                    <RechartsTooltip
+                      formatter={(value: any) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "10px",
+                        color: "hsl(var(--foreground))",
+                        boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+                      }}
+                      itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                      labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
                     />
-                  ))}
-                </Pie>
 
-                <RechartsTooltip
-                  formatter={(value: any) => [
-                    `$${formatCifra(Number(value) || 0, scaleFormat)}`,
-                    "Monto",
-                  ]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "10px",
-                    color: "hsl(var(--foreground))",
-                    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
-                  }}
-                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
-                />
-
-                <Legend verticalAlign="bottom" align="center" content={makeLegend("estado")} />
-              </PieChart>
-            </ResponsiveContainer>
+                    <Legend verticalAlign="bottom" align="center" content={makeLegend("estado")} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           );
         })()}
       </div>
     )}
   </CardContent>
 </Card>
+
             {/* Gráfico por Subcuenta/Cuenta Contable */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
