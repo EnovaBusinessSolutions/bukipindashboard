@@ -18,7 +18,21 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList, Treemap } from "recharts";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  Brush,
+  LabelList,
+} from "recharts";
+
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
@@ -118,6 +132,44 @@ const formatCifra = (value: unknown, scale: "general" | "miles" | "millones"): s
     }) + suffix
   );
 };
+
+type ChartTooltipProps = {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  scaleFormat: "general" | "miles" | "millones";
+  title?: string;
+};
+
+function ChartTooltipBukipin({ active, payload, label, scaleFormat, title }: ChartTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  // Filtra solo series con valor > 0 para no mostrar basura
+  const items = payload
+    .map((p) => ({ name: p.name ?? p.dataKey, value: Number(p.value) || 0, color: p.color }))
+    .filter((x) => x.value !== 0);
+
+  return (
+    <div className="rounded-xl border bg-background/95 backdrop-blur px-3 py-2 shadow-lg">
+      <div className="text-xs text-muted-foreground">{title ?? "Detalle"}</div>
+      <div className="text-sm font-semibold text-foreground">{label}</div>
+
+      <div className="mt-2 space-y-1">
+        {(items.length ? items : payload).map((it, idx) => (
+          <div key={idx} className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: it.color }} />
+              <span className="text-xs text-muted-foreground">{it.name}</span>
+            </div>
+            <span className="text-xs font-semibold text-foreground">
+              ${formatCifra(Number(it.value) || 0, scaleFormat)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ✅ Normaliza transacciones: soporta camelCase y snake_case + arregla fechas/números
 const normalizeTx = (tx: any) => {
@@ -4946,68 +4998,136 @@ const getTxFecha = (t: any) => {
 
       return (
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="periodo" />
-              <YAxis tickFormatter={(value) => formatCifra(value, scaleFormat)} />
-              <Tooltip
-                formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, ""]}
-                contentStyle={{
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #ccc",
-                  borderRadius: "10px",
-                }}
-                wrapperStyle={{ zIndex: 1000 }}
-              />
-              <Legend />
+  <ResponsiveContainer width="100%" height="100%">
+    <AreaChart
+      data={chartData}
+      margin={{ top: 14, right: 18, left: 4, bottom: 0 }}
+    >
+      {/* Degradados (modern look) */}
+      <defs>
+        <linearGradient id="gradVentas" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+        </linearGradient>
 
-              {metricType === "descuentos" && (
-                <Line type="monotone" dataKey="descuentos" stroke="hsl(180 60% 70%)" name="Descuentos" strokeWidth={2} dot={false}>
-                  <LabelList
-                    dataKey="descuentos"
-                    position="top"
-                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
-                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                  />
-                </Line>
-              )}
+        <linearGradient id="gradOtros" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity={0.30} />
+          <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity={0.02} />
+        </linearGradient>
 
-              {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
-                <Line type="monotone" dataKey="ventas" stroke="hsl(180 50% 55%)" name="Ventas Brutas" strokeWidth={2} dot={false}>
-                  <LabelList
-                    dataKey="ventas"
-                    position="top"
-                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
-                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                  />
-                </Line>
-              )}
+        <linearGradient id="gradDescuentos" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.20} />
+          <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0.02} />
+        </linearGradient>
+      </defs>
 
-              {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
-                <Line type="monotone" dataKey="neto" stroke="hsl(180 45% 45%)" name="Ventas Netas" strokeWidth={2} dot={false}>
-                  <LabelList
-                    dataKey="neto"
-                    position="top"
-                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
-                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                  />
-                </Line>
-              )}
+      {/* Grid suave (más pro) */}
+      <CartesianGrid
+        strokeDasharray="4 6"
+        vertical={false}
+        stroke="hsl(var(--border))"
+        opacity={0.6}
+      />
 
-              {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
-                <Line type="monotone" dataKey="otrosIngresos" stroke="hsl(140 50% 50%)" name="Otros Ingresos" strokeWidth={2} dot={false}>
-                  <LabelList
-                    dataKey="otrosIngresos"
-                    position="top"
-                    formatter={(value: number) => (Number(value) > 0 ? `$${formatCifra(value, scaleFormat)}` : "")}
-                    style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                  />
-                </Line>
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      <XAxis
+        dataKey="periodo"
+        tickLine={false}
+        axisLine={false}
+        interval="preserveStartEnd"
+        tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+      />
+
+      <YAxis
+        tickLine={false}
+        axisLine={false}
+        tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+        tickFormatter={(value) => formatCifra(Number(value) || 0, scaleFormat)}
+      />
+
+      {/* Tooltip pro + cursor tipo crosshair */}
+      <Tooltip
+        cursor={{ stroke: "hsl(var(--border))", strokeDasharray: "4 6" }}
+        content={
+          <ChartTooltipBukipin
+            scaleFormat={scaleFormat}
+            title={
+              metricType === "descuentos"
+                ? "Descuentos"
+                : tipoIngresoAnalisis === "otros"
+                ? "Otros ingresos"
+                : metricType === "brutas"
+                ? "Ventas brutas"
+                : "Ventas netas"
+            }
+          />
+        }
+      />
+
+      {/* 🔥 Serie ACTIVA (solo 1, coherente con tu selector) */}
+      {metricType === "descuentos" && (
+        <Area
+          type="monotone"
+          dataKey="descuentos"
+          name="Descuentos"
+          stroke="hsl(var(--destructive))"
+          fill="url(#gradDescuentos)"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5 }}
+        />
+      )}
+
+      {metricType === "brutas" && tipoIngresoAnalisis === "ventas" && (
+        <Area
+          type="monotone"
+          dataKey="ventas"
+          name="Ventas brutas"
+          stroke="hsl(var(--primary))"
+          fill="url(#gradVentas)"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5 }}
+        />
+      )}
+
+      {metricType === "netas" && tipoIngresoAnalisis === "ventas" && (
+        <Area
+          type="monotone"
+          dataKey="neto"
+          name="Ventas netas"
+          stroke="hsl(var(--chart-1))"
+          fill="url(#gradVentas)"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5 }}
+        />
+      )}
+
+      {tipoIngresoAnalisis === "otros" && metricType !== "descuentos" && (
+        <Area
+          type="monotone"
+          dataKey="otrosIngresos"
+          name="Otros ingresos"
+          stroke="hsl(var(--chart-2))"
+          fill="url(#gradOtros)"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5 }}
+        />
+      )}
+
+      {/* Brush (mini-zoom) estilo “pro” como tu referencia */}
+      {periodFilter !== "diario" && chartData.length > 12 && (
+        <Brush
+          dataKey="periodo"
+          height={18}
+          travellerWidth={10}
+          stroke="hsl(var(--primary))"
+        />
+      )}
+    </AreaChart>
+  </ResponsiveContainer>
+</div>
       );
     })()}
   </CardContent>
