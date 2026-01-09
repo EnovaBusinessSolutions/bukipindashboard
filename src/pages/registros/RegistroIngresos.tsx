@@ -22,16 +22,21 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Treemap,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  Legend,
+  Tooltip as RechartsTooltip,
   Brush,
   LabelList,
+  Legend,
 } from "recharts";
+
 
 import { useVentasResumen } from "@/hooks/useVentasResumen";
 import { useTransaccionesRecientes } from "@/hooks/useTransaccionesRecientes";
@@ -5045,7 +5050,7 @@ const getTxFecha = (t: any) => {
       />
 
       {/* Tooltip pro + cursor tipo crosshair */}
-      <Tooltip
+      <RechartsTooltip
         cursor={{ stroke: "hsl(var(--border))", strokeDasharray: "4 6" }}
         content={
           <ChartTooltipBukipin
@@ -5213,7 +5218,7 @@ const getTxFecha = (t: any) => {
                             return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
                           })}
                         </Pie>
-                        <Tooltip
+                        <RechartsTooltip
                           formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
                           contentStyle={{
                             backgroundColor: "#ffffff",
@@ -5298,7 +5303,7 @@ const getTxFecha = (t: any) => {
                           <Cell fill="hsl(180 55% 65%)" />
                           <Cell fill="hsl(180 45% 45%)" />
                         </Pie>
-                        <Tooltip
+                        <RechartsTooltip
                           formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
                           contentStyle={{
                             backgroundColor: "#ffffff",
@@ -5429,7 +5434,7 @@ const getTxFecha = (t: any) => {
                           domain={[0, (dataMax: number) => dataMax * 1.2]}
                         />
                         <YAxis type="category" dataKey="subcuenta" width={150} tick={{ fill: "#000000" }} />
-                        <Tooltip
+                        <RechartsTooltip
                           formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
                           contentStyle={{
                             backgroundColor: "#ffffff",
@@ -5489,7 +5494,7 @@ const getTxFecha = (t: any) => {
                         fill="#8884d8"
                         content={<CustomTreemapContent />}
                       >
-                        <Tooltip content={<CustomTreemapTooltip scaleFormat={scaleFormat} />} />
+                        <RechartsTooltip content={<CustomTreemapTooltip scaleFormat={scaleFormat} />} />
                       </Treemap>
                     </ResponsiveContainer>
                   </div>
