@@ -3627,7 +3627,7 @@ case "otros":
         <p className="text-sm text-muted-foreground">Resultados: {filtered.length}</p>
 
         <p className="text-lg font-bold text-primary">
-          Total: ${formatMonto(total)}
+          Ingresos (Ventas + Extras): ${formatMonto(total)}
         </p>
 
         <p className="text-sm font-medium text-red-600">
@@ -3635,7 +3635,7 @@ case "otros":
         </p>
 
         <p className="text-sm font-medium text-green-600">
-          Neto: ${formatMonto(neto)}
+          Total ingresos: ${formatMonto(neto)}
         </p>
       </>
     );
