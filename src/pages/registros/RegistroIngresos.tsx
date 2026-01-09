@@ -4370,6 +4370,35 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
 
     const asientosDir: any[] = Array.isArray(asientosIngresosDirectos) ? asientosIngresosDirectos : [];
 
+    const getTipoIngresoKey = (t: any) => {
+  const raw =
+    t?.tipo_ingreso ??
+    t?.tipoIngreso ??
+    t?.tipo ??
+    t?.tipo_ingreso_registro ??
+    t?.tipo_ingreso_original;
+
+  return String(raw ?? "sin_tipo").toLowerCase().trim();
+};
+
+const prettyTipoIngreso = (raw: string) => {
+  const k = String(raw ?? "sin_tipo").toLowerCase().trim();
+
+  const map: Record<string, string> = {
+    precargados: "Precargados",
+    inventariados: "Inventariados",
+    general: "General",
+    otros: "Otros",
+    sin_tipo: "Sin tipo",
+  };
+
+  return (
+    map[k] ??
+    k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+};
+
+
     // ✅ Helper: misma fecha “real” que usa la tabla (soporta varios shapes)
 const getTxFecha = (t: any) => {
   const raw =
@@ -5262,7 +5291,7 @@ const getTxFecha = (t: any) => {
             }
 
             const distribucion = filteredTransactions.reduce<NumMap>((acc, t: any) => {
-              const rawKey = String(t?.tipo_ingreso || "sin_tipo");
+              const rawKey = getTipoIngresoKey(t);
               acc[rawKey] = (acc[rawKey] || 0) + (Number(getMetricValue(t, metricType)) || 0);
               return acc;
             }, {} as NumMap);
@@ -5279,7 +5308,7 @@ const getTxFecha = (t: any) => {
 
             return (Object.entries(distribucion) as Array<[string, number]>)
               .map(([tipo, monto]) => ({
-                tipo: prettyTipo(tipo), // ✅ AQUÍ
+                tipo: prettyTipoIngreso(tipo),
                 monto: Number(monto) || 0,
                 porcentaje: total > 0 ? (((Number(monto) || 0) / total) * 100).toFixed(1) : "0.0",
               }))
