@@ -5549,27 +5549,13 @@ const getTxFecha = (t: any) => {
 
 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
-            {/* Gráfico de Ventas por Tipo */}
+            {/* Gráfico por Tipo */}
 <Card>
   <CardHeader>
-    <CardTitle>
-      {metricType === "brutas"
-        ? "Ventas Brutas"
-        : metricType === "descuentos"
-        ? "Descuentos"
-        : "Ventas Netas"}{" "}
-      por Tipo
-    </CardTitle>
-    <CardDescription>
-      Distribución de{" "}
-      {metricType === "brutas"
-        ? "ventas brutas"
-        : metricType === "descuentos"
-        ? "descuentos"
-        : "ventas netas"}{" "}
-      por categoría
-    </CardDescription>
+    <CardTitle>{metricLabel} por Tipo</CardTitle>
+    <CardDescription>Distribución de {metricLabelLower} por categoría</CardDescription>
   </CardHeader>
+
 
   <CardContent>
     {loadingTransacciones ? (
