@@ -465,6 +465,11 @@ const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date(
 type HighlightLabels = { dia?: string; mes?: string; ano?: string };
 const [highlightLabels, setHighlightLabels] = useState<HighlightLabels>({});
 
+const [fechaAnalisisAnual, setFechaAnalisisAnual] = useState<Date>(
+  () => new Date(new Date().getFullYear(), 0, 1)
+);
+
+
 // ✅ Totales highlights
 type TotalesHighlights = {
   ventasBrutas: number;
@@ -4374,148 +4379,154 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
     const asientosDir: any[] = Array.isArray(asientosIngresosDirectos) ? asientosIngresosDirectos : [];
 
     const getTipoIngresoKey = (t: any) => {
-  const raw =
-    t?.tipo_ingreso ??
-    t?.tipoIngreso ??
-    t?.tipo ??
-    t?.tipo_ingreso_registro ??
-    t?.tipo_ingreso_original;
+      const raw =
+        t?.tipo_ingreso ??
+        t?.tipoIngreso ??
+        t?.tipo ??
+        t?.tipo_ingreso_registro ??
+        t?.tipo_ingreso_original;
 
-  return String(raw ?? "sin_tipo").toLowerCase().trim();
-};
+      return String(raw ?? "sin_tipo").toLowerCase().trim();
+    };
 
-const prettyTipoIngreso = (raw: string) => {
-  const k = String(raw ?? "sin_tipo").toLowerCase().trim();
+    const prettyTipoIngreso = (raw: string) => {
+      const k = String(raw ?? "sin_tipo").toLowerCase().trim();
 
-  const map: Record<string, string> = {
-    precargados: "Precargados",
-    inventariados: "Inventariados",
-    general: "General",
-    otros: "Otros",
-    sin_tipo: "Sin tipo",
-  };
+      const map: Record<string, string> = {
+        precargados: "Precargados",
+        inventariados: "Inventariados",
+        general: "General",
+        otros: "Otros",
+        sin_tipo: "Sin tipo",
+      };
 
-  return (
-    map[k] ??
-    k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-  );
-};
-
+      return map[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    };
 
     // ✅ Helper: misma fecha “real” que usa la tabla (soporta varios shapes)
-const getTxFecha = (t: any) => {
-  const raw =
-    t?.fecha_fixed ??        // ideal (YYYY-MM-DD)
-    t?.fecha ??              // fallback
-    t?.createdAt ??
-    t?.created_at ??
-    t?.asiento_fecha;        // último fallback
-  if (!raw) return null;
-  return parseDateSafe(raw);
-};
+    const getTxFecha = (t: any) => {
+      const raw =
+        t?.fecha_fixed ?? // ideal (YYYY-MM-DD)
+        t?.fecha ?? // fallback
+        t?.createdAt ??
+        t?.created_at ??
+        t?.asiento_fecha; // último fallback
+      if (!raw) return null;
+      return parseDateSafe(raw);
+    };
 
-const prettyMonthYearLabel = (raw?: string) => {
-  if (!raw) return "";
+    const prettyMonthYearLabel = (raw?: string) => {
+      if (!raw) return "";
 
-  const s = String(raw).trim();
+      const s = String(raw).trim();
 
-  // Soporta: "01/2026", "1/2026"
-  let mm: string | undefined;
-  let yyyy: string | undefined;
+      // Soporta: "01/2026", "1/2026"
+      let mm: string | undefined;
+      let yyyy: string | undefined;
 
-  const m1 = s.match(/^(\d{1,2})\/(\d{4})$/);
-  if (m1) {
-    mm = m1[1];
-    yyyy = m1[2];
-  }
+      const m1 = s.match(/^(\d{1,2})\/(\d{4})$/);
+      if (m1) {
+        mm = m1[1];
+        yyyy = m1[2];
+      }
 
-  // Soporta: "2026-01" o "2026-01-15"
-  const m2 = s.match(/^(\d{4})-(\d{2})/);
-  if (!mm && m2) {
-    yyyy = m2[1];
-    mm = m2[2];
-  }
+      // Soporta: "2026-01" o "2026-01-15"
+      const m2 = s.match(/^(\d{4})-(\d{2})/);
+      if (!mm && m2) {
+        yyyy = m2[1];
+        mm = m2[2];
+      }
 
-  if (!mm || !yyyy) return s;
+      if (!mm || !yyyy) return s;
 
-  const monthNum = parseInt(mm, 10);
-  const months = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-  ];
+      const monthNum = parseInt(mm, 10);
+      const months = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+      ];
 
-  if (monthNum >= 1 && monthNum <= 12) {
-    return `${months[monthNum - 1]}/${yyyy}`;
-  }
+      if (monthNum >= 1 && monthNum <= 12) {
+        return `${months[monthNum - 1]}/${yyyy}`;
+      }
 
-  return s;
-};
+      return s;
+    };
 
-
-// ✅ Helper: normaliza cuenta principal a string (evita bug 4001 number vs "4001")
-const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
-
+    // ✅ Helper: normaliza cuenta principal a string (evita bug 4001 number vs "4001")
+    const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
 
     const getFilteredTransactions = () => {
-  const today = new Date();
-  const currentYear = today.getFullYear();
+      // ✅ año seleccionado (no “año actual” fijo)
+      const selectedYear = fechaAnalisisAnual.getFullYear();
 
-  // 1) Base: excluir canceladas y reversiones
-  let filtered = (transacciones || []).filter((t: any) => {
-    const estado = String(t?.estado || "").toLowerCase();
-    const desc = String(t?.descripcion || "");
-    return estado !== "cancelado" && !desc.includes("CANCELACIÓN:");
-  });
+      // 1) Base: excluir canceladas y reversiones
+      let filtered = (transacciones || []).filter((t: any) => {
+        const estado = String(t?.estado || "").toLowerCase();
+        const desc = String(t?.descripcion || "");
+        return estado !== "cancelado" && !desc.includes("CANCELACIÓN:");
+      });
 
-  // 2) Filtrar por período (usando misma fecha que la tabla)
-  if (periodFilter === "diario") {
-    const selected = ymdLocal(fechaAnalisisDiario);
+      // 2) Filtrar por período (usando misma fecha que la tabla)
+      if (periodFilter === "diario") {
+        const selected = ymdLocal(fechaAnalisisDiario);
 
-    filtered = filtered.filter((t: any) => {
-      const d = getTxFecha(t);
-      if (!d) return false;
-      return ymdLocal(d) === selected;
-    });
-  } else if (periodFilter === "mensual") {
-    const month = fechaAnalisisMensual.getMonth();
-    const year = fechaAnalisisMensual.getFullYear();
+        filtered = filtered.filter((t: any) => {
+          const d = getTxFecha(t);
+          if (!d) return false;
+          return ymdLocal(d) === selected;
+        });
+      } else if (periodFilter === "mensual") {
+        const month = fechaAnalisisMensual.getMonth();
+        const year = fechaAnalisisMensual.getFullYear();
 
-    filtered = filtered.filter((t: any) => {
-      const d = getTxFecha(t);
-      if (!d) return false;
-      return d.getFullYear() === year && d.getMonth() === month;
-    });
-  } else {
-    // anual (año actual)
-    filtered = filtered.filter((t: any) => {
-      const d = getTxFecha(t);
-      if (!d) return false;
-      return d.getFullYear() === currentYear;
-    });
-  }
+        filtered = filtered.filter((t: any) => {
+          const d = getTxFecha(t);
+          if (!d) return false;
+          return d.getFullYear() === year && d.getMonth() === month;
+        });
+      } else {
+        // ✅ anual (año seleccionado por el usuario)
+        filtered = filtered.filter((t: any) => {
+          const d = getTxFecha(t);
+          if (!d) return false;
+          return d.getFullYear() === selectedYear;
+        });
+      }
 
-  // 3) Filtrar por tipo de ingreso (ventas vs otros) usando cuenta como string
-  if (tipoIngresoAnalisis === "ventas") {
-    return filtered.filter((t: any) => getCuentaCodigo(t) === "4001");
-  } else {
-    const codeIsOtherIncome = (code: string) =>
-      code.startsWith("4") && code !== "4001" && code !== "4003";
+      // 3) Filtrar por tipo de ingreso (ventas vs otros) usando cuenta como string
+      if (tipoIngresoAnalisis === "ventas") {
+        return filtered.filter((t: any) => getCuentaCodigo(t) === "4001");
+      } else {
+        const codeIsOtherIncome = (code: string) =>
+          code.startsWith("4") && code !== "4001" && code !== "4003";
 
-    return filtered.filter((t: any) => codeIsOtherIncome(getCuentaCodigo(t)));
-  }
-};
-
+        return filtered.filter((t: any) => codeIsOtherIncome(getCuentaCodigo(t)));
+      }
+    };
 
     const filteredTransactions = getFilteredTransactions();
 
-    console.log("[Analitica] filteredTransactions:", filteredTransactions.length, filteredTransactions.slice(0, 3));
-
+    console.log(
+      "[Analitica] filteredTransactions:",
+      filteredTransactions.length,
+      filteredTransactions.slice(0, 3)
+    );
 
     // Función para procesar datos de métodos de pago (solo para transacciones con pago recibido)
     const getMetodosPagoData = (): MetodoPagoItem[] => {
       // Filtrar solo transacciones que tienen método de pago asignado (contado o parcial)
-      const transaccionesConPago = filteredTransactions.filter((t) =>
-        (t as any).tipo_pago === "contado" || (t as any).tipo_pago === "parcial"
+      const transaccionesConPago = filteredTransactions.filter(
+        (t) => (t as any).tipo_pago === "contado" || (t as any).tipo_pago === "parcial"
       );
 
       if (transaccionesConPago.length === 0) return [];
@@ -4524,10 +4535,14 @@ const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
       const metodosPago: NumMap = {};
       transaccionesConPago.forEach((t) => {
         const metodo = (t as any).metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta";
-        metodosPago[metodo] = (metodosPago[metodo] || 0) + (Number(getMetricValue(t as any, metricType)) || 0);
+        metodosPago[metodo] =
+          (metodosPago[metodo] || 0) + (Number(getMetricValue(t as any, metricType)) || 0);
       });
 
-      const total = (Object.values(metodosPago) as number[]).reduce((sum, val) => sum + (Number(val) || 0), 0);
+      const total = (Object.values(metodosPago) as number[]).reduce(
+        (sum, val) => sum + (Number(val) || 0),
+        0
+      );
 
       return (Object.entries(metodosPago) as Array<[string, number]>).map(([name, value]) => ({
         name,
@@ -4554,120 +4569,136 @@ const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
 
     const hsl = (v: string) => `hsl(var(--${v}))`;
 
-const PIE_COLORS = [
-  hsl("primary"),
-  hsl("chart-1"),
-  hsl("chart-2"),
-  hsl("chart-3"),
-  hsl("muted-foreground"),
-];
+    const PIE_COLORS = [
+      hsl("primary"),
+      hsl("chart-1"),
+      hsl("chart-2"),
+      hsl("chart-3"),
+      hsl("muted-foreground"),
+    ];
 
-const makeLegend =
-  (nameKey: "tipo" | "estado") =>
-  ({ payload }: any) => {
-    if (!payload?.length) return null;
+    const makeLegend =
+      (nameKey: "tipo" | "estado") =>
+      ({ payload }: any) => {
+        if (!payload?.length) return null;
 
-    return (
-      <div className="mt-3 grid grid-cols-1 gap-2">
-        {payload.map((item: any, idx: number) => {
-          const raw = item?.payload?.payload ?? item?.payload ?? {};
-          const label = String(raw?.[nameKey] ?? item?.value ?? "—");
-          const monto = Number(raw?.monto ?? raw?.value ?? 0) || 0;
-          const pct = String(raw?.porcentaje ?? "");
+        return (
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            {payload.map((item: any, idx: number) => {
+              const raw = item?.payload?.payload ?? item?.payload ?? {};
+              const label = String(raw?.[nameKey] ?? item?.value ?? "—");
+              const monto = Number(raw?.monto ?? raw?.value ?? 0) || 0;
+              const pct = String(raw?.porcentaje ?? "");
 
-          return (
-            <div key={idx} className="flex items-center justify-between gap-3 text-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ background: item.color || PIE_COLORS[idx % PIE_COLORS.length] }}
-                />
-                <span className="truncate text-foreground/90">{label}</span>
-              </div>
+              return (
+                <div key={idx} className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{
+                        background: item.color || PIE_COLORS[idx % PIE_COLORS.length],
+                      }}
+                    />
+                    <span className="truncate text-foreground/90">{label}</span>
+                  </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-muted-foreground">{pct ? `${pct}%` : ""}</span>
-                <span className="font-medium text-foreground">
-                  ${formatCifra(monto, scaleFormat)}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-muted-foreground">{pct ? `${pct}%` : ""}</span>
+                    <span className="font-medium text-foreground">
+                      ${formatCifra(monto, scaleFormat)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      };
 
-const CenterLabel =
-  (title: string, total: number) =>
-  ({ viewBox }: any) => {
-    const cx = viewBox?.cx ?? 0;
-    const cy = viewBox?.cy ?? 0;
+    const CenterLabel =
+      (title: string, total: number) =>
+      ({ viewBox }: any) => {
+        const cx = viewBox?.cx ?? 0;
+        const cy = viewBox?.cy ?? 0;
 
-    return (
-      <g>
-        <text x={cx} y={cy - 6} textAnchor="middle" fill={hsl("muted-foreground")} fontSize="12">
-          {title}
-        </text>
-        <text x={cx} y={cy + 16} textAnchor="middle" fill={hsl("foreground")} fontSize="16" fontWeight="700">
-          ${formatCifra(total, scaleFormat)}
-        </text>
-      </g>
-    );
-  };
-
+        return (
+          <g>
+            <text
+              x={cx}
+              y={cy - 6}
+              textAnchor="middle"
+              fill={hsl("muted-foreground")}
+              fontSize="12"
+            >
+              {title}
+            </text>
+            <text
+              x={cx}
+              y={cy + 16}
+              textAnchor="middle"
+              fill={hsl("foreground")}
+              fontSize="16"
+              fontWeight="700"
+            >
+              ${formatCifra(total, scaleFormat)}
+            </text>
+          </g>
+        );
+      };
 
     return (
       <>
         {/* HIGHLIGHTS - Resumen Completo (sin filtros) */}
         <div className="mb-8">
           <h3 className="text-xl font-bold text-foreground mb-4">Highlights de Ingresos</h3>
+
           {/* Filtro SOLO para Highlights */}
-<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-  <p className="text-sm text-muted-foreground">
-    Ajusta el formato numérico de los highlights
-  </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <p className="text-sm text-muted-foreground">
+              Ajusta el formato numérico de los highlights
+            </p>
 
-  <div className="flex items-center gap-2">
-    <span className="text-xs text-muted-foreground">Formato:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Formato:</span>
 
-    <RadioGroup
-      value={highlightsScaleFormat}
-      onValueChange={(v) =>
-        setHighlightsScaleFormat(v as "general" | "miles" | "millones")
-      }
-      className="flex items-center gap-4"
-    >
-      <div className="flex items-center space-x-2">
-        <RadioGroupItem value="general" id="high-scale-general" />
-        <Label htmlFor="high-scale-general" className="cursor-pointer text-sm">
-          General
-        </Label>
-      </div>
+              <RadioGroup
+                value={highlightsScaleFormat}
+                onValueChange={(v) =>
+                  setHighlightsScaleFormat(v as "general" | "miles" | "millones")
+                }
+                className="flex items-center gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="general" id="high-scale-general" />
+                  <Label htmlFor="high-scale-general" className="cursor-pointer text-sm">
+                    General
+                  </Label>
+                </div>
 
-      <div className="flex items-center space-x-2">
-        <RadioGroupItem value="miles" id="high-scale-miles" />
-        <Label htmlFor="high-scale-miles" className="cursor-pointer text-sm">
-          Miles (K)
-        </Label>
-      </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="miles" id="high-scale-miles" />
+                  <Label htmlFor="high-scale-miles" className="cursor-pointer text-sm">
+                    Miles (K)
+                  </Label>
+                </div>
 
-      <div className="flex items-center space-x-2">
-        <RadioGroupItem value="millones" id="high-scale-millones" />
-        <Label htmlFor="high-scale-millones" className="cursor-pointer text-sm">
-          Millones (M)
-        </Label>
-      </div>
-    </RadioGroup>
-  </div>
-</div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="millones" id="high-scale-millones" />
+                  <Label htmlFor="high-scale-millones" className="cursor-pointer text-sm">
+                    Millones (M)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Día */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-primary">
-  Resumen del Día {highlightLabels?.dia ? `(${highlightLabels.dia})` : ""}
-</CardTitle>
+                  Resumen del Día {highlightLabels?.dia ? `(${highlightLabels.dia})` : ""}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -4708,7 +4739,12 @@ const CenterLabel =
             {/* Mes */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes {highlightLabels?.mes ? `(${prettyMonthYearLabel(highlightLabels.mes)})` : ""}</CardTitle>
+                <CardTitle className="text-lg font-semibold text-primary">
+                  Resumen del Mes{" "}
+                  {highlightLabels?.mes
+                    ? `(${prettyMonthYearLabel(highlightLabels.mes)})`
+                    : ""}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -4749,7 +4785,9 @@ const CenterLabel =
             {/* Año */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-primary">Resumen del Año {highlightLabels?.ano ? `(${highlightLabels.ano})` : ""}</CardTitle>
+                <CardTitle className="text-lg font-semibold text-primary">
+                  Resumen del Año {highlightLabels?.ano ? `(${highlightLabels.ano})` : ""}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -4832,6 +4870,7 @@ const CenterLabel =
                 <CardTitle>Período de Análisis</CardTitle>
                 <CardDescription>Selecciona el período</CardDescription>
               </CardHeader>
+
               <CardContent className="space-y-3">
                 <RadioGroup
                   value={periodFilter}
@@ -4861,12 +4900,17 @@ const CenterLabel =
                 {/* Selector de fecha para análisis diario */}
                 {periodFilter === "diario" && (
                   <div className="pt-2 border-t">
-                    <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
+                    <Label className="text-xs text-muted-foreground mb-2 block">
+                      Fecha específica
+                    </Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={cn("w-full justify-start text-left font-normal", !fechaAnalisisDiario && "text-muted-foreground")}
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !fechaAnalisisDiario && "text-muted-foreground"
+                          )}
                           size="sm"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -4886,29 +4930,141 @@ const CenterLabel =
                   </div>
                 )}
 
-                {/* Selector de mes para análisis mensual */}
+                {/* ✅ Selector de mes para análisis mensual (SOLO MES/AÑO, sin días) */}
                 {periodFilter === "mensual" && (
                   <div className="pt-2 border-t">
-                    <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
+                    <Label className="text-xs text-muted-foreground mb-2 block">
+                      Mes específico
+                    </Label>
+
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={cn("w-full justify-start text-left font-normal", !fechaAnalisisMensual && "text-muted-foreground")}
+                          className={cn("w-full justify-start text-left font-normal")}
                           size="sm"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={fechaAnalisisMensual}
-                          onSelect={(date) => date && setFechaAnalisisMensual(date)}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
+
+                      <PopoverContent className="w-[280px] p-3" align="start">
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Mes */}
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Mes</Label>
+                            <Select
+                              value={String(fechaAnalisisMensual.getMonth())}
+                              onValueChange={(v) => {
+                                const month = Number(v);
+                                const y = fechaAnalisisMensual.getFullYear();
+                                setFechaAnalisisMensual(new Date(y, month, 1));
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[
+                                  "Enero",
+                                  "Febrero",
+                                  "Marzo",
+                                  "Abril",
+                                  "Mayo",
+                                  "Junio",
+                                  "Julio",
+                                  "Agosto",
+                                  "Septiembre",
+                                  "Octubre",
+                                  "Noviembre",
+                                  "Diciembre",
+                                ].map((m, idx) => (
+                                  <SelectItem key={m} value={String(idx)}>
+                                    {m}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Año */}
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Año</Label>
+                            <Select
+                              value={String(fechaAnalisisMensual.getFullYear())}
+                              onValueChange={(v) => {
+                                const year = Number(v);
+                                const m = fechaAnalisisMensual.getMonth();
+                                setFechaAnalisisMensual(new Date(year, m, 1));
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(() => {
+                                  const now = new Date().getFullYear();
+                                  const years = Array.from({ length: 12 }, (_, i) => now - 10 + i);
+                                  return years.map((y) => (
+                                    <SelectItem key={y} value={String(y)}>
+                                      {y}
+                                    </SelectItem>
+                                  ));
+                                })()}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+
+                {/* ✅ Selector de año para análisis anual (SOLO AÑO) */}
+                {periodFilter === "anual" && (
+                  <div className="pt-2 border-t">
+                    <Label className="text-xs text-muted-foreground mb-2 block">
+                      Año específico
+                    </Label>
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn("w-full justify-start text-left font-normal")}
+                          size="sm"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {String(fechaAnalisisAnual.getFullYear())}
+                        </Button>
+                      </PopoverTrigger>
+
+                      <PopoverContent className="w-[220px] p-3" align="start">
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Año</Label>
+                          <Select
+                            value={String(fechaAnalisisAnual.getFullYear())}
+                            onValueChange={(v) =>
+                              setFechaAnalisisAnual(new Date(Number(v), 0, 1))
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(() => {
+                                const now = new Date().getFullYear();
+                                const years = Array.from({ length: 15 }, (_, i) => now - 12 + i);
+                                return years.map((y) => (
+                                  <SelectItem key={y} value={String(y)}>
+                                    {y}
+                                  </SelectItem>
+                                ));
+                              })()}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -4924,7 +5080,9 @@ const CenterLabel =
               <CardContent>
                 <RadioGroup
                   value={scaleFormat}
-                  onValueChange={(v) => setScaleFormat(v as "general" | "miles" | "millones")}
+                  onValueChange={(v) =>
+                    setScaleFormat(v as "general" | "miles" | "millones")
+                  }
                   className="flex flex-col gap-3"
                 >
                   <div className="flex items-center space-x-2">
