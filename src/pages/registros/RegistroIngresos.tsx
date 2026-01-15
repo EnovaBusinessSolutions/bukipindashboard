@@ -249,13 +249,23 @@ const normalizeTx = (tx: any) => {
 };
 
 // Función helper para obtener el valor de métrica según el tipo seleccionado
-const getMetricValue = (transaction: any, metricType: "brutas" | "descuentos" | "netas"): number => {
-  const t = normalizeTx(transaction);
-  if (metricType === "brutas") return t.monto_total || 0;
-  if (metricType === "descuentos") return t.monto_descuento || 0;
-  if (metricType === "netas") return t.monto_neto || t.monto_total || 0;
-  return 0;
+type MetricType = "brutas" | "descuentos" | "netas" | "otros_netos";
+
+const getMetricValue = (transaction: any, metricType: MetricType): number => {
+  const montoTotal = Number(transaction?.monto_total ?? transaction?.montoTotal ?? 0) || 0;
+  const montoDescuento = Number(transaction?.monto_descuento ?? transaction?.montoDescuento ?? 0) || 0;
+
+  // monto neto si existe, si no lo derivamos
+  const montoNeto =
+    Number(transaction?.monto_neto ?? transaction?.montoNeto ?? 0) || Math.max(montoTotal - montoDescuento, 0);
+
+  if (metricType === "brutas") return montoTotal;
+  if (metricType === "descuentos") return montoDescuento;
+
+  // ✅ netas y otros_netos regresan neto (para "otros" será su neto)
+  return montoNeto;
 };
+
 
 
 // Función para parsear fechas DATE correctamente (evita problemas de zona horaria UTC)
@@ -449,7 +459,7 @@ const [pageResumen, setPageResumen] = useState(1);
   const [scaleFormat, setScaleFormat] = useState<"general" | "miles" | "millones">("general");
   
   // Estado para el tipo de métrica a mostrar
-  const [metricType, setMetricType] = useState<"brutas" | "descuentos" | "netas">("netas");
+  const [metricType, setMetricType] = useState<MetricType>("netas");
   
   // Estado para el tipo de ingreso a analizar
   const [tipoIngresoAnalisis, setTipoIngresoAnalisis] = useState<"ventas" | "otros">("ventas");
@@ -526,7 +536,14 @@ setHighTotalesAno(EMPTY_HIGHLIGHTS);
 }, []);
 
 
- 
+ useEffect(() => {
+  setMetricType((prev) => {
+    if (tipoIngresoAnalisis === "otros") return "otros_netos";
+    // si regresan a ventas y traían otros_netos, volvemos a netas
+    return prev === "otros_netos" ? "netas" : prev;
+  });
+}, [tipoIngresoAnalisis]);
+
   // Estado para datos de analíticas calculados desde asientos contables
   const [datosAnaliticas, setDatosAnaliticas] = useState<{
     ventasBrutas: number;
@@ -4577,6 +4594,25 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
       hsl("muted-foreground"),
     ];
 
+    const metricLabel =
+  tipoIngresoAnalisis === "otros"
+    ? "Otros Ingresos Netos"
+    : metricType === "brutas"
+    ? "Ventas Brutas"
+    : metricType === "descuentos"
+    ? "Descuentos"
+    : "Ventas Netas";
+
+const metricLabelLower =
+  tipoIngresoAnalisis === "otros"
+    ? "otros ingresos netos"
+    : metricType === "brutas"
+    ? "ventas brutas"
+    : metricType === "descuentos"
+    ? "descuentos"
+    : "ventas netas";
+
+
     const makeLegend =
       (nameKey: "tipo" | "estado") =>
       ({ payload }: any) => {
@@ -5114,49 +5150,68 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
   </CardHeader>
 
   <CardContent className="space-y-3">
-    <RadioGroup
-      value={metricType}
-      onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")}
-      className="flex flex-col gap-3"
-    >
-      {/* ✅ 1) Predeterminado + primer lugar: Ventas Netas */}
-      <div className="flex items-center space-x-2">
-        <RadioGroupItem value="netas" id="metric-netas" />
-        <Label htmlFor="metric-netas" className="cursor-pointer">
-          Ventas Netas
-        </Label>
-      </div>
+  {tipoIngresoAnalisis === "otros" ? (
+    <>
+      <RadioGroup
+        value={metricType}
+        onValueChange={(v) => setMetricType(v as MetricType)}
+        className="flex flex-col gap-3"
+      >
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="otros_netos" id="metric-otros-netos" />
+          <Label htmlFor="metric-otros-netos" className="cursor-pointer">
+            Otros Ingresos Netos
+          </Label>
+        </div>
+      </RadioGroup>
 
-      {/* ✅ 2) Descuentos */}
-      <div className="flex items-center space-x-2">
-        <RadioGroupItem value="descuentos" id="metric-descuentos" />
-        <Label htmlFor="metric-descuentos" className="cursor-pointer">
-          Descuentos
-        </Label>
-      </div>
-
-      {/* ✅ 3) Ventas Brutas */}
-      <div className="flex items-center space-x-2">
-        <RadioGroupItem value="brutas" id="metric-brutas" />
-        <Label htmlFor="metric-brutas" className="cursor-pointer">
-          Ventas Brutas
-        </Label>
-      </div>
-    </RadioGroup>
-
-    {/* ✅ Leyenda dinámica */}
-    {metricType === "netas" && (
       <div className="mt-1 text-xs text-muted-foreground border rounded-lg bg-muted/30 px-3 py-2">
-        <b>Ventas netas</b> = (Ventas Brutas) − (Descuentos)
+        Muestra el total neto de <b>otros ingresos</b> en el período seleccionado.
       </div>
-    )}
+    </>
+  ) : (
+    <>
+      <RadioGroup
+        value={metricType}
+        onValueChange={(v) => setMetricType(v as MetricType)}
+        className="flex flex-col gap-3"
+      >
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="netas" id="metric-netas" />
+          <Label htmlFor="metric-netas" className="cursor-pointer">
+            Ventas Netas
+          </Label>
+        </div>
 
-    {metricType === "brutas" && (
-      <div className="mt-1 text-xs text-muted-foreground border rounded-lg bg-muted/30 px-3 py-2">
-        Las <b>ventas brutas</b> es lo facturado antes de hacer algún descuento
-      </div>
-    )}
-  </CardContent>
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="descuentos" id="metric-descuentos" />
+          <Label htmlFor="metric-descuentos" className="cursor-pointer">
+            Descuentos
+          </Label>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="brutas" id="metric-brutas" />
+          <Label htmlFor="metric-brutas" className="cursor-pointer">
+            Ventas Brutas
+          </Label>
+        </div>
+      </RadioGroup>
+
+      {metricType === "netas" && (
+        <div className="mt-1 text-xs text-muted-foreground border rounded-lg bg-muted/30 px-3 py-2">
+          <b>Ventas netas</b> = (Ventas Brutas) − (Descuentos)
+        </div>
+      )}
+
+      {metricType === "brutas" && (
+        <div className="mt-1 text-xs text-muted-foreground border rounded-lg bg-muted/30 px-3 py-2">
+          Las <b>ventas brutas</b> es lo facturado antes de hacer algún descuento
+        </div>
+      )}
+    </>
+  )}
+</CardContent>
 </Card>
 
           </div>
@@ -5751,7 +5806,7 @@ const getTxFecha = (t: any) => {
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="space-y-1">
                   <CardTitle>
-                    {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por{" "}
+                    {metricLabel} por{" "}
                     {vistaGraficaBarras === "subcuenta" ? "Subcuenta" : "Cuenta"}
                   </CardTitle>
                   <CardDescription>
@@ -5889,7 +5944,7 @@ const getTxFecha = (t: any) => {
                 <CardTitle>Métodos de Pago Recibidos</CardTitle>
                 <CardDescription>
                   Distribución de{" "}
-                  {metricType === "brutas" ? "ventas brutas" : metricType === "descuentos" ? "descuentos" : "ventas netas"} por método de pago
+                  {metricLabelLower} por método de pago
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -5931,7 +5986,7 @@ const getTxFecha = (t: any) => {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Producto
+                  {metricLabel} por Producto
                 </CardTitle>
                 <CardDescription>
                   Ranking de productos {metricType === "descuentos" ? "con más descuentos" : "más vendidos"}
@@ -6238,7 +6293,7 @@ const getTxFecha = (t: any) => {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {metricType === "brutas" ? "Ventas Brutas" : metricType === "descuentos" ? "Descuentos" : "Ventas Netas"} por Cliente
+                  {metricLabel} por Cliente
                 </CardTitle>
                 <CardDescription>
                   Ranking de {metricType === "descuentos" ? "clientes con más descuentos" : "mejores clientes"}
