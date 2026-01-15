@@ -454,6 +454,9 @@ const [pageResumen, setPageResumen] = useState(1);
   // Estado para el tipo de ingreso a analizar
   const [tipoIngresoAnalisis, setTipoIngresoAnalisis] = useState<"ventas" | "otros">("ventas");
 
+  const [highlightsScaleFormat, setHighlightsScaleFormat] =
+  useState<"general" | "miles" | "millones">("general");
+
   // Estados para fechas específicas de análisis
 const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
 const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
@@ -4619,6 +4622,45 @@ const CenterLabel =
         {/* HIGHLIGHTS - Resumen Completo (sin filtros) */}
         <div className="mb-8">
           <h3 className="text-xl font-bold text-foreground mb-4">Highlights de Ingresos</h3>
+          {/* Filtro SOLO para Highlights */}
+<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+  <p className="text-sm text-muted-foreground">
+    Ajusta el formato numérico de los highlights
+  </p>
+
+  <div className="flex items-center gap-2">
+    <span className="text-xs text-muted-foreground">Formato:</span>
+
+    <RadioGroup
+      value={highlightsScaleFormat}
+      onValueChange={(v) =>
+        setHighlightsScaleFormat(v as "general" | "miles" | "millones")
+      }
+      className="flex items-center gap-4"
+    >
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="general" id="high-scale-general" />
+        <Label htmlFor="high-scale-general" className="cursor-pointer text-sm">
+          General
+        </Label>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="miles" id="high-scale-miles" />
+        <Label htmlFor="high-scale-miles" className="cursor-pointer text-sm">
+          Miles (K)
+        </Label>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="millones" id="high-scale-millones" />
+        <Label htmlFor="high-scale-millones" className="cursor-pointer text-sm">
+          Millones (M)
+        </Label>
+      </div>
+    </RadioGroup>
+  </div>
+</div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Día */}
             <Card>
@@ -4631,33 +4673,33 @@ const CenterLabel =
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesDia.ventasBrutas, scaleFormat)}
+                    ${formatCifra(highTotalesDia.ventasBrutas, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-destructive">Descuentos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesDia.descuentos, scaleFormat)}
+                    ${formatCifra(highTotalesDia.descuentos, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${formatCifra(highTotalesDia.ventasNetas, scaleFormat)}
+                    ${formatCifra(highTotalesDia.ventasNetas, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-600">Otros Ingresos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesDia.otrosIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesDia.otrosIngresos, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-primary">Total Ingresos:</span>
                   <span className="text-xl font-bold text-primary">
-                    ${formatCifra(highTotalesDia.totalIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesDia.totalIngresos, highlightsScaleFormat)}
                   </span>
                 </div>
               </CardContent>
@@ -4672,33 +4714,33 @@ const CenterLabel =
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesMes.ventasBrutas, scaleFormat)}
+                    ${formatCifra(highTotalesMes.ventasBrutas, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-destructive">Descuentos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesMes.descuentos, scaleFormat)}
+                    ${formatCifra(highTotalesMes.descuentos, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${formatCifra(highTotalesMes.ventasNetas, scaleFormat)}
+                    ${formatCifra(highTotalesMes.ventasNetas, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-600">Otros Ingresos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesMes.otrosIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesMes.otrosIngresos, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-primary">Total Ingresos:</span>
                   <span className="text-xl font-bold text-primary">
-                    ${formatCifra(highTotalesMes.totalIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesMes.totalIngresos, highlightsScaleFormat)}
                   </span>
                 </div>
               </CardContent>
@@ -4713,33 +4755,33 @@ const CenterLabel =
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Ventas Brutas:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesAno.ventasBrutas, scaleFormat)}
+                    ${formatCifra(highTotalesAno.ventasBrutas, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-destructive">Descuentos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesAno.descuentos, scaleFormat)}
+                    ${formatCifra(highTotalesAno.descuentos, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-chart-2">Ventas Netas:</span>
                   <span className="text-lg font-bold text-foreground">
-                    ${formatCifra(highTotalesAno.ventasNetas, scaleFormat)}
+                    ${formatCifra(highTotalesAno.ventasNetas, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-600">Otros Ingresos:</span>
                   <span className="font-semibold text-foreground">
-                    ${formatCifra(highTotalesAno.otrosIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesAno.otrosIngresos, highlightsScaleFormat)}
                   </span>
                 </div>
                 <div className="h-px bg-border"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-primary">Total Ingresos:</span>
                   <span className="text-xl font-bold text-primary">
-                    ${formatCifra(highTotalesAno.totalIngresos, scaleFormat)}
+                    ${formatCifra(highTotalesAno.totalIngresos, highlightsScaleFormat)}
                   </span>
                 </div>
               </CardContent>
