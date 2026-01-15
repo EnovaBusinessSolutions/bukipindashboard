@@ -5668,38 +5668,46 @@ const getTxFecha = (t: any) => {
 <Card>
   <CardHeader>
     <CardTitle>
-      Estado de Pagos -{" "}
-      {metricType === "brutas"
-        ? "Ventas Brutas"
-        : metricType === "descuentos"
-        ? "Descuentos"
-        : "Ventas Netas"}
+      Estado de Pagos - {metricLabel}
     </CardTitle>
     <CardDescription>Distribución por estado de pago</CardDescription>
   </CardHeader>
 
   <CardContent>
     {loadingTransacciones ? (
-      <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
+        Cargando gráfico...
+      </div>
     ) : !hayDatosDisponibles() ? (
-      <div className="h-80 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
-    ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-      <div className="h-80 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
+        No hay datos para mostrar
+      </div>
+    ) : tipoIngresoAnalisis === "ventas" && metricType !== "netas" ? (
+      // ✅ Regla clave: solo se integra con netas (en ventas)
+      <div className="h-80 flex items-center justify-center">
+        <div className="max-w-md w-full p-4 rounded-lg border bg-muted/30 text-sm text-muted-foreground text-center">
+          <div className="font-semibold text-foreground mb-1">
+            Solo se puede integrar con <span className="text-primary">Ventas netas</span>
+          </div>
+          <div>
+            ya que es lo que realmente se cobra.
+          </div>
+        </div>
+      </div>
     ) : (
+      // ✅ Caso permitido: Ventas Netas o Otros Ingresos Netos
       <div className="h-80">
         {(() => {
           const pieEstadoData: PieEstadoItem[] = (() => {
             const totalRealEstado =
               tipoIngresoAnalisis === "ventas"
-                ? metricType === "brutas"
-                  ? datosAnaliticas.ventasBrutas
-                  : metricType === "descuentos"
-                  ? datosAnaliticas.descuentos
-                  : datosAnaliticas.ventasNetas
-                : datosAnaliticas.otrosIngresos;
+                ? Number(datosAnaliticas.ventasNetas || 0)
+                : Number(datosAnaliticas.otrosIngresos || 0);
 
-            if (filteredTransactions.length === 0 && (Number(totalRealEstado) || 0) > 0) {
-              return [{ estado: "Pagado Total", monto: Number(totalRealEstado) || 0, porcentaje: "100.0" }];
+            if (filteredTransactions.length === 0 && totalRealEstado > 0) {
+              return [
+                { estado: "Pagado Total", monto: totalRealEstado, porcentaje: "100.0" },
+              ];
             }
 
             const estadoPagos = filteredTransactions.reduce<NumMap>((acc, t: any) => {
@@ -5710,17 +5718,22 @@ const getTxFecha = (t: any) => {
               if (t?.tipo_pago === "contado" || (pagado > 0 && pendiente === 0)) estado = "Pagado Total";
               else if (t?.tipo_pago === "parcial" || (pagado > 0 && pendiente > 0)) estado = "Pago Parcial";
 
-              acc[estado] = (acc[estado] || 0) + (Number(getMetricValue(t, metricType)) || 0);
+              // ✅ IMPORTANTÍSIMO: Estado de pagos siempre se calcula sobre NETO cobrable
+              acc[estado] = (acc[estado] || 0) + (Number(getMetricValue(t, tipoIngresoAnalisis === "ventas" ? "netas" : "otros_netos")) || 0);
               return acc;
             }, {} as NumMap);
 
-            const total = (Object.values(estadoPagos) as number[]).reduce((sum, v) => sum + (Number(v) || 0), 0);
+            const total = (Object.values(estadoPagos) as number[]).reduce(
+              (sum, v) => sum + (Number(v) || 0),
+              0
+            );
 
             return (Object.entries(estadoPagos) as Array<[string, number]>)
               .map(([estado, monto]) => ({
                 estado,
                 monto: Number(monto) || 0,
-                porcentaje: total > 0 ? (((Number(monto) || 0) / total) * 100).toFixed(1) : "0.0",
+                porcentaje:
+                  total > 0 ? (((Number(monto) || 0) / total) * 100).toFixed(1) : "0.0",
               }))
               .sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
           })();
@@ -5743,9 +5756,9 @@ const getTxFecha = (t: any) => {
                       dataKey="monto"
                       nameKey="estado"
                       cx="50%"
-                      cy="44%"         // ✅ aire para leyenda
+                      cy="44%"
                       innerRadius={64}
-                      outerRadius={88} // ✅ evitar recorte con 3+ estados
+                      outerRadius={88}
                       paddingAngle={2}
                       cornerRadius={10}
                       stroke={hsl("border")}
@@ -5763,7 +5776,10 @@ const getTxFecha = (t: any) => {
                     </Pie>
 
                     <RechartsTooltip
-                      formatter={(value: any) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
+                      formatter={(value: any) => [
+                        `$${formatCifra(Number(value) || 0, scaleFormat)}`,
+                        "Monto",
+                      ]}
                       contentStyle={{
                         backgroundColor: "hsl(var(--background))",
                         border: "1px solid hsl(var(--border))",
