@@ -596,6 +596,15 @@ function dateOnlyToLocalEnd(s: string) {
   return new Date(y, m - 1, d, 23, 59, 59, 999);
 }
 
+const getSubcuentaIdAny = (t: any) =>
+  t?.subcuenta_id ??
+  t?.subcuentaId ??
+  t?.subcuenta ??
+  t?.subcuenta_codigo ??
+  t?.subcuentaCodigo ??
+  null;
+
+
 // ✅ esto reemplaza el new Date(...) directo en TODOS tus filtros
 const matchRangoFechas = (createdAt: any) => {
   const dt = parseDateSafe(createdAt);
@@ -619,7 +628,8 @@ const handleRangoChange = (range?: DateRange) => {
   const [filtroTipoIngreso, setFiltroTipoIngreso] = useState("todos");
   const [filtroCuenta, setFiltroCuenta] = useState("todas");
   const [filtroSubcuenta, setFiltroSubcuenta] = useState("");
-  const [vistaGraficaBarras, setVistaGraficaBarras] = useState<"subcuenta" | "cuenta">("subcuenta");
+  const [vistaGraficaBarras, setVistaGraficaBarras] = useState<"subcuenta" | "cuenta">("cuenta");
+
   
   // Estado para asientos contables en diálogo
   const [currentAsientos, setCurrentAsientos] = useState<any>(null);
@@ -5820,8 +5830,8 @@ const getTxFecha = (t: any) => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
-                    <SelectItem value="cuenta">Por Cuenta</SelectItem>
+                   <SelectItem value="cuenta">Por Cuenta</SelectItem>
+                   <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
                   </SelectContent>
                 </Select>
               </CardHeader>
@@ -5853,13 +5863,20 @@ const getTxFecha = (t: any) => {
                           const chartData = filteredTransactions.reduce<NumMap>((acc, t: any) => {
                             let key: string;
                             if (vistaGraficaBarras === "subcuenta") {
-                              key = t.subcuenta_id
-                                ? subcuentas.find((s) => s.id === t.subcuenta_id)?.nombre || "Subcuenta desconocida"
-                                : "Sin subcuenta asignada";
-                            } else {
-                              const cuenta = cuentas.find((c) => c.codigo === t.cuenta_principal_codigo);
-                              key = cuenta ? `${t.cuenta_principal_codigo} - ${cuenta.nombre}` : t.cuenta_principal_codigo || "Sin cuenta";
-                            }
+  const sid = getSubcuentaIdAny(t);
+  const sidStr = sid ? String(sid) : "";
+
+  const sub = subcuentas.find((s: any) =>
+    String(s?.id ?? s?._id ?? "") === sidStr
+  );
+
+  key = sub?.codigo
+    ? `${sub.codigo} - ${sub.nombre}`
+    : sub?.nombre || "Sin subcuenta asignada";
+} else {
+  const cuenta = cuentas.find((c) => c.codigo === t.cuenta_principal_codigo);
+  key = cuenta ? `${t.cuenta_principal_codigo} - ${cuenta.nombre}` : t.cuenta_principal_codigo || "Sin cuenta";
+}
 
                             acc[key] = (acc[key] || 0) + (Number(getMetricValue(t, metricType)) || 0);
                             return acc;
@@ -5885,9 +5902,21 @@ const getTxFecha = (t: any) => {
                               if (vistaGraficaBarras === "cuenta") {
                                 origen = `${cuentaCodigo} - ${cuentaNombre}`;
                               } else {
-                                const subcuentaId = detalleIngreso.subcuenta_id;
-                                const subcuentaInfo = subcuentas.find((s) => s.id === subcuentaId);
-                                origen = subcuentaInfo?.nombre || "Sin subcuenta asignada";
+                                const subRef =
+  detalleIngreso?.subcuenta_id ??
+  detalleIngreso?.subcuentaId ??
+  detalleIngreso?.subcuenta ??
+  null;
+
+const subIdStr = subRef ? String(subRef) : "";
+
+const subcuentaInfo = subcuentas.find((s: any) =>
+  String(s?.id ?? s?._id ?? "") === subIdStr
+);
+
+origen = subcuentaInfo?.codigo
+  ? `${subcuentaInfo.codigo} - ${subcuentaInfo.nombre}`
+  : subcuentaInfo?.nombre || "Sin subcuenta asignada";
                               }
 
                               ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + monto;
@@ -5905,34 +5934,48 @@ const getTxFecha = (t: any) => {
                         })()}
                         layout="vertical"
                       >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          type="number"
-                          tickFormatter={(value) => formatCifra(value, scaleFormat)}
-                          tick={{ fill: "#000000" }}
-                          domain={[0, (dataMax: number) => dataMax * 1.2]}
-                        />
-                        <YAxis type="category" dataKey="subcuenta" width={150} tick={{ fill: "#000000" }} />
-                        <RechartsTooltip
-                          formatter={(value) => [`$${formatCifra(Number(value), scaleFormat)}`, "Monto"]}
-                          contentStyle={{
-                            backgroundColor: "#ffffff",
-                            border: "1px solid #ccc",
-                            borderRadius: "4px",
-                            color: "#000000",
-                          }}
-                          itemStyle={{ color: "#000000", fontWeight: "bold" }}
-                          labelStyle={{ color: "#000000", fontWeight: "bold" }}
-                          wrapperStyle={{ zIndex: 1000 }}
-                        />
-                        <Bar dataKey="monto" fill="hsl(180 50% 55%)">
-                          <LabelList
-                            dataKey="monto"
-                            position="right"
-                            formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
-                            style={{ fill: "#000000", fontWeight: "bold", fontSize: "12px" }}
-                          />
-                        </Bar>
+                        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+
+<XAxis
+  type="number"
+  tickFormatter={(value) => formatCifra(value, scaleFormat)}
+  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+  axisLine={{ stroke: "hsl(var(--border))" }}
+  tickLine={{ stroke: "hsl(var(--border))" }}
+  domain={[0, (dataMax: number) => dataMax * 1.15]}
+/>
+
+<YAxis
+  type="category"
+  dataKey="subcuenta"
+  width={180}
+  tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
+  axisLine={{ stroke: "hsl(var(--border))" }}
+  tickLine={{ stroke: "hsl(var(--border))" }}
+/>
+
+<RechartsTooltip
+  formatter={(value) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
+  contentStyle={{
+    backgroundColor: "hsl(var(--background))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "12px",
+    color: "hsl(var(--foreground))",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+    padding: "10px 12px",
+  }}
+  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
+/>
+
+<Bar dataKey="monto" fill="hsl(180 50% 55%)" radius={[10, 10, 10, 10]} barSize={28}>
+  <LabelList
+    dataKey="monto"
+    position="right"
+    formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
+    style={{ fill: "hsl(var(--foreground))", fontWeight: 700, fontSize: 12 }}
+  />
+</Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
