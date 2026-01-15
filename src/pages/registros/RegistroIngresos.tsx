@@ -449,7 +449,7 @@ const [pageResumen, setPageResumen] = useState(1);
   const [scaleFormat, setScaleFormat] = useState<"general" | "miles" | "millones">("general");
   
   // Estado para el tipo de métrica a mostrar
-  const [metricType, setMetricType] = useState<"brutas" | "descuentos" | "netas">("brutas");
+  const [metricType, setMetricType] = useState<"brutas" | "descuentos" | "netas">("netas");
   
   // Estado para el tipo de ingreso a analizar
   const [tipoIngresoAnalisis, setTipoIngresoAnalisis] = useState<"ventas" | "otros">("ventas");
@@ -5108,37 +5108,57 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle>Tipo de Métrica</CardTitle>
-                <CardDescription>Datos a visualizar</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  value={metricType}
-                  onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")}
-                  className="flex flex-col gap-3"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="brutas" id="metric-brutas" />
-                    <Label htmlFor="metric-brutas" className="cursor-pointer">
-                      Ventas Brutas
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="descuentos" id="metric-descuentos" />
-                    <Label htmlFor="metric-descuentos" className="cursor-pointer">
-                      Descuentos
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="netas" id="metric-netas" />
-                    <Label htmlFor="metric-netas" className="cursor-pointer">
-                      Ventas Netas
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
+  <CardHeader>
+    <CardTitle>Tipo de Métrica</CardTitle>
+    <CardDescription>Datos a visualizar</CardDescription>
+  </CardHeader>
+
+  <CardContent className="space-y-3">
+    <RadioGroup
+      value={metricType}
+      onValueChange={(v) => setMetricType(v as "brutas" | "descuentos" | "netas")}
+      className="flex flex-col gap-3"
+    >
+      {/* ✅ 1) Predeterminado + primer lugar: Ventas Netas */}
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="netas" id="metric-netas" />
+        <Label htmlFor="metric-netas" className="cursor-pointer">
+          Ventas Netas
+        </Label>
+      </div>
+
+      {/* ✅ 2) Descuentos */}
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="descuentos" id="metric-descuentos" />
+        <Label htmlFor="metric-descuentos" className="cursor-pointer">
+          Descuentos
+        </Label>
+      </div>
+
+      {/* ✅ 3) Ventas Brutas */}
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="brutas" id="metric-brutas" />
+        <Label htmlFor="metric-brutas" className="cursor-pointer">
+          Ventas Brutas
+        </Label>
+      </div>
+    </RadioGroup>
+
+    {/* ✅ Leyenda dinámica */}
+    {metricType === "netas" && (
+      <div className="mt-1 text-xs text-muted-foreground border rounded-lg bg-muted/30 px-3 py-2">
+        <b>Ventas netas</b> = (Ventas Brutas) − (Descuentos)
+      </div>
+    )}
+
+    {metricType === "brutas" && (
+      <div className="mt-1 text-xs text-muted-foreground border rounded-lg bg-muted/30 px-3 py-2">
+        Las <b>ventas brutas</b> es lo facturado antes de hacer algún descuento
+      </div>
+    )}
+  </CardContent>
+</Card>
+
           </div>
 
           {/* Gráfico de Ventas Totales, Descuentos y Ventas Netas */}
