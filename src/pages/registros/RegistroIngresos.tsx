@@ -4411,6 +4411,44 @@ const getTxFecha = (t: any) => {
   return parseDateSafe(raw);
 };
 
+const prettyMonthYearLabel = (raw?: string) => {
+  if (!raw) return "";
+
+  const s = String(raw).trim();
+
+  // Soporta: "01/2026", "1/2026"
+  let mm: string | undefined;
+  let yyyy: string | undefined;
+
+  const m1 = s.match(/^(\d{1,2})\/(\d{4})$/);
+  if (m1) {
+    mm = m1[1];
+    yyyy = m1[2];
+  }
+
+  // Soporta: "2026-01" o "2026-01-15"
+  const m2 = s.match(/^(\d{4})-(\d{2})/);
+  if (!mm && m2) {
+    yyyy = m2[1];
+    mm = m2[2];
+  }
+
+  if (!mm || !yyyy) return s;
+
+  const monthNum = parseInt(mm, 10);
+  const months = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+
+  if (monthNum >= 1 && monthNum <= 12) {
+    return `${months[monthNum - 1]}/${yyyy}`;
+  }
+
+  return s;
+};
+
+
 // ✅ Helper: normaliza cuenta principal a string (evita bug 4001 number vs "4001")
 const getCuentaCodigo = (t: any) => String(t?.cuenta_principal_codigo ?? "");
 
@@ -4628,7 +4666,7 @@ const CenterLabel =
             {/* Mes */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes {highlightLabels?.mes ? `(${highlightLabels.mes})` : ""}</CardTitle>
+                <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes {highlightLabels?.mes ? `(${prettyMonthYearLabel(highlightLabels.mes)})` : ""}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
