@@ -5828,47 +5828,46 @@ const getTxFecha = (t: any) => {
       </CardDescription>
     </div>
 
-    <Select
-      value={vistaGraficaBarras}
-      onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}
-    >
-      <SelectTrigger className="w-[170px]">
-        <SelectValue />
-      </SelectTrigger>
+    <div className="flex items-center gap-2">
+      <Select
+        value={vistaGraficaBarras}
+        onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}
+      >
+        <SelectTrigger className="w-[170px]">
+          <SelectValue />
+        </SelectTrigger>
 
-      <SelectContent>
-        {/* ✅ Orden “pro”: primero Cuenta */}
-        <SelectItem value="cuenta">Por Cuenta</SelectItem>
-        <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
-      </SelectContent>
-    </Select>
+        <SelectContent>
+          <SelectItem value="cuenta">Por Cuenta</SelectItem>
+          <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   </CardHeader>
 
   <CardContent>
     {loadingTransacciones ? (
-      <div className="h-72 flex items-center justify-center text-muted-foreground">
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
         Cargando gráfico...
       </div>
     ) : !hayDatosDisponibles() ? (
-      <div className="h-72 flex items-center justify-center text-muted-foreground">
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
         No hay datos para mostrar
       </div>
     ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-      <div className="h-72 flex items-center justify-center text-muted-foreground">
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
         No hay descuentos en otros ingresos
       </div>
     ) : (
       (() => {
         // ----------------------------
-        // ✅ DATA + ESTÉTICA PRO
-        // - Contenedor fijo (no se aplasta) + scroll interno si hay muchas barras
-        // - YAxisWidth dinámico + wrap 2 líneas
-        // - Mismos labels coherentes para cuenta/subcuenta
-        // - “Subcuentas reales”: usa lista subcuentas y/o datos en tx
+        // ✅ PRO: soporta MUCHAS subcuentas sin aplastar
+        // - No encima: altura interna proporcional a items
+        // - Card con altura fija y scroll interno
+        // - “Top N” adaptativo: subcuenta => ALL, cuenta => 25
         // ----------------------------
 
         type NumMap = Record<string, number>;
-
         const safeStr = (v: any) => String(v ?? "").trim();
 
         const resolveCuentaLabel = (t: any) => {
@@ -5881,11 +5880,7 @@ const getTxFecha = (t: any) => {
             safeStr(t?.cuentaNombre);
 
           const nombre = found?.nombre || nombreTx || "";
-          return code
-            ? nombre
-              ? `${code} - ${nombre}`
-              : code
-            : "Sin cuenta";
+          return code ? (nombre ? `${code} - ${nombre}` : code) : "Sin cuenta";
         };
 
         const resolveSubcuentaLabel = (t: any) => {
@@ -5902,7 +5897,7 @@ const getTxFecha = (t: any) => {
             return code ? `${code} - ${name}` : name || "Sin subcuenta asignada";
           }
 
-          // ✅ fallback si el backend ya manda subcuenta “resuelta” en la transacción
+          // fallback si la tx ya trae subcuenta resuelta
           const codeTx =
             safeStr(t?.subcuenta_codigo) ||
             safeStr(t?.subcuentaCodigo) ||
@@ -5913,9 +5908,7 @@ const getTxFecha = (t: any) => {
             safeStr(t?.subcuentaNombre) ||
             safeStr(t?.subcuenta_name);
 
-          if (codeTx || nameTx) {
-            return codeTx ? `${codeTx} - ${nameTx || "Subcuenta"}` : nameTx;
-          }
+          if (codeTx || nameTx) return codeTx ? `${codeTx} - ${nameTx || "Subcuenta"}` : nameTx;
 
           return "Sin subcuenta asignada";
         };
@@ -5929,12 +5922,13 @@ const getTxFecha = (t: any) => {
               : datosAnaliticas.ventasNetas
             : datosAnaliticas.otrosIngresos;
 
-        const barData = (() => {
+        const agg = (() => {
+          // Caso fallback si no hay tx pero sí total
           if (filteredTransactions.length === 0 && (Number(totalRealBarSub) || 0) > 0) {
-            return [{ label: "Sin detalle", monto: Number(totalRealBarSub) || 0 }];
+            return { "Sin detalle": Number(totalRealBarSub) || 0 } as NumMap;
           }
 
-          const agg = filteredTransactions.reduce<NumMap>((acc, t: any) => {
+          const map = filteredTransactions.reduce<NumMap>((acc, t: any) => {
             const key =
               vistaGraficaBarras === "subcuenta"
                 ? resolveSubcuentaLabel(t)
@@ -5944,12 +5938,8 @@ const getTxFecha = (t: any) => {
             return acc;
           }, {} as NumMap);
 
-          // ✅ Si hay diferencia vs total, sumamos “otros” desde asientos directos (si aplica)
-          const totalTrans = (Object.values(agg) as number[]).reduce(
-            (sum, v) => sum + (Number(v) || 0),
-            0
-          );
-
+          // Si hay diferencia vs total, sumamos desde asientos directos
+          const totalTrans = (Object.values(map) as number[]).reduce((sum, v) => sum + (Number(v) || 0), 0);
           const diff = (Number(totalRealBarSub) || 0) - totalTrans;
 
           if (diff > 0.01) {
@@ -5993,47 +5983,56 @@ const getTxFecha = (t: any) => {
             });
 
             (Object.entries(extra) as Array<[string, number]>).forEach(([k, v]) => {
-              agg[k] = (agg[k] || 0) + (Number(v) || 0);
+              map[k] = (map[k] || 0) + (Number(v) || 0);
             });
           }
 
-          const arr = (Object.entries(agg) as Array<[string, number]>)
-            .map(([label, monto]) => ({ label, monto: Number(monto) || 0 }))
-            .sort((a, b) => (b.monto || 0) - (a.monto || 0));
-
-          // ✅ Top N “pro” (evita una lista larguísima en card)
-          const TOP_N = 12;
-          return arr.slice(0, TOP_N);
+          return map;
         })();
 
-        // ✅ ancho Y dinámico (sin recortes)
-        const maxLen = barData.reduce((m, it) => Math.max(m, String(it?.label ?? "").length), 0);
-        const yAxisWidth = Math.min(320, Math.max(170, maxLen * 6.2)); // más compacto que antes (da más espacio a barras)
+        // Convertimos a array + orden
+        const arrAll = (Object.entries(agg) as Array<[string, number]>)
+          .map(([label, monto]) => ({ label, monto: Number(monto) || 0 }))
+          .sort((a, b) => (b.monto || 0) - (a.monto || 0));
 
-        // ✅ alturas: el card NO se aplasta; usamos contenedor fijo y scroll interno si hay muchas barras
-        const containerH = 340; // altura visible del card (se ve “limpio”)
-        const innerH = Math.max(300, Math.min(640, barData.length * 60)); // altura real para barras (con aire)
+        // ✅ Límite adaptativo:
+        // - Subcuentas: ALL (para soportar muchas)
+        // - Cuentas: TOP 25 (mejor UX)
+        const limit = vistaGraficaBarras === "subcuenta" ? 0 : 25;
+        const barData = limit > 0 ? arrAll.slice(0, limit) : arrAll;
+
+        // ✅ ancho Y dinámico
+        const maxLen = barData.reduce((m, it) => Math.max(m, String(it?.label ?? "").length), 0);
+        const yAxisWidth = Math.min(340, Math.max(180, maxLen * 6.2));
+
+        // ✅ Card altura fija + scroll interno
+        // visible: estable y elegante
+        const containerH = 420;
+
+        // ✅ altura interna proporcional a items (evita encimado)
+        // 70px por barra = mucho aire (pro)
+        const innerH = Math.max(340, Math.min(2400, barData.length * 70));
+
+        // ✅ si hay muchas, mostramos hint
+        const showScrollHint = barData.length >= 10;
 
         return (
           <div className="w-full">
-            <div
-              className="rounded-xl border bg-muted/10"
-              style={{ height: containerH }}
-            >
-              <div className="h-full overflow-y-auto overflow-x-hidden p-3">
+            <div className="rounded-xl border bg-muted/10" style={{ height: containerH }}>
+              <div className="h-full overflow-y-auto overflow-x-hidden p-4">
                 <div style={{ height: innerH }} className="w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={barData}
                       layout="vertical"
-                      margin={{ top: 10, right: 96, bottom: 12, left: 8 }}
-                      barCategoryGap={18}
+                      margin={{ top: 8, right: 110, bottom: 14, left: 8 }}
+                      barCategoryGap={26}
                     >
                       <CartesianGrid
                         stroke="hsl(var(--border))"
-                        strokeDasharray="4 6"
+                        strokeDasharray="4 8"
                         vertical={false}
-                        opacity={0.7}
+                        opacity={0.65}
                       />
 
                       <XAxis
@@ -6055,6 +6054,7 @@ const getTxFecha = (t: any) => {
                           const { x, y, payload } = props;
                           const full = String(payload?.value ?? "");
 
+                          // wrap 2 líneas (sin encimar)
                           const maxChars = 26;
                           const line1 = full.length > maxChars ? full.slice(0, maxChars) : full;
                           const line2 = full.length > maxChars ? full.slice(maxChars, maxChars * 2) : "";
@@ -6062,21 +6062,16 @@ const getTxFecha = (t: any) => {
                           return (
                             <g transform={`translate(${x},${y})`}>
                               <text
-                                x={-8}
+                                x={-10}
                                 y={0}
                                 textAnchor="end"
                                 fill="hsl(var(--foreground))"
                                 fontSize={12}
-                                fontWeight={600}
+                                fontWeight={650}
                               >
-                                <tspan x={-8} dy="0">{line1}</tspan>
+                                <tspan x={-10} dy="0">{line1}</tspan>
                                 {line2 ? (
-                                  <tspan
-                                    x={-8}
-                                    dy="14"
-                                    fill="hsl(var(--muted-foreground))"
-                                    fontWeight={500}
-                                  >
+                                  <tspan x={-10} dy="14" fill="hsl(var(--muted-foreground))" fontWeight={500}>
                                     {line2}
                                   </tspan>
                                 ) : null}
@@ -6087,11 +6082,8 @@ const getTxFecha = (t: any) => {
                       />
 
                       <RechartsTooltip
-                        cursor={{ fill: "hsl(var(--muted))", opacity: 0.25 }}
-                        formatter={(value) => [
-                          `$${formatCifra(Number(value) || 0, scaleFormat)}`,
-                          "Monto",
-                        ]}
+                        cursor={{ fill: "hsl(var(--muted))", opacity: 0.22 }}
+                        formatter={(value) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
                         contentStyle={{
                           backgroundColor: "hsl(var(--background))",
                           border: "1px solid hsl(var(--border))",
@@ -6108,15 +6100,13 @@ const getTxFecha = (t: any) => {
                         dataKey="monto"
                         fill="hsl(180 50% 55%)"
                         radius={[14, 14, 14, 14]}
-                        barSize={34}
+                        barSize={36}
                       >
                         <LabelList
                           dataKey="monto"
                           position="right"
-                          offset={12}
-                          formatter={(value: number) =>
-                            `$${formatCifra(Number(value) || 0, scaleFormat)}`
-                          }
+                          offset={14}
+                          formatter={(value: number) => `$${formatCifra(Number(value) || 0, scaleFormat)}`}
                           style={{
                             fill: "hsl(var(--foreground))",
                             fontWeight: 800,
@@ -6130,9 +6120,17 @@ const getTxFecha = (t: any) => {
               </div>
             </div>
 
-            {/* ✅ Hint pro cuando el usuario está en Subcuenta y faltan subcuentas */}
-            {vistaGraficaBarras === "subcuenta" && (!subcuentas || subcuentas.length === 0) ? (
+            {/* Hint pro: scroll */}
+            {showScrollHint ? (
               <div className="mt-3 text-xs text-muted-foreground border rounded-lg bg-muted/20 px-3 py-2">
+                Tip: desplázate dentro del gráfico para ver todas las{" "}
+                {vistaGraficaBarras === "subcuenta" ? "subcuentas" : "cuentas"}.
+              </div>
+            ) : null}
+
+            {/* Hint pro: subcuentas no cargadas */}
+            {vistaGraficaBarras === "subcuenta" && (!subcuentas || subcuentas.length === 0) ? (
+              <div className="mt-2 text-xs text-muted-foreground border rounded-lg bg-muted/20 px-3 py-2">
                 Nota: No se detectaron subcuentas cargadas. Se mostrará “Sin subcuenta asignada” cuando aplique.
               </div>
             ) : null}
