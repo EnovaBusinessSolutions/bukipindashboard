@@ -5814,174 +5814,275 @@ const getTxFecha = (t: any) => {
 </Card>
 
             {/* Gráfico por Subcuenta/Cuenta Contable */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="space-y-1">
-                  <CardTitle>
-                    {metricLabel} por{" "}
-                    {vistaGraficaBarras === "subcuenta" ? "Subcuenta" : "Cuenta"}
-                  </CardTitle>
-                  <CardDescription>
-                    Distribución por {vistaGraficaBarras === "subcuenta" ? "subcuentas" : "cuentas"} contables
-                  </CardDescription>
-                </div>
-                <Select value={vistaGraficaBarras} onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                   <SelectItem value="cuenta">Por Cuenta</SelectItem>
-                   <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
-                ) : !hayDatosDisponibles() ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
-                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
-                ) : (
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={(() => {
-                          const totalRealBarSub =
-                            tipoIngresoAnalisis === "ventas"
-                              ? metricType === "brutas"
-                                ? datosAnaliticas.ventasBrutas
-                                : metricType === "descuentos"
-                                ? datosAnaliticas.descuentos
-                                : datosAnaliticas.ventasNetas
-                              : datosAnaliticas.otrosIngresos;
+<Card>
+  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <div className="space-y-1">
+      <CardTitle>
+        {metricLabel} por{" "}
+        {vistaGraficaBarras === "subcuenta" ? "Subcuenta" : "Cuenta"}
+      </CardTitle>
 
-                          if (filteredTransactions.length === 0 && (Number(totalRealBarSub) || 0) > 0) {
-                            return [{ subcuenta: "Sin detalle", monto: Number(totalRealBarSub) || 0 }];
-                          }
+      <CardDescription>
+        Distribución por{" "}
+        {vistaGraficaBarras === "subcuenta" ? "subcuentas" : "cuentas"} contables
+      </CardDescription>
+    </div>
 
-                          const chartData = filteredTransactions.reduce<NumMap>((acc, t: any) => {
-                            let key: string;
-                            if (vistaGraficaBarras === "subcuenta") {
-  const sid = getSubcuentaIdAny(t);
-  const sidStr = sid ? String(sid) : "";
+    <Select
+      value={vistaGraficaBarras}
+      onValueChange={(v) => setVistaGraficaBarras(v as "subcuenta" | "cuenta")}
+    >
+      <SelectTrigger className="w-[150px]">
+        <SelectValue />
+      </SelectTrigger>
 
-  const sub = subcuentas.find((s: any) =>
-    String(s?.id ?? s?._id ?? "") === sidStr
-  );
+      <SelectContent>
+        <SelectItem value="cuenta">Por Cuenta</SelectItem>
+        <SelectItem value="subcuenta">Por Subcuenta</SelectItem>
+      </SelectContent>
+    </Select>
+  </CardHeader>
 
-  key = sub?.codigo
-    ? `${sub.codigo} - ${sub.nombre}`
-    : sub?.nombre || "Sin subcuenta asignada";
-} else {
-  const cuenta = cuentas.find((c) => c.codigo === t.cuenta_principal_codigo);
-  key = cuenta ? `${t.cuenta_principal_codigo} - ${cuenta.nombre}` : t.cuenta_principal_codigo || "Sin cuenta";
-}
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        Cargando gráfico...
+      </div>
+    ) : !hayDatosDisponibles() ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        No hay datos para mostrar
+      </div>
+    ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+      <div className="h-64 flex items-center justify-center text-muted-foreground">
+        No hay descuentos en otros ingresos
+      </div>
+    ) : (
+      (() => {
+        // ----------------------------
+        // ✅ DATA + ESTÉTICA PRO (sin rojos)
+        // - yAxisWidth dinámico (labels largos)
+        // - height dinámico (muchas barras)
+        // - wrap a 2 líneas en YAxis
+        // - margen derecho extra + domain para evitar recorte de montos
+        // - orden descendente + TOP_N para estética
+        // ----------------------------
 
-                            acc[key] = (acc[key] || 0) + (Number(getMetricValue(t, metricType)) || 0);
-                            return acc;
-                          }, {} as NumMap);
+        const barData = (() => {
+          const totalRealBarSub =
+            tipoIngresoAnalisis === "ventas"
+              ? metricType === "brutas"
+                ? datosAnaliticas.ventasBrutas
+                : metricType === "descuentos"
+                ? datosAnaliticas.descuentos
+                : datosAnaliticas.ventasNetas
+              : datosAnaliticas.otrosIngresos;
 
-                          const totalTransacciones = (Object.values(chartData) as number[]).reduce((sum, v) => sum + (Number(v) || 0), 0);
-                          const diferencia = (Number(totalRealBarSub) || 0) - totalTransacciones;
+          if (filteredTransactions.length === 0 && (Number(totalRealBarSub) || 0) > 0) {
+            return [{ subcuenta: "Sin detalle", monto: Number(totalRealBarSub) || 0 }];
+          }
 
-                          if (diferencia > 0.01) {
-                            const ingresosPorOrigen: NumMap = {};
+          const chartData = filteredTransactions.reduce<NumMap>((acc, t: any) => {
+            let key: string;
 
-                            asientosDir.forEach((asiento: any) => {
-                              const detalles = Array.isArray(asiento.detalle_asientos) ? asiento.detalle_asientos : [];
-                              const detalleIngreso = detalles.find((d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0);
-                              if (!detalleIngreso) return;
+            if (vistaGraficaBarras === "subcuenta") {
+              const sid = getSubcuentaIdAny(t);
+              const sidStr = sid ? String(sid) : "";
 
-                              const monto = Number(detalleIngreso.haber) || 0;
-                              const cuentaCodigo = String(detalleIngreso.cuenta_codigo || "");
-                              const cuentaInfo = cuentas.find((c) => c.codigo === cuentaCodigo);
-                              const cuentaNombre = cuentaInfo?.nombre || "Otros ingresos";
+              const sub = subcuentas.find(
+                (s: any) => String(s?.id ?? s?._id ?? "") === sidStr
+              );
 
-                              let origen: string;
-                              if (vistaGraficaBarras === "cuenta") {
-                                origen = `${cuentaCodigo} - ${cuentaNombre}`;
-                              } else {
-                                const subRef =
-  detalleIngreso?.subcuenta_id ??
-  detalleIngreso?.subcuentaId ??
-  detalleIngreso?.subcuenta ??
-  null;
+              key = sub?.codigo
+                ? `${sub.codigo} - ${sub.nombre}`
+                : sub?.nombre || "Sin subcuenta asignada";
+            } else {
+              const cuenta = cuentas.find((c) => c.codigo === t.cuenta_principal_codigo);
+              key = cuenta
+                ? `${t.cuenta_principal_codigo} - ${cuenta.nombre}`
+                : t.cuenta_principal_codigo || "Sin cuenta";
+            }
 
-const subIdStr = subRef ? String(subRef) : "";
+            acc[key] = (acc[key] || 0) + (Number(getMetricValue(t, metricType)) || 0);
+            return acc;
+          }, {} as NumMap);
 
-const subcuentaInfo = subcuentas.find((s: any) =>
-  String(s?.id ?? s?._id ?? "") === subIdStr
-);
+          const totalTransacciones = (Object.values(chartData) as number[]).reduce(
+            (sum, v) => sum + (Number(v) || 0),
+            0
+          );
 
-origen = subcuentaInfo?.codigo
-  ? `${subcuentaInfo.codigo} - ${subcuentaInfo.nombre}`
-  : subcuentaInfo?.nombre || "Sin subcuenta asignada";
-                              }
+          const diferencia = (Number(totalRealBarSub) || 0) - totalTransacciones;
 
-                              ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + monto;
-                            });
+          if (diferencia > 0.01) {
+            const ingresosPorOrigen: NumMap = {};
 
-                            (Object.entries(ingresosPorOrigen) as Array<[string, number]>).forEach(([origen, monto]) => {
-                              chartData[origen] = (chartData[origen] || 0) + (Number(monto) || 0);
-                            });
-                          }
+            asientosDir.forEach((asiento: any) => {
+              const detalles = Array.isArray(asiento.detalle_asientos) ? asiento.detalle_asientos : [];
+              const detalleIngreso = detalles.find(
+                (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
+              );
+              if (!detalleIngreso) return;
 
-                          return (Object.entries(chartData) as Array<[string, number]>).map(([subcuenta, monto]) => ({
-                            subcuenta,
-                            monto: Number(monto) || 0,
-                          }));
-                        })()}
-                        layout="vertical"
-                      >
-                        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+              const monto = Number(detalleIngreso.haber) || 0;
+              const cuentaCodigo = String(detalleIngreso.cuenta_codigo || "");
+              const cuentaInfo = cuentas.find((c) => c.codigo === cuentaCodigo);
+              const cuentaNombre = cuentaInfo?.nombre || "Otros ingresos";
 
-<XAxis
-  type="number"
-  tickFormatter={(value) => formatCifra(value, scaleFormat)}
-  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-  axisLine={{ stroke: "hsl(var(--border))" }}
-  tickLine={{ stroke: "hsl(var(--border))" }}
-  domain={[0, (dataMax: number) => dataMax * 1.15]}
-/>
+              let origen: string;
 
-<YAxis
-  type="category"
-  dataKey="subcuenta"
-  width={180}
-  tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
-  axisLine={{ stroke: "hsl(var(--border))" }}
-  tickLine={{ stroke: "hsl(var(--border))" }}
-/>
+              if (vistaGraficaBarras === "cuenta") {
+                origen = `${cuentaCodigo} - ${cuentaNombre}`;
+              } else {
+                const subRef =
+                  detalleIngreso?.subcuenta_id ??
+                  detalleIngreso?.subcuentaId ??
+                  detalleIngreso?.subcuenta ??
+                  null;
 
-<RechartsTooltip
-  formatter={(value) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
-  contentStyle={{
-    backgroundColor: "hsl(var(--background))",
-    border: "1px solid hsl(var(--border))",
-    borderRadius: "12px",
-    color: "hsl(var(--foreground))",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
-    padding: "10px 12px",
-  }}
-  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 600 }}
-/>
+                const subIdStr = subRef ? String(subRef) : "";
 
-<Bar dataKey="monto" fill="hsl(180 50% 55%)" radius={[10, 10, 10, 10]} barSize={28}>
-  <LabelList
-    dataKey="monto"
-    position="right"
-    formatter={(value: number) => `$${formatCifra(value, scaleFormat)}`}
-    style={{ fill: "hsl(var(--foreground))", fontWeight: 700, fontSize: 12 }}
-  />
-</Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                const subcuentaInfo = subcuentas.find(
+                  (s: any) => String(s?.id ?? s?._id ?? "") === subIdStr
+                );
+
+                origen = subcuentaInfo?.codigo
+                  ? `${subcuentaInfo.codigo} - ${subcuentaInfo.nombre}`
+                  : subcuentaInfo?.nombre || "Sin subcuenta asignada";
+              }
+
+              ingresosPorOrigen[origen] = (ingresosPorOrigen[origen] || 0) + monto;
+            });
+
+            (Object.entries(ingresosPorOrigen) as Array<[string, number]>).forEach(
+              ([origen, monto]) => {
+                chartData[origen] = (chartData[origen] || 0) + (Number(monto) || 0);
+              }
+            );
+          }
+
+          const arr = (Object.entries(chartData) as Array<[string, number]>)
+            .map(([subcuenta, monto]) => ({ subcuenta, monto: Number(monto) || 0 }))
+            .sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
+
+          const TOP_N = 12; // 10–15 se ve “pro”
+          return arr.slice(0, TOP_N);
+        })();
+
+        // ✅ ancho Y dinámico (sin arguments)
+        const maxLen = barData.reduce((m, it) => Math.max(m, String(it?.subcuenta ?? "").length), 0);
+        const yAxisWidth = Math.min(360, Math.max(190, maxLen * 7)); // 7px/char aprox
+
+        // ✅ altura dinámica (evita recortes verticales)
+        const chartHeight = Math.min(520, Math.max(280, barData.length * 44));
+
+        return (
+          <div style={{ height: chartHeight }} className="w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={barData}
+                layout="vertical"
+                margin={{ top: 10, right: 88, bottom: 10, left: 16 }} // ✅ aire para montos
+              >
+                <CartesianGrid
+                  stroke="hsl(var(--border))"
+                  strokeDasharray="4 6"
+                  vertical={false}
+                  opacity={0.7}
+                />
+
+                <XAxis
+                  type="number"
+                  tickFormatter={(value) => formatCifra(Number(value) || 0, scaleFormat)}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[0, (dataMax: number) => dataMax * 1.22]} // ✅ aire para labels
+                />
+
+                <YAxis
+                  type="category"
+                  dataKey="subcuenta"
+                  width={yAxisWidth}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={(props: any) => {
+                    const { x, y, payload } = props;
+                    const full = String(payload?.value ?? "");
+
+                    // ✅ wrap 2 líneas
+                    const maxChars = 24;
+                    const line1 = full.length > maxChars ? full.slice(0, maxChars) : full;
+                    const line2 = full.length > maxChars ? full.slice(maxChars, maxChars * 2) : "";
+
+                    return (
+                      <g transform={`translate(${x},${y})`}>
+                        <text
+                          x={-8}
+                          y={0}
+                          textAnchor="end"
+                          fill="hsl(var(--foreground))"
+                          fontSize={12}
+                          fontWeight={600}
+                        >
+                          <tspan x={-8} dy="0">{line1}</tspan>
+                          {line2 ? (
+                            <tspan
+                              x={-8}
+                              dy="14"
+                              fill="hsl(var(--muted-foreground))"
+                              fontWeight={500}
+                            >
+                              {line2}
+                            </tspan>
+                          ) : null}
+                        </text>
+                      </g>
+                    );
+                  }}
+                />
+
+                <RechartsTooltip
+                  formatter={(value) => [`$${formatCifra(Number(value) || 0, scaleFormat)}`, "Monto"]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "12px",
+                    color: "hsl(var(--foreground))",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+                    padding: "10px 12px",
+                  }}
+                  itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 700 }}
+                  labelStyle={{ color: "hsl(var(--muted-foreground))", fontWeight: 700 }}
+                />
+
+                <Bar
+                  dataKey="monto"
+                  fill="hsl(180 50% 55%)"
+                  radius={[12, 12, 12, 12]}
+                  barSize={30}
+                >
+                  <LabelList
+                    dataKey="monto"
+                    position="right"
+                    offset={12} // ✅ evita recorte del label
+                    formatter={(value: number) =>
+                      `$${formatCifra(Number(value) || 0, scaleFormat)}`
+                    }
+                    style={{
+                      fill: "hsl(var(--foreground))",
+                      fontWeight: 800,
+                      fontSize: 12,
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()
+    )}
+  </CardContent>
+</Card>
 
             {/* TreeMap de Métodos de Pago */}
             <Card>
