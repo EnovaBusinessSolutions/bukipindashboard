@@ -6142,45 +6142,254 @@ const getTxFecha = (t: any) => {
 </Card>
 
             {/* TreeMap de Métodos de Pago */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Métodos de Pago Recibidos</CardTitle>
-                <CardDescription>
-                  Distribución de{" "}
-                  {metricLabelLower} por método de pago
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">Cargando gráfico...</div>
-                ) : !hayDatosDisponibles() ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
-                ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">No hay descuentos en otros ingresos</div>
-                ) : datosMetodosPago.length === 0 ? (
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">
-                    No hay transacciones con método de pago en este período
-                    <br />
-                    <span className="text-xs mt-2 block">Las ventas a crédito no tienen método de pago asignado</span>
-                  </div>
-                ) : (
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <Treemap
-                        data={datosMetodosPago}
-                        dataKey="value"
-                        aspectRatio={4 / 3}
-                        stroke="#fff"
-                        fill="#8884d8"
-                        content={<CustomTreemapContent />}
-                      >
-                        <RechartsTooltip content={<CustomTreemapTooltip scaleFormat={scaleFormat} />} />
-                      </Treemap>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+<Card>
+  <CardHeader className="pb-3">
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <CardTitle className="text-lg font-semibold text-foreground">
+          Métodos de Pago Recibidos
+        </CardTitle>
+
+        <CardDescription>
+          Distribución de {metricLabelLower} por método de pago
+        </CardDescription>
+      </div>
+    </div>
+  </CardHeader>
+
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">
+        Cargando gráfico...
+      </div>
+    ) : !hayDatosDisponibles() ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">
+        No hay datos para mostrar
+      </div>
+    ) : tipoIngresoAnalisis === "otros" && metricType === "descuentos" ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">
+        No hay descuentos en otros ingresos
+      </div>
+    ) : (
+      (() => {
+        // ✅ REGLAS (igual que Estado de Pago / captura):
+        // - Ventas: SOLO con "netas" → muestra treemap
+        // - Ventas: "brutas" o "descuentos" → SOLO leyenda
+        // - Otros ingresos: SOLO con su "neta" → en tu sistema sigue siendo metricType === "netas"
+        //   (porque "otros" NO es un metricType válido)
+
+        const isVentas = tipoIngresoAnalisis === "ventas";
+        const isOtros = tipoIngresoAnalisis === "otros";
+
+        const showLegendOnly =
+          isVentas && (metricType === "brutas" || metricType === "descuentos");
+
+        const shouldShowTreemap =
+          (isVentas && metricType === "netas") || (isOtros && metricType === "netas");
+
+        const legendText =
+          "Solo se puede integrar con ventas netas, ya que es lo que realmente se cobra.";
+
+        // ✅ Si no aplica (ventas brutas / descuentos): SOLO leyenda
+        if (showLegendOnly) {
+          return (
+            <div className="h-72 flex items-center justify-center">
+              <div className="max-w-md text-center rounded-xl border bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">Nota:</span>{" "}
+                {legendText}
+              </div>
+            </div>
+          );
+        }
+
+        // ✅ Si por algún motivo cae en un estado no esperado, no rompas UI
+        if (!shouldShowTreemap) {
+          return (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              Selecciona <span className="font-semibold mx-1">Ventas Netas</span>{" "}
+              para ver los métodos de pago.
+            </div>
+          );
+        }
+
+        // ✅ Aplica pero no hay data
+        if (!Array.isArray(datosMetodosPago) || datosMetodosPago.length === 0) {
+          return (
+            <div className="h-72 flex items-center justify-center text-muted-foreground text-center">
+              No hay transacciones con método de pago en este período
+              <br />
+              <span className="text-xs mt-2 block">
+                Las ventas a crédito no tienen método de pago asignado
+              </span>
+            </div>
+          );
+        }
+
+        // ✅ Componente para nodes del Treemap (evita el typing problem de "content=function")
+        const TreemapNode = (props: any) => {
+          const { x, y, width, height, name, value, percent } = props;
+          const w = Number(width) || 0;
+          const h = Number(height) || 0;
+
+          if (w < 8 || h < 8) return null;
+
+          const showText = w >= 160 && h >= 90;
+          const showTiny = !showText && w >= 110 && h >= 60;
+
+          // Paleta Bukipin (turquesa pro)
+          const bg = "hsl(180 50% 55%)";
+
+          const money = `$${formatCifra(Number(value) || 0, scaleFormat)}`;
+          const pct = typeof percent === "number" ? `${(percent * 100).toFixed(1)}%` : "";
+
+          return (
+            <g>
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                rx={16}
+                ry={16}
+                fill={bg}
+                stroke="hsl(var(--background))"
+                strokeWidth={2}
+                opacity={0.92}
+              />
+
+              <rect
+                x={x + 1}
+                y={y + 1}
+                width={Math.max(0, w - 2)}
+                height={Math.max(0, h - 2)}
+                rx={15}
+                ry={15}
+                fill="transparent"
+                stroke="hsl(var(--border))"
+                strokeWidth={1}
+                opacity={0.35}
+              />
+
+              {showText ? (
+                <>
+                  <text
+                    x={x + w / 2}
+                    y={y + h / 2 - 12}
+                    textAnchor="middle"
+                    fill="hsl(var(--background))"
+                    fontSize={14}
+                    fontWeight={800}
+                    style={{
+                      paintOrder: "stroke",
+                      stroke: "rgba(0,0,0,0.25)",
+                      strokeWidth: 2,
+                    }}
+                  >
+                    {String(name ?? "")}
+                  </text>
+
+                  <text
+                    x={x + w / 2}
+                    y={y + h / 2 + 12}
+                    textAnchor="middle"
+                    fill="hsl(var(--background))"
+                    fontSize={13}
+                    fontWeight={900}
+                    style={{
+                      paintOrder: "stroke",
+                      stroke: "rgba(0,0,0,0.25)",
+                      strokeWidth: 2,
+                    }}
+                  >
+                    {money}
+                  </text>
+
+                  <text
+                    x={x + w / 2}
+                    y={y + h / 2 + 32}
+                    textAnchor="middle"
+                    fill="hsl(var(--background))"
+                    fontSize={12}
+                    fontWeight={700}
+                    opacity={0.95}
+                    style={{
+                      paintOrder: "stroke",
+                      stroke: "rgba(0,0,0,0.25)",
+                      strokeWidth: 2,
+                    }}
+                  >
+                    {pct}
+                  </text>
+                </>
+              ) : showTiny ? (
+                <>
+                  <text
+                    x={x + w / 2}
+                    y={y + h / 2 - 6}
+                    textAnchor="middle"
+                    fill="hsl(var(--background))"
+                    fontSize={12}
+                    fontWeight={800}
+                    style={{
+                      paintOrder: "stroke",
+                      stroke: "rgba(0,0,0,0.25)",
+                      strokeWidth: 2,
+                    }}
+                  >
+                    {String(name ?? "")}
+                  </text>
+
+                  <text
+                    x={x + w / 2}
+                    y={y + h / 2 + 14}
+                    textAnchor="middle"
+                    fill="hsl(var(--background))"
+                    fontSize={12}
+                    fontWeight={900}
+                    style={{
+                      paintOrder: "stroke",
+                      stroke: "rgba(0,0,0,0.25)",
+                      strokeWidth: 2,
+                    }}
+                  >
+                    {money}
+                  </text>
+                </>
+              ) : null}
+            </g>
+          );
+        };
+
+        return (
+          <div className="w-full">
+            <div className="rounded-xl border bg-muted/10 p-3">
+              <div className="h-[340px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <Treemap
+                    data={datosMetodosPago}
+                    dataKey="value"
+                    aspectRatio={4 / 3}
+                    stroke="hsl(var(--background))"
+                    content={<TreemapNode />}
+                  >
+                    <RechartsTooltip
+                      content={<CustomTreemapTooltip scaleFormat={scaleFormat} />}
+                    />
+                  </Treemap>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="mt-3 text-xs text-muted-foreground">
+              Tip: pasa el cursor sobre un bloque para ver el detalle.
+            </div>
+          </div>
+        );
+      })()
+    )}
+  </CardContent>
+</Card>
+
           </div>
 
           {/* Tablas de análisis */}
