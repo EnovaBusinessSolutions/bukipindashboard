@@ -6172,11 +6172,12 @@ const getTxFecha = (t: any) => {
       </div>
     ) : (
       (() => {
-        // ✅ REGLAS (igual que Estado de Pago / captura):
-        // - Ventas: SOLO con "netas" → muestra treemap
+        // ============================
+        // ✅ REGLAS (igual que tu diseño):
+        // - Ventas: SOLO con "netas" → treemap
         // - Ventas: "brutas" o "descuentos" → SOLO leyenda
-        // - Otros ingresos: SIEMPRE debe graficar (es su métrica neta), sin depender del literal exacto de metricType
-
+        // - Otros ingresos: SIEMPRE treemap (su neta)
+        // ============================
         const tipo = String(tipoIngresoAnalisis ?? "");
         const mt = String(metricType ?? "");
 
@@ -6184,85 +6185,136 @@ const getTxFecha = (t: any) => {
         const isOtros = tipo === "otros";
 
         const showLegendOnly = isVentas && (mt === "brutas" || mt === "descuentos");
-
-        // ✅ FIX: Otros ingresos deben graficar siempre (salvo descuentos, que ya se corta arriba)
         const shouldShowTreemap = isVentas ? mt === "netas" : isOtros;
 
         const legendText =
           "Solo se puede integrar con ventas netas, ya que es lo que realmente se cobra.";
 
-        // ✅ Ventas brutas / descuentos: SOLO leyenda
         if (showLegendOnly) {
           return (
             <div className="h-72 flex items-center justify-center">
               <div className="max-w-md text-center rounded-xl border bg-muted/20 px-4 py-4 text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">Nota:</span>{" "}
-                {legendText}
+                <div className="font-semibold text-foreground">Nota</div>
+                <div className="mt-1">{legendText}</div>
               </div>
             </div>
           );
         }
 
-        // ✅ Si no aplica: solo en Ventas (porque Otros SIEMPRE grafica)
         if (!shouldShowTreemap) {
           return (
             <div className="h-72 flex items-center justify-center text-muted-foreground">
-              Selecciona <span className="font-semibold mx-1">Ventas Netas</span>{" "}
+              Selecciona{" "}
+              <div className="font-semibold mx-1 inline">Ventas Netas</div>
               para ver los métodos de pago.
             </div>
           );
         }
 
-        // ✅ Aplica pero no hay data
         if (!Array.isArray(datosMetodosPago) || datosMetodosPago.length === 0) {
           return (
             <div className="h-72 flex items-center justify-center text-muted-foreground text-center">
               No hay transacciones con método de pago en este período
-              <br />
-              <span className="text-xs mt-2 block">
-                Las ventas a crédito no tienen método de pago asignado
-              </span>
+              <div className="text-xs mt-2">
+                Tip: las ventas a crédito pueden no tener método de pago asignado.
+              </div>
             </div>
           );
         }
 
-        // ----------------------------
-        // 🎨 PALETA BUKIPIN PRO (no repetitiva)
-        // ----------------------------
-        const safeName = (v: any) => String(v ?? "").trim();
+        // ============================
+        // ✅ TOTAL CANÓNICO (CUADRA con Highlights)
+        // - Ventas → ventasNetas
+        // - Otros → otrosIngresos
+        // - Según periodo (Diario/Mensual/Anual)
+        // ============================
+        const totalCanonicoMetodoPago = (() => {
+          // ⚠️ Si tu state se llama distinto, cambia "periodoAnalisis" aquí.
+          const p = String((periodFilter as any) ?? "mensual").toLowerCase();
 
-        const pickHueByName = (nameRaw: string) => {
-          const n = safeName(nameRaw).toLowerCase();
-          if (n.includes("tarj")) return 188;
-          if (n.includes("efect")) return 168;
-          if (n.includes("transf")) return 210;
-          if (n.includes("depo")) return 145;
-          if (n.includes("cheq")) return 45;
-          if (n.includes("spei")) return 220;
-          if (n.includes("paypal")) return 200;
-          if (n.includes("mercado")) return 160;
-          return -1;
-        };
+          const src =
+            p === "diario" ? highTotalesDia :
+            p === "anual"  ? highTotalesAno :
+            highTotalesMes; // default mensual
 
-        const fallbackHues = [188, 168, 210, 145, 45, 220, 260, 12];
+          if (isVentas) return Number(src?.ventasNetas) || 0;
+          if (isOtros)  return Number(src?.otrosIngresos) || 0;
 
-        const getTileFill = (nameRaw: string, index: number, intensity01: number) => {
-          const hueFromName = pickHueByName(nameRaw);
-          const hue = hueFromName >= 0 ? hueFromName : fallbackHues[index % fallbackHues.length];
+          // fallback (no debería entrar)
+          return (datosMetodosPago as any[]).reduce(
+            (s, it) => s + (Number(it?.value) || 0),
+            0
+          );
+        })();
 
-          const s = 52;
-          const lBase = 62;
-          const l = Math.max(48, Math.min(66, lBase - intensity01 * 10));
-
-          return `hsl(${hue} ${s}% ${l}%)`;
-        };
-
-        const total = (datosMetodosPago as any[]).reduce(
+        // total del treemap calculado (lo que viene por método)
+        const totalTreemap = (datosMetodosPago as any[]).reduce(
           (sum, it) => sum + (Number(it?.value) || 0),
           0
         );
 
-        // ✅ Node como componente (evita TS de content=function)
+        // si falta dinero para llegar al total real → lo metemos como "Sin método"
+        const missing = Math.max(
+          0,
+          (Number(totalCanonicoMetodoPago) || 0) - (Number(totalTreemap) || 0)
+        );
+
+        const dataFinal =
+          missing > 0.009
+            ? [
+                ...(datosMetodosPago as any[]),
+                { name: "Sin método", value: missing, _missing: true },
+              ]
+            : (datosMetodosPago as any[]);
+
+        // el total para % debe ser el canónico (si existe)
+        const total =
+          (Number(totalCanonicoMetodoPago) || 0) > 0
+            ? Number(totalCanonicoMetodoPago)
+            : dataFinal.reduce((s, it) => s + (Number((it as any)?.value) || 0), 0);
+
+        // ============================
+        // 🎨 PALETA AZUL PRO BUKIPIN
+        // ============================
+        const safeName = (v: any) => String(v ?? "").trim();
+
+        const pickBlueByName = (nameRaw: string) => {
+          const n = safeName(nameRaw).toLowerCase();
+          if (n.includes("tarj")) return 214; // azul premium
+          if (n.includes("efect")) return 202; // azul-cian profundo
+          if (n.includes("transf") || n.includes("spei")) return 222; // azul serio
+          if (n.includes("depo")) return 208; // azul medio
+          if (n.includes("cheq")) return 230; // azul oscuro
+          if (n.includes("paypal")) return 226; // azul tech
+          if (n.includes("mercado")) return 206; // azul teal
+          if (n.includes("sin método")) return 220; // lo convertimos a azul-gris abajo
+          return -1;
+        };
+
+        const fallbackHues = [214, 222, 202, 208, 230, 226, 238, 196];
+
+        const getTileFill = (nameRaw: string, index: number, intensity01: number) => {
+          const n = safeName(nameRaw).toLowerCase();
+          const hueFromName = pickBlueByName(nameRaw);
+          const hue =
+            hueFromName >= 0 ? hueFromName : fallbackHues[index % fallbackHues.length];
+
+          const isMissing = n.includes("sin método");
+
+          // Missing = azul-gris elegante
+          const s = isMissing ? 16 : 62;
+          const lBase = isMissing ? 72 : 50;
+          const l = Math.max(
+            isMissing ? 60 : 38,
+            Math.min(isMissing ? 78 : 60, lBase - intensity01 * 12)
+          );
+
+          return `hsl(${hue} ${s}% ${l}%)`;
+        };
+
+        // ============================
+        // ✅ Node del Treemap
+        // ============================
         const TreemapNode = (props: any) => {
           const { x, y, width, height, name, value, index } = props;
           const w = Number(width) || 0;
@@ -6277,6 +6329,7 @@ const getTxFecha = (t: any) => {
           const showTiny = !showText && w >= 118 && h >= 62;
 
           const fill = getTileFill(String(name ?? ""), Number(index) || 0, pct01);
+
           const money = `$${formatCifra(v, scaleFormat)}`;
           const pct = total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "";
 
@@ -6294,9 +6347,10 @@ const getTxFecha = (t: any) => {
                 fill={fill}
                 stroke="hsl(var(--background))"
                 strokeWidth={2}
-                opacity={0.96}
+                opacity={0.98}
               />
 
+              {/* borde suave */}
               <rect
                 x={x + 1}
                 y={y + 1}
@@ -6305,11 +6359,11 @@ const getTxFecha = (t: any) => {
                 rx={17}
                 ry={17}
                 fill="transparent"
-                stroke="hsl(var(--border))"
+                stroke="rgba(255,255,255,0.22)"
                 strokeWidth={1}
-                opacity={0.35}
               />
 
+              {/* highlight superior */}
               <rect
                 x={x + 10}
                 y={y + 10}
@@ -6317,7 +6371,7 @@ const getTxFecha = (t: any) => {
                 height={Math.max(0, Math.min(18, h - 20))}
                 rx={12}
                 ry={12}
-                fill="rgba(255,255,255,0.18)"
+                fill="rgba(255,255,255,0.16)"
                 opacity={0.45}
               />
 
@@ -6332,7 +6386,7 @@ const getTxFecha = (t: any) => {
                     fontWeight={900}
                     style={{
                       paintOrder: "stroke",
-                      stroke: "rgba(0,0,0,0.25)",
+                      stroke: "rgba(0,0,0,0.28)",
                       strokeWidth: 2,
                     }}
                   >
@@ -6348,7 +6402,7 @@ const getTxFecha = (t: any) => {
                     fontWeight={900}
                     style={{
                       paintOrder: "stroke",
-                      stroke: "rgba(0,0,0,0.25)",
+                      stroke: "rgba(0,0,0,0.28)",
                       strokeWidth: 2,
                     }}
                   >
@@ -6365,7 +6419,7 @@ const getTxFecha = (t: any) => {
                     opacity={0.95}
                     style={{
                       paintOrder: "stroke",
-                      stroke: "rgba(0,0,0,0.25)",
+                      stroke: "rgba(0,0,0,0.28)",
                       strokeWidth: 2,
                     }}
                   >
@@ -6383,7 +6437,7 @@ const getTxFecha = (t: any) => {
                     fontWeight={900}
                     style={{
                       paintOrder: "stroke",
-                      stroke: "rgba(0,0,0,0.25)",
+                      stroke: "rgba(0,0,0,0.28)",
                       strokeWidth: 2,
                     }}
                   >
@@ -6399,7 +6453,7 @@ const getTxFecha = (t: any) => {
                     fontWeight={900}
                     style={{
                       paintOrder: "stroke",
-                      stroke: "rgba(0,0,0,0.25)",
+                      stroke: "rgba(0,0,0,0.28)",
                       strokeWidth: 2,
                     }}
                   >
@@ -6411,18 +6465,43 @@ const getTxFecha = (t: any) => {
           );
         };
 
-        const legendItems = (datosMetodosPago as any[])
+        // ============================
+        // ✅ Leyenda chips
+        // ============================
+        const legendItems = dataFinal
           .slice()
-          .sort((a, b) => (Number(b?.value) || 0) - (Number(a?.value) || 0))
-          .slice(0, 6);
+          .sort((a: any, b: any) => (Number(b?.value) || 0) - (Number(a?.value) || 0))
+          .slice(0, 8);
+
+        const fmtMoney = (n: number) => `$${formatCifra(n, scaleFormat)}`;
 
         return (
           <div className="w-full">
             <div className="rounded-xl border bg-muted/10 p-3">
+              {/* Totales (alineación) */}
+              <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="rounded-lg border bg-background/60 px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">Total real (Highlights)</div>
+                  <div className="font-semibold text-foreground">{fmtMoney(totalCanonicoMetodoPago)}</div>
+                </div>
+
+                <div className="rounded-lg border bg-background/60 px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">Sumado por métodos</div>
+                  <div className="font-semibold text-foreground">{fmtMoney(totalTreemap)}</div>
+                </div>
+
+                <div className="rounded-lg border bg-background/60 px-3 py-2 text-xs">
+                  <div className="text-muted-foreground">Diferencia</div>
+                  <div className="font-semibold text-foreground">
+                    {fmtMoney(Math.max(0, totalCanonicoMetodoPago - totalTreemap))}
+                  </div>
+                </div>
+              </div>
+
               <div className="h-[340px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <Treemap
-                    data={datosMetodosPago}
+                    data={dataFinal}
                     dataKey="value"
                     aspectRatio={4 / 3}
                     stroke="hsl(var(--background))"
@@ -6435,30 +6514,39 @@ const getTxFecha = (t: any) => {
                 </ResponsiveContainer>
               </div>
 
+              {/* Chips */}
               <div className="mt-3 flex flex-wrap gap-2">
-  {legendItems.map((it, idx) => {
-    const n = safeName(it?.name);
-    const v = Number(it?.value) || 0;
-    const pct01 = total > 0 ? v / total : 0;
-    const dot = getTileFill(n, idx, pct01);
+                {legendItems.map((it: any, idx: number) => {
+                  const n = safeName(it?.name);
+                  const v = Number(it?.value) || 0;
+                  const pct01 = total > 0 ? v / total : 0;
+                  const dot = getTileFill(n, idx, pct01);
 
-    return (
-      <div
-        key={`${n}-${idx}`}
-        className="flex items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs"
-      >
-        <span
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ background: dot }}
-        />
-        <span className="font-semibold text-foreground">{n}</span>
-        <span className="text-muted-foreground">
-          {total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "0%"}
-        </span>
-      </div>
-    );
-  })}
-</div>
+                  return (
+                    <div
+                      key={`${n}-${idx}`}
+                      className="flex items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs"
+                    >
+                      <div
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ background: dot }}
+                      />
+                      <div className="font-semibold text-foreground">{n}</div>
+                      <div className="text-muted-foreground">
+                        {total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "0%"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Nota de missing */}
+              {missing > 0.009 ? (
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  Nota: {fmtMoney(missing)} no tenía método de pago asignado, por eso se agrupa como{" "}
+                  <div className="font-semibold inline">Sin método</div>.
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-3 text-xs text-muted-foreground">
@@ -6470,6 +6558,8 @@ const getTxFecha = (t: any) => {
     )}
   </CardContent>
 </Card>
+
+
           </div>
 
           {/* Tablas de análisis */}
