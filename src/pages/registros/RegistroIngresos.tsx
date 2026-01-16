@@ -6176,7 +6176,6 @@ const getTxFecha = (t: any) => {
         // - Ventas: SOLO con "netas" → muestra treemap
         // - Ventas: "brutas" o "descuentos" → SOLO leyenda
         // - Otros ingresos: SOLO con su "neta" → en tu sistema sigue siendo metricType === "netas"
-        //   (porque "otros" NO es un metricType válido)
 
         const isVentas = tipoIngresoAnalisis === "ventas";
         const isOtros = tipoIngresoAnalisis === "otros";
@@ -6190,7 +6189,6 @@ const getTxFecha = (t: any) => {
         const legendText =
           "Solo se puede integrar con ventas netas, ya que es lo que realmente se cobra.";
 
-        // ✅ Si no aplica (ventas brutas / descuentos): SOLO leyenda
         if (showLegendOnly) {
           return (
             <div className="h-72 flex items-center justify-center">
@@ -6202,7 +6200,6 @@ const getTxFecha = (t: any) => {
           );
         }
 
-        // ✅ Si por algún motivo cae en un estado no esperado, no rompas UI
         if (!shouldShowTreemap) {
           return (
             <div className="h-72 flex items-center justify-center text-muted-foreground">
@@ -6212,7 +6209,6 @@ const getTxFecha = (t: any) => {
           );
         }
 
-        // ✅ Aplica pero no hay data
         if (!Array.isArray(datosMetodosPago) || datosMetodosPago.length === 0) {
           return (
             <div className="h-72 flex items-center justify-center text-muted-foreground text-center">
@@ -6225,74 +6221,137 @@ const getTxFecha = (t: any) => {
           );
         }
 
-        // ✅ Componente para nodes del Treemap (evita el typing problem de "content=function")
+        // ----------------------------
+        // 🎨 PALETA BUKIPIN PRO (no repetitiva)
+        // - Asigna color por nombre (Tarjeta/Efectivo/Transferencia/...)
+        // - Fallback por índice (para métodos nuevos)
+        // - Ajusta "luz" ligeramente según tamaño (se ve premium)
+        // ----------------------------
+        const safeName = (v: any) => String(v ?? "").trim();
+
+        const pickHueByName = (nameRaw: string) => {
+          const n = safeName(nameRaw).toLowerCase();
+
+          // mapping por keywords
+          if (n.includes("tarj")) return 188; // teal-azulado
+          if (n.includes("efect")) return 168; // teal-verde
+          if (n.includes("transf")) return 210; // azul
+          if (n.includes("depo")) return 145; // verde
+          if (n.includes("cheq")) return 45; // ámbar
+          if (n.includes("spei")) return 220; // azul profundo
+          if (n.includes("paypal")) return 200; // azul
+          if (n.includes("mercado")) return 160; // verde-teal
+
+          // fallback
+          return -1;
+        };
+
+        const fallbackHues = [188, 168, 210, 145, 45, 220, 260, 12];
+
+        const getTileFill = (nameRaw: string, index: number, intensity01: number) => {
+          const hueFromName = pickHueByName(nameRaw);
+          const hue = hueFromName >= 0 ? hueFromName : fallbackHues[index % fallbackHues.length];
+
+          // intensity01: 0..1 (más grande = un poquito más oscuro para contraste)
+          const s = 52;
+          const lBase = 62; // base clara (premium)
+          const l = Math.max(48, Math.min(66, lBase - intensity01 * 10));
+
+          return `hsl(${hue} ${s}% ${l}%)`;
+        };
+
+        const total = (datosMetodosPago as any[]).reduce(
+          (sum, it) => sum + (Number(it?.value) || 0),
+          0
+        );
+
+        // ✅ Componente para nodes del Treemap (evita typing problem de content=function)
         const TreemapNode = (props: any) => {
-          const { x, y, width, height, name, value, percent } = props;
+          const { x, y, width, height, name, value, index } = props;
           const w = Number(width) || 0;
           const h = Number(height) || 0;
 
           if (w < 8 || h < 8) return null;
 
-          const showText = w >= 160 && h >= 90;
-          const showTiny = !showText && w >= 110 && h >= 60;
+          const v = Number(value) || 0;
+          const pct01 = total > 0 ? v / total : 0;
 
-          // Paleta Bukipin (turquesa pro)
-          const bg = "hsl(180 50% 55%)";
+          const showText = w >= 170 && h >= 92;
+          const showTiny = !showText && w >= 118 && h >= 62;
 
-          const money = `$${formatCifra(Number(value) || 0, scaleFormat)}`;
-          const pct = typeof percent === "number" ? `${(percent * 100).toFixed(1)}%` : "";
+          const fill = getTileFill(String(name ?? ""), Number(index) || 0, pct01);
+
+          const money = `$${formatCifra(v, scaleFormat)}`;
+          const pct = total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "";
+
+          // texto con contraste: usa foreground invertido (background)
+          const textFill = "hsl(var(--background))";
 
           return (
             <g>
+              {/* base */}
               <rect
                 x={x}
                 y={y}
                 width={w}
                 height={h}
-                rx={16}
-                ry={16}
-                fill={bg}
+                rx={18}
+                ry={18}
+                fill={fill}
                 stroke="hsl(var(--background))"
                 strokeWidth={2}
-                opacity={0.92}
+                opacity={0.96}
               />
 
+              {/* borde suave interno */}
               <rect
                 x={x + 1}
                 y={y + 1}
                 width={Math.max(0, w - 2)}
                 height={Math.max(0, h - 2)}
-                rx={15}
-                ry={15}
+                rx={17}
+                ry={17}
                 fill="transparent"
                 stroke="hsl(var(--border))"
                 strokeWidth={1}
                 opacity={0.35}
               />
 
+              {/* highlight superior (se ve más “pro”) */}
+              <rect
+                x={x + 10}
+                y={y + 10}
+                width={Math.max(0, w - 20)}
+                height={Math.max(0, Math.min(18, h - 20))}
+                rx={12}
+                ry={12}
+                fill="rgba(255,255,255,0.18)"
+                opacity={0.45}
+              />
+
               {showText ? (
                 <>
                   <text
                     x={x + w / 2}
-                    y={y + h / 2 - 12}
+                    y={y + h / 2 - 14}
                     textAnchor="middle"
-                    fill="hsl(var(--background))"
+                    fill={textFill}
                     fontSize={14}
-                    fontWeight={800}
+                    fontWeight={900}
                     style={{
                       paintOrder: "stroke",
                       stroke: "rgba(0,0,0,0.25)",
                       strokeWidth: 2,
                     }}
                   >
-                    {String(name ?? "")}
+                    {safeName(name)}
                   </text>
 
                   <text
                     x={x + w / 2}
-                    y={y + h / 2 + 12}
+                    y={y + h / 2 + 10}
                     textAnchor="middle"
-                    fill="hsl(var(--background))"
+                    fill={textFill}
                     fontSize={13}
                     fontWeight={900}
                     style={{
@@ -6306,11 +6365,11 @@ const getTxFecha = (t: any) => {
 
                   <text
                     x={x + w / 2}
-                    y={y + h / 2 + 32}
+                    y={y + h / 2 + 30}
                     textAnchor="middle"
-                    fill="hsl(var(--background))"
+                    fill={textFill}
                     fontSize={12}
-                    fontWeight={700}
+                    fontWeight={800}
                     opacity={0.95}
                     style={{
                       paintOrder: "stroke",
@@ -6327,23 +6386,23 @@ const getTxFecha = (t: any) => {
                     x={x + w / 2}
                     y={y + h / 2 - 6}
                     textAnchor="middle"
-                    fill="hsl(var(--background))"
+                    fill={textFill}
                     fontSize={12}
-                    fontWeight={800}
+                    fontWeight={900}
                     style={{
                       paintOrder: "stroke",
                       stroke: "rgba(0,0,0,0.25)",
                       strokeWidth: 2,
                     }}
                   >
-                    {String(name ?? "")}
+                    {safeName(name)}
                   </text>
 
                   <text
                     x={x + w / 2}
                     y={y + h / 2 + 14}
                     textAnchor="middle"
-                    fill="hsl(var(--background))"
+                    fill={textFill}
                     fontSize={12}
                     fontWeight={900}
                     style={{
@@ -6359,6 +6418,12 @@ const getTxFecha = (t: any) => {
             </g>
           );
         };
+
+        // ✅ Mini-leyenda pro (chips)
+        const legendItems = (datosMetodosPago as any[])
+          .slice()
+          .sort((a, b) => (Number(b?.value) || 0) - (Number(a?.value) || 0))
+          .slice(0, 6);
 
         return (
           <div className="w-full">
@@ -6378,6 +6443,32 @@ const getTxFecha = (t: any) => {
                   </Treemap>
                 </ResponsiveContainer>
               </div>
+
+              {/* ✅ Leyenda compacta */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {legendItems.map((it, idx) => {
+                  const n = safeName(it?.name);
+                  const v = Number(it?.value) || 0;
+                  const pct01 = total > 0 ? v / total : 0;
+                  const dot = getTileFill(n, idx, pct01);
+
+                  return (
+                    <div
+                      key={`${n}-${idx}`}
+                      className="flex items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ background: dot }}
+                      />
+                      <span className="font-semibold text-foreground">{n}</span>
+                      <span className="text-muted-foreground">
+                        {total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "0%"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mt-3 text-xs text-muted-foreground">
@@ -6389,7 +6480,6 @@ const getTxFecha = (t: any) => {
     )}
   </CardContent>
 </Card>
-
           </div>
 
           {/* Tablas de análisis */}
