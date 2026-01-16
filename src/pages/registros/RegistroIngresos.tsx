@@ -550,6 +550,14 @@ const [productSearch, setProductSearch] = useState("");
 const [productPage, setProductPage] = useState(1);
 const PAGE_SIZE_PRODUCTS = 25; // o 10 si quieres 10 en 10
 
+const PAGE_SIZE_CLIENTS = 25;
+
+const [clientSort, setClientSort] = useState<"desc" | "asc">("desc");
+const [clientSearch, setClientSearch] = useState("");
+const [clientPage, setClientPage] = useState(1);
+const [openClientsModal, setOpenClientsModal] = useState(false);
+
+
 
   // Estado para datos de analíticas calculados desde asientos contables
   const [datosAnaliticas, setDatosAnaliticas] = useState<{
@@ -7039,186 +7047,367 @@ const getTxFecha = (t: any) => {
 
 
             {/* Tabla de Ventas por Cliente */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {metricLabel} por Cliente
-                </CardTitle>
-                <CardDescription>
-                  Ranking de {metricType === "descuentos" ? "clientes con más descuentos" : "mejores clientes"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? (
-                  <div className="text-center py-8 text-muted-foreground">Cargando datos...</div>
-                ) : !hayDatosDisponibles() ? (
-                  <div className="text-center py-8 text-muted-foreground">No hay datos para mostrar</div>
-                ) : (
-                  <div className="space-y-3">
-                    {(() => {
-                      if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
-                        return <div className="text-center py-8 text-muted-foreground">No hay descuentos en otros ingresos</div>;
-                      }
+<Card>
+  <CardHeader className="pb-3">
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <CardTitle className="text-lg font-semibold text-foreground">
+          {metricLabel} por Cliente
+        </CardTitle>
+        <CardDescription>
+          Ranking de {metricType === "descuentos" ? "clientes con más descuentos" : "mejores clientes"}
+        </CardDescription>
+      </div>
 
-                      const totalRealClientes =
-                        tipoIngresoAnalisis === "ventas"
-                          ? metricType === "brutas"
-                            ? datosAnaliticas.ventasBrutas
-                            : metricType === "descuentos"
-                            ? datosAnaliticas.descuentos
-                            : datosAnaliticas.ventasNetas
-                          : datosAnaliticas.otrosIngresos;
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setClientSort((s) => (s === "desc" ? "asc" : "desc"))}
+          className="rounded-full border bg-background/60 px-3 py-1 text-xs text-foreground hover:bg-background"
+        >
+          Orden: {clientSort === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+        </button>
 
-                      if (filteredTransactions.length === 0 && (Number(totalRealClientes) || 0) > 0) {
-                        return (
-                          <>
-                            <div className="flex items-center gap-3 p-3 border rounded-lg">
-                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <Users className="w-6 h-6 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium">Sin cliente asignado</p>
-                                <p className="text-sm text-muted-foreground">Otros Ingresos</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-foreground">${formatCifra(Number(totalRealClientes) || 0, scaleFormat)}</p>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">100%</div>
-                              </div>
-                            </div>
+        <button
+          type="button"
+          onClick={() => {
+            setClientSearch("");
+            setClientPage(1);
+            setOpenClientsModal(true);
+          }}
+          className="rounded-full border bg-background/60 px-3 py-1 text-xs text-foreground hover:bg-background"
+        >
+          Ver todos
+        </button>
+      </div>
+    </div>
+  </CardHeader>
 
-                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                <Users className="w-6 h-6 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                <p className="text-sm text-muted-foreground">1 registro</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-lg text-primary">${formatCifra(Number(totalRealClientes) || 0, scaleFormat)}</p>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
-                              </div>
-                            </div>
-                          </>
-                        );
-                      }
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">Cargando datos...</div>
+    ) : !hayDatosDisponibles() ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+    ) : (
+      (() => {
+        if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
+          return (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              No hay descuentos en otros ingresos
+            </div>
+          );
+        }
 
-                      const clientesVentas = filteredTransactions.reduce<Record<string, ClienteVenta>>((acc, t: any) => {
-                        const clienteNombre = String(t?.cliente_nombre || "Sin cliente asignado");
+        const safeStr = (v: any) => String(v ?? "").trim();
 
-                        if (!acc[clienteNombre]) {
-                          acc[clienteNombre] = {
-                            nombre: clienteNombre,
-                            transacciones: 0,
-                            monto: 0,
-                            email: t?.cliente_email,
-                            telefono: t?.cliente_telefono,
-                          };
-                        }
+        // ✅ Total canónico para % (cuadra con resumen)
+        const totalCanonicoClientes =
+          tipoIngresoAnalisis === "ventas"
+            ? metricType === "brutas"
+              ? Number(datosAnaliticas.ventasBrutas || 0)
+              : metricType === "descuentos"
+              ? Number(datosAnaliticas.descuentos || 0)
+              : Number(datosAnaliticas.ventasNetas || 0)
+            : Number(datosAnaliticas.otrosIngresos || 0);
 
-                        acc[clienteNombre].transacciones += 1;
-                        acc[clienteNombre].monto += Number(getMetricValue(t, metricType)) || 0;
+        type Row = {
+          nombre: string;
+          transacciones: number;
+          monto: number;
+          email?: string;
+          telefono?: string;
+        };
 
-                        return acc;
-                      }, {} as Record<string, ClienteVenta>);
+        const getClienteNombre = (t: any) => {
+          const direct =
+            t?.cliente_nombre ??
+            t?.clienteNombre ??
+            t?.cliente_name ??
+            t?.cliente ??
+            t?.customer_name ??
+            null;
 
-                      const clientesArray = (Object.values(clientesVentas) as ClienteVenta[]).sort(
-                        (a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0)
-                      );
+          const nested =
+            t?.cliente?.nombre ??
+            t?.cliente?.name ??
+            null;
 
-                      const totalGeneralClientes = clientesArray.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
+          const name = safeStr(direct) || safeStr(nested);
+          return name || "Sin cliente asignado";
+        };
 
-                      if (tipoIngresoAnalisis === "otros") {
-                        const diferencia = (Number(totalRealClientes) || 0) - totalGeneralClientes;
-                        if (diferencia > 0.01) {
-                          const existente = clientesArray.find((c) => c.nombre === "Sin cliente asignado");
-                          if (existente) {
-                            existente.monto += diferencia;
-                            existente.transacciones += asientosDir.length;
-                          } else {
-                            clientesArray.push({
-                              nombre: "Sin cliente asignado",
-                              transacciones: asientosDir.length,
-                              monto: diferencia,
-                            });
-                          }
-                          clientesArray.sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
-                        }
-                      }
+        const getClienteEmail = (t: any) =>
+          safeStr(t?.cliente_email ?? t?.clienteEmail ?? t?.cliente?.email) || undefined;
 
-                      const top10 = clientesArray.slice(0, 10);
+        const getClienteTelefono = (t: any) =>
+          safeStr(t?.cliente_telefono ?? t?.clienteTelefono ?? t?.cliente?.telefono ?? t?.cliente?.phone) || undefined;
 
-                      return (
-                        <>
-                          {top10.map((cliente: ClienteVenta) => {
-                            const totalConAsientos = clientesArray.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
-                            const porcentaje =
-                              totalConAsientos > 0 ? (((Number(cliente.monto) || 0) / totalConAsientos) * 100).toFixed(1) : "0.0";
+        const map = new Map<string, Row>();
 
-                            return (
-                              <div key={cliente.nombre} className="flex items-center gap-3 p-3 border rounded-lg">
-                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <Users className="w-6 h-6 text-primary" />
-                                </div>
+        const addRow = (nombre: string, addMonto: number, addTx: number, email?: string, telefono?: string) => {
+          const key = safeStr(nombre) || "Sin cliente asignado";
+          const prev = map.get(key);
+          if (prev) {
+            prev.monto += Number(addMonto) || 0;
+            prev.transacciones += Number(addTx) || 0;
+            prev.email = prev.email || email;
+            prev.telefono = prev.telefono || telefono;
+          } else {
+            map.set(key, {
+              nombre: key,
+              monto: Number(addMonto) || 0,
+              transacciones: Number(addTx) || 0,
+              email,
+              telefono,
+            });
+          }
+        };
 
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium truncate">{cliente.nombre}</p>
-                                  <div className="text-sm text-muted-foreground space-y-0.5">
-                                    <p>
-                                      {cliente.transacciones} {cliente.transacciones === 1 ? "compra" : "compras"}
-                                    </p>
-                                    {cliente.telefono && <p className="text-xs">{cliente.telefono}</p>}
-                                    {cliente.email && <p className="text-xs truncate">{cliente.email}</p>}
-                                  </div>
-                                </div>
+        // 1) Base desde transacciones filtradas
+        (filteredTransactions || []).forEach((t: any) => {
+          const nombre = getClienteNombre(t);
+          const email = getClienteEmail(t);
+          const telefono = getClienteTelefono(t);
+          const montoTx = Number(getMetricValue(t, metricType)) || 0;
 
-                                <div className="text-right flex-shrink-0">
-                                  <p className="font-bold text-foreground">${formatCifra(Number(cliente.monto) || 0, scaleFormat)}</p>
-                                </div>
+          addRow(nombre, montoTx, 1, email, telefono);
+        });
 
-                                <div className="flex-shrink-0">
-                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">{porcentaje}%</div>
-                                </div>
-                              </div>
-                            );
-                          })}
+        // 2) Si es “otros”, sumar diferencia desde asientos directos a “Sin cliente asignado”
+        if (tipoIngresoAnalisis === "otros") {
+          const sumFromTx = Array.from(map.values()).reduce((s, r) => s + (Number(r.monto) || 0), 0);
+          const diff = (Number(totalCanonicoClientes) || 0) - sumFromTx;
 
-                          {(() => {
-                            const totalGeneralMonto = clientesArray.reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
-                            if (totalGeneralMonto > 0) {
-                              return (
-                                <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                    <Users className="w-6 h-6 text-primary" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                    <p className="text-sm text-muted-foreground">
-                                      {clientesArray.reduce((sum, c) => sum + (Number(c.transacciones) || 0), 0)} transacciones
-                                    </p>
-                                  </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <p className="font-bold text-lg text-primary">${formatCifra(totalGeneralMonto, scaleFormat)}</p>
-                                  </div>
-                                  <div className="flex-shrink-0">
-                                    <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </>
-                      );
-                    })()}
+          if (diff > 0.01) {
+            addRow("Sin cliente asignado", diff, Math.max(1, (asientosDir || []).length));
+          }
+        }
+
+        // 3) Array final + orden
+        const allRows = Array.from(map.values())
+          .filter((r) => (Number(r.monto) || 0) > 0)
+          .sort((a, b) =>
+            clientSort === "desc"
+              ? (b.monto || 0) - (a.monto || 0)
+              : (a.monto || 0) - (b.monto || 0)
+          );
+
+        const totalForPct =
+          (Number(totalCanonicoClientes) || 0) > 0
+            ? Number(totalCanonicoClientes)
+            : allRows.reduce((s, r) => s + (Number(r.monto) || 0), 0);
+
+        if (allRows.length === 0) {
+          return (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              No hay clientes para mostrar en este período.
+            </div>
+          );
+        }
+
+        // 4) Top 10 + “Otros clientes” (posición 11)
+        const top10 = allRows.slice(0, 10);
+        const rest = allRows.slice(10);
+
+        const otros = rest.reduce(
+          (acc, r) => {
+            acc.monto += Number(r.monto) || 0;
+            acc.transacciones += Number(r.transacciones) || 0;
+            return acc;
+          },
+          { nombre: "Otros clientes", monto: 0, transacciones: 0 } as Row
+        );
+
+        const list = otros.monto > 0 ? [...top10, otros] : top10;
+
+        const pctOf = (m: number) => (totalForPct > 0 ? ((Number(m) || 0) / totalForPct) * 100 : 0);
+
+        const RowItem = (c: Row & { pct: number }) => {
+          const isOtrosRow = c.nombre === "Otros clientes";
+          const isSinAsignar = c.nombre === "Sin cliente asignado";
+
+          return (
+            <div
+              className={[
+                "flex items-center gap-3 p-3 rounded-lg border",
+                isOtrosRow ? "border-primary/40 bg-primary/5" : "",
+                isSinAsignar && !isOtrosRow ? "border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20" : "",
+              ].join(" ")}
+            >
+              <div
+                className={[
+                  "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                  isSinAsignar ? "bg-amber-100 dark:bg-amber-900/30" : "bg-primary/10",
+                ].join(" ")}
+              >
+                <Users className={isSinAsignar ? "w-6 h-6 text-amber-600 dark:text-amber-400" : "w-6 h-6 text-primary"} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="font-medium truncate">{c.nombre}</p>
+                  {isSinAsignar && !isOtrosRow ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                      Sin asignar
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="text-sm text-muted-foreground space-y-0.5">
+                  <p>
+                    {c.transacciones} {c.transacciones === 1 ? "compra" : "compras"}
+                  </p>
+                  {c.telefono ? <p className="text-xs">{c.telefono}</p> : null}
+                  {c.email ? <p className="text-xs truncate">{c.email}</p> : null}
+                </div>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                <p className="font-bold text-foreground">
+                  ${formatCifra(Number(c.monto) || 0, scaleFormat)}
+                </p>
+              </div>
+
+              <div className="flex-shrink-0">
+                <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
+                  {c.pct.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // Total general
+        const totalGeneralMonto = allRows.reduce((s, r) => s + (Number(r.monto) || 0), 0);
+        const totalGeneralTx = allRows.reduce((s, r) => s + (Number(r.transacciones) || 0), 0);
+
+        return (
+          <>
+            <div className="space-y-3">
+              {list.map((c) => (
+                <RowItem key={c.nombre} {...c} pct={pctOf(c.monto)} />
+              ))}
+
+              <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                  <p className="text-sm text-muted-foreground">{totalGeneralTx} transacciones</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-bold text-lg text-primary">
+                    ${formatCifra(totalGeneralMonto, scaleFormat)}
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
+                    100%
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
+
+            {/* ============================
+                Modal: Ver todos
+               ============================ */}
+            <Dialog
+              open={openClientsModal}
+              onOpenChange={(v) => {
+                setOpenClientsModal(v);
+                if (!v) {
+                  setClientSearch("");
+                  setClientPage(1);
+                }
+              }}
+            >
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Clientes</DialogTitle>
+                  <DialogDescription>Lista completa para análisis detallado</DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-col md:flex-row md:items-center gap-2">
+                  <Input
+                    value={clientSearch}
+                    onChange={(e) => {
+                      setClientSearch(e.target.value);
+                      setClientPage(1);
+                    }}
+                    placeholder="Buscar cliente..."
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setClientSort((s) => (s === "desc" ? "asc" : "desc"))}
+                  >
+                    Orden: {clientSort === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+                  </Button>
+                </div>
+
+                {(() => {
+                  const q = safeStr(clientSearch).toLowerCase();
+
+                  const filtered = q
+                    ? allRows.filter((r) => safeStr(r.nombre).toLowerCase().includes(q))
+                    : allRows;
+
+                  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE_CLIENTS));
+                  const page = Math.min(clientPage, totalPages);
+                  const start = (page - 1) * PAGE_SIZE_CLIENTS;
+                  const chunk = filtered.slice(start, start + PAGE_SIZE_CLIENTS);
+
+                  return (
+                    <>
+                      <div className="mt-3 max-h-[55vh] overflow-auto pr-1 space-y-2">
+                        {chunk.map((c) => (
+                          <RowItem key={`modal-${c.nombre}`} {...c} pct={pctOf(c.monto)} />
+                        ))}
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between">
+                        <div className="text-xs text-muted-foreground">
+                          Mostrando {start + 1}-{Math.min(start + PAGE_SIZE_CLIENTS, filtered.length)} de{" "}
+                          {filtered.length}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={page <= 1}
+                            onClick={() => setClientPage((p) => Math.max(1, p - 1))}
+                          >
+                            Anterior
+                          </Button>
+
+                          <div className="text-sm">
+                            {page} / {totalPages}
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={page >= totalPages}
+                            onClick={() => setClientPage((p) => Math.min(totalPages, p + 1))}
+                          >
+                            Siguiente
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </DialogContent>
+            </Dialog>
+          </>
+        );
+      })()
+    )}
+  </CardContent>
+</Card>
           </div>
         </div>
       </>
