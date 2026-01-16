@@ -6175,20 +6175,23 @@ const getTxFecha = (t: any) => {
         // ✅ REGLAS (igual que Estado de Pago / captura):
         // - Ventas: SOLO con "netas" → muestra treemap
         // - Ventas: "brutas" o "descuentos" → SOLO leyenda
-        // - Otros ingresos: SOLO con su "neta" → en tu sistema sigue siendo metricType === "netas"
+        // - Otros ingresos: SIEMPRE debe graficar (es su métrica neta), sin depender del literal exacto de metricType
 
-        const isVentas = tipoIngresoAnalisis === "ventas";
-        const isOtros = tipoIngresoAnalisis === "otros";
+        const tipo = String(tipoIngresoAnalisis ?? "");
+        const mt = String(metricType ?? "");
 
-        const showLegendOnly =
-          isVentas && (metricType === "brutas" || metricType === "descuentos");
+        const isVentas = tipo === "ventas";
+        const isOtros = tipo === "otros";
 
-        const shouldShowTreemap =
-          (isVentas && metricType === "netas") || (isOtros && metricType === "netas");
+        const showLegendOnly = isVentas && (mt === "brutas" || mt === "descuentos");
+
+        // ✅ FIX: Otros ingresos deben graficar siempre (salvo descuentos, que ya se corta arriba)
+        const shouldShowTreemap = isVentas ? mt === "netas" : isOtros;
 
         const legendText =
           "Solo se puede integrar con ventas netas, ya que es lo que realmente se cobra.";
 
+        // ✅ Ventas brutas / descuentos: SOLO leyenda
         if (showLegendOnly) {
           return (
             <div className="h-72 flex items-center justify-center">
@@ -6200,6 +6203,7 @@ const getTxFecha = (t: any) => {
           );
         }
 
+        // ✅ Si no aplica: solo en Ventas (porque Otros SIEMPRE grafica)
         if (!shouldShowTreemap) {
           return (
             <div className="h-72 flex items-center justify-center text-muted-foreground">
@@ -6209,6 +6213,7 @@ const getTxFecha = (t: any) => {
           );
         }
 
+        // ✅ Aplica pero no hay data
         if (!Array.isArray(datosMetodosPago) || datosMetodosPago.length === 0) {
           return (
             <div className="h-72 flex items-center justify-center text-muted-foreground text-center">
@@ -6223,26 +6228,19 @@ const getTxFecha = (t: any) => {
 
         // ----------------------------
         // 🎨 PALETA BUKIPIN PRO (no repetitiva)
-        // - Asigna color por nombre (Tarjeta/Efectivo/Transferencia/...)
-        // - Fallback por índice (para métodos nuevos)
-        // - Ajusta "luz" ligeramente según tamaño (se ve premium)
         // ----------------------------
         const safeName = (v: any) => String(v ?? "").trim();
 
         const pickHueByName = (nameRaw: string) => {
           const n = safeName(nameRaw).toLowerCase();
-
-          // mapping por keywords
-          if (n.includes("tarj")) return 188; // teal-azulado
-          if (n.includes("efect")) return 168; // teal-verde
-          if (n.includes("transf")) return 210; // azul
-          if (n.includes("depo")) return 145; // verde
-          if (n.includes("cheq")) return 45; // ámbar
-          if (n.includes("spei")) return 220; // azul profundo
-          if (n.includes("paypal")) return 200; // azul
-          if (n.includes("mercado")) return 160; // verde-teal
-
-          // fallback
+          if (n.includes("tarj")) return 188;
+          if (n.includes("efect")) return 168;
+          if (n.includes("transf")) return 210;
+          if (n.includes("depo")) return 145;
+          if (n.includes("cheq")) return 45;
+          if (n.includes("spei")) return 220;
+          if (n.includes("paypal")) return 200;
+          if (n.includes("mercado")) return 160;
           return -1;
         };
 
@@ -6252,9 +6250,8 @@ const getTxFecha = (t: any) => {
           const hueFromName = pickHueByName(nameRaw);
           const hue = hueFromName >= 0 ? hueFromName : fallbackHues[index % fallbackHues.length];
 
-          // intensity01: 0..1 (más grande = un poquito más oscuro para contraste)
           const s = 52;
-          const lBase = 62; // base clara (premium)
+          const lBase = 62;
           const l = Math.max(48, Math.min(66, lBase - intensity01 * 10));
 
           return `hsl(${hue} ${s}% ${l}%)`;
@@ -6265,7 +6262,7 @@ const getTxFecha = (t: any) => {
           0
         );
 
-        // ✅ Componente para nodes del Treemap (evita typing problem de content=function)
+        // ✅ Node como componente (evita TS de content=function)
         const TreemapNode = (props: any) => {
           const { x, y, width, height, name, value, index } = props;
           const w = Number(width) || 0;
@@ -6280,16 +6277,13 @@ const getTxFecha = (t: any) => {
           const showTiny = !showText && w >= 118 && h >= 62;
 
           const fill = getTileFill(String(name ?? ""), Number(index) || 0, pct01);
-
           const money = `$${formatCifra(v, scaleFormat)}`;
           const pct = total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "";
 
-          // texto con contraste: usa foreground invertido (background)
           const textFill = "hsl(var(--background))";
 
           return (
             <g>
-              {/* base */}
               <rect
                 x={x}
                 y={y}
@@ -6303,7 +6297,6 @@ const getTxFecha = (t: any) => {
                 opacity={0.96}
               />
 
-              {/* borde suave interno */}
               <rect
                 x={x + 1}
                 y={y + 1}
@@ -6317,7 +6310,6 @@ const getTxFecha = (t: any) => {
                 opacity={0.35}
               />
 
-              {/* highlight superior (se ve más “pro”) */}
               <rect
                 x={x + 10}
                 y={y + 10}
@@ -6419,7 +6411,6 @@ const getTxFecha = (t: any) => {
           );
         };
 
-        // ✅ Mini-leyenda pro (chips)
         const legendItems = (datosMetodosPago as any[])
           .slice()
           .sort((a, b) => (Number(b?.value) || 0) - (Number(a?.value) || 0))
@@ -6444,31 +6435,30 @@ const getTxFecha = (t: any) => {
                 </ResponsiveContainer>
               </div>
 
-              {/* ✅ Leyenda compacta */}
               <div className="mt-3 flex flex-wrap gap-2">
-                {legendItems.map((it, idx) => {
-                  const n = safeName(it?.name);
-                  const v = Number(it?.value) || 0;
-                  const pct01 = total > 0 ? v / total : 0;
-                  const dot = getTileFill(n, idx, pct01);
+  {legendItems.map((it, idx) => {
+    const n = safeName(it?.name);
+    const v = Number(it?.value) || 0;
+    const pct01 = total > 0 ? v / total : 0;
+    const dot = getTileFill(n, idx, pct01);
 
-                  return (
-                    <div
-                      key={`${n}-${idx}`}
-                      className="flex items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs"
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ background: dot }}
-                      />
-                      <span className="font-semibold text-foreground">{n}</span>
-                      <span className="text-muted-foreground">
-                        {total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "0%"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+    return (
+      <div
+        key={`${n}-${idx}`}
+        className="flex items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs"
+      >
+        <span
+          className="h-2.5 w-2.5 rounded-full"
+          style={{ background: dot }}
+        />
+        <span className="font-semibold text-foreground">{n}</span>
+        <span className="text-muted-foreground">
+          {total > 0 ? `${(pct01 * 100).toFixed(1)}%` : "0%"}
+        </span>
+      </div>
+    );
+  })}
+</div>
             </div>
 
             <div className="mt-3 text-xs text-muted-foreground">
