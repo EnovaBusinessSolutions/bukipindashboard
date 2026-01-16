@@ -544,6 +544,13 @@ setHighTotalesAno(EMPTY_HIGHLIGHTS);
   });
 }, [tipoIngresoAnalisis]);
 
+const [productSort, setProductSort] = useState<"desc" | "asc">("desc");
+const [openProductsModal, setOpenProductsModal] = useState(false);
+const [productSearch, setProductSearch] = useState("");
+const [productPage, setProductPage] = useState(1);
+const PAGE_SIZE_PRODUCTS = 25; // o 10 si quieres 10 en 10
+
+
   // Estado para datos de analíticas calculados desde asientos contables
   const [datosAnaliticas, setDatosAnaliticas] = useState<{
     ventasBrutas: number;
@@ -6566,310 +6573,470 @@ const getTxFecha = (t: any) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             {/* Tabla de Ventas por Producto */}
             <Card>
-              <CardHeader>
-                <CardTitle>
-                  {metricLabel} por Producto
-                </CardTitle>
-                <CardDescription>
-                  Ranking de productos {metricType === "descuentos" ? "con más descuentos" : "más vendidos"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingTransacciones ? (
-                  <div className="text-center py-8 text-muted-foreground">Cargando datos...</div>
-                ) : !hayDatosDisponibles() ? (
-                  <div className="text-center py-8 text-muted-foreground">No hay datos para mostrar</div>
-                ) : (
-                  <div className="space-y-3">
-                    {(() => {
-                      if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
-                        return <div className="text-center py-8 text-muted-foreground">No hay descuentos en otros ingresos</div>;
-                      }
+  <CardHeader className="pb-3">
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <CardTitle className="text-lg font-semibold text-foreground">
+          {metricLabel} por Producto
+        </CardTitle>
+        <CardDescription>
+          Ranking de productos {metricType === "descuentos" ? "con más descuentos" : "más vendidos"}
+        </CardDescription>
+      </div>
 
-                      const totalRealProductos =
-                        tipoIngresoAnalisis === "ventas"
-                          ? metricType === "brutas"
-                            ? datosAnaliticas.ventasBrutas
-                            : metricType === "descuentos"
-                            ? datosAnaliticas.descuentos
-                            : datosAnaliticas.ventasNetas
-                          : datosAnaliticas.otrosIngresos;
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setProductSort((s) => (s === "desc" ? "asc" : "desc"))}
+          className="rounded-full border bg-background/60 px-3 py-1 text-xs text-foreground hover:bg-background"
+        >
+          Orden: {productSort === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+        </button>
 
-                      if (filteredTransactions.length === 0 && (Number(totalRealProductos) || 0) > 0) {
-                        return (
-                          <>
-                            <div className="flex items-center gap-3 p-3 border rounded-lg">
-                              <div className="w-12 h-12 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <Package className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium">Sin detalle de producto</p>
-                                <p className="text-sm text-muted-foreground">Otros Ingresos</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-foreground">${formatCifra(Number(totalRealProductos) || 0, scaleFormat)}</p>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">100%</div>
-                              </div>
-                            </div>
+        <button
+          type="button"
+          onClick={() => {
+            setProductSearch("");
+            setProductPage(1);
+            setOpenProductsModal(true);
+          }}
+          className="rounded-full border bg-background/60 px-3 py-1 text-xs text-foreground hover:bg-background"
+        >
+          Ver todos
+        </button>
+      </div>
+    </div>
+  </CardHeader>
 
-                            <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                              <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                <Package className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                <p className="text-sm text-muted-foreground">1 registro</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-lg text-primary">${formatCifra(Number(totalRealProductos) || 0, scaleFormat)}</p>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
-                              </div>
-                            </div>
-                          </>
-                        );
-                      }
+  <CardContent>
+    {loadingTransacciones ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">Cargando datos...</div>
+    ) : !hayDatosDisponibles() ? (
+      <div className="h-72 flex items-center justify-center text-muted-foreground">No hay datos para mostrar</div>
+    ) : (
+      (() => {
+        // ============================
+        // ✅ Reglas:
+        // - Top 10 + “Otros Productos” (posición 11)
+        // - Orden DESC default, toggle ASC
+        // - Modal: listado completo + búsqueda + paginación
+        // ============================
+        if (tipoIngresoAnalisis === "otros" && metricType === "descuentos") {
+          return (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              No hay descuentos en otros ingresos
+            </div>
+          );
+        }
 
-                      const productosVentas: Record<
-                        string,
-                        { nombre: string; transacciones: number; monto: number; imagen?: string; tieneAsignacion: boolean }
-                      > = {};
+        const safeStr = (v: any) => String(v ?? "").trim();
 
-                      filteredTransactions.forEach((t: any) => {
-                        if (t.tipo_ingreso === "inventariados" && String(t.descripcion || "").startsWith("Venta de ")) {
-                          const productoNombre = String(t.descripcion).replace("Venta de ", "").trim();
-                          const productoEnCatalogo = productosInventario.find((p) => p.nombre.toLowerCase() === productoNombre.toLowerCase());
+        // total “canónico” para % (cuadra con el resumen)
+        const totalCanonicoProductos =
+          tipoIngresoAnalisis === "ventas"
+            ? metricType === "brutas"
+              ? Number(datosAnaliticas.ventasBrutas || 0)
+              : metricType === "descuentos"
+                ? Number(datosAnaliticas.descuentos || 0)
+                : Number(datosAnaliticas.ventasNetas || 0)
+            : Number(datosAnaliticas.otrosIngresos || 0);
 
-                          if (!productosVentas[productoNombre]) {
-                            productosVentas[productoNombre] = {
-                              nombre: productoNombre,
-                              transacciones: 0,
-                              monto: 0,
-                              imagen: productoEnCatalogo?.imagen_url,
-                              tieneAsignacion: true,
-                            };
-                          }
+        // Detectar nombre de producto (robusto)
+        const getProductoNombre = (t: any) => {
+          // 1) Si backend ya lo manda
+          const direct =
+            t?.producto_nombre ??
+            t?.productoNombre ??
+            t?.productName ??
+            t?.producto ??
+            null;
 
-                          productosVentas[productoNombre].transacciones += 1;
-                          productosVentas[productoNombre].monto += Number(getMetricValue(t, metricType)) || 0;
-                        }
-                      });
+          if (safeStr(direct)) return safeStr(direct);
 
-                      filteredTransactions.forEach((t: any) => {
-                        if (t.tipo_ingreso === "precargados") {
-                          let productosPorProcesar: Array<{ nombre: string; cantidad: number }> = [];
+          const tipo = safeStr(t?.tipo_ingreso ?? t?.tipoIngreso ?? t?.tipo ?? "").toLowerCase();
+          const desc = safeStr(t?.descripcion);
 
-                          if (String(t.descripcion || "").startsWith("Venta: ")) {
-                            const productosSplit = String(t.descripcion).replace("Venta: ", "").split(", ");
-                            productosPorProcesar = productosSplit.map((productoStr) => {
-                              const match = productoStr.match(/^(.+?) \(x(\d+)\)$/);
-                              if (match) return { nombre: match[1].trim(), cantidad: parseInt(match[2]) };
-                              return { nombre: productoStr.trim(), cantidad: 1 };
-                            });
-                          } else if (String(t.descripcion || "").startsWith("Venta de ")) {
-                            const nombreProducto = String(t.descripcion).replace("Venta de ", "").trim();
-                            productosPorProcesar = [{ nombre: nombreProducto, cantidad: 1 }];
-                          } else {
-                            productosPorProcesar = [{ nombre: String(t.descripcion || "Sin descripción"), cantidad: 1 }];
-                          }
+          // 2) Inventariados: “Venta de X”
+          if (tipo === "inventariados" && desc.toLowerCase().startsWith("venta de ")) {
+            return safeStr(desc.replace(/^Venta de\s+/i, ""));
+          }
 
-                          const montoTransaccion = Number(getMetricValue(t, metricType)) || 0;
+          // 3) Precargados: “Venta: Prod (x2), Prod2 (x1)”
+          // Para la tabla, NO desglosamos por unidad aquí; abajo lo hacemos con reparto proporcional si aplica
+          if (tipo === "precargados" && desc.toLowerCase().startsWith("venta: ")) {
+            return "__MULTI__"; // señal para desglose
+          }
 
-                          const preciosProductos: Array<{ nombre: string; cantidad: number; precioBase: number }> = [];
-                          let sumaPreciosCatalogo = 0;
+          // 4) Otros ingresos: usar descripción como “producto/origen”
+          if (tipo === "otros") return desc || "Otros ingresos";
 
-                          productosPorProcesar.forEach(({ nombre, cantidad }) => {
-                            const productoEnCatalogo = productosServicios.find((p) => p.nombre.toLowerCase() === nombre.toLowerCase());
-                            const precioBase = Number(productoEnCatalogo?.precio) || 0;
+          // 5) General o sin match
+          return "Ingresos sin producto asignado";
+        };
 
-                            preciosProductos.push({ nombre, cantidad, precioBase });
-                            sumaPreciosCatalogo += precioBase * cantidad;
-                          });
+        const findImageForName = (name: string) => {
+          const n = safeStr(name).toLowerCase();
+          const inv = (productosInventario || []).find((p: any) => safeStr(p?.nombre).toLowerCase() === n);
+          if (inv?.imagen_url) return inv.imagen_url;
 
-                          preciosProductos.forEach(({ nombre, cantidad, precioBase }) => {
-                            const productoEnCatalogo = productosServicios.find((p) => p.nombre.toLowerCase() === nombre.toLowerCase());
-                            const subtotalProductoCatalogo = precioBase * cantidad;
+          const srv = (productosServicios || []).find((p: any) => safeStr(p?.nombre).toLowerCase() === n);
+          if (srv?.imagen_url) return srv.imagen_url;
 
-                            const proporcion =
-                              sumaPreciosCatalogo > 0 ? subtotalProductoCatalogo / sumaPreciosCatalogo : 1 / Math.max(preciosProductos.length, 1);
+          return undefined;
+        };
 
-                            const montoProducto = montoTransaccion * proporcion;
+        type Row = {
+          nombre: string;
+          transacciones: number;
+          monto: number;
+          imagen?: string;
+          tieneAsignacion: boolean;
+        };
 
-                            if (!productosVentas[nombre]) {
-                              productosVentas[nombre] = {
-                                nombre,
-                                transacciones: 0,
-                                monto: 0,
-                                imagen: productoEnCatalogo?.imagen_url,
-                                tieneAsignacion: !!productoEnCatalogo,
-                              };
-                            }
+        const map = new Map<string, Row>();
 
-                            productosVentas[nombre].transacciones += 1;
-                            productosVentas[nombre].monto += Number(montoProducto) || 0;
-                          });
-                        }
+        const addRow = (nombre: string, addMonto: number, addTx: number, tieneAsignacion: boolean, imagen?: string) => {
+          const key = safeStr(nombre) || "Ingresos sin producto asignado";
+          const prev = map.get(key);
+          if (prev) {
+            prev.monto += Number(addMonto) || 0;
+            prev.transacciones += Number(addTx) || 0;
+            prev.tieneAsignacion = prev.tieneAsignacion || !!tieneAsignacion;
+            prev.imagen = prev.imagen || imagen;
+          } else {
+            map.set(key, {
+              nombre: key,
+              monto: Number(addMonto) || 0,
+              transacciones: Number(addTx) || 0,
+              tieneAsignacion: !!tieneAsignacion,
+              imagen,
+            });
+          }
+        };
 
-                        if (t.tipo_ingreso === "general" || (t.tipo_ingreso === "inventariados" && !String(t.descripcion || "").startsWith("Venta de "))) {
-                          const nombre = "Ingresos sin producto asignado";
-                          if (!productosVentas[nombre]) {
-                            productosVentas[nombre] = { nombre, transacciones: 0, monto: 0, tieneAsignacion: false };
-                          }
-                          productosVentas[nombre].transacciones += 1;
-                          productosVentas[nombre].monto += Number(getMetricValue(t, metricType)) || 0;
-                        }
+        // 1) Base: desde filteredTransactions
+        (filteredTransactions || []).forEach((t: any) => {
+          const tipo = safeStr(t?.tipo_ingreso ?? t?.tipoIngreso ?? t?.tipo ?? "").toLowerCase();
+          const desc = safeStr(t?.descripcion);
 
-                        if (t.tipo_ingreso === "otros") {
-                          const nombre = String(t.descripcion || "Otros ingresos");
-                          if (!productosVentas[nombre]) {
-                            productosVentas[nombre] = { nombre, transacciones: 0, monto: 0, tieneAsignacion: false };
-                          }
-                          productosVentas[nombre].transacciones += 1;
-                          productosVentas[nombre].monto += Number(getMetricValue(t, metricType)) || 0;
-                        }
-                      });
+          const montoTx = Number(getMetricValue(t, metricType)) || 0;
 
-                      const productosArray = (Object.values(productosVentas) as Array<{
-                        nombre: string;
-                        transacciones: number;
-                        monto: number;
-                        imagen?: string;
-                        tieneAsignacion: boolean;
-                      }>).sort((a, b) => (Number(b.monto) || 0) - (Number(a.monto) || 0));
+          // Caso: precargados multi-producto “Venta: ...”
+          if (tipo === "precargados" && desc.toLowerCase().startsWith("venta: ")) {
+            const items = safeStr(desc.replace(/^Venta:\s*/i, ""))
+              .split(",")
+              .map((s) => safeStr(s))
+              .filter(Boolean);
 
-                      if (tipoIngresoAnalisis === "otros") {
-                        const totalTransaccionesOtros = filteredTransactions
-                          .filter((t: any) => t.tipo_ingreso === "otros")
-                          .reduce((sum, t: any) => sum + (Number(getMetricValue(t, metricType)) || 0), 0);
+            // Parse “Nombre (x2)”
+            const parsed = items.map((it) => {
+              const m = it.match(/^(.+?)\s*\(x(\d+)\)\s*$/i);
+              return {
+                nombre: safeStr(m ? m[1] : it),
+                cantidad: m ? Number(m[2]) || 1 : 1,
+              };
+            });
 
-                        const diferencia = (Number(totalRealProductos) || 0) - totalTransaccionesOtros;
+            // Reparto proporcional usando catálogo si existe precio (como tú ya hacías)
+            const precios = parsed.map((p) => {
+              const prod = (productosServicios || []).find(
+                (x: any) => safeStr(x?.nombre).toLowerCase() === p.nombre.toLowerCase()
+              );
+              const precioBase = Number(prod?.precio) || 0;
+              return { ...p, precioBase, tieneAsignacion: !!prod, imagen: prod?.imagen_url };
+            });
 
-                        if (diferencia > 0.01) {
-                          const ingresosPorOrigen: Record<string, { monto: number; count: number }> = {};
+            const suma = precios.reduce((s, p) => s + (p.precioBase * p.cantidad), 0);
 
-                          asientosDir.forEach((asiento: any) => {
-                            const detalles = Array.isArray(asiento.detalle_asientos) ? asiento.detalle_asientos : [];
-                            const detalleIngreso = detalles.find((d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0);
-                            if (!detalleIngreso) return;
+            precios.forEach((p) => {
+              const subtotalCat = p.precioBase * p.cantidad;
+              const proporcion = suma > 0 ? subtotalCat / suma : 1 / Math.max(precios.length, 1);
+              const montoProducto = montoTx * proporcion;
+              addRow(
+                p.nombre,
+                montoProducto,
+                1, // transacciones (mantén 1 por tx como en tu tabla)
+                p.tieneAsignacion,
+                p.imagen || findImageForName(p.nombre)
+              );
+            });
 
-                            const monto = Number(detalleIngreso.haber) || 0;
-                            const cuentaCodigo = String(detalleIngreso.cuenta_codigo || "");
-                            const cuentaInfo = cuentas.find((c) => c.codigo === cuentaCodigo);
+            return;
+          }
 
-                            let nombre: string;
-                            if (String(asiento.numero_asiento || "").startsWith("BAJA-")) {
-                              nombre = cuentaInfo?.nombre || "Ganancia en Venta de Activos";
-                            } else {
-                              nombre = String(asiento.descripcion || cuentaInfo?.nombre || "Otros ingresos");
-                            }
+          // Caso normal: 1 “producto”
+          const nombre = getProductoNombre(t);
+          const imagen = findImageForName(nombre);
+          const tieneAsignacion = !!imagen && nombre !== "Ingresos sin producto asignado";
+          addRow(nombre, montoTx, 1, tieneAsignacion, imagen);
+        });
 
-                            if (!ingresosPorOrigen[nombre]) ingresosPorOrigen[nombre] = { monto: 0, count: 0 };
-                            ingresosPorOrigen[nombre].monto += monto;
-                            ingresosPorOrigen[nombre].count += 1;
-                          });
+        // 2) Si es “otros”, podemos sumar asientos directos como “origen”
+        if (tipoIngresoAnalisis === "otros") {
+          const sumFromTx = Array.from(map.values()).reduce((s, r) => s + (Number(r.monto) || 0), 0);
+          const diff = (Number(totalCanonicoProductos) || 0) - sumFromTx;
 
-                          Object.entries(ingresosPorOrigen).forEach(([nombre, data]) => {
-                            if ((Number(data.monto) || 0) > 0.01) {
-                              productosArray.push({
-                                nombre,
-                                transacciones: data.count,
-                                monto: data.monto,
-                                tieneAsignacion: false,
-                              });
-                            }
-                          });
-                        }
-                      }
+          if (diff > 0.01) {
+            const ingresosPorOrigen: Record<string, { monto: number; count: number }> = {};
 
-                      const top10 = productosArray.slice(0, 10);
+            (asientosDir || []).forEach((asiento: any) => {
+              const detalles = Array.isArray(asiento?.detalle_asientos) ? asiento.detalle_asientos : [];
+              const det = detalles.find(
+                (d: any) => String(d?.cuenta_codigo || "").startsWith("4") && Number(d?.haber) > 0
+              );
+              if (!det) return;
 
-                      return (
-                        <>
-                          {top10.map((producto) => {
-                            const totalConAsientos = productosArray.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
-                            const porcentaje = totalConAsientos > 0 ? (((Number(producto.monto) || 0) / totalConAsientos) * 100).toFixed(1) : "0.0";
+              const monto = Number(det?.haber) || 0;
+              const cuentaCodigo = String(det?.cuenta_codigo || "");
+              const cuentaInfo = (cuentas || []).find((c: any) => String(c?.codigo) === cuentaCodigo);
 
-                            return (
-                              <div
-                                key={producto.nombre}
-                                className={`flex items-center gap-3 p-3 border rounded-lg ${
-                                  !producto.tieneAsignacion ? "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20" : ""
-                                }`}
-                              >
-                                {producto.imagen ? (
-                                  <img src={producto.imagen} alt={producto.nombre} className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
-                                ) : (
-                                  <div
-                                    className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
-                                      !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
-                                    }`}
-                                  >
-                                    <Package
-                                      className={`w-5 h-5 ${!producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
-                                    />
-                                  </div>
-                                )}
+              const nombre =
+                safeStr(asiento?.descripcion) ||
+                safeStr(cuentaInfo?.nombre) ||
+                "Otros ingresos";
 
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium truncate">{producto.nombre}</p>
-                                    {!producto.tieneAsignacion && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
-                                        Sin asignar
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    {producto.transacciones} {producto.transacciones === 1 ? "transacción" : "transacciones"}
-                                  </p>
-                                </div>
+              if (!ingresosPorOrigen[nombre]) ingresosPorOrigen[nombre] = { monto: 0, count: 0 };
+              ingresosPorOrigen[nombre].monto += monto;
+              ingresosPorOrigen[nombre].count += 1;
+            });
 
-                                <div className="text-right flex-shrink-0">
-                                  <p className="font-bold text-foreground">${formatCifra(Number(producto.monto) || 0, scaleFormat)}</p>
-                                </div>
+            Object.entries(ingresosPorOrigen).forEach(([nombre, data]) => {
+              if ((Number(data.monto) || 0) > 0.01) {
+                addRow(nombre, Number(data.monto) || 0, Number(data.count) || 1, false);
+              }
+            });
+          }
+        }
 
-                                <div className="flex-shrink-0">
-                                  <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">{porcentaje}%</div>
-                                </div>
-                              </div>
-                            );
-                          })}
+        // 3) Array final + orden
+        const allRows = Array.from(map.values())
+          .filter((r) => (Number(r.monto) || 0) > 0)
+          .sort((a, b) => (productSort === "desc" ? (b.monto || 0) - (a.monto || 0) : (a.monto || 0) - (b.monto || 0)));
 
-                          {(() => {
-                            const totalGeneralMonto = productosArray.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
-                            if (totalGeneralMonto > 0) {
-                              return (
-                                <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
-                                  <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
-                                    <Package className="w-5 h-5 text-primary" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-foreground">TOTAL GENERAL</p>
-                                    <p className="text-sm text-muted-foreground">
-                                      {productosArray.reduce((sum, p) => sum + (Number(p.transacciones) || 0), 0)} transacciones
-                                    </p>
-                                  </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <p className="font-bold text-lg text-primary">${formatCifra(totalGeneralMonto, scaleFormat)}</p>
-                                  </div>
-                                  <div className="flex-shrink-0">
-                                    <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">100%</div>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </>
-                      );
-                    })()}
+        const totalForPct =
+          (Number(totalCanonicoProductos) || 0) > 0
+            ? Number(totalCanonicoProductos)
+            : allRows.reduce((s, r) => s + (Number(r.monto) || 0), 0);
+
+        if (allRows.length === 0) {
+          return (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              No hay productos para mostrar en este período.
+            </div>
+          );
+        }
+
+        // 4) Top 10 + Otros Productos (posición 11)
+        const top10 = allRows.slice(0, 10);
+        const rest = allRows.slice(10);
+
+        const otros = rest.reduce(
+          (acc, r) => {
+            acc.monto += Number(r.monto) || 0;
+            acc.transacciones += Number(r.transacciones) || 0;
+            return acc;
+          },
+          {
+            nombre: "Otros Productos",
+            monto: 0,
+            transacciones: 0,
+            tieneAsignacion: true,
+          } as Row
+        );
+
+        const list = otros.monto > 0 ? [...top10, otros] : top10;
+
+        const pctOf = (m: number) => (totalForPct > 0 ? ((Number(m) || 0) / totalForPct) * 100 : 0);
+
+        const RowItem = (p: Row & { pct: number }) => {
+          const isOtrosRow = p.nombre === "Otros Productos";
+          const isSinAsignar = p.nombre === "Ingresos sin producto asignado" || !p.tieneAsignacion;
+
+          return (
+            <div
+              className={[
+                "flex items-center gap-3 p-3 rounded-lg border",
+                isOtrosRow ? "border-primary/40 bg-primary/5" : "",
+                isSinAsignar && !isOtrosRow ? "border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20" : "",
+              ].join(" ")}
+            >
+              {p.imagen ? (
+                <img
+                  src={p.imagen}
+                  alt={p.nombre}
+                  className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                />
+              ) : (
+                <div
+                  className={[
+                    "w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0",
+                    isSinAsignar ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted",
+                  ].join(" ")}
+                >
+                  <Package className={isSinAsignar ? "w-5 h-5 text-amber-600 dark:text-amber-400" : "w-5 h-5 text-muted-foreground"} />
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="font-medium truncate">{p.nombre}</p>
+                  {isSinAsignar && !isOtrosRow ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                      Sin asignar
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {p.transacciones} {p.transacciones === 1 ? "transacción" : "transacciones"}
+                </p>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                <p className="font-bold text-foreground">
+                  ${formatCifra(Number(p.monto) || 0, scaleFormat)}
+                </p>
+              </div>
+
+              <div className="flex-shrink-0">
+                <div className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-semibold">
+                  {p.pct.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // total general
+        const totalGeneralMonto = allRows.reduce((s, r) => s + (Number(r.monto) || 0), 0);
+        const totalGeneralTx = allRows.reduce((s, r) => s + (Number(r.transacciones) || 0), 0);
+
+        return (
+          <>
+            <div className="space-y-3">
+              {list.map((p) => (
+                <RowItem key={p.nombre} {...p} pct={pctOf(p.monto)} />
+              ))}
+
+              <div className="flex items-center gap-3 p-3 border-2 border-primary rounded-lg bg-primary/5">
+                <div className="w-12 h-12 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <Package className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-foreground">TOTAL GENERAL</p>
+                  <p className="text-sm text-muted-foreground">{totalGeneralTx} transacciones</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-bold text-lg text-primary">
+                    ${formatCifra(totalGeneralMonto, scaleFormat)}
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="px-2 py-1 bg-primary text-primary-foreground rounded text-sm font-bold">
+                    100%
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
+
+            {/* ============================
+                Modal: Ver todos
+               ============================ */}
+            <Dialog
+              open={openProductsModal}
+              onOpenChange={(v) => {
+                setOpenProductsModal(v);
+                if (!v) {
+                  setProductSearch("");
+                  setProductPage(1);
+                }
+              }}
+            >
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Productos</DialogTitle>
+                  <DialogDescription>Lista completa para análisis detallado</DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-col md:flex-row md:items-center gap-2">
+                  <Input
+                    value={productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value);
+                      setProductPage(1);
+                    }}
+                    placeholder="Buscar producto..."
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setProductSort((s) => (s === "desc" ? "asc" : "desc"))}
+                  >
+                    Orden: {productSort === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+                  </Button>
+                </div>
+
+                {(() => {
+                  const q = safeStr(productSearch).toLowerCase();
+                  const filtered = q
+                    ? allRows.filter((r) => safeStr(r.nombre).toLowerCase().includes(q))
+                    : allRows;
+
+                  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE_PRODUCTS));
+                  const page = Math.min(productPage, totalPages);
+                  const start = (page - 1) * PAGE_SIZE_PRODUCTS;
+                  const chunk = filtered.slice(start, start + PAGE_SIZE_PRODUCTS);
+
+                  return (
+                    <>
+                      <div className="mt-3 max-h-[55vh] overflow-auto pr-1 space-y-2">
+                        {chunk.map((p) => (
+                          <RowItem key={`modal-${p.nombre}`} {...p} pct={pctOf(p.monto)} />
+                        ))}
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between">
+                        <div className="text-xs text-muted-foreground">
+                          Mostrando {start + 1}-{Math.min(start + PAGE_SIZE_PRODUCTS, filtered.length)} de{" "}
+                          {filtered.length}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={page <= 1}
+                            onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                          >
+                            Anterior
+                          </Button>
+
+                          <div className="text-sm">
+                            {page} / {totalPages}
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={page >= totalPages}
+                            onClick={() => setProductPage((p) => Math.min(totalPages, p + 1))}
+                          >
+                            Siguiente
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </DialogContent>
+            </Dialog>
+          </>
+        );
+      })()
+    )}
+  </CardContent>
+</Card>
+
 
             {/* Tabla de Ventas por Cliente */}
             <Card>
