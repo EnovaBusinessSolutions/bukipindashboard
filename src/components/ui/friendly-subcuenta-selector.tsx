@@ -16,23 +16,35 @@ interface FriendlySubcuentaSelectorProps {
   className?: string;
 }
 
+/**
+ * ✅ Whitelists duras por tipo
+ */
+const ALLOWED_GASTO = new Set(["5101", "5102", "5103", "5104", "5105", "5106", "5107", "5108"]);
+const ALLOWED_COSTO = new Set(["5001", "5002", "5003", "5004"]);
+
 const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
   value,
   onValueChange,
   accountType,
-  className = ""
+  className = "",
 }) => {
   const navigate = useNavigate();
   const { data: cuentasData } = useCuentas();
   const { data: subcuentasData } = useSubcuentas();
-  
+
   const [selectedEstado, setSelectedEstado] = useState("");
   const [selectedGrupo, setSelectedGrupo] = useState("");
   const [selectedSubgrupo, setSelectedSubgrupo] = useState("");
   const [selectedCuenta, setSelectedCuenta] = useState("");
-  
+
   const estadosFinancieros = cuentasData?.estadosFinancieros || {};
-  const subcuentas = subcuentasData || [];
+  const subcuentas = Array.isArray(subcuentasData) ? subcuentasData : [];
+
+  // ✅ value defensivo para Select (siempre string)
+  const safeValue = value ? String(value) : "";
+
+  // ✅ FIX TS (evita TS2367): calcular ANTES del render/narrowing
+  const showAllowedHint = accountType === "gasto" || accountType === "costo";
 
   // Reset selections when account type changes
   useEffect(() => {
@@ -41,25 +53,32 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
       setSelectedGrupo("Egresos");
       setSelectedSubgrupo("Costo de Ventas");
       setSelectedCuenta("5001");
-      // Automatically set the account code for costs
+
+      // ✅ Para costos sí fijamos cuenta 5001 (subcuenta la elige el usuario)
       onValueChange("", "5001");
-    } else if (accountType === "gasto") {
+      return;
+    }
+
+    if (accountType === "gasto") {
+      // ✅ Para gastos NO fijamos cuenta aquí (ya la eliges en el formulario padre)
       setSelectedEstado("Estado de Resultados");
       setSelectedGrupo("Egresos");
-      // For gastos, don't reset selectedCuenta - keep user's selection
-      setSelectedSubgrupo("");
-      // Don't reset selectedCuenta here
-    } else {
-      setSelectedEstado("");
-      setSelectedGrupo("");
       setSelectedSubgrupo("");
       setSelectedCuenta("");
+      onValueChange("", "");
+      return;
     }
-  }, [accountType]); // Remove estadosFinancieros dependency
 
-  // Helper functions to get data for each step
+    // accountType === "" (flujo genérico)
+    setSelectedEstado("");
+    setSelectedGrupo("");
+    setSelectedSubgrupo("");
+    setSelectedCuenta("");
+    onValueChange("", "");
+  }, [accountType]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const getEstados = () => Object.keys(estadosFinancieros);
-  
+
   const getGrupos = () => {
     if (!selectedEstado || !estadosFinancieros[selectedEstado]) return [];
     return Object.keys(estadosFinancieros[selectedEstado]);
@@ -72,15 +91,28 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
 
   const getCuentas = () => {
     if (!selectedEstado || !selectedGrupo || !selectedSubgrupo) return [];
-    return estadosFinancieros[selectedEstado]?.[selectedGrupo]?.[selectedSubgrupo] || [];
+    const list = estadosFinancieros[selectedEstado]?.[selectedGrupo]?.[selectedSubgrupo] || [];
+    if (!Array.isArray(list)) return [];
+
+    // ✅ Filtro duro por tipo
+    if (accountType === "gasto") return list.filter((c: any) => ALLOWED_GASTO.has(String(c?.codigo)));
+    if (accountType === "costo") return list.filter((c: any) => ALLOWED_COSTO.has(String(c?.codigo)));
+
+    return list;
   };
 
   const getSubcuentas = () => {
     if (!selectedCuenta) return [];
-    return subcuentas.filter(s => s.cuenta_madre_codigo === selectedCuenta);
+    return subcuentas.filter((s: any) => String(s.cuenta_madre_codigo) === String(selectedCuenta));
   };
 
   const handleSubcuentaSelect = (subcuentaId: string) => {
+    if (!subcuentaId || subcuentaId === "no-subcuentas") return;
+
+    // ✅ Hard guard por si selectedCuenta se sale del whitelist
+    if (accountType === "gasto" && selectedCuenta && !ALLOWED_GASTO.has(String(selectedCuenta))) return;
+    if (accountType === "costo" && selectedCuenta && !ALLOWED_COSTO.has(String(selectedCuenta))) return;
+
     onValueChange(subcuentaId, selectedCuenta);
   };
 
@@ -91,44 +123,66 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
     if (step <= 4) onValueChange("", "");
   };
 
+  // ✅ Si cambia la cuenta, limpia subcuenta si ya no pertenece
+  useEffect(() => {
+    if (!selectedCuenta) return;
+    if (!safeValue) return;
+
+    const valid = getSubcuentas().some((s: any) => String(s.id) === String(safeValue));
+    if (!valid) onValueChange("", selectedCuenta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCuenta]);
+
   const getStepStatus = (step: number) => {
-    if (accountType === "costo") {
-      // For costs, we only have one step: subcuenta selection
-      return value ? "completed" : "active";
-    }
-    
+    if (accountType === "costo") return safeValue ? "completed" : "active";
+
     if (accountType === "gasto") {
-      // For gastos, Estado and Grupo are automatically set
       switch (step) {
-        case 1: return selectedSubgrupo ? "completed" : "active";
-        case 2: return selectedCuenta ? "completed" : selectedSubgrupo ? "active" : "disabled";
-        case 3: return value ? "completed" : selectedCuenta ? "completed" : "disabled"; // Subcuenta is optional for gastos
-        default: return "disabled";
+        case 1:
+          return selectedSubgrupo ? "completed" : "active";
+        case 2:
+          return selectedCuenta ? "completed" : selectedSubgrupo ? "active" : "disabled";
+        case 3:
+          return safeValue ? "completed" : selectedCuenta ? "active" : "disabled";
+        default:
+          return "disabled";
       }
     }
-    
+
     switch (step) {
-      case 1: return selectedEstado ? "completed" : "pending";
-      case 2: return selectedGrupo ? "completed" : selectedEstado ? "active" : "disabled";
-      case 3: return selectedSubgrupo ? "completed" : selectedGrupo ? "active" : "disabled";
-      case 4: return selectedCuenta ? "completed" : selectedSubgrupo ? "active" : "disabled";
-      case 5: return value ? "completed" : selectedCuenta ? "active" : "disabled";
-      default: return "disabled";
+      case 1:
+        return selectedEstado ? "completed" : "pending";
+      case 2:
+        return selectedGrupo ? "completed" : selectedEstado ? "active" : "disabled";
+      case 3:
+        return selectedSubgrupo ? "completed" : selectedGrupo ? "active" : "disabled";
+      case 4:
+        return selectedCuenta ? "completed" : selectedSubgrupo ? "active" : "disabled";
+      case 5:
+        return safeValue ? "completed" : selectedCuenta ? "active" : "disabled";
+      default:
+        return "disabled";
     }
   };
 
   const StepIndicator = ({ step, title, status }: { step: number; title: string; status: string }) => (
     <div className="flex items-center space-x-2">
-      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-        status === "completed" ? "bg-green-500 text-white" :
-        status === "active" ? "bg-blue-500 text-white" :
-        "bg-gray-200 text-gray-500"
-      }`}>
+      <div
+        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+          status === "completed"
+            ? "bg-green-500 text-white"
+            : status === "active"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-200 text-gray-500"
+        }`}
+      >
         {status === "completed" ? <CheckCircle className="w-3 h-3" /> : step}
       </div>
-      <span className={`text-sm ${
-        status === "completed" || status === "active" ? "text-foreground" : "text-muted-foreground"
-      }`}>
+      <span
+        className={`text-sm ${
+          status === "completed" || status === "active" ? "text-foreground" : "text-muted-foreground"
+        }`}
+      >
         {title}
       </span>
       {step < 5 && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
@@ -139,11 +193,8 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
     <Card className={className}>
       <CardHeader>
         <CardTitle className="text-lg">Seleccionar Subcuenta</CardTitle>
-        <CardDescription>
-          Sigue estos pasos para seleccionar dónde se registrará este {accountType}
-        </CardDescription>
-        
-        {/* Progress indicator */}
+        <CardDescription>Sigue estos pasos para seleccionar dónde se registrará este {accountType}</CardDescription>
+
         <div className="flex flex-wrap items-center gap-1 p-3 bg-muted/30 rounded-lg">
           {accountType === "costo" ? (
             <>
@@ -155,14 +206,14 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
               <div className="flex items-center space-x-2">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                  value ? "bg-green-500 text-white" : "bg-blue-500 text-white"
-                }`}>
-                  {value ? <CheckCircle className="w-3 h-3" /> : "1"}
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                    safeValue ? "bg-green-500 text-white" : "bg-blue-500 text-white"
+                  }`}
+                >
+                  {safeValue ? <CheckCircle className="w-3 h-3" /> : "1"}
                 </div>
-                <span className={`text-sm ${value ? "text-foreground" : "text-foreground"}`}>
-                  Seleccionar detalle específico
-                </span>
+                <span className="text-sm text-foreground">Seleccionar detalle específico</span>
               </div>
             </>
           ) : accountType === "gasto" ? (
@@ -177,15 +228,24 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
               <StepIndicator step={1} title="Subcategoría" status={getStepStatus(1)} />
               <StepIndicator step={2} title="Cuenta" status={getStepStatus(2)} />
               <div className="flex items-center space-x-2">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                  getStepStatus(3) === "completed" ? "bg-green-500 text-white" : 
-                  getStepStatus(3) === "active" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-500"
-                }`}>
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                    getStepStatus(3) === "completed"
+                      ? "bg-green-500 text-white"
+                      : getStepStatus(3) === "active"
+                      ? "bg-blue-500 text-white"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
                   {getStepStatus(3) === "completed" ? <CheckCircle className="w-3 h-3" /> : "3"}
                 </div>
-                <span className={`text-sm ${
-                  getStepStatus(3) === "completed" || getStepStatus(3) === "active" ? "text-foreground" : "text-muted-foreground"
-                }`}>
+                <span
+                  className={`text-sm ${
+                    getStepStatus(3) === "completed" || getStepStatus(3) === "active"
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                >
                   Detalle (Opcional)
                 </span>
               </div>
@@ -201,32 +261,27 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
           )}
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {accountType === "gasto" ? (
-          // For gastos: Only show subcuenta selection (cuenta already selected above)
           selectedCuenta ? (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                Selecciona el detalle específico *
-              </Label>
-              <p className="text-sm text-muted-foreground mb-3">
-                Para la cuenta {selectedCuenta}. Es obligatorio seleccionar un detalle específico para los gastos recurrentes.
-              </p>
-              <Select
-                value={value || ""}
-                onValueChange={handleSubcuentaSelect}
-              >
+              <Label className="text-sm font-medium">Selecciona el detalle específico</Label>
+              <p className="text-sm text-muted-foreground mb-3">Para la cuenta {selectedCuenta}. (Opcional)</p>
+
+              <Select value={safeValue} onValueChange={handleSubcuentaSelect}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona el detalle específico" />
                 </SelectTrigger>
                 <SelectContent className="bg-background border shadow-md">
                   {getSubcuentas().length > 0 ? (
-                    getSubcuentas().map((subcuenta) => (
-                      <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                    getSubcuentas().map((subcuenta: any) => (
+                      <SelectItem key={subcuenta.id} value={String(subcuenta.id)}>
                         <div className="flex items-center space-x-2">
                           <span>{subcuenta.nombre}</span>
-                          <Badge variant="outline" className="text-xs">Detalle específico</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            Detalle específico
+                          </Badge>
                         </div>
                       </SelectItem>
                     ))
@@ -237,25 +292,22 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                   )}
                 </SelectContent>
               </Select>
-              
-              {/* Show help message when no subcuentas available */}
+
               {getSubcuentas().length === 0 && (
                 <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
                   <div className="flex items-center space-x-2 mb-2">
                     <AlertCircle className="w-4 h-4 text-yellow-600" />
-                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Subcuenta requerida
-                    </p>
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">No hay detalles disponibles</p>
                   </div>
                   <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                    Necesitas crear un detalle específico para la cuenta {selectedCuenta} antes de continuar. Los gastos recurrentes requieren subcuentas para un mejor control contable.
+                    Puedes crear una subcuenta para mejorar el control contable.
                   </p>
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="sm" 
+                    variant="outline"
+                    size="sm"
                     className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-                    onClick={() => navigate('/plan-cuentas')}
+                    onClick={() => navigate("/plan-cuentas")}
                   >
                     Crear subcuenta ahora
                   </Button>
@@ -265,28 +317,22 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
           ) : (
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                Primero selecciona una cuenta de gasto en la sección de arriba.
+                Selecciona la cuenta desde el formulario principal. Este selector no debe fijar cuentas para gastos.
               </p>
             </div>
           )
         ) : accountType === "costo" ? (
-          // For costos: Show subcuenta selection (required)
           selectedCuenta && (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                Selecciona el detalle específico
-              </Label>
+              <Label className="text-sm font-medium">Selecciona el detalle específico</Label>
               {getSubcuentas().length > 0 ? (
-                <Select
-                  value={value}
-                  onValueChange={handleSubcuentaSelect}
-                >
+                <Select value={safeValue} onValueChange={handleSubcuentaSelect}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona el detalle específico" />
                   </SelectTrigger>
                   <SelectContent className="bg-background border shadow-md">
-                    {getSubcuentas().map((subcuenta) => (
-                      <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                    {getSubcuentas().map((subcuenta: any) => (
+                      <SelectItem key={subcuenta.id} value={String(subcuenta.id)}>
                         {subcuenta.nombre}
                       </SelectItem>
                     ))}
@@ -296,19 +342,17 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                 <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
                   <div className="flex items-center space-x-2 mb-2">
                     <AlertCircle className="w-4 h-4 text-yellow-600" />
-                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      No hay detalles disponibles
-                    </p>
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">No hay detalles disponibles</p>
                   </div>
                   <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
                     Necesitas crear un detalle específico para esta cuenta antes de continuar.
                   </p>
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="sm" 
+                    variant="outline"
+                    size="sm"
                     className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-                    onClick={() => navigate('/plan-cuentas')}
+                    onClick={() => navigate("/plan-cuentas")}
                   >
                     Crear detalle específico
                   </Button>
@@ -317,13 +361,10 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             </div>
           )
         ) : (
-          // For other types: Show full selection process
           <>
             {/* Step 1: Estado Financiero */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                1. ¿En qué tipo de reporte aparecerá?
-              </Label>
+              <Label className="text-sm font-medium">1. ¿En qué tipo de reporte aparecerá?</Label>
               <Select
                 value={selectedEstado}
                 onValueChange={(val) => {
@@ -339,9 +380,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                     <SelectItem key={estado} value={estado}>
                       <div className="flex items-center space-x-2">
                         <span>{estado}</span>
-                        {estado === "Balance General" && (
-                          <Badge variant="outline" className="text-xs">Lo que tienes</Badge>
-                        )}
+                        {estado === "Balance General" && <Badge variant="outline" className="text-xs">Lo que tienes</Badge>}
                         {estado === "Estado de Resultados" && (
                           <Badge variant="outline" className="text-xs">Ingresos y gastos</Badge>
                         )}
@@ -355,9 +394,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {/* Step 2: Grupo */}
             {selectedEstado && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  2. ¿Qué tipo de movimiento es?
-                </Label>
+                <Label className="text-sm font-medium">2. ¿Qué tipo de movimiento es?</Label>
                 <Select
                   value={selectedGrupo}
                   onValueChange={(val) => {
@@ -388,9 +425,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {/* Step 3: Subgrupo */}
             {selectedGrupo && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  3. ¿Qué tipo específico?
-                </Label>
+                <Label className="text-sm font-medium">3. ¿Qué tipo específico?</Label>
                 <Select
                   value={selectedSubgrupo}
                   onValueChange={(val) => {
@@ -415,9 +450,7 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
             {/* Step 4: Cuenta */}
             {selectedSubgrupo && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  4. ¿Cuál cuenta específica?
-                </Label>
+                <Label className="text-sm font-medium">4. ¿Cuál cuenta específica?</Label>
                 <Select
                   value={selectedCuenta}
                   onValueChange={(val) => {
@@ -429,8 +462,8 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                     <SelectValue placeholder="Selecciona la cuenta contable" />
                   </SelectTrigger>
                   <SelectContent>
-                    {getCuentas().map((cuenta) => (
-                      <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
+                    {getCuentas().map((cuenta: any) => (
+                      <SelectItem key={cuenta.codigo} value={String(cuenta.codigo)}>
                         <div className="flex items-center space-x-2">
                           <Badge variant="outline" className="font-mono text-xs">
                             {cuenta.codigo}
@@ -441,26 +474,28 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
+
+                {/* ✅ FIX TS: ya no compara accountType aquí */}
+                {showAllowedHint && (
+                  <p className="text-xs text-muted-foreground">
+                    Mostrando solo cuentas permitidas para {accountType}.
+                  </p>
+                )}
               </div>
             )}
 
             {/* Step 5: Subcuenta */}
             {selectedCuenta && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  5. ¿En qué detalle específico? *
-                </Label>
+                <Label className="text-sm font-medium">5. ¿En qué detalle específico?</Label>
                 {getSubcuentas().length > 0 ? (
-                  <Select
-                    value={value}
-                    onValueChange={handleSubcuentaSelect}
-                  >
+                  <Select value={safeValue} onValueChange={handleSubcuentaSelect}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona el detalle específico" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getSubcuentas().map((subcuenta) => (
-                        <SelectItem key={subcuenta.id} value={subcuenta.id}>
+                      {getSubcuentas().map((subcuenta: any) => (
+                        <SelectItem key={subcuenta.id} value={String(subcuenta.id)}>
                           {subcuenta.nombre}
                         </SelectItem>
                       ))}
@@ -470,19 +505,17 @@ const FriendlySubcuentaSelector: React.FC<FriendlySubcuentaSelectorProps> = ({
                   <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
                     <div className="flex items-center space-x-2 mb-2">
                       <AlertCircle className="w-4 h-4 text-yellow-600" />
-                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                        No hay detalles disponibles
-                      </p>
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">No hay detalles disponibles</p>
                     </div>
                     <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
                       Necesitas crear un detalle específico para esta cuenta antes de continuar.
                     </p>
-                    <Button 
+                    <Button
                       type="button"
-                      variant="outline" 
-                      size="sm" 
+                      variant="outline"
+                      size="sm"
                       className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
-                      onClick={() => navigate('/plan-cuentas')}
+                      onClick={() => navigate("/plan-cuentas")}
                     >
                       Crear detalle específico
                     </Button>

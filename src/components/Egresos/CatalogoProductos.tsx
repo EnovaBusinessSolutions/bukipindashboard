@@ -64,48 +64,21 @@ const normalizeProducto = (p: any) => {
     p.cuentaCodigo ??
     "";
 
-  const subcuenta_id =
-    p.subcuenta_id ??
-    p.subcuentaId ??
-    null;
+  const subcuenta_id = p.subcuenta_id ?? p.subcuentaId ?? null;
 
-  const proveedor_principal =
-    p.proveedor_principal ??
-    p.proveedorPrincipal ??
-    p.proveedor ??
-    "";
+  const proveedor_principal = p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
 
-  const imagen_url =
-    p.imagen_url ??
-    p.imagenUrl ??
-    p.imageUrl ??
-    "";
+  const imagen_url = p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? "";
 
-  const precio_promedio =
-    p.precio_promedio ??
-    p.precioPromedio ??
-    0;
+  const precio_promedio = p.precio_promedio ?? p.precioPromedio ?? 0;
 
-  const variacion_precio =
-    p.variacion_precio ??
-    p.variacionPrecio ??
-    0;
+  const variacion_precio = p.variacion_precio ?? p.variacionPrecio ?? 0;
 
-  const total_transacciones =
-    p.total_transacciones ??
-    p.transacciones ??
-    0;
+  const total_transacciones = p.total_transacciones ?? p.transacciones ?? 0;
 
-  const ultima_compra =
-    p.ultima_compra ??
-    p.ultimaCompra ??
-    null;
+  const ultima_compra = p.ultima_compra ?? p.ultimaCompra ?? null;
 
-  const es_recurrente =
-    p.es_recurrente ??
-    p.esRecurrente ??
-    p.es_recurrente ??
-    false;
+  const es_recurrente = p.es_recurrente ?? p.esRecurrente ?? p.es_recurrente ?? false;
 
   const id = p.id ?? (p._id ? String(p._id) : "");
 
@@ -140,15 +113,14 @@ const CatalogoProductos = () => {
 
   // Normaliza SIEMPRE para que el UI no dependa del shape del backend
   const productosEgresos = useMemo(() => {
-  const arr = Array.isArray(productosEgresosRaw)
-    ? productosEgresosRaw
-    : Array.isArray(productosEgresosRaw?.data)
-    ? productosEgresosRaw.data
-    : [];
+    const arr = Array.isArray(productosEgresosRaw)
+      ? productosEgresosRaw
+      : Array.isArray(productosEgresosRaw?.data)
+      ? productosEgresosRaw.data
+      : [];
 
-  return (arr || []).map(normalizeProducto).filter(Boolean);
-}, [productosEgresosRaw]);
-
+    return (arr || []).map(normalizeProducto).filter(Boolean);
+  }, [productosEgresosRaw]);
 
   const [newProduct, setNewProduct] = useState({
     nombre: "",
@@ -162,6 +134,11 @@ const CatalogoProductos = () => {
     imagen: null as File | null,
   });
 
+  /**
+   * ✅ Whitelist de cuentas contables permitidas por tipo
+   * - Para "gasto": SOLO 5101–5108 + 5103 (como captura 3)
+   * - Para "costo": cuentas 5001–5004
+   */
   const getCuentasAfectadas = (tipo: string) => {
     if (tipo === "costo") {
       return [
@@ -170,20 +147,27 @@ const CatalogoProductos = () => {
         { codigo: "5003", nombre: "Devoluciones sobre Compras", subgrupo: "Costo de Ventas" },
         { codigo: "5004", nombre: "Descuentos sobre Compras", subgrupo: "Costo de Ventas" },
       ];
-    } else if (tipo === "gasto") {
+    }
+
+    if (tipo === "gasto") {
       return [
         { codigo: "5101", nombre: "Gastos de Venta", subgrupo: "Gastos de Operación" },
         { codigo: "5102", nombre: "Sueldos y Salarios Ventas", subgrupo: "Gastos de Operación" },
+        { codigo: "5103", nombre: "Comisiones sobre Ventas", subgrupo: "Gastos de Operación" },
         { codigo: "5104", nombre: "Publicidad", subgrupo: "Gastos de Operación" },
         { codigo: "5105", nombre: "Gastos de Administración", subgrupo: "Gastos de Operación" },
         { codigo: "5106", nombre: "Sueldos y Salarios Administración", subgrupo: "Gastos de Operación" },
         { codigo: "5107", nombre: "Renta de Oficinas", subgrupo: "Gastos de Operación" },
         { codigo: "5108", nombre: "Servicios Públicos", subgrupo: "Gastos de Operación" },
-        { codigo: "5201", nombre: "Gastos Financieros", subgrupo: "Gastos Financieros" },
-        { codigo: "5202", nombre: "Comisiones Bancarias", subgrupo: "Gastos Financieros" },
       ];
     }
+
     return [];
+  };
+
+  const allowedCuentaByTipo = (tipo: "gasto" | "costo") => {
+    const allowed = new Set(getCuentasAfectadas(tipo).map((x) => x.codigo));
+    return allowed;
   };
 
   const gastos = productosEgresos.filter((p: any) => p.tipo === "gasto");
@@ -240,6 +224,23 @@ const CatalogoProductos = () => {
       return;
     }
 
+    // ✅ Hard guard: gastos solo en cuentas permitidas
+    if (newProduct.tipo === "gasto") {
+      const allowed = allowedCuentaByTipo("gasto");
+      if (!allowed.has(newProduct.cuentaContable)) {
+        toast({
+          title: "⚠️ Cuenta no permitida",
+          description: "Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Para gasto no usamos subcuenta aquí (evita contaminación)
+      if (newProduct.subcuentaId) {
+        setNewProduct((p) => ({ ...p, subcuentaId: "" }));
+      }
+    }
+
     const createData: CreateProductoEgresoData = {
       nombre: newProduct.nombre,
       descripcion: newProduct.descripcion,
@@ -247,7 +248,7 @@ const CatalogoProductos = () => {
       unidad: newProduct.unidad,
       proveedor_principal: newProduct.proveedorPrincipal,
       es_recurrente: newProduct.esRecurrente,
-      subcuenta_id: newProduct.subcuentaId,
+      subcuenta_id: newProduct.tipo === "costo" ? newProduct.subcuentaId : "",
       cuenta_contable: newProduct.cuentaContable,
       imagen: newProduct.imagen || undefined,
     };
@@ -324,6 +325,23 @@ const CatalogoProductos = () => {
       return;
     }
 
+    // ✅ Hard guard en edición
+    if (editingProduct.tipo === "gasto") {
+      const allowed = allowedCuentaByTipo("gasto");
+      if (!allowed.has(editingProduct.cuentaContable)) {
+        toast({
+          title: "⚠️ Cuenta no permitida",
+          description: "Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Limpia subcuenta si quedó residual
+      if (editingProduct.subcuentaId) {
+        setEditingProduct((p: any) => ({ ...p, subcuentaId: "" }));
+      }
+    }
+
     const updateData: UpdateProductoEgresoData = {
       id: editingProduct.id,
       nombre: editingProduct.nombre,
@@ -332,7 +350,7 @@ const CatalogoProductos = () => {
       unidad: editingProduct.unidad,
       proveedor_principal: editingProduct.proveedorPrincipal,
       es_recurrente: editingProduct.esRecurrente,
-      subcuenta_id: editingProduct.subcuentaId,
+      subcuenta_id: editingProduct.tipo === "costo" ? editingProduct.subcuentaId : "",
       cuenta_contable: editingProduct.cuentaContable,
       imagen: editingProduct.imagen || undefined,
     };
@@ -504,8 +522,15 @@ const CatalogoProductos = () => {
                     value={newProduct.tipo}
                     onValueChange={(value) => {
                       const updatedProduct = { ...newProduct, tipo: value, subcuentaId: "" };
-                      if (value === "costo") updatedProduct.cuentaContable = "5001";
-                      else updatedProduct.cuentaContable = "";
+
+                      if (value === "costo") {
+                        // Default para costo
+                        updatedProduct.cuentaContable = "5001";
+                      } else {
+                        // Para gasto: limpiar y forzar selección manual de 5101–5108
+                        updatedProduct.cuentaContable = "";
+                      }
+
                       setNewProduct(updatedProduct);
                     }}
                   >
@@ -525,19 +550,24 @@ const CatalogoProductos = () => {
                   <Label htmlFor="cuenta-contable">Cuenta Contable a Afectar *</Label>
                   <Select
                     value={newProduct.cuentaContable}
-                    onValueChange={(value) => setNewProduct({ ...newProduct, cuentaContable: value, subcuentaId: "" })}
+                    onValueChange={(value) =>
+                      setNewProduct({ ...newProduct, cuentaContable: value, subcuentaId: "" })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cuenta contable" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getCuentasAfectadas(newProduct.tipo).map((cuenta) => (
+                      {getCuentasAfectadas("gasto").map((cuenta) => (
                         <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
                           {cuenta.codigo} - {cuenta.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).
+                  </p>
                 </div>
               )}
 
@@ -551,13 +581,14 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {newProduct.tipo && (
+              {/* ✅ IMPORTANTE: subcuenta SOLO aplica para COSTO (evita contaminación en GASTO) */}
+              {newProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
                   value={newProduct.subcuentaId}
                   onValueChange={(subcuentaId, cuentaCodigo) =>
                     setNewProduct({ ...newProduct, subcuentaId, cuentaContable: cuentaCodigo })
                   }
-                  accountType={newProduct.tipo as "gasto" | "costo"}
+                  accountType="costo"
                 />
               )}
 
@@ -650,13 +681,17 @@ const CatalogoProductos = () => {
             ))}
           </div>
         ) : filteredGastos.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{filteredGastos.map(renderProductCard)}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredGastos.map(renderProductCard)}
+          </div>
         ) : (
           <Card>
             <CardContent className="text-center py-8">
               <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm ? "No se encontraron gastos que coincidan con la búsqueda" : "Aún no has agregado gastos al catálogo"}
+                {searchTerm
+                  ? "No se encontraron gastos que coincidan con la búsqueda"
+                  : "Aún no has agregado gastos al catálogo"}
               </p>
             </CardContent>
           </Card>
@@ -682,13 +717,17 @@ const CatalogoProductos = () => {
             ))}
           </div>
         ) : filteredCostos.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{filteredCostos.map(renderProductCard)}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCostos.map(renderProductCard)}
+          </div>
         ) : (
           <Card>
             <CardContent className="text-center py-8">
               <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm ? "No se encontraron costos que coincidan con la búsqueda" : "Aún no has agregado costos al catálogo"}
+                {searchTerm
+                  ? "No se encontraron costos que coincidan con la búsqueda"
+                  : "Aún no has agregado costos al catálogo"}
               </p>
             </CardContent>
           </Card>
@@ -728,10 +767,10 @@ const CatalogoProductos = () => {
                     value={editingProduct.tipo}
                     onValueChange={(value) => {
                       const next = { ...editingProduct, tipo: value };
-                      // Si cambias a costo: default cuenta 5001; si cambias a gasto: limpiar cuenta para seleccionar
+
                       if (value === "costo") next.cuentaContable = next.cuentaContable || "5001";
-                      if (value === "gasto") next.cuentaContable = next.cuentaContable || "";
-                      // reset subcuenta si cambias tipo
+                      if (value === "gasto") next.cuentaContable = "";
+
                       next.subcuentaId = "";
                       setEditingProduct(next);
                     }}
@@ -752,13 +791,15 @@ const CatalogoProductos = () => {
                   <Label htmlFor="edit-cuenta-contable">Cuenta Contable a Afectar *</Label>
                   <Select
                     value={editingProduct.cuentaContable}
-                    onValueChange={(value) => setEditingProduct({ ...editingProduct, cuentaContable: value, subcuentaId: "" })}
+                    onValueChange={(value) =>
+                      setEditingProduct({ ...editingProduct, cuentaContable: value, subcuentaId: "" })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cuenta contable" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getCuentasAfectadas(editingProduct.tipo).map((cuenta) => (
+                      {getCuentasAfectadas("gasto").map((cuenta) => (
                         <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
                           {cuenta.codigo} - {cuenta.nombre}
                         </SelectItem>
@@ -778,13 +819,14 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {editingProduct.tipo && (
+              {/* ✅ IMPORTANTE: subcuenta SOLO aplica para COSTO */}
+              {editingProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
                   value={editingProduct.subcuentaId}
                   onValueChange={(subcuentaId, cuentaCodigo) =>
                     setEditingProduct({ ...editingProduct, subcuentaId, cuentaContable: cuentaCodigo })
                   }
-                  accountType={editingProduct.tipo as "gasto" | "costo"}
+                  accountType="costo"
                 />
               )}
 
