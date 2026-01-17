@@ -1,3 +1,4 @@
+// src/components/Egresos/CatalogoProductos.tsx
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,32 +54,30 @@ const normalizeProducto = (p: any) => {
     p.unidad ??
     p.unidad_medida ??
     p.unidadMedida ??
-    p.unidadMedida ??
-    p.unidadMedida ??
+    p.unidad_de_medida ??
+    p.unidadDeMedida ??
     "";
 
   const cuenta_contable =
     p.cuenta_contable ??
+    p.cuentaContable ??
     p.cuenta_codigo ??
-    p.cuentaCodigo ??
     p.cuentaCodigo ??
     "";
 
   const subcuenta_id = p.subcuenta_id ?? p.subcuentaId ?? null;
 
-  const proveedor_principal = p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
+  const proveedor_principal =
+    p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
 
-  const imagen_url = p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? "";
+  const imagen_url =
+    p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? p.imagen ?? "";
 
   const precio_promedio = p.precio_promedio ?? p.precioPromedio ?? 0;
-
   const variacion_precio = p.variacion_precio ?? p.variacionPrecio ?? 0;
-
   const total_transacciones = p.total_transacciones ?? p.transacciones ?? 0;
-
   const ultima_compra = p.ultima_compra ?? p.ultimaCompra ?? null;
-
-  const es_recurrente = p.es_recurrente ?? p.esRecurrente ?? p.es_recurrente ?? false;
+  const es_recurrente = p.es_recurrente ?? p.esRecurrente ?? false;
 
   const id = p.id ?? (p._id ? String(p._id) : "");
 
@@ -136,8 +135,8 @@ const CatalogoProductos = () => {
 
   /**
    * ✅ Whitelist de cuentas contables permitidas por tipo
-   * - Para "gasto": SOLO 5101–5108 + 5103 (como captura 3)
-   * - Para "costo": cuentas 5001–5004
+   * - Para "gasto": SOLO 5101–5108 (incluye 5103)
+   * - Para "costo": cuentas 5001–5004 (pero en UI forzamos 5001)
    */
   const getCuentasAfectadas = (tipo: string) => {
     if (tipo === "costo") {
@@ -166,24 +165,33 @@ const CatalogoProductos = () => {
   };
 
   const allowedCuentaByTipo = (tipo: "gasto" | "costo") => {
-    const allowed = new Set(getCuentasAfectadas(tipo).map((x) => x.codigo));
-    return allowed;
+    return new Set(getCuentasAfectadas(tipo).map((x) => x.codigo));
   };
 
-  const gastos = productosEgresos.filter((p: any) => p.tipo === "gasto");
-  const costos = productosEgresos.filter((p: any) => p.tipo === "costo");
+  const gastos = productosEgresos.filter((p: any) => p?.tipo === "gasto");
+  const costos = productosEgresos.filter((p: any) => p?.tipo === "costo");
 
   const filteredGastos = gastos.filter((producto: any) => {
     const st = searchTerm.toLowerCase();
-    const n = (producto.nombre || "").toLowerCase();
-    const prov = (producto.proveedor_principal || "").toLowerCase();
+    const n = (producto?.nombre || "").toLowerCase();
+    const prov = (
+      producto?.proveedor_principal ||
+      producto?.proveedorPrincipal ||
+      producto?.proveedor ||
+      ""
+    ).toLowerCase();
     return n.includes(st) || prov.includes(st);
   });
 
   const filteredCostos = costos.filter((producto: any) => {
     const st = searchTerm.toLowerCase();
-    const n = (producto.nombre || "").toLowerCase();
-    const prov = (producto.proveedor_principal || "").toLowerCase();
+    const n = (producto?.nombre || "").toLowerCase();
+    const prov = (
+      producto?.proveedor_principal ||
+      producto?.proveedorPrincipal ||
+      producto?.proveedor ||
+      ""
+    ).toLowerCase();
     return n.includes(st) || prov.includes(st);
   });
 
@@ -241,16 +249,26 @@ const CatalogoProductos = () => {
       }
     }
 
-    const createData: CreateProductoEgresoData = {
+    // ✅ Enviamos duplicados defensivos (unidad_medida / proveedorPrincipal) por compat con backend legacy
+    const createData: (CreateProductoEgresoData & Record<string, any>) = {
       nombre: newProduct.nombre,
       descripcion: newProduct.descripcion,
       tipo: newProduct.tipo as "gasto" | "costo",
+
+      // canonical
       unidad: newProduct.unidad,
       proveedor_principal: newProduct.proveedorPrincipal,
       es_recurrente: newProduct.esRecurrente,
       subcuenta_id: newProduct.tipo === "costo" ? newProduct.subcuentaId : "",
       cuenta_contable: newProduct.cuentaContable,
       imagen: newProduct.imagen || undefined,
+
+      // legacy compat (por si el backend espera otros nombres)
+      unidad_medida: newProduct.unidad,
+      proveedorPrincipal: newProduct.proveedorPrincipal,
+      cuentaCodigo: newProduct.cuentaContable,
+      subcuentaId: newProduct.tipo === "costo" ? newProduct.subcuentaId : "",
+      esRecurrente: newProduct.esRecurrente,
     };
 
     createProducto.mutate(createData, {
@@ -280,6 +298,8 @@ const CatalogoProductos = () => {
 
   const handleEditProduct = (producto: any) => {
     const p = normalizeProducto(producto);
+    if (!p) return;
+
     setEditingProduct({
       id: p.id,
       nombre: p.nombre || "",
@@ -292,6 +312,7 @@ const CatalogoProductos = () => {
       cuentaContable: p.cuenta_contable || "",
       imagen: null,
     });
+
     setIsEditDialogOpen(true);
   };
 
@@ -342,17 +363,26 @@ const CatalogoProductos = () => {
       }
     }
 
-    const updateData: UpdateProductoEgresoData = {
+    const updateData: (UpdateProductoEgresoData & Record<string, any>) = {
       id: editingProduct.id,
       nombre: editingProduct.nombre,
       descripcion: editingProduct.descripcion,
       tipo: editingProduct.tipo,
+
+      // canonical
       unidad: editingProduct.unidad,
       proveedor_principal: editingProduct.proveedorPrincipal,
       es_recurrente: editingProduct.esRecurrente,
       subcuenta_id: editingProduct.tipo === "costo" ? editingProduct.subcuentaId : "",
       cuenta_contable: editingProduct.cuentaContable,
       imagen: editingProduct.imagen || undefined,
+
+      // legacy compat
+      unidad_medida: editingProduct.unidad,
+      proveedorPrincipal: editingProduct.proveedorPrincipal,
+      cuentaCodigo: editingProduct.cuentaContable,
+      subcuentaId: editingProduct.tipo === "costo" ? editingProduct.subcuentaId : "",
+      esRecurrente: editingProduct.esRecurrente,
     };
 
     updateProducto.mutate(updateData, {
@@ -371,18 +401,33 @@ const CatalogoProductos = () => {
   };
 
   const renderProductCard = (producto: any) => {
-    const precioProm = toNum(producto.precio_promedio, 0);
-    const varPrecio = toNum(producto.variacion_precio, 0);
-    const txs = toNum(producto.total_transacciones, 0);
-    const unidad = producto.unidad || "-";
+    const precioProm = toNum(producto?.precio_promedio, 0);
+    const varPrecio = toNum(producto?.variacion_precio, 0);
+    const txs = toNum(producto?.total_transacciones, 0);
+
+    // ✅ Fallbacks extra (por si el backend manda keys distintas)
+    const unidad =
+      producto?.unidad ||
+      producto?.unidad_medida ||
+      producto?.unidadMedida ||
+      producto?.unidadDeMedida ||
+      "-";
+
+    const proveedor =
+      producto?.proveedor_principal ||
+      producto?.proveedorPrincipal ||
+      producto?.proveedor ||
+      "No especificado";
+
+    const imagenUrl = producto?.imagen_url || producto?.imagenUrl || producto?.imageUrl || "";
 
     return (
       <Card key={producto.id} className="hover:shadow-md transition-shadow">
         <CardHeader className="pb-3">
           <div className="flex gap-3 items-start">
-            {producto.imagen_url ? (
+            {imagenUrl ? (
               <img
-                src={producto.imagen_url}
+                src={imagenUrl}
                 alt={producto.nombre}
                 className="w-16 h-16 object-cover rounded-md border"
               />
@@ -391,9 +436,12 @@ const CatalogoProductos = () => {
                 <Package2 className="h-8 w-8 text-muted-foreground" />
               </div>
             )}
+
             <div className="flex-1">
               <CardTitle className="text-lg">{producto.nombre}</CardTitle>
-              <CardDescription className="mt-1">{producto.descripcion || "Sin descripción"}</CardDescription>
+              <CardDescription className="mt-1">
+                {producto.descripcion || "Sin descripción"}
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -401,7 +449,7 @@ const CatalogoProductos = () => {
         <CardContent className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Proveedor principal:</span>
-            <span className="font-medium">{producto.proveedor_principal || "No especificado"}</span>
+            <span className="font-medium">{proveedor}</span>
           </div>
 
           <div className="flex justify-between text-sm">
@@ -418,7 +466,9 @@ const CatalogoProductos = () => {
 
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Variación de precio:</span>
-            <span className={`font-medium ${getVariationColor(varPrecio)}`}>±{moneyMX(varPrecio)}%</span>
+            <span className={`font-medium ${getVariationColor(varPrecio)}`}>
+              ±{moneyMX(varPrecio)}%
+            </span>
           </div>
 
           <div className="flex justify-between text-sm">
@@ -428,7 +478,9 @@ const CatalogoProductos = () => {
 
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Última compra:</span>
-            <span>{producto.ultima_compra ? new Date(producto.ultima_compra).toLocaleDateString() : "-"}</span>
+            <span>
+              {producto.ultima_compra ? new Date(producto.ultima_compra).toLocaleDateString() : "-"}
+            </span>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -437,8 +489,9 @@ const CatalogoProductos = () => {
               variant="outline"
               className="flex-1"
               onClick={() => {
-                if (txs > 0) navigate(`/egresos/analytics/${producto.id}`);
-                else {
+                if (txs > 0) {
+                  navigate(`/egresos/analytics/${producto.id}`);
+                } else {
                   toast({
                     title: "📊 Sin datos suficientes",
                     description: `No hay transacciones registradas para "${producto.nombre}" aún.`,
@@ -451,7 +504,14 @@ const CatalogoProductos = () => {
               Analíticas
             </Button>
 
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEditProduct(producto)}>
+            {/* ✅ IMPORTANTE: este botón estaba marcando “rojo” por un JSX mal cerrado en tu archivo.
+                Déjalo EXACTAMENTE así (nota el “>” al final del Button opening tag). */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              onClick={() => handleEditProduct(producto)}
+            >
               <Edit className="h-3 w-3 mr-1" />
               Editar
             </Button>
@@ -524,10 +584,8 @@ const CatalogoProductos = () => {
                       const updatedProduct = { ...newProduct, tipo: value, subcuentaId: "" };
 
                       if (value === "costo") {
-                        // Default para costo
                         updatedProduct.cuentaContable = "5001";
                       } else {
-                        // Para gasto: limpiar y forzar selección manual de 5101–5108
                         updatedProduct.cuentaContable = "";
                       }
 
@@ -581,7 +639,7 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {/* ✅ IMPORTANTE: subcuenta SOLO aplica para COSTO (evita contaminación en GASTO) */}
+              {/* ✅ subcuenta SOLO aplica para COSTO */}
               {newProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
                   value={newProduct.subcuentaId}
@@ -619,10 +677,7 @@ const CatalogoProductos = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="unidad">Unidad de Medida *</Label>
-                <Select
-                  value={newProduct.unidad}
-                  onValueChange={(value) => setNewProduct({ ...newProduct, unidad: value })}
-                >
+                <Select value={newProduct.unidad} onValueChange={(value) => setNewProduct({ ...newProduct, unidad: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar unidad" />
                   </SelectTrigger>
@@ -689,9 +744,7 @@ const CatalogoProductos = () => {
             <CardContent className="text-center py-8">
               <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm
-                  ? "No se encontraron gastos que coincidan con la búsqueda"
-                  : "Aún no has agregado gastos al catálogo"}
+                {searchTerm ? "No se encontraron gastos que coincidan con la búsqueda" : "Aún no has agregado gastos al catálogo"}
               </p>
             </CardContent>
           </Card>
@@ -725,16 +778,14 @@ const CatalogoProductos = () => {
             <CardContent className="text-center py-8">
               <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm
-                  ? "No se encontraron costos que coincidan con la búsqueda"
-                  : "Aún no has agregado costos al catálogo"}
+                {searchTerm ? "No se encontraron costos que coincidan con la búsqueda" : "Aún no has agregado costos al catálogo"}
               </p>
             </CardContent>
           </Card>
         )}
       </div>
 
-      {/* Diálogo de Edición (COMPLETO) */}
+      {/* Diálogo de Edición */}
       <Dialog
         open={isEditDialogOpen}
         onOpenChange={(open) => {
@@ -819,7 +870,7 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {/* ✅ IMPORTANTE: subcuenta SOLO aplica para COSTO */}
+              {/* ✅ subcuenta SOLO aplica para COSTO */}
               {editingProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
                   value={editingProduct.subcuentaId}
