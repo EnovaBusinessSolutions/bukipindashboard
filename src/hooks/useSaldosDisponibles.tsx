@@ -16,24 +16,15 @@ type DetalleAsiento = {
   debe?: number | string | null;
   haber?: number | string | null;
 
-  // soportes comunes si el backend ya agrega totales
   totalDebe?: number | string | null;
   totalHaber?: number | string | null;
-};
 
-const normalizeArray = <T,>(json: AnyJson): T[] => {
-  const data =
-    json?.data ??
-    json?.items ??
-    json?.detalles ??
-    json ??
-    [];
-  return Array.isArray(data) ? (data as T[]) : [];
+  // ✅ si el backend ya manda saldo por cuenta
+  saldo?: number | string | null;
 };
 
 const safeNumber = (v: any) => {
   if (v === null || v === undefined) return 0;
-  // soporta "1,234.56"
   const s = String(v).replace(/,/g, "").trim();
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
@@ -42,11 +33,33 @@ const safeNumber = (v: any) => {
 const pickCuentaCodigo = (d: DetalleAsiento) =>
   String(d?.cuenta_codigo ?? d?.cuentaCodigo ?? "").trim();
 
-const pickDebe = (d: DetalleAsiento) =>
-  safeNumber(d?.debe ?? d?.totalDebe);
+const pickDebe = (d: DetalleAsiento) => safeNumber(d?.debe ?? d?.totalDebe);
+const pickHaber = (d: DetalleAsiento) => safeNumber(d?.haber ?? d?.totalHaber);
 
-const pickHaber = (d: DetalleAsiento) =>
-  safeNumber(d?.haber ?? d?.totalHaber);
+const normalizeDetalles = (json: AnyJson): DetalleAsiento[] => {
+  const root = json?.data ?? json;
+
+  // 1) ya viene como array directo
+  if (Array.isArray(root)) return root as DetalleAsiento[];
+
+  // 2) wrappers típicos
+  const maybeArr = root?.items ?? root?.detalles ?? root?.rows ?? root?.data;
+  if (Array.isArray(maybeArr)) return maybeArr as DetalleAsiento[];
+
+  // 3) shape por cuenta: { saldos: { "1001": {...}, "1002": {...} } }
+  const saldosObj = root?.saldos ?? root?.balances ?? root?.byAccount;
+  if (saldosObj && typeof saldosObj === "object" && !Array.isArray(saldosObj)) {
+    return Object.entries(saldosObj).map(([codigo, v]: any) => ({
+      cuentaCodigo: String(codigo),
+      debe: v?.debe ?? v?.totalDebe ?? 0,
+      haber: v?.haber ?? v?.totalHaber ?? 0,
+      saldo: v?.saldo ?? null,
+    }));
+  }
+
+  // 4) nada usable
+  return [];
+};
 
 export const useSaldosDisponibles = () => {
   return useQuery<SaldosDisponibles>({
@@ -56,24 +69,30 @@ export const useSaldosDisponibles = () => {
        * Endpoint esperado:
        *   GET /api/asientos/detalle?cuentas=1001,1002
        *
-       * Respuesta (cualquiera de estas):
-       *   [{ cuenta_codigo|cuentaCodigo, debe|totalDebe, haber|totalHaber }]
-       *   o { data: [...] } / { items: [...] } / { detalles: [...] }
+       * Soporta respuestas:
+       *   - Array: [{ cuentaCodigo|cuenta_codigo, debe|totalDebe, haber|totalHaber, saldo? }]
+       *   - Wrapper: { data: [...] } / { items: [...] } / { detalles: [...] }
+       *   - Objeto: { saldos: { "1001": {debe,haber|saldo}, "1002": {...} } }
        */
-      const json: AnyJson = await apiFetch("/api/asientos/detalle?cuentas=1001,1002", {
-        method: "GET",
-      });
+      const json: AnyJson = await apiFetch(
+        "/api/asientos/detalle?cuentas=1001,1002",
+        { method: "GET" }
+      );
 
-      const detalles = normalizeArray<DetalleAsiento>(json);
+      const detalles = normalizeDetalles(json);
 
       let efectivo = 0;
       let bancos = 0;
 
       for (const d of detalles) {
         const codigo = pickCuentaCodigo(d);
-        const debe = pickDebe(d);
-        const haber = pickHaber(d);
-        const saldo = debe - haber;
+        if (!codigo) continue;
+
+        // ✅ si backend manda saldo, úsalo; si no, calcula debe-haber
+        const saldo =
+          d?.saldo !== undefined && d?.saldo !== null
+            ? safeNumber(d.saldo)
+            : pickDebe(d) - pickHaber(d);
 
         if (codigo === "1001") efectivo += saldo;
         else if (codigo === "1002") bancos += saldo;
