@@ -1,4 +1,3 @@
-// bukipin-dashboard/src/components/Egresos/RegistroEgresosGenerales.tsx
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,9 @@ import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
 const RegistroEgresosGenerales = () => {
+  // ✅ NUEVO: el usuario elige primero si es costo o gasto
+  const [tipoEgresoUI, setTipoEgresoUI] = useState<"costo" | "gasto" | "">("");
+
   const [concept, setConcept] = useState("");
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState("");
   const [subcuentaSeleccionada, setSubcuentaSeleccionada] = useState("");
@@ -50,8 +52,37 @@ const RegistroEgresosGenerales = () => {
   const { data: tarjetasCredito } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
+  const resetForm = () => {
+    setTipoEgresoUI("");
+    setConcept("");
+    setCuentaSeleccionada("");
+    setSubcuentaSeleccionada("");
+    setTotalAmount("");
+    setPaymentType("");
+    setPaymentMethod("");
+    setPaidAmount("");
+    setDueDate("");
+    setSupplierName("");
+    setSupplierPhone("");
+    setSupplierEmail("");
+    setSupplierRFC("");
+    setDescription("");
+    setShowConfirmDialog(false);
+    setPendingSubmit(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ✅ Validaciones UX (antes de pegarle al backend)
+    if (!tipoEgresoUI) {
+      toast({
+        title: "⚠️ Falta seleccionar tipo",
+        description: "Selecciona si este registro es Costo o Gasto.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!concept || !cuentaSeleccionada || !totalAmount || !paymentType) {
       toast({
@@ -62,16 +93,46 @@ const RegistroEgresosGenerales = () => {
       return;
     }
 
-    try {
-      const montoTotal = parseFloat(totalAmount);
-      const montoPagado =
-        paymentType === "contado"
-          ? montoTotal
-          : paymentType === "parcial"
-            ? parseFloat(paidAmount) || 0
-            : 0;
+    const montoTotal = Number(totalAmount || 0);
+    if (!(montoTotal > 0)) {
+      toast({
+        title: "⚠️ Monto inválido",
+        description: "El monto total debe ser mayor a 0.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      // FASE 1: Verificar que los saldos se hayan cargado (si aplica)
+    // Contado/parcial requieren método
+    if ((paymentType === "contado" || paymentType === "parcial") && !paymentMethod) {
+      toast({
+        title: "⚠️ Falta método de pago",
+        description: "Selecciona el método de pago para contado o pago parcial.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const montoPagado =
+      paymentType === "contado"
+        ? montoTotal
+        : paymentType === "parcial"
+          ? Number(paidAmount || 0)
+          : 0;
+
+    if (paymentType === "parcial") {
+      if (!(montoPagado > 0) || !(montoPagado < montoTotal)) {
+        toast({
+          title: "⚠️ Pago parcial inválido",
+          description: "En pago parcial, el monto pagado debe ser mayor a 0 y menor al total.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    try {
+      // FASE 1: Verificar saldos cargados (si aplica)
       if (montoPagado > 0 && (paymentMethod === "efectivo" || paymentMethod === "tarjeta-transferencia")) {
         if (!saldosDisponibles) {
           toast({
@@ -83,7 +144,7 @@ const RegistroEgresosGenerales = () => {
         }
       }
 
-      // FASE 2: Validar saldo disponible para efectivo
+      // FASE 2: Validar saldo efectivo
       if (paymentMethod === "efectivo") {
         if (montoPagado > (saldosDisponibles?.efectivo ?? 0)) {
           toast({
@@ -95,7 +156,7 @@ const RegistroEgresosGenerales = () => {
         }
       }
 
-      // Validar saldo disponible para bancos
+      // Validar saldo bancos
       if (paymentMethod === "tarjeta-transferencia") {
         if (montoPagado > (saldosDisponibles?.bancos ?? 0)) {
           toast({
@@ -107,7 +168,7 @@ const RegistroEgresosGenerales = () => {
         }
       }
 
-      // Validar límite de crédito si se seleccionó tarjeta de crédito
+      // Validar límite tarjeta crédito
       if (paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito) {
         const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
         const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
@@ -140,32 +201,49 @@ const RegistroEgresosGenerales = () => {
   const processTransaction = async (montoPagado: number, montoTotal: number) => {
     setIsSubmitting(true);
     try {
-      const montoPendiente = montoTotal - montoPagado;
-      const tipoEgreso = cuentaSeleccionada.startsWith("5") ? "costo" : "gasto";
+      const montoPendiente = Math.max(0, montoTotal - montoPagado);
 
-      
-      // ✅ Ahora: backend Mongo (sesión por cookies)
+      // ✅ IMPORTANTÍSIMO:
+      // Tu backend exige cantidad y precio_unitario > 0.
+      // Para “Generales”, usamos 1 x montoTotal para pasar validación sin inventar.
+      const cantidad = 1;
+      const precioUnitario = montoTotal;
+
       const payload = {
-        tipo_egreso: tipoEgreso,
+        // ✅ ahora lo decide el usuario (no lo inferimos por cuenta)
+        tipo_egreso: tipoEgresoUI, // "costo" | "gasto"
         subtipo_egreso: "general",
+
+        // ✅ bandera E2E: forzar que el asiento vaya contra 2001 Proveedores
+        force_proveedores_2001: true,
+
         descripcion: concept,
         concepto: concept,
+
         cuenta_codigo: cuentaSeleccionada,
         subcuenta_id: subcuentaSeleccionada || null,
+
         monto_total: montoTotal,
+        cantidad,
+        precio_unitario: precioUnitario,
+
         tipo_pago: paymentType,
         metodo_pago: paymentMethod || null,
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
+
         fecha_vencimiento: dueDate || null,
+
         proveedor_nombre: supplierName || null,
         proveedor_telefono: supplierPhone || null,
         proveedor_email: supplierEmail || null,
         proveedor_rfc: supplierRFC || null,
+
         comentarios: description || null,
       };
 
-      const res = await apiFetch("/api/egresos/registrar", {
+      // ✅ OJO: este es el endpoint correcto del router que me mostraste
+      const res = await apiFetch("/api/egresos/transacciones", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -177,30 +255,16 @@ const RegistroEgresosGenerales = () => {
         description: `Egreso registrado correctamente${result?.numero_asiento ? ` con asiento contable ${result.numero_asiento}` : ""}`,
       });
 
-      // Reset form
-      setConcept("");
-      setCuentaSeleccionada("");
-      setSubcuentaSeleccionada("");
-      setTotalAmount("");
-      setPaymentType("");
-      setPaymentMethod("");
-      setPaidAmount("");
-      setDueDate("");
-      setSupplierName("");
-      setSupplierPhone("");
-      setSupplierEmail("");
-      setSupplierRFC("");
-      setDescription("");
-      setShowConfirmDialog(false);
-      setPendingSubmit(null);
+      resetForm();
     } catch (error: any) {
       console.error("❌ Error al registrar egreso:", error);
 
-      // Si apiFetch propaga status/response, aquí puedes afinar el mensaje:
       const msg =
         error?.status === 401
           ? "Tu sesión expiró. Inicia sesión nuevamente."
-          : "No se pudo registrar el egreso. Intenta nuevamente.";
+          : error?.message
+            ? String(error.message)
+            : "No se pudo registrar el egreso. Intenta nuevamente.";
 
       toast({
         title: "❌ Error",
@@ -225,6 +289,27 @@ const RegistroEgresosGenerales = () => {
 
         <CardContent className="p-6 pt-0">
           <form onSubmit={handleSubmit} className="space-y-6 pb-4">
+            {/* ✅ NUEVO BLOQUE (primero que el usuario ve): tipo costo/gasto */}
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold">Tipo de Registro *</h3>
+              <p className="text-sm text-muted-foreground">
+                Define si este movimiento se registrará como <b>Costo</b> o <b>Gasto</b>.
+              </p>
+
+              <RadioGroup value={tipoEgresoUI} onValueChange={(v) => setTipoEgresoUI(v as any)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="costo" id="tipo-costo" />
+                  <Label htmlFor="tipo-costo">Costo</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="gasto" id="tipo-gasto" />
+                  <Label htmlFor="tipo-gasto">Gasto</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <Separator />
+
             {/* Información del Gasto */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Información del Gasto</h3>
@@ -265,7 +350,7 @@ const RegistroEgresosGenerales = () => {
 
                 {cuentaSeleccionada && (
                   <div className="space-y-2">
-                    <Label htmlFor="subcuenta">Subcuenta *</Label>
+                    <Label htmlFor="subcuenta">Subcuenta</Label>
                     <Select value={subcuentaSeleccionada} onValueChange={setSubcuentaSeleccionada}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar subcuenta" />
@@ -329,7 +414,7 @@ const RegistroEgresosGenerales = () => {
               {(paymentType === "contado" || paymentType === "parcial") && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="metodo-pago">Método de Pago</Label>
+                    <Label htmlFor="metodo-pago">Método de Pago *</Label>
                     <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar método" />
@@ -354,7 +439,7 @@ const RegistroEgresosGenerales = () => {
 
                   {paymentType === "parcial" && (
                     <div className="space-y-2">
-                      <Label htmlFor="monto-pagado">Monto Pagado</Label>
+                      <Label htmlFor="monto-pagado">Monto Pagado *</Label>
                       <Input
                         id="monto-pagado"
                         type="number"
@@ -438,7 +523,7 @@ const RegistroEgresosGenerales = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={isSubmitting}>
+              <Button type="button" variant="outline" disabled={isSubmitting} onClick={resetForm}>
                 Cancelar
               </Button>
               <Button type="submit" className="gap-2" disabled={isSubmitting}>
