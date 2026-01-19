@@ -4,12 +4,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Package, AlertCircle, Save, Calculator, Wallet, ArrowLeft } from "lucide-react";
+import {
+  Package,
+  AlertCircle,
+  Save,
+  Calculator,
+  Wallet,
+  ArrowLeft,
+  CheckCircle2,
+  CreditCard,
+  Building2,
+  Banknote,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
@@ -37,8 +49,7 @@ const getProductCuentaContable = (p: any) =>
 
 const getProductSubcuentaId = (p: any) => p?.subcuenta_id ?? p?.subcuentaId ?? "";
 
-const getProductProveedor = (p: any) =>
-  p?.proveedor_principal ?? p?.proveedorPrincipal ?? p?.proveedor ?? "";
+const getProductProveedor = (p: any) => p?.proveedor_principal ?? p?.proveedorPrincipal ?? p?.proveedor ?? "";
 
 const getProductPrecioPromedio = (p: any) => p?.precio_promedio ?? p?.precioPromedio ?? 0;
 
@@ -76,18 +87,35 @@ const normalizeMetodoPago = (m: string) => {
   return m; // "efectivo" | "bancos" | "tarjeta_credito_<id>"
 };
 
+const humanMetodoPago = (m: string) => {
+  if (!m) return "—";
+  if (m === "efectivo") return "Efectivo";
+  if (m === "bancos") return "Bancos / Transferencia";
+  if (m.startsWith("tarjeta_credito_")) return "Tarjeta de crédito";
+  return m;
+};
+
+const humanTipoPago = (t: string) => {
+  if (!t) return "—";
+  if (t === "contado") return "Pago total";
+  if (t === "credito") return "Crédito";
+  if (t === "parcial") return "Pago parcial";
+  return t;
+};
+
+const money = (n: any) => formatCurrency(toNum(n, 0));
+
 const RegistroEgresosPrecargados = () => {
   const { data: productosRaw = [] } = useProductosEgresos();
   const { proveedores: proveedoresRaw = [], createProveedor } = useProveedores();
   const { data: tarjetasCreditoRaw = [] } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
-  // Normalizamos en memoria para que TODO el componente use ids consistentes
   const productos = useMemo(() => productosRaw ?? [], [productosRaw]);
   const proveedores = useMemo(() => proveedoresRaw ?? [], [proveedoresRaw]);
   const tarjetasCredito = useMemo(() => tarjetasCreditoRaw ?? [], [tarjetasCreditoRaw]);
 
-  const [vistaSeleccion, setVistaSeleccion] = useState(true); // true = tarjetas, false = formulario
+  const [vistaSeleccion, setVistaSeleccion] = useState(true); // true = selección, false = formulario
   const [selectedType, setSelectedType] = useState(""); // "costo" | "gasto"
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -119,7 +147,6 @@ const RegistroEgresosPrecargados = () => {
   useEffect(() => {
     if (paymentType === "credito" || paymentType === "parcial") {
       setRegistrarProveedor(true);
-      // Si no hay tipo, no lo seteamos forzado; pero evitamos que quede "apagado"
     }
   }, [paymentType]);
 
@@ -180,7 +207,6 @@ const RegistroEgresosPrecargados = () => {
       setSupplierName(getProductProveedor(product) || "");
       const pp = toNum(getProductPrecioPromedio(product), 0);
       setUnitPrice(pp > 0 ? String(pp) : "");
-      // totalAmount se recalcula con useEffect
     } else {
       setSupplierName("");
       setUnitPrice("");
@@ -196,10 +222,31 @@ const RegistroEgresosPrecargados = () => {
     setUnitPrice(onlyNumberDot(price));
   };
 
+  const qNum = toNum(quantity, 0);
+  const upNum = toNum(unitPrice, 0);
+  const montoTotalCalc = qNum > 0 && upNum > 0 ? Number((qNum * upNum).toFixed(2)) : 0;
+
+  const montoPagadoCalc =
+    paymentType === "contado" ? montoTotalCalc : paymentType === "parcial" ? toNum(paidAmount, 0) : 0;
+
+  const montoPendienteCalc = Math.max(0, montoTotalCalc - montoPagadoCalc);
+
+  const metodoPagoNorm = normalizeMetodoPago(paymentMethod);
+
+  const canSubmit =
+    !!selectedType &&
+    !!selectedProductId &&
+    qNum > 0 &&
+    upNum > 0 &&
+    !!paymentType &&
+    (paymentType === "credito" || paymentType === "parcial" ? !!dueDate : true) &&
+    (paymentType === "contado" || paymentType === "parcial" ? !!metodoPagoNorm : true) &&
+    (paymentType === "credito" || paymentType === "parcial" ? true : true);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const metodoPagoNorm = normalizeMetodoPago(paymentMethod);
+    const metodoPagoNormLocal = normalizeMetodoPago(paymentMethod);
 
     if (!selectedProductId || !quantity || !unitPrice || !paymentType) {
       toast({
@@ -211,7 +258,7 @@ const RegistroEgresosPrecargados = () => {
     }
 
     // Método de pago requerido si hay pago (contado o parcial)
-    if ((paymentType === "contado" || paymentType === "parcial") && !metodoPagoNorm) {
+    if ((paymentType === "contado" || paymentType === "parcial") && !metodoPagoNormLocal) {
       toast({
         title: "⚠️ Método de pago requerido",
         description: "Selecciona un método de pago para el monto pagado.",
@@ -220,7 +267,7 @@ const RegistroEgresosPrecargados = () => {
       return;
     }
 
-    // Para crédito/parcial, fecha vencimiento normalmente requerida (E2E contable)
+    // Para crédito/parcial, fecha vencimiento requerida
     if ((paymentType === "credito" || paymentType === "parcial") && !dueDate) {
       toast({
         title: "⚠️ Fecha de vencimiento requerida",
@@ -259,18 +306,15 @@ const RegistroEgresosPrecargados = () => {
     }
 
     try {
-      // ✅ Validar sesión por cookies. Si 401, apiFetch debe lanzar.
       await apiJson("/api/auth/me", { method: "GET" });
 
       let proveedorId: string | null = null;
 
-      // Crear o seleccionar proveedor si se decidió registrarlo
       if (registrarProveedor) {
         if (tipoProveedor === "nuevo") {
-          // Mandamos shape compatible (name + nombre)
           const nuevoProveedor: any = {
             name: supplierName.trim(),
-            nombre: supplierName.trim(), // compat
+            nombre: supplierName.trim(),
             telefono: supplierPhone || null,
             email: supplierEmail || null,
             rfc: supplierRFC || null,
@@ -293,11 +337,10 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // ✅ MONTO TOTAL: SIEMPRE se calcula en submit
-      const qNum = toNum(quantity, 0);
-      const upNum = toNum(unitPrice, 0);
+      const q = toNum(quantity, 0);
+      const up = toNum(unitPrice, 0);
 
-      if (!(qNum > 0) || !(upNum > 0)) {
+      if (!(q > 0) || !(up > 0)) {
         toast({
           title: "⚠️ Cantidad/Precio inválidos",
           description: "Cantidad y precio unitario deben ser mayores a 0.",
@@ -306,14 +349,10 @@ const RegistroEgresosPrecargados = () => {
         return;
       }
 
-      const montoTotal = Number((qNum * upNum).toFixed(2));
+      const montoTotal = Number((q * up).toFixed(2));
 
       const montoPagado =
-        paymentType === "contado"
-          ? montoTotal
-          : paymentType === "parcial"
-          ? toNum(paidAmount, 0)
-          : 0;
+        paymentType === "contado" ? montoTotal : paymentType === "parcial" ? toNum(paidAmount, 0) : 0;
 
       if (paymentType === "parcial") {
         if (!(montoPagado > 0) || montoPagado >= montoTotal) {
@@ -328,8 +367,7 @@ const RegistroEgresosPrecargados = () => {
 
       const montoPendiente = Math.max(0, montoTotal - montoPagado);
 
-      // Si hay pago y el método consume saldos, verifica que saldos estén
-      if (montoPagado > 0 && (metodoPagoNorm === "efectivo" || metodoPagoNorm === "bancos")) {
+      if (montoPagado > 0 && (metodoPagoNormLocal === "efectivo" || metodoPagoNormLocal === "bancos")) {
         if (!saldosDisponibles) {
           toast({
             title: "⚠️ Error de validación",
@@ -340,8 +378,7 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // Validar saldo disponible para efectivo / bancos
-      if (metodoPagoNorm === "efectivo" && saldosDisponibles) {
+      if (metodoPagoNormLocal === "efectivo" && saldosDisponibles) {
         const disponible = toNum(saldosDisponibles.efectivo, 0);
         if (montoPagado > disponible) {
           toast({
@@ -353,7 +390,7 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      if (metodoPagoNorm === "bancos" && saldosDisponibles) {
+      if (metodoPagoNormLocal === "bancos" && saldosDisponibles) {
         const disponible = toNum(saldosDisponibles.bancos, 0);
         if (montoPagado > disponible) {
           toast({
@@ -365,9 +402,8 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // Validar límite de crédito si se seleccionó tarjeta de crédito
-      if (metodoPagoNorm?.startsWith("tarjeta_credito_") && tarjetasCredito?.length) {
-        const tarjetaId = metodoPagoNorm.replace("tarjeta_credito_", "");
+      if (metodoPagoNormLocal?.startsWith("tarjeta_credito_") && tarjetasCredito?.length) {
+        const tarjetaId = metodoPagoNormLocal.replace("tarjeta_credito_", "");
         const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
 
         if (!validacion.valido) {
@@ -380,19 +416,20 @@ const RegistroEgresosPrecargados = () => {
         }
       }
 
-      // ✅ Para costo: subcuenta es muy importante
       const subcuentaIdToSend = selectedType === "costo" ? (getProductSubcuentaId(selectedProduct) || null) : null;
 
       if (selectedType === "costo" && !subcuentaIdToSend) {
         toast({
           title: "⚠️ Falta subcuenta en el catálogo",
-          description: "Este costo no tiene subcuenta asignada. Revisa el catálogo para evitar registros contables incorrectos.",
+          description:
+            "Este costo no tiene subcuenta asignada. Revisa el catálogo para evitar registros contables incorrectos.",
           variant: "destructive",
         });
         return;
       }
 
-      const cuentaCodigoToSend = getProductCuentaContable(selectedProduct) || (selectedType === "costo" ? "5001" : "5101");
+      const cuentaCodigoToSend =
+        getProductCuentaContable(selectedProduct) || (selectedType === "costo" ? "5001" : "5101");
 
       const productName = getProductNombre(selectedProduct);
 
@@ -401,9 +438,7 @@ const RegistroEgresosPrecargados = () => {
           ? "compra_inventario"
           : "precargado";
 
-      // ✅ Payload CANÓNICO camelCase + espejos snake_case para compat (alineación FE/BE)
       const payload: any = {
-        // Canon
         tipoEgreso: selectedType,
         subtipoEgreso: subtipo,
         descripcion: productName || "",
@@ -412,11 +447,11 @@ const RegistroEgresosPrecargados = () => {
         subcuentaId: subcuentaIdToSend,
 
         montoTotal,
-        cantidad: qNum,
-        precioUnitario: upNum,
+        cantidad: q,
+        precioUnitario: up,
 
         tipoPago: paymentType,
-        metodoPago: metodoPagoNorm || null,
+        metodoPago: metodoPagoNormLocal || null,
 
         montoPagado,
         montoPendiente,
@@ -432,15 +467,14 @@ const RegistroEgresosPrecargados = () => {
         productoEgresoId: selectedProductId,
         comentarios: description || null,
 
-        // Compat legacy (si tu backend aún lee snake_case)
         tipo_egreso: selectedType,
         subtipo_egreso: subtipo,
         cuenta_codigo: cuentaCodigoToSend,
         subcuenta_id: subcuentaIdToSend,
         monto_total: montoTotal,
-        precio_unitario: upNum,
+        precio_unitario: up,
         tipo_pago: paymentType,
-        metodo_pago: metodoPagoNorm || null,
+        metodo_pago: metodoPagoNormLocal || null,
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
         fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
@@ -452,24 +486,19 @@ const RegistroEgresosPrecargados = () => {
         producto_egreso_id: selectedProductId,
       };
 
-      const result = await apiJson<{ numero_asiento?: string; egreso_id?: string }>(
-        "/api/transacciones/egresos",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const result = await apiJson<{ numero_asiento?: string; egreso_id?: string }>("/api/transacciones/egresos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       toast({
         title: "✅ Egreso registrado",
         description: `Egreso registrado correctamente${result?.numero_asiento ? ` con asiento ${result.numero_asiento}` : ""}`,
       });
 
-      // Disparar evento para que otras vistas refresquen (tablas/gráficas)
       window.dispatchEvent(new CustomEvent("bukipin:egreso-creado"));
 
-      // Reset completo y volver a selección
       setSelectedType("");
       setVistaSeleccion(true);
       resetForm();
@@ -483,475 +512,666 @@ const RegistroEgresosPrecargados = () => {
     }
   };
 
+  const headerBadge =
+    selectedType === "costo" ? (
+      <Badge variant="secondary" className="ml-2">
+        Costo
+      </Badge>
+    ) : selectedType === "gasto" ? (
+      <Badge variant="secondary" className="ml-2">
+        Gasto
+      </Badge>
+    ) : null;
+
   return (
-    <Card className="max-w-5xl mx-auto border-0 shadow-none">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          Registro de Costos y Gastos Precargados
-        </CardTitle>
-        <CardDescription>
-          Registra gastos y costos de productos precargados del catálogo con unidades de medida específicas
-        </CardDescription>
+    <Card className="max-w-6xl mx-auto border bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/50 shadow-sm">
+      <CardHeader className="pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Registro de Costos y Gastos Precargados
+              {headerBadge}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Registra egresos basados en tu catálogo con unidad de medida, control de pagos y proveedor.
+            </CardDescription>
+          </div>
+
+          {!vistaSeleccion && (
+            <Button variant="outline" onClick={handleVolverSeleccion} className="shrink-0">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver
+            </Button>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent className="px-6 pb-6">
         {vistaSeleccion ? (
           <div className="space-y-4">
-            <Alert className="mb-4">
+            <Alert className="border-muted-foreground/20">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>Selecciona el tipo de egreso que deseas registrar</AlertDescription>
+              <AlertDescription>Selecciona el tipo de egreso que deseas registrar.</AlertDescription>
             </Alert>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card
-                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
+              <button
+                type="button"
                 onClick={() => handleTypeChange("costo")}
+                className="text-left"
               >
-                <CardHeader className="text-center">
-                  <div className="flex justify-center mb-4">
-                    <div className="p-4 bg-red-100 rounded-full">
-                      <Package className="h-8 w-8 text-red-600" />
+                <Card className="h-full border hover:border-primary/40 hover:shadow-md transition-all">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-xl bg-destructive/10">
+                          <Package className="h-6 w-6 text-destructive" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">Costo</CardTitle>
+                          <CardDescription>Relacionado directamente con producción/venta.</CardDescription>
+                        </div>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-muted-foreground/40" />
                     </div>
-                  </div>
-                  <CardTitle className="text-lg">Costo</CardTitle>
-                  <CardDescription>
-                    Directamente relacionado con la producción o venta de productos/servicios
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Usa subcuenta desde catálogo</li>
+                      <li>• Mejor trazabilidad por unidad</li>
+                      <li>• Control de pagos y pendientes</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </button>
 
-              <Card
-                className="cursor-pointer hover:border-primary hover:shadow-lg transition-all"
+              <button
+                type="button"
                 onClick={() => handleTypeChange("gasto")}
+                className="text-left"
               >
-                <CardHeader className="text-center">
-                  <div className="flex justify-center mb-4">
-                    <div className="p-4 bg-orange-100 rounded-full">
-                      <Wallet className="h-8 w-8 text-orange-600" />
+                <Card className="h-full border hover:border-primary/40 hover:shadow-md transition-all">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-xl bg-orange-500/10">
+                          <Wallet className="h-6 w-6 text-orange-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">Gasto</CardTitle>
+                          <CardDescription>Operativos, administrativos y de venta.</CardDescription>
+                        </div>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-muted-foreground/40" />
                     </div>
-                  </div>
-                  <CardTitle className="text-lg">Gasto</CardTitle>
-                  <CardDescription>Gastos operativos, administrativos y de venta</CardDescription>
-                </CardHeader>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Clasificación más ordenada</li>
+                      <li>• Pago total / parcial / crédito</li>
+                      <li>• Proveedor opcional en contado</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </button>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-            <Button variant="ghost" onClick={handleVolverSeleccion} className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver a selección de tipo
-            </Button>
-
-            <Alert className="mb-4">
+            <Alert className="border-muted-foreground/20">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>Los productos deben estar registrados en el catálogo para poder seleccionarlos aquí.</AlertDescription>
+              <AlertDescription>
+                Los productos deben existir en el catálogo para poder seleccionarlos aquí.
+              </AlertDescription>
             </Alert>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <Separator />
 
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Información del Producto</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="producto">{selectedType === "costo" ? "Costo" : "Gasto"} Precargado *</Label>
-                    <Select value={selectedProductId} onValueChange={handleProductChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={`Seleccionar ${selectedType} del catálogo`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredProducts.length > 0 ? (
-                          filteredProducts.map((producto: any) => {
-                            const pid = getId(producto);
-                            return (
-                              <SelectItem key={pid} value={pid}>
-                                <div className="flex items-center space-x-2">
-                                  <span>{getProductNombre(producto) || "Sin nombre"}</span>
-                                  <span className="text-muted-foreground text-xs">
-                                    - {getProductUnidad(producto) || "unidad"}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            );
-                          })
-                        ) : (
-                          <SelectItem value="no-products" disabled>
-                            No hay {selectedType}s en el catálogo
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-
-                    {filteredProducts.length === 0 && (
-                      <p className="text-sm text-yellow-600">
-                        No hay {selectedType}s precargados. Ve al catálogo de costos y gastos para agregar {selectedType}s.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="unidad">Unidad de Medida</Label>
-                    <Input
-                      id="unidad"
-                      value={selectedProduct ? getProductUnidad(selectedProduct) || "" : ""}
-                      placeholder="Se completa automáticamente"
-                      disabled
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="cantidad">Cantidad *</Label>
-                    <Input
-                      id="cantidad"
-                      type="text"
-                      value={quantity}
-                      onChange={(e) => handleQuantityChange(e.target.value)}
-                      placeholder="Ej: 10 o 10.5"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="precio-unitario">Precio Unitario *</Label>
-                    <Input
-                      id="precio-unitario"
-                      type="text"
-                      value={unitPrice}
-                      onChange={(e) => handleUnitPriceChange(e.target.value)}
-                      placeholder="Ej: 100 o 100.50"
-                      required
-                    />
-                    {selectedProduct && toNum(getProductPrecioPromedio(selectedProduct), 0) > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Precio promedio del catálogo: ${formatNumber(String(getProductPrecioPromedio(selectedProduct)))}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="total">Monto Total</Label>
-                    <div className="flex items-center space-x-2">
-                      <Calculator className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="total"
-                        type="text"
-                        value={totalAmount ? formatNumber(totalAmount) : ""}
-                        placeholder="0.00"
-                        disabled
-                        className="bg-muted"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {selectedProduct && (
-                <>
-                  <Separator />
-
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* LEFT: Form */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Producto */}
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Información de Pago</h3>
-
-                    <div className="space-y-2">
-                      <Label>Tipo de Pago *</Label>
-                      <RadioGroup value={paymentType} onValueChange={setPaymentType}>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="contado" id="contado" />
-                          <Label htmlFor="contado">Pago Total</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="credito" id="credito" />
-                          <Label htmlFor="credito">Crédito</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="parcial" id="parcial" />
-                          <Label htmlFor="parcial">Pago Parcial</Label>
-                        </div>
-                      </RadioGroup>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold">Información del Producto</h3>
+                      <Badge variant="outline" className="text-xs">
+                        Del catálogo
+                      </Badge>
                     </div>
 
-                    {(paymentType === "contado" || paymentType === "parcial") && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="metodo-pago">Método de Pago</Label>
-                          <Select
-                            value={paymentMethod}
-                            onValueChange={(v) => setPaymentMethod(normalizeMetodoPago(v))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar método" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="efectivo">
-                                Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo)}
-                              </SelectItem>
-
-                              {/* CANÓNICO: bancos */}
-                              <SelectItem value="bancos">
-                                Bancos / Transferencia - Disponible: ${formatCurrency(saldosDisponibles?.bancos)}
-                              </SelectItem>
-
-                              {tarjetasCredito?.map((tarjeta: any) => {
-                                const tid = getId(tarjeta);
-                                const limite = tarjeta?.limite_disponible ?? tarjeta?.limiteDisponible ?? 0;
-                                return (
-                                  <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
-                                    {tarjeta?.nombre ?? tarjeta?.name ?? "Tarjeta"} - Disponible: $
-                                    {formatCurrency(limite)}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {paymentType === "parcial" && (
-                          <div className="space-y-2">
-                            <Label htmlFor="monto-pagado">Monto Pagado</Label>
-                            <Input
-                              id="monto-pagado"
-                              type="text"
-                              value={paidAmount}
-                              onChange={(e) => setPaidAmount(onlyNumberDot(e.target.value))}
-                              placeholder="Ej: 500 o 500.50"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {(paymentType === "credito" || paymentType === "parcial") && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
-                        <Input
-                          id="fecha-vencimiento"
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                        />
-                      </div>
-                    )}
-                  </div>
+                        <Label htmlFor="producto">
+                          {selectedType === "costo" ? "Costo" : "Gasto"} Precargado <span className="text-destructive">*</span>
+                        </Label>
 
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Información del Proveedor</h3>
-
-                    {paymentType === "contado" && (
-                      <div className="space-y-2">
-                        <Label>¿Deseas registrar información del proveedor?</Label>
-                        <RadioGroup
-                          value={registrarProveedor ? "si" : "no"}
-                          onValueChange={(val) => {
-                            const si = val === "si";
-                            setRegistrarProveedor(si);
-                            if (!si) {
-                              setTipoProveedor("");
-                              setProveedorSeleccionado("");
-                              setSupplierName("");
-                              setSupplierPhone("");
-                              setSupplierEmail("");
-                              setSupplierRFC("");
-                            }
-                          }}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="no" id="no-proveedor" />
-                            <Label htmlFor="no-proveedor">No, continuar sin proveedor</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="si" id="si-proveedor" />
-                            <Label htmlFor="si-proveedor">Sí, registrar proveedor</Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                    )}
-
-                    {(paymentType === "credito" || paymentType === "parcial") && (
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Para pagos a crédito o parciales es obligatorio registrar la información del proveedor
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {registrarProveedor && (
-                      <div className="space-y-2">
-                        <Label>Tipo de Proveedor *</Label>
-                        <RadioGroup
-                          value={tipoProveedor}
-                          onValueChange={(val) => {
-                            setTipoProveedor(val);
-                            if (val === "nuevo") {
-                              setProveedorSeleccionado("");
-                              setSupplierName("");
-                              setSupplierPhone("");
-                              setSupplierEmail("");
-                              setSupplierRFC("");
-                            } else if (val === "existente") {
-                              setSupplierName("");
-                              setSupplierPhone("");
-                              setSupplierEmail("");
-                              setSupplierRFC("");
-                            }
-                          }}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
-                            <Label htmlFor="proveedor-nuevo">Nuevo Proveedor</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="existente" id="proveedor-existente" />
-                            <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                    )}
-
-                    {registrarProveedor && tipoProveedor === "existente" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="proveedor-select">Seleccionar Proveedor *</Label>
-                        <Select
-                          value={proveedorSeleccionado}
-                          onValueChange={(val) => {
-                            setProveedorSeleccionado(val);
-                            const proveedor = proveedores.find((p: any) => getId(p) === val);
-                            if (proveedor) {
-                              setSupplierName(getProveedorNombre(proveedor));
-                              setSupplierPhone(getProveedorTelefono(proveedor));
-                              setSupplierEmail(getProveedorEmail(proveedor));
-                              setSupplierRFC(getProveedorRFC(proveedor));
-                            }
-                          }}
-                        >
+                        <Select value={selectedProductId} onValueChange={handleProductChange}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar proveedor" />
+                            <SelectValue placeholder={`Seleccionar ${selectedType} del catálogo`} />
                           </SelectTrigger>
                           <SelectContent>
-                            {proveedores.length > 0 ? (
-                              proveedores.map((proveedor: any) => {
-                                const pid = getId(proveedor);
-                                const nombre = getProveedorNombre(proveedor);
-                                const rfc = getProveedorRFC(proveedor);
+                            {filteredProducts.length > 0 ? (
+                              filteredProducts.map((producto: any) => {
+                                const pid = getId(producto);
                                 return (
                                   <SelectItem key={pid} value={pid}>
-                                    {nombre || "Proveedor"}{rfc ? ` - ${rfc}` : ""}
+                                    <div className="flex items-center justify-between gap-2 w-full">
+                                      <span className="truncate">{getProductNombre(producto) || "Sin nombre"}</span>
+                                      <span className="text-muted-foreground text-xs shrink-0">
+                                        {getProductUnidad(producto) || "unidad"}
+                                      </span>
+                                    </div>
                                   </SelectItem>
                                 );
                               })
                             ) : (
-                              <SelectItem value="no-proveedores" disabled>
-                                No hay proveedores registrados
+                              <SelectItem value="no-products" disabled>
+                                No hay {selectedType}s en el catálogo
                               </SelectItem>
                             )}
                           </SelectContent>
                         </Select>
+
+                        {filteredProducts.length === 0 && (
+                          <p className="text-sm text-yellow-600">
+                            No hay {selectedType}s precargados. Ve al catálogo para agregarlos.
+                          </p>
+                        )}
                       </div>
-                    )}
 
-                    {registrarProveedor && tipoProveedor === "nuevo" && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
-                          <Input
-                            id="proveedor-nombre"
-                            value={supplierName}
-                            onChange={(e) => setSupplierName(e.target.value)}
-                            placeholder="Nombre completo o razón social"
-                            required
-                          />
-                        </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="unidad">Unidad de Medida</Label>
+                        <Input
+                          id="unidad"
+                          value={selectedProduct ? getProductUnidad(selectedProduct) || "" : ""}
+                          placeholder="Se completa automáticamente"
+                          disabled
+                        />
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                          <Input
-                            id="proveedor-telefono"
-                            value={supplierPhone}
-                            onChange={(e) => setSupplierPhone(e.target.value)}
-                            placeholder="Número de teléfono"
-                          />
-                          <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
-                        </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cantidad">
+                          Cantidad <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="cantidad"
+                          type="text"
+                          value={quantity}
+                          onChange={(e) => handleQuantityChange(e.target.value)}
+                          placeholder="Ej: 10 o 10.5"
+                          required
+                        />
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="proveedor-email">Email</Label>
-                          <Input
-                            id="proveedor-email"
-                            type="email"
-                            value={supplierEmail}
-                            onChange={(e) => setSupplierEmail(e.target.value)}
-                            placeholder="correo@ejemplo.com"
-                          />
-                          <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
-                        </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="precio-unitario">
+                          Precio Unitario <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="precio-unitario"
+                          type="text"
+                          value={unitPrice}
+                          onChange={(e) => handleUnitPriceChange(e.target.value)}
+                          placeholder="Ej: 100 o 100.50"
+                          required
+                        />
+                        {selectedProduct && toNum(getProductPrecioPromedio(selectedProduct), 0) > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Precio promedio del catálogo: ${formatNumber(String(getProductPrecioPromedio(selectedProduct)))}
+                          </p>
+                        )}
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="proveedor-rfc">RFC</Label>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="total">Monto Total</Label>
+                        <div className="flex items-center space-x-2">
+                          <Calculator className="h-4 w-4 text-muted-foreground" />
                           <Input
-                            id="proveedor-rfc"
-                            value={supplierRFC}
-                            onChange={(e) => setSupplierRFC(e.target.value)}
-                            placeholder="RFC del proveedor"
+                            id="total"
+                            type="text"
+                            value={totalAmount ? formatNumber(totalAmount) : ""}
+                            placeholder="0.00"
+                            disabled
+                            className="bg-muted"
                           />
-                          <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  </div>
 
-                    {registrarProveedor && tipoProveedor === "existente" && proveedorSeleccionado && (
-                      <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                        <p className="font-semibold">Datos del proveedor seleccionado:</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="font-medium">Nombre:</span> {supplierName}
+                  {/* Pago + Proveedor solo cuando hay producto */}
+                  {selectedProduct && (
+                    <>
+                      <Separator />
+
+                      {/* Pago */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold">Información de Pago</h3>
+                          {paymentType ? <Badge variant="secondary">{humanTipoPago(paymentType)}</Badge> : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>
+                            Tipo de Pago <span className="text-destructive">*</span>
+                          </Label>
+                          <RadioGroup value={paymentType} onValueChange={setPaymentType}>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="contado" id="contado" />
+                              <Label htmlFor="contado">Pago Total</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="credito" id="credito" />
+                              <Label htmlFor="credito">Crédito</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="parcial" id="parcial" />
+                              <Label htmlFor="parcial">Pago Parcial</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        {(paymentType === "contado" || paymentType === "parcial") && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="metodo-pago">
+                                Método de Pago <span className="text-destructive">*</span>
+                              </Label>
+                              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(normalizeMetodoPago(v))}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Seleccionar método" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="efectivo">
+                                    <div className="flex items-center gap-2">
+                                      <Banknote className="h-4 w-4" />
+                                      <span>Efectivo</span>
+                                      <span className="text-muted-foreground text-xs">
+                                        • Disponible: ${money(saldosDisponibles?.efectivo)}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+
+                                  <SelectItem value="bancos">
+                                    <div className="flex items-center gap-2">
+                                      <Building2 className="h-4 w-4" />
+                                      <span>Bancos / Transferencia</span>
+                                      <span className="text-muted-foreground text-xs">
+                                        • Disponible: ${money(saldosDisponibles?.bancos)}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+
+                                  {tarjetasCredito?.map((tarjeta: any) => {
+                                    const tid = getId(tarjeta);
+                                    const limite = tarjeta?.limite_disponible ?? tarjeta?.limiteDisponible ?? 0;
+                                    return (
+                                      <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
+                                        <div className="flex items-center gap-2">
+                                          <CreditCard className="h-4 w-4" />
+                                          <span className="truncate">{tarjeta?.nombre ?? tarjeta?.name ?? "Tarjeta"}</span>
+                                          <span className="text-muted-foreground text-xs">
+                                            • Disponible: ${money(limite)}
+                                          </span>
+                                        </div>
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {paymentType === "parcial" && (
+                              <div className="space-y-2">
+                                <Label htmlFor="monto-pagado">
+                                  Monto Pagado <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                  id="monto-pagado"
+                                  type="text"
+                                  value={paidAmount}
+                                  onChange={(e) => setPaidAmount(onlyNumberDot(e.target.value))}
+                                  placeholder="Ej: 500 o 500.50"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Pendiente estimado: ${money(montoPendienteCalc)}
+                                </p>
+                              </div>
+                            )}
                           </div>
-                          {supplierPhone && (
-                            <div>
-                              <span className="font-medium">Teléfono:</span> {supplierPhone}
-                            </div>
-                          )}
-                          {supplierEmail && (
-                            <div>
-                              <span className="font-medium">Email:</span> {supplierEmail}
-                            </div>
-                          )}
-                          {supplierRFC && (
-                            <div>
-                              <span className="font-medium">RFC:</span> {supplierRFC}
-                            </div>
-                          )}
-                        </div>
+                        )}
+
+                        {(paymentType === "credito" || paymentType === "parcial") && (
+                          <div className="space-y-2">
+                            <Label htmlFor="fecha-vencimiento">
+                              Fecha de Vencimiento <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                              id="fecha-vencimiento"
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="descripcion">Descripción Adicional</Label>
-                    <Textarea
-                      id="descripcion"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Detalles adicionales del gasto..."
-                      rows={3}
-                    />
-                  </div>
+                      <Separator />
 
-                  <div className="flex justify-end gap-2">
+                      {/* Proveedor */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold">Información del Proveedor</h3>
+                          {registrarProveedor ? <Badge variant="secondary">Se registrará</Badge> : <Badge variant="outline">Opcional</Badge>}
+                        </div>
+
+                        {paymentType === "contado" && (
+                          <div className="space-y-2">
+                            <Label>¿Deseas registrar información del proveedor?</Label>
+                            <RadioGroup
+                              value={registrarProveedor ? "si" : "no"}
+                              onValueChange={(val) => {
+                                const si = val === "si";
+                                setRegistrarProveedor(si);
+                                if (!si) {
+                                  setTipoProveedor("");
+                                  setProveedorSeleccionado("");
+                                  setSupplierName("");
+                                  setSupplierPhone("");
+                                  setSupplierEmail("");
+                                  setSupplierRFC("");
+                                }
+                              }}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="no" id="no-proveedor" />
+                                <Label htmlFor="no-proveedor">No, continuar sin proveedor</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="si" id="si-proveedor" />
+                                <Label htmlFor="si-proveedor">Sí, registrar proveedor</Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+                        )}
+
+                        {(paymentType === "credito" || paymentType === "parcial") && (
+                          <Alert className="border-muted-foreground/20">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>
+                              Para pagos a crédito o parciales es obligatorio registrar la información del proveedor.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {registrarProveedor && (
+                          <div className="space-y-2">
+                            <Label>
+                              Tipo de Proveedor <span className="text-destructive">*</span>
+                            </Label>
+                            <RadioGroup
+                              value={tipoProveedor}
+                              onValueChange={(val) => {
+                                setTipoProveedor(val);
+                                if (val === "nuevo") {
+                                  setProveedorSeleccionado("");
+                                  setSupplierName("");
+                                  setSupplierPhone("");
+                                  setSupplierEmail("");
+                                  setSupplierRFC("");
+                                } else if (val === "existente") {
+                                  setSupplierName("");
+                                  setSupplierPhone("");
+                                  setSupplierEmail("");
+                                  setSupplierRFC("");
+                                }
+                              }}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="nuevo" id="proveedor-nuevo" />
+                                <Label htmlFor="proveedor-nuevo">Nuevo Proveedor</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="existente" id="proveedor-existente" />
+                                <Label htmlFor="proveedor-existente">Proveedor Existente</Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+                        )}
+
+                        {registrarProveedor && tipoProveedor === "existente" && (
+                          <div className="space-y-2">
+                            <Label htmlFor="proveedor-select">
+                              Seleccionar Proveedor <span className="text-destructive">*</span>
+                            </Label>
+                            <Select
+                              value={proveedorSeleccionado}
+                              onValueChange={(val) => {
+                                setProveedorSeleccionado(val);
+                                const proveedor = proveedores.find((p: any) => getId(p) === val);
+                                if (proveedor) {
+                                  setSupplierName(getProveedorNombre(proveedor));
+                                  setSupplierPhone(getProveedorTelefono(proveedor));
+                                  setSupplierEmail(getProveedorEmail(proveedor));
+                                  setSupplierRFC(getProveedorRFC(proveedor));
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar proveedor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {proveedores.length > 0 ? (
+                                  proveedores.map((proveedor: any) => {
+                                    const pid = getId(proveedor);
+                                    const nombre = getProveedorNombre(proveedor);
+                                    const rfc = getProveedorRFC(proveedor);
+                                    return (
+                                      <SelectItem key={pid} value={pid}>
+                                        {nombre || "Proveedor"}
+                                        {rfc ? ` - ${rfc}` : ""}
+                                      </SelectItem>
+                                    );
+                                  })
+                                ) : (
+                                  <SelectItem value="no-proveedores" disabled>
+                                    No hay proveedores registrados
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {registrarProveedor && tipoProveedor === "nuevo" && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="proveedor-nombre">
+                                Nombre del Proveedor <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                id="proveedor-nombre"
+                                value={supplierName}
+                                onChange={(e) => setSupplierName(e.target.value)}
+                                placeholder="Nombre completo o razón social"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="proveedor-telefono">Teléfono</Label>
+                              <Input
+                                id="proveedor-telefono"
+                                value={supplierPhone}
+                                onChange={(e) => setSupplierPhone(e.target.value)}
+                                placeholder="Número de teléfono"
+                              />
+                              <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="proveedor-email">Email</Label>
+                              <Input
+                                id="proveedor-email"
+                                type="email"
+                                value={supplierEmail}
+                                onChange={(e) => setSupplierEmail(e.target.value)}
+                                placeholder="correo@ejemplo.com"
+                              />
+                              <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="proveedor-rfc">RFC</Label>
+                              <Input
+                                id="proveedor-rfc"
+                                value={supplierRFC}
+                                onChange={(e) => setSupplierRFC(e.target.value)}
+                                placeholder="RFC del proveedor"
+                              />
+                              <p className="text-xs text-muted-foreground">No puede repetirse con otro proveedor</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {registrarProveedor && tipoProveedor === "existente" && proveedorSeleccionado && (
+                          <div className="bg-muted/40 border rounded-lg p-4 space-y-2">
+                            <p className="font-semibold">Proveedor seleccionado</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="font-medium">Nombre:</span> {supplierName || "—"}
+                              </div>
+                              <div>
+                                <span className="font-medium">Teléfono:</span> {supplierPhone || "—"}
+                              </div>
+                              <div>
+                                <span className="font-medium">Email:</span> {supplierEmail || "—"}
+                              </div>
+                              <div>
+                                <span className="font-medium">RFC:</span> {supplierRFC || "—"}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Descripción */}
+                      <div className="space-y-2">
+                        <Label htmlFor="descripcion">Descripción Adicional</Label>
+                        <Textarea
+                          id="descripcion"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          placeholder="Detalles adicionales del gasto..."
+                          rows={3}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-2">
                     <Button type="button" variant="outline" onClick={handleVolverSeleccion}>
                       Cancelar
                     </Button>
-                    <Button type="submit" className="gap-2">
+                    <Button type="submit" className="gap-2" disabled={!canSubmit}>
                       <Save className="h-4 w-4" />
                       Registrar Egreso
                     </Button>
                   </div>
-                </>
-              )}
+                </div>
+
+                {/* RIGHT: Resumen */}
+                <div className="lg:col-span-1">
+                  <Card className="border shadow-sm lg:sticky lg:top-4">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Resumen</CardTitle>
+                      <CardDescription>Vista rápida del registro</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Producto</span>
+                          <span className="font-medium text-right truncate max-w-[180px]">
+                            {selectedProduct ? getProductNombre(selectedProduct) : "—"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Unidad</span>
+                          <span className="font-medium">
+                            {selectedProduct ? getProductUnidad(selectedProduct) || "—" : "—"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Cantidad</span>
+                          <span className="font-medium">{qNum > 0 ? qNum : "—"}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Precio unitario</span>
+                          <span className="font-medium">${money(upNum)}</span>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Monto total</span>
+                          <span className="text-lg font-semibold">${money(montoTotalCalc)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Pagado</span>
+                          <span className="font-medium">${money(montoPagadoCalc)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Pendiente</span>
+                          <span className="font-medium">${money(montoPendienteCalc)}</span>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Tipo de pago</span>
+                          <span className="font-medium">{humanTipoPago(paymentType)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Método</span>
+                          <span className="font-medium">{humanMetodoPago(metodoPagoNorm)}</span>
+                        </div>
+                        {(paymentType === "credito" || paymentType === "parcial") && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Vencimiento</span>
+                            <span className="font-medium">{dueDate || "—"}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-1 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Proveedor</span>
+                          <span className="font-medium truncate max-w-[180px]">{supplierName || "—"}</span>
+                        </div>
+                        {registrarProveedor ? (
+                          <Badge className="w-fit" variant="secondary">
+                            Se guardará proveedor
+                          </Badge>
+                        ) : (
+                          <Badge className="w-fit" variant="outline">
+                            Proveedor opcional
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </form>
           </div>
         )}
