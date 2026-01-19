@@ -76,6 +76,41 @@ const getSubCuentaMadre = (s: any) =>
 const getSubNombre = (s: any) => String(s?.nombre ?? s?.name ?? "Subcuenta");
 
 const RegistroEgresosGenerales = () => {
+  /**
+   * ✅ FIX SCROLL DOBLE (E2E)
+   * En dashboards es común tener:
+   *  - main con overflow-y-auto (scroll interno)
+   *  - html/body todavía con scroll (scroll externo)
+   * Resultado: doble scrollbar + “blanco”/descuadres.
+   *
+   * Aquí bloqueamos el scroll del documento mientras este form está montado,
+   * para que SOLO quede el scroll del contenedor del dashboard.
+   *
+   * (Si luego quieres hacerlo “global”, lo movemos al DashboardLayout.)
+   */
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlHeight = html.style.height;
+    const prevBodyHeight = body.style.height;
+
+    // Bloquear scroll externo
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.height = "100%";
+    body.style.height = "100%";
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      html.style.height = prevHtmlHeight;
+      body.style.height = prevBodyHeight;
+    };
+  }, []);
+
   // ✅ el usuario elige primero si es costo o gasto
   const [tipoEgresoUI, setTipoEgresoUI] = useState<"costo" | "gasto" | "">("");
 
@@ -375,13 +410,12 @@ const RegistroEgresosGenerales = () => {
         montoPagado,
         montoPendiente,
 
-        fechaVencimiento:
-          paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
+        fechaVencimiento: paymentType === "credito" || paymentType === "parcial" ? dueDate || null : null,
 
-        proveedorNombre: registrarProveedor ? (supplierName.trim() || null) : null,
-        proveedorTelefono: registrarProveedor ? (supplierPhone || null) : null,
-        proveedorEmail: registrarProveedor ? (supplierEmail || null) : null,
-        proveedorRFC: registrarProveedor ? (supplierRFC || null) : null,
+        proveedorNombre: registrarProveedor ? supplierName.trim() || null : null,
+        proveedorTelefono: registrarProveedor ? supplierPhone || null : null,
+        proveedorEmail: registrarProveedor ? supplierEmail || null : null,
+        proveedorRFC: registrarProveedor ? supplierRFC || null : null,
 
         comentarios: description || null,
 
@@ -395,12 +429,11 @@ const RegistroEgresosGenerales = () => {
         metodo_pago: metodoPagoNorm || null,
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
-        fecha_vencimiento:
-          paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
-        proveedor_nombre: registrarProveedor ? (supplierName.trim() || null) : null,
-        proveedor_telefono: registrarProveedor ? (supplierPhone || null) : null,
-        proveedor_email: registrarProveedor ? (supplierEmail || null) : null,
-        proveedor_rfc: registrarProveedor ? (supplierRFC || null) : null,
+        fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? dueDate || null : null,
+        proveedor_nombre: registrarProveedor ? supplierName.trim() || null : null,
+        proveedor_telefono: registrarProveedor ? supplierPhone || null : null,
+        proveedor_email: registrarProveedor ? supplierEmail || null : null,
+        proveedor_rfc: registrarProveedor ? supplierRFC || null : null,
         precio_unitario: precioUnitario,
       };
 
@@ -600,7 +633,6 @@ const RegistroEgresosGenerales = () => {
                   value={paymentType}
                   onValueChange={(v) => {
                     setPaymentType(v);
-                    // limpia campos dependientes
                     if (v !== "parcial") setPaidAmount("");
                     if (v === "contado") setDueDate("");
                     if (v === "credito") setPaymentMethod("");
@@ -634,7 +666,6 @@ const RegistroEgresosGenerales = () => {
                           Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo ?? 0)}
                         </SelectItem>
 
-                        {/* ✅ CANÓNICO: bancos */}
                         <SelectItem value="bancos">
                           Bancos / Transferencia - Disponible: ${formatCurrency(saldosDisponibles?.bancos ?? 0)}
                         </SelectItem>
