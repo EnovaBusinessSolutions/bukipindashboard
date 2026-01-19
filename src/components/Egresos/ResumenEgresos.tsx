@@ -55,6 +55,77 @@ const pickISODate = (t: any) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
+// ✅ Normalizadores E2E (para soportar múltiples shapes del backend)
+const normalizeAsientoDetalle = (d: any): AsientoDetalle => {
+  // soporta: detalles[], detalle_asientos[], lines[]
+  const cuenta_codigo =
+    d?.cuenta_codigo ??
+    d?.cuentaCodigo ??
+    d?.accountCodigo ??
+    d?.accountCode ??
+    d?.code ??
+    "";
+
+  const cuenta_nombre = d?.cuenta_nombre ?? d?.cuentaNombre ?? d?.accountName ?? undefined;
+
+  const debe =
+    safeNum(d?.debe) ||
+    safeNum(d?.debit) ||
+    (String(d?.side || "").toLowerCase() === "debit" ? safeNum(d?.monto) : 0);
+
+  const haber =
+    safeNum(d?.haber) ||
+    safeNum(d?.credit) ||
+    (String(d?.side || "").toLowerCase() === "credit" ? safeNum(d?.monto) : 0);
+
+  const descripcion = d?.descripcion ?? d?.memo ?? d?.concepto ?? d?.description ?? "";
+
+  return {
+    cuenta_codigo: String(cuenta_codigo || ""),
+    cuenta_nombre,
+    descripcion: String(descripcion || ""),
+    debe,
+    haber,
+  };
+};
+
+const normalizeAsiento = (json: any): Asiento | null => {
+  if (!json) return null;
+
+  // soporta: {ok:true,data}, {ok:true,asiento}, payload plano, o {data:{asiento}}
+  let raw: any = json?.data ?? json?.asiento ?? json?.item ?? json;
+  if (raw?.asiento) raw = raw.asiento;
+
+  if (!raw) return null;
+
+  const numero_asiento =
+    raw?.numero_asiento ??
+    raw?.numeroAsiento ??
+    raw?.numero ??
+    raw?.id ??
+    "N/A";
+
+  const fecha = raw?.fecha ?? raw?.asiento_fecha ?? raw?.date ?? raw?.created_at ?? raw?.createdAt ?? undefined;
+  const descripcion = raw?.descripcion ?? raw?.concepto ?? raw?.memo ?? "";
+
+  const rawDetalles =
+    raw?.detalles ??
+    raw?.detalle_asientos ??
+    raw?.detalle_asiento ??
+    raw?.lines ??
+    [];
+
+  const detalles = Array.isArray(rawDetalles) ? rawDetalles.map(normalizeAsientoDetalle) : [];
+
+  return {
+    id: raw?.id ?? raw?._id,
+    numero_asiento: String(numero_asiento || "N/A"),
+    fecha: fecha ? String(fecha) : undefined,
+    descripcion: String(descripcion || ""),
+    detalles,
+  };
+};
+
 const ResumenEgresos = () => {
   // react-query normalmente regresa error/isError; si tu hook no lo expone, igual no rompe.
   const {
@@ -228,7 +299,8 @@ const ResumenEgresos = () => {
       cuenta_codigo: cv.cuenta_codigo,
       monto_total: safeNum(cv.monto_total),
       proveedor_nombre: cv.proveedor_nombre,
-      imagen_url: mapaImagenesProductos.get(String(cv.descripcion || "").toLowerCase().trim()) || cv.imagen_comprobante || null,
+      imagen_url:
+        mapaImagenesProductos.get(String(cv.descripcion || "").toLowerCase().trim()) || cv.imagen_comprobante || null,
       cantidad: safeNum(cv.cantidad),
       costo_unitario: safeNum(cv.precio_unitario),
       numero_asiento: cv.numero_asiento || cv.numeroAsiento || null,
@@ -250,7 +322,8 @@ const ResumenEgresos = () => {
       cuenta_codigo: g.cuenta_codigo,
       monto_total: safeNum(g.monto_total),
       proveedor_nombre: g.proveedor_nombre,
-      imagen_url: mapaImagenesProductos.get(String(g.descripcion || "").toLowerCase().trim()) || g.imagen_comprobante || null,
+      imagen_url:
+        mapaImagenesProductos.get(String(g.descripcion || "").toLowerCase().trim()) || g.imagen_comprobante || null,
       cantidad: safeNum(g.cantidad),
       costo_unitario: safeNum(g.precio_unitario),
       numero_asiento: g.numero_asiento || g.numeroAsiento || null,
@@ -272,7 +345,8 @@ const ResumenEgresos = () => {
       cuenta_codigo: og.cuenta_codigo,
       monto_total: safeNum(og.monto_total),
       proveedor_nombre: og.proveedor_nombre,
-      imagen_url: mapaImagenesProductos.get(String(og.descripcion || "").toLowerCase().trim()) || og.imagen_comprobante || null,
+      imagen_url:
+        mapaImagenesProductos.get(String(og.descripcion || "").toLowerCase().trim()) || og.imagen_comprobante || null,
       cantidad: safeNum(og.cantidad),
       costo_unitario: safeNum(og.precio_unitario),
       numero_asiento: og.numero_asiento || og.numeroAsiento || null,
@@ -290,13 +364,22 @@ const ResumenEgresos = () => {
       const db = pickISODate(b);
       return new Date(db || 0).getTime() - new Date(da || 0).getTime();
     });
-  }, [costosVentaInventario, transaccionesCostosVenta, transaccionesGastos, transaccionesOtrosGastos, mapaImagenesProductos]);
+  }, [
+    costosVentaInventario,
+    transaccionesCostosVenta,
+    transaccionesGastos,
+    transaccionesOtrosGastos,
+    mapaImagenesProductos,
+  ]);
 
   const transaccionesFiltadasPorCategoria = useMemo(() => {
     if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
-    if (filterCategoriaContable === "costos") return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
-    if (filterCategoriaContable === "gastos") return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
-    if (filterCategoriaContable === "otros_gastos") return transaccionesEgresosUnificadas.filter((t: any) => t.cuenta_codigo === "5204");
+    if (filterCategoriaContable === "costos")
+      return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
+    if (filterCategoriaContable === "gastos")
+      return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
+    if (filterCategoriaContable === "otros_gastos")
+      return transaccionesEgresosUnificadas.filter((t: any) => t.cuenta_codigo === "5204");
     return transaccionesEgresosUnificadas;
   }, [transaccionesEgresosUnificadas, filterCategoriaContable]);
 
@@ -350,19 +433,24 @@ const ResumenEgresos = () => {
     setLoadingAsientos(true);
     setCurrentAsientos(null);
 
+    // helper: intenta endpoint; 404 = null (silencioso), otros errores = throw
+    const tryFetchAsiento = async (url: string) => {
+      try {
+        const j = await apiFetch(url, { method: "GET" });
+        return normalizeAsiento(j);
+      } catch (e: any) {
+        if (e?.status === 404) return null;
+        throw e;
+      }
+    };
+
     try {
       // 1) Si ya trae detalle (inventario), úsalo directo
       if (Array.isArray(transaccion?.detalles_asiento) && transaccion.detalles_asiento.length) {
-        const detalles = transaccion.detalles_asiento.map((d: any) => ({
-          cuenta_codigo: d.cuenta_codigo,
-          cuenta_nombre: d.cuenta_nombre,
-          descripcion: d.descripcion,
-          debe: safeNum(d.debe),
-          haber: safeNum(d.haber),
-        }));
+        const detalles = transaccion.detalles_asiento.map(normalizeAsientoDetalle);
 
         setCurrentAsientos({
-          numero_asiento: transaccion.numero_asiento || "N/A",
+          numero_asiento: transaccion.numero_asiento || transaccion.numeroAsiento || "N/A",
           fecha: pickISODate(transaccion) || undefined,
           descripcion: transaccion.descripcion,
           detalles,
@@ -370,24 +458,39 @@ const ResumenEgresos = () => {
         return;
       }
 
-      // 2) Canonical: buscar por transacción (este endpoint lo vamos a garantizar en backend)
       const id = String(transaccion?.id || "").trim();
-      if (!id) {
-        setCurrentAsientos(null);
-        return;
+      const numeroAsiento = String(transaccion?.numero_asiento || transaccion?.numeroAsiento || "").trim();
+
+      // 2) Asiento por ID (si existe)
+      const asientoId = transaccion?.asiento_id ?? transaccion?.asientoId ?? transaccion?.asientoID ?? null;
+
+      let asiento: Asiento | null = null;
+
+      if (asientoId) {
+        asiento = await tryFetchAsiento(`/api/asientos/${encodeURIComponent(String(asientoId))}`);
       }
 
-      const json = await apiFetch(`/api/asientos/by-transaccion?source=egreso&id=${encodeURIComponent(id)}`, {
-        method: "GET",
-      });
+      // 3) Canonical: by-transaccion
+      if (!asiento && id) {
+        asiento = await tryFetchAsiento(`/api/asientos/by-transaccion?source=egreso&id=${encodeURIComponent(id)}`);
+      }
 
-      const asiento = (json?.data ?? json) as Asiento | null;
-      setCurrentAsientos(asiento || null);
+      // 4) Fallback: by-numero
+      if (!asiento && numeroAsiento) {
+        asiento = await tryFetchAsiento(`/api/asientos/by-numero?numero_asiento=${encodeURIComponent(numeroAsiento)}`);
+      }
+
+      setCurrentAsientos(asiento);
     } catch (error: any) {
       console.error("Error en loadAsientosContables:", error);
       toast({
         title: "Error",
-        description: error?.status === 404 ? "No se encontró asiento para esta transacción" : "Error inesperado al cargar asientos",
+        description:
+          error?.status === 401
+            ? "Tu sesión expiró. Inicia sesión nuevamente."
+            : error?.status === 404
+            ? "No se encontró asiento para esta transacción"
+            : "Error inesperado al cargar registros contables",
         variant: "destructive",
       });
       setCurrentAsientos(null);
@@ -501,7 +604,11 @@ const ResumenEgresos = () => {
           <CardDescription>Cargando transacciones...</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
         </CardContent>
       </Card>
     );
@@ -563,7 +670,9 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Tipo de Egreso</label>
                   <Select value={filterTipo} onValueChange={setFilterTipo}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="costo">Costos</SelectItem>
@@ -575,11 +684,15 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Proveedor</label>
                   <Select value={filterProveedor} onValueChange={setFilterProveedor}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       {proveedoresUnicos.map((prov: string) => (
-                        <SelectItem key={prov} value={prov}>{prov}</SelectItem>
+                        <SelectItem key={prov} value={prov}>
+                          {prov}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -588,7 +701,9 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Tipo de Pago</label>
                   <Select value={filterPago} onValueChange={setFilterPago}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="contado">Contado</SelectItem>
@@ -601,7 +716,9 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Categoría Contable</label>
                   <Select value={filterCategoriaContable} onValueChange={setFilterCategoriaContable}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="costos">Costos de Venta (5001-5004)</SelectItem>
@@ -614,7 +731,9 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Estado de Pago</label>
                   <Select value={filterEstado} onValueChange={setFilterEstado}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="pagado">Pagado</SelectItem>
@@ -626,7 +745,9 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Mes</label>
                   <Select value={filterMes} onValueChange={setFilterMes}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="1">Enero</SelectItem>
@@ -648,11 +769,15 @@ const ResumenEgresos = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Año</label>
                   <Select value={filterAno} onValueChange={setFilterAno}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       {anosUnicos.map((ano: number) => (
-                        <SelectItem key={ano} value={String(ano)}>{ano}</SelectItem>
+                        <SelectItem key={ano} value={String(ano)}>
+                          {ano}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -751,7 +876,9 @@ const ResumenEgresos = () => {
                                 src={transaccion.imagen_url}
                                 alt={transaccion.descripcion}
                                 className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.src = "/placeholder.svg"; }}
+                                onError={(e) => {
+                                  e.currentTarget.src = "/placeholder.svg";
+                                }}
                               />
                             ) : (
                               <Package className="h-5 w-5 text-muted-foreground" />
@@ -831,9 +958,10 @@ const ResumenEgresos = () => {
                             ${formatMonto(safeNum(transaccion.monto_total))}
                           </span>
 
-                          {safeNum(transaccion.monto_pagado) > 0 && safeNum(transaccion.monto_pagado) < safeNum(transaccion.monto_total) && (
-                            <div className="text-xs text-green-600">Pagado: ${formatMonto(safeNum(transaccion.monto_pagado))}</div>
-                          )}
+                          {safeNum(transaccion.monto_pagado) > 0 &&
+                            safeNum(transaccion.monto_pagado) < safeNum(transaccion.monto_total) && (
+                              <div className="text-xs text-green-600">Pagado: ${formatMonto(safeNum(transaccion.monto_pagado))}</div>
+                            )}
                           {safeNum(transaccion.monto_pendiente) > 0 && (
                             <div className="text-xs text-yellow-600">Pendiente: ${formatMonto(safeNum(transaccion.monto_pendiente))}</div>
                           )}
@@ -883,20 +1011,39 @@ const ResumenEgresos = () => {
                                         <div>
                                           <h4 className="font-semibold text-sm mb-2">Información General</h4>
                                           <div className="space-y-1 text-sm">
-                                            <p><span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}</p>
-                                            <p><span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}</p>
-                                            <p><span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || "N/A"}</p>
-                                            <p><span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago || "N/A"}</p>
-                                            <p><span className="font-medium">Fecha:</span> {pickISODate(selectedTransaction) ? new Date(pickISODate(selectedTransaction)!).toLocaleDateString("es-ES") : "—"}</p>
+                                            <p>
+                                              <span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}
+                                            </p>
+                                            <p>
+                                              <span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}
+                                            </p>
+                                            <p>
+                                              <span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || "N/A"}
+                                            </p>
+                                            <p>
+                                              <span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago || "N/A"}
+                                            </p>
+                                            <p>
+                                              <span className="font-medium">Fecha:</span>{" "}
+                                              {pickISODate(selectedTransaction)
+                                                ? new Date(pickISODate(selectedTransaction)!).toLocaleDateString("es-ES")
+                                                : "—"}
+                                            </p>
                                           </div>
                                         </div>
 
                                         <div>
                                           <h4 className="font-semibold text-sm mb-2">Montos</h4>
                                           <div className="space-y-1 text-sm">
-                                            <p><span className="font-medium">Total:</span> ${formatMonto(safeNum(selectedTransaction.monto_total))}</p>
-                                            <p><span className="font-medium">Pagado:</span> ${formatMonto(safeNum(selectedTransaction.monto_pagado))}</p>
-                                            <p><span className="font-medium">Pendiente:</span> ${formatMonto(safeNum(selectedTransaction.monto_pendiente))}</p>
+                                            <p>
+                                              <span className="font-medium">Total:</span> ${formatMonto(safeNum(selectedTransaction.monto_total))}
+                                            </p>
+                                            <p>
+                                              <span className="font-medium">Pagado:</span> ${formatMonto(safeNum(selectedTransaction.monto_pagado))}
+                                            </p>
+                                            <p>
+                                              <span className="font-medium">Pendiente:</span> ${formatMonto(safeNum(selectedTransaction.monto_pendiente))}
+                                            </p>
                                           </div>
                                         </div>
                                       </div>
@@ -905,10 +1052,24 @@ const ResumenEgresos = () => {
                                         <div>
                                           <h4 className="font-semibold text-sm mb-2">Información del Proveedor</h4>
                                           <div className="grid grid-cols-2 gap-4 text-sm">
-                                            <p><span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}</p>
-                                            {selectedTransaction.proveedor_telefono && <p><span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}</p>}
-                                            {selectedTransaction.proveedor_email && <p><span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}</p>}
-                                            {selectedTransaction.proveedor_rfc && <p><span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}</p>}
+                                            <p>
+                                              <span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}
+                                            </p>
+                                            {selectedTransaction.proveedor_telefono && (
+                                              <p>
+                                                <span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}
+                                              </p>
+                                            )}
+                                            {selectedTransaction.proveedor_email && (
+                                              <p>
+                                                <span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}
+                                              </p>
+                                            )}
+                                            {selectedTransaction.proveedor_rfc && (
+                                              <p>
+                                                <span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}
+                                              </p>
+                                            )}
                                           </div>
                                         </div>
                                       )}
@@ -969,7 +1130,9 @@ const ResumenEgresos = () => {
                                                   </tr>
                                                 ))}
                                                 <tr className="border-t-2 bg-muted/50 font-bold">
-                                                  <td colSpan={2} className="p-3">TOTALES</td>
+                                                  <td colSpan={2} className="p-3">
+                                                    TOTALES
+                                                  </td>
                                                   <td className="p-3 text-right text-red-600">
                                                     ${formatMonto(currentAsientos.detalles.reduce((sum, d) => sum + safeNum(d.debe), 0))}
                                                   </td>
@@ -1112,8 +1275,12 @@ const ResumenEgresos = () => {
             {transaccionACancelar && (
               <div className="p-3 bg-muted rounded-md text-sm">
                 <p className="font-medium mb-2">Transacción a cancelar:</p>
-                <p><span className="font-medium">Descripción:</span> {transaccionACancelar.descripcion}</p>
-                <p><span className="font-medium">Monto:</span> ${formatMonto(safeNum(transaccionACancelar.monto_total))}</p>
+                <p>
+                  <span className="font-medium">Descripción:</span> {transaccionACancelar.descripcion}
+                </p>
+                <p>
+                  <span className="font-medium">Monto:</span> ${formatMonto(safeNum(transaccionACancelar.monto_total))}
+                </p>
               </div>
             )}
           </div>
