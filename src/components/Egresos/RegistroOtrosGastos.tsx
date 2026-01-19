@@ -133,6 +133,109 @@ const RegistroOtrosGastos = () => {
     setIsSubmitting(false);
   };
 
+  const metodoPagoLabel = (m: string) => {
+    const mm = normalizeMetodoPago(m);
+    if (mm === "efectivo") return "Efectivo";
+    if (mm === "bancos") return "Bancos / Transferencia";
+    if (mm.startsWith("tarjeta_credito_")) return "Tarjeta de crédito";
+    return "Método";
+  };
+
+  const processTransaction = async (montoPagado: number, montoTotal: number, metodoPagoNorm: string) => {
+    const montoPendiente = Math.max(0, montoTotal - montoPagado);
+
+    // ✅ Backend exige cantidad y precio_unitario > 0.
+    // Para “Otros gastos”, usamos 1 x montoTotal.
+    const cantidad = 1;
+    const precioUnitario = montoTotal;
+
+    // ✅ TODOS los otros gastos van a la cuenta 5204
+    const cuentaCodigo = "5204";
+
+    // ✅ Payload CANÓNICO + espejos legacy (alineación FE/BE)
+    // IMPORTANT: NO duplicar keys dentro del objeto (TypeScript marca rojo)
+    const payload: any = {
+      // Canon
+      tipoEgreso: "otro",
+      subtipoEgreso: "otros_gastos",
+
+      descripcion: concept.trim(),
+      concepto: concept.trim(),
+
+      cuentaCodigo,
+      subcuentaId: null,
+
+      montoTotal,
+      cantidad,
+      precioUnitario,
+
+      tipoPago: paymentType,
+      metodoPago: metodoPagoNorm || null,
+      montoPagado,
+      montoPendiente,
+
+      fechaVencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
+
+      proveedorNombre: supplierName ? supplierName.trim() : null,
+      proveedorTelefono: supplierPhone || null,
+      proveedorEmail: supplierEmail || null,
+      proveedorRFC: supplierRFC || null,
+      esProveedorRecurrente: !!esProveedorRecurrente,
+
+      comentarios: description || null,
+
+      // Legacy snake_case (por compat)
+      tipo_egreso: "otro",
+      subtipo_egreso: "otros_gastos",
+      cuenta_codigo: cuentaCodigo,
+      cuentaPrincipalCodigo: cuentaCodigo,
+      monto_total: montoTotal,
+      tipo_pago: paymentType,
+      metodo_pago: metodoPagoNorm || null,
+      monto_pagado: montoPagado,
+      monto_pendiente: montoPendiente,
+      fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
+      proveedor_nombre: supplierName ? supplierName.trim() : null,
+      proveedor_telefono: supplierPhone || null,
+      proveedor_email: supplierEmail || null,
+      proveedor_rfc: supplierRFC || null,
+      es_proveedor_recurrente: !!esProveedorRecurrente,
+      precio_unitario: precioUnitario,
+      // ✅ No repetimos `cantidad` aquí (ya va en canonical). Evita el error ts(1117)
+    };
+
+    try {
+      setIsSubmitting(true);
+
+      // ⚠️ Ruta canonical
+      const result = await apiJson<{ numero_asiento?: string }>(`/api/egresos/transacciones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      toast({
+        title: "✅ Gasto registrado",
+        description: `Gasto registrado correctamente${
+          result?.numero_asiento ? ` con asiento contable ${result.numero_asiento}` : ""
+        }`,
+      });
+
+      // 🔔 refrescar otras vistas
+      window.dispatchEvent(new CustomEvent("bukipin:egreso-creado"));
+
+      resetForm();
+    } catch (error) {
+      console.error("Error al guardar transacción de otros gastos:", error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo registrar el gasto. Revisa tu conexión o intenta nuevamente.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -168,7 +271,7 @@ const RegistroOtrosGastos = () => {
       return;
     }
 
-    // Crédito/parcial requieren vencimiento (consistencia E2E)
+    // Crédito/parcial requieren vencimiento
     if ((paymentType === "credito" || paymentType === "parcial") && !dueDate) {
       toast({
         title: "⚠️ Fecha de vencimiento requerida",
@@ -178,7 +281,7 @@ const RegistroOtrosGastos = () => {
       return;
     }
 
-    // Proveedor requerido si hay monto pendiente (credito/parcial)
+    // Proveedor requerido si crédito/parcial
     if ((paymentType === "credito" || paymentType === "parcial") && !supplierName.trim()) {
       toast({
         title: "⚠️ Proveedor requerido",
@@ -213,7 +316,7 @@ const RegistroOtrosGastos = () => {
     try {
       setIsSubmitting(true);
 
-      // ✅ Validar sesión por cookies (E2E backend)
+      // ✅ Validar sesión por cookies
       await apiJson("/api/auth/me", { method: "GET" });
 
       // Validación de saldos (solo aplica si pagas ahora y es efectivo/bancos)
@@ -290,406 +393,309 @@ const RegistroOtrosGastos = () => {
     }
   };
 
-  const processTransaction = async (montoPagado: number, montoTotal: number, metodoPagoNorm: string) => {
-    const montoPendiente = Math.max(0, montoTotal - montoPagado);
-
-    // ✅ Backend exige cantidad y precio_unitario > 0.
-    // Para “Otros gastos”, usamos 1 x montoTotal.
-    const cantidad = 1;
-    const precioUnitario = montoTotal;
-
-    // ✅ TODOS los otros gastos van a la cuenta 5204
-    const cuentaCodigo = "5204";
-
-    // ✅ Payload CANÓNICO + espejos legacy (alineación FE/BE)
-    // IMPORTANT: NO duplicar keys dentro del objeto (TypeScript marca rojo)
-    const payload: any = {
-      // Canon
-      tipoEgreso: "otro",
-      subtipoEgreso: "otros_gastos",
-
-      descripcion: concept.trim(),
-      concepto: concept.trim(),
-
-      cuentaCodigo,
-      subcuentaId: null,
-
-      montoTotal,
-      cantidad,
-      precioUnitario,
-
-      tipoPago: paymentType,
-      metodoPago: metodoPagoNorm || null,
-      montoPagado,
-      montoPendiente,
-
-      fechaVencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
-
-      proveedorNombre: supplierName ? supplierName.trim() : null,
-      proveedorTelefono: supplierPhone || null,
-      proveedorEmail: supplierEmail || null,
-      proveedorRFC: supplierRFC || null,
-      esProveedorRecurrente: !!esProveedorRecurrente,
-
-      comentarios: description || null,
-
-      // Legacy snake_case (por compat)
-      tipo_egreso: "otro",
-      subtipo_egreso: "otros_gastos",
-      cuenta_codigo: cuentaCodigo,
-      cuentaPrincipalCodigo: cuentaCodigo,
-      monto_total: montoTotal,
-      tipo_pago: paymentType,
-      metodo_pago: metodoPagoNorm || null,
-      monto_pagado: montoPagado,
-      monto_pendiente: montoPendiente,
-      fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
-      proveedor_nombre: supplierName ? supplierName.trim() : null,
-      proveedor_telefono: supplierPhone || null,
-      proveedor_email: supplierEmail || null,
-      proveedor_rfc: supplierRFC || null,
-      es_proveedor_recurrente: !!esProveedorRecurrente,
-      precio_unitario: precioUnitario,
-      // ✅ No repetimos `cantidad` aquí (ya va en canonical). Evita el error ts(1117)
-    };
-
-    try {
-      setIsSubmitting(true);
-
-      // ⚠️ Ruta canonical (tu app ya trae esta para otros egresos)
-      const result = await apiJson<{ numero_asiento?: string }>(`/api/egresos/transacciones`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      toast({
-        title: "✅ Gasto registrado",
-        description: `Gasto registrado correctamente${
-          result?.numero_asiento ? ` con asiento contable ${result.numero_asiento}` : ""
-        }`,
-      });
-
-      // 🔔 refrescar otras vistas
-      window.dispatchEvent(new CustomEvent("bukipin:egreso-creado"));
-
-      resetForm();
-    } catch (error) {
-      console.error("Error al guardar transacción de otros gastos:", error);
-      toast({
-        title: "❌ Error",
-        description: "No se pudo registrar el gasto. Revisa tu conexión o intenta nuevamente.",
-        variant: "destructive",
-      });
-      setIsSubmitting(false);
-    }
-  };
-
-  const metodoPagoLabel = (m: string) => {
-    const mm = normalizeMetodoPago(m);
-    if (mm === "efectivo") return "Efectivo";
-    if (mm === "bancos") return "Bancos / Transferencia";
-    if (mm.startsWith("tarjeta_credito_")) return "Tarjeta de crédito";
-    return "Método";
-  };
-
   return (
     <>
-      {/* ✅ Sin hacks de scroll: el layout global ya controla el único scroll */}
-      <Card className="max-w-5xl mx-auto border-0 shadow-none">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Registro de Otros Gastos
-          </CardTitle>
-          <CardDescription>
-            Registra gastos que están fuera de la operación normal para poder identificarlos separadamente
-          </CardDescription>
-        </CardHeader>
+      {/* ✅ Wrapper canonical: NO forzar alturas, NO overflow. El único scroll debe vivir en el layout */}
+      <div className="w-full min-h-0">
+        {/* ✅ Contenedor de ancho consistente con el resto de registros */}
+        <div className="w-full max-w-5xl mx-auto">
+          <Card className="border bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/50">
+            <CardHeader className="space-y-2">
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Registro de Otros Gastos
+              </CardTitle>
+              <CardDescription>
+                Registra gastos que están fuera de la operación normal para poder identificarlos separadamente
+              </CardDescription>
+            </CardHeader>
 
-        <CardContent className="px-6 pb-6">
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Estos egresos se registran siempre en la cuenta <b>5204</b> para mantener consistencia contable.
-            </AlertDescription>
-          </Alert>
+            <CardContent className="p-6 pt-0">
+              <Alert className="mb-5">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Estos egresos se registran siempre en la cuenta <b>5204</b> para mantener consistencia contable.
+                </AlertDescription>
+              </Alert>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Información del Gasto */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Información del Gasto</h3>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Información del Gasto */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Información del Gasto</h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="concepto">Concepto del Gasto *</Label>
-                  <Input
-                    id="concepto"
-                    value={concept}
-                    onChange={(e) => setConcept(e.target.value)}
-                    placeholder="Ej: Donaciones, multas, gastos personales"
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="monto-total">Monto Total *</Label>
-                  <Input
-                    id="monto-total"
-                    type="text"
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(onlyNumberDot(e.target.value))}
-                    placeholder="0.00"
-                    required
-                    disabled={isSubmitting}
-                  />
-                  {!!totalAmount && <p className="text-xs text-muted-foreground">Total: ${formatNumber(totalAmount)}</p>}
-                </div>
-              </div>
-
-              {/* Cuenta contable fija */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Cuenta contable (fija)</Label>
-                  <Input value="5204" disabled />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Información de Pago */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Información de Pago</h3>
-
-              <div className="space-y-2">
-                <Label>Tipo de Pago *</Label>
-                <RadioGroup
-                  value={paymentType}
-                  onValueChange={(v) => {
-                    const vv = v as any;
-                    setPaymentType(vv);
-
-                    // reset relacionados
-                    setPaymentMethod("");
-                    setPaidAmount("");
-                    setDueDate("");
-
-                    // si vuelve a contado, dejamos proveedor opcional pero no borramos si ya lo capturó
-                    if (vv === "contado") {
-                      setEsProveedorRecurrente(false);
-                    }
-                  }}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="contado" id="contado" />
-                    <Label htmlFor="contado">Contado</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="credito" id="credito" />
-                    <Label htmlFor="credito">Crédito</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="parcial" id="parcial" />
-                    <Label htmlFor="parcial">Pago Parcial</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {(paymentType === "contado" || paymentType === "parcial") && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="metodo-pago">Método de Pago *</Label>
-                    <Select
-                      value={paymentMethod}
-                      onValueChange={(v) => setPaymentMethod(normalizeMetodoPago(v))}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar método" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="efectivo">
-                          Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo ?? 0)}
-                        </SelectItem>
-
-                        <SelectItem value="bancos">
-                          Bancos / Transferencia - Disponible: ${formatCurrency(saldosDisponibles?.bancos ?? 0)}
-                        </SelectItem>
-
-                        {tarjetasCredito?.length
-                          ? tarjetasCredito.map((t: any) => {
-                              const tid = getId(t);
-                              const nombre = getTarjetaNombre(t);
-                              const limite = getTarjetaLimiteDisponible(t);
-                              return (
-                                <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
-                                  {nombre} - Disponible: ${formatCurrency(limite)}
-                                </SelectItem>
-                              );
-                            })
-                          : null}
-                      </SelectContent>
-                    </Select>
-
-                    {!!paymentMethod && (
-                      <p className="text-xs text-muted-foreground">
-                        Método seleccionado: <b>{metodoPagoLabel(paymentMethod)}</b>
-                      </p>
-                    )}
-                  </div>
-
-                  {paymentType === "parcial" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="monto-pagado">Monto Pagado *</Label>
+                      <Label htmlFor="concepto">Concepto del Gasto *</Label>
                       <Input
-                        id="monto-pagado"
-                        type="text"
-                        value={paidAmount}
-                        onChange={(e) => setPaidAmount(onlyNumberDot(e.target.value))}
-                        placeholder="0.00"
+                        id="concepto"
+                        value={concept}
+                        onChange={(e) => setConcept(e.target.value)}
+                        placeholder="Ej: Donaciones, multas, gastos personales"
+                        required
                         disabled={isSubmitting}
                       />
-                      {!!paidAmount && (
-                        <p className="text-xs text-muted-foreground">
-                          Pagado: ${formatNumber(paidAmount)} | Pendiente: $
-                          {formatNumber(String(Math.max(0, toNum(totalAmount, 0) - toNum(paidAmount, 0)).toFixed(2)))}
-                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="monto-total">Monto Total *</Label>
+                      <Input
+                        id="monto-total"
+                        type="text"
+                        value={totalAmount}
+                        onChange={(e) => setTotalAmount(onlyNumberDot(e.target.value))}
+                        placeholder="0.00"
+                        required
+                        disabled={isSubmitting}
+                      />
+                      {!!totalAmount && (
+                        <p className="text-xs text-muted-foreground">Total: ${formatNumber(totalAmount)}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Cuenta contable fija */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Cuenta contable (fija)</Label>
+                      <Input value="5204" disabled />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Información de Pago */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Información de Pago</h3>
+
+                  <div className="space-y-2">
+                    <Label>Tipo de Pago *</Label>
+                    <RadioGroup
+                      value={paymentType}
+                      onValueChange={(v) => {
+                        const vv = v as any;
+                        setPaymentType(vv);
+
+                        // reset relacionados
+                        setPaymentMethod("");
+                        setPaidAmount("");
+                        setDueDate("");
+
+                        if (vv === "contado") setEsProveedorRecurrente(false);
+                      }}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="contado" id="contado" />
+                        <Label htmlFor="contado">Contado</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="credito" id="credito" />
+                        <Label htmlFor="credito">Crédito</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="parcial" id="parcial" />
+                        <Label htmlFor="parcial">Pago Parcial</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {(paymentType === "contado" || paymentType === "parcial") && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="metodo-pago">Método de Pago *</Label>
+                        <Select
+                          value={paymentMethod}
+                          onValueChange={(v) => setPaymentMethod(normalizeMetodoPago(v))}
+                          disabled={isSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar método" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="efectivo">
+                              Efectivo - Disponible: ${formatCurrency(saldosDisponibles?.efectivo ?? 0)}
+                            </SelectItem>
+
+                            <SelectItem value="bancos">
+                              Bancos / Transferencia - Disponible: ${formatCurrency(saldosDisponibles?.bancos ?? 0)}
+                            </SelectItem>
+
+                            {tarjetasCredito?.length
+                              ? tarjetasCredito.map((t: any) => {
+                                  const tid = getId(t);
+                                  const nombre = getTarjetaNombre(t);
+                                  const limite = getTarjetaLimiteDisponible(t);
+                                  return (
+                                    <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
+                                      {nombre} - Disponible: ${formatCurrency(limite)}
+                                    </SelectItem>
+                                  );
+                                })
+                              : null}
+                          </SelectContent>
+                        </Select>
+
+                        {!!paymentMethod && (
+                          <p className="text-xs text-muted-foreground">
+                            Método seleccionado: <b>{metodoPagoLabel(paymentMethod)}</b>
+                          </p>
+                        )}
+                      </div>
+
+                      {paymentType === "parcial" && (
+                        <div className="space-y-2">
+                          <Label htmlFor="monto-pagado">Monto Pagado *</Label>
+                          <Input
+                            id="monto-pagado"
+                            type="text"
+                            value={paidAmount}
+                            onChange={(e) => setPaidAmount(onlyNumberDot(e.target.value))}
+                            placeholder="0.00"
+                            disabled={isSubmitting}
+                          />
+                          {!!paidAmount && (
+                            <p className="text-xs text-muted-foreground">
+                              Pagado: ${formatNumber(paidAmount)} | Pendiente: $
+                              {formatNumber(
+                                String(Math.max(0, toNum(totalAmount, 0) - toNum(paidAmount, 0)).toFixed(2))
+                              )}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {(paymentType === "credito" || paymentType === "parcial") && (
-                <div className="space-y-2">
-                  <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
-                  <Input
-                    id="fecha-vencimiento"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Proveedor/Beneficiario */}
-            {(paymentType === "credito" || paymentType === "parcial") && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Información del Proveedor/Beneficiario *</h3>
-                <p className="text-sm text-muted-foreground">
-                  Requerido para pagos a crédito o parciales para gestionar cuentas por pagar
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
-                    <Input
-                      id="proveedor-nombre"
-                      value={supplierName}
-                      onChange={(e) => setSupplierName(e.target.value)}
-                      placeholder="Nombre completo o razón social"
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor-telefono">Teléfono</Label>
-                    <Input
-                      id="proveedor-telefono"
-                      value={supplierPhone}
-                      onChange={(e) => setSupplierPhone(e.target.value)}
-                      placeholder="Número de teléfono"
-                      disabled={isSubmitting}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor-email">Email</Label>
-                    <Input
-                      id="proveedor-email"
-                      type="email"
-                      value={supplierEmail}
-                      onChange={(e) => setSupplierEmail(e.target.value)}
-                      placeholder="correo@ejemplo.com"
-                      disabled={isSubmitting}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="proveedor-rfc">RFC</Label>
-                    <Input
-                      id="proveedor-rfc"
-                      value={supplierRFC}
-                      onChange={(e) => setSupplierRFC(e.target.value)}
-                      placeholder="RFC del proveedor/beneficiario"
-                      disabled={isSubmitting}
-                    />
-                  </div>
+                  {(paymentType === "credito" || paymentType === "parcial") && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fecha-vencimiento">Fecha de Vencimiento *</Label>
+                      <Input
+                        id="fecha-vencimiento"
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* Recurrencia */}
-                <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      id="es-recurrente"
-                      checked={esProveedorRecurrente}
-                      onChange={(e) => setEsProveedorRecurrente(e.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-gray-300"
-                      disabled={isSubmitting}
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor="es-recurrente" className="font-semibold cursor-pointer">
-                        ¿Es un proveedor recurrente?
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Si marcas esta opción, guardaremos este proveedor en tu catálogo para futuras transacciones.
+                <Separator />
+
+                {/* Proveedor/Beneficiario */}
+                {(paymentType === "credito" || paymentType === "parcial") && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Información del Proveedor/Beneficiario *</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Requerido para pagos a crédito o parciales para gestionar cuentas por pagar
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="proveedor-nombre">Nombre del Proveedor *</Label>
+                        <Input
+                          id="proveedor-nombre"
+                          value={supplierName}
+                          onChange={(e) => setSupplierName(e.target.value)}
+                          placeholder="Nombre completo o razón social"
+                          required
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="proveedor-telefono">Teléfono</Label>
+                        <Input
+                          id="proveedor-telefono"
+                          value={supplierPhone}
+                          onChange={(e) => setSupplierPhone(e.target.value)}
+                          placeholder="Número de teléfono"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="proveedor-email">Email</Label>
+                        <Input
+                          id="proveedor-email"
+                          type="email"
+                          value={supplierEmail}
+                          onChange={(e) => setSupplierEmail(e.target.value)}
+                          placeholder="correo@ejemplo.com"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="proveedor-rfc">RFC</Label>
+                        <Input
+                          id="proveedor-rfc"
+                          value={supplierRFC}
+                          onChange={(e) => setSupplierRFC(e.target.value)}
+                          placeholder="RFC del proveedor/beneficiario"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Recurrencia */}
+                    <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-start space-x-3">
+                        <input
+                          type="checkbox"
+                          id="es-recurrente"
+                          checked={esProveedorRecurrente}
+                          onChange={(e) => setEsProveedorRecurrente(e.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300"
+                          disabled={isSubmitting}
+                        />
+                        <div className="flex-1">
+                          <Label htmlFor="es-recurrente" className="font-semibold cursor-pointer">
+                            ¿Es un proveedor recurrente?
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Si marcas esta opción, guardaremos este proveedor en tu catálogo para futuras transacciones.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/50 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        <strong>Nota:</strong> Esta información es necesaria para gestionar correctamente las cuentas por pagar.
                       </p>
                     </div>
                   </div>
+                )}
+
+                {/* Descripción */}
+                <div className="space-y-2">
+                  <Label htmlFor="descripcion">Descripción Adicional</Label>
+                  <Textarea
+                    id="descripcion"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Detalles adicionales del gasto..."
+                    rows={3}
+                    disabled={isSubmitting}
+                  />
                 </div>
 
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Nota:</strong> Esta información es necesaria para gestionar correctamente las cuentas por pagar.
-                  </p>
+                {/* Acciones */}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" className="gap-2" disabled={isSubmitting}>
+                    <Save className="h-4 w-4" />
+                    {isSubmitting ? "Guardando..." : "Registrar Gasto"}
+                  </Button>
                 </div>
-              </div>
-            )}
-
-            {/* Descripción */}
-            <div className="space-y-2">
-              <Label htmlFor="descripcion">Descripción Adicional</Label>
-              <Textarea
-                id="descripcion"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Detalles adicionales del gasto..."
-                rows={3}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Acciones */}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="gap-2" disabled={isSubmitting}>
-                <Save className="h-4 w-4" />
-                {isSubmitting ? "Guardando..." : "Registrar Gasto"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Confirmación tarjeta */}
       <AlertDialog
