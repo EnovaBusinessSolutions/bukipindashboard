@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,17 @@ const RegistroEgresosGenerales = () => {
   const { data: tarjetasCredito } = useTarjetasCredito();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
+  // ✅ Allowlist EXACTA para "Gasto" (solo las cuentas de tu captura)
+  const GASTO_CODES_ALLOWLIST = useMemo(() => {
+    return new Set(["5101", "5102", "5103", "5104", "5105", "5106", "5107", "5108"]);
+  }, []);
+
+  // ✅ Opciones de cuenta según tipo seleccionado
+  const cuentasGastoPermitidas = useMemo(() => {
+    const flat = cuentasData?.cuentasFlat ?? [];
+    return flat.filter((c: any) => GASTO_CODES_ALLOWLIST.has(String(c?.codigo ?? "")));
+  }, [cuentasData, GASTO_CODES_ALLOWLIST]);
+
   const resetForm = () => {
     setTipoEgresoUI("");
     setConcept("");
@@ -71,6 +82,22 @@ const RegistroEgresosGenerales = () => {
     setPendingSubmit(null);
   };
 
+  // ✅ Al cambiar Costo/Gasto, forzamos cuenta como pediste
+  const handleTipoEgresoChange = (v: "costo" | "gasto") => {
+    setTipoEgresoUI(v);
+
+    // reset de cuenta/subcuenta al cambiar tipo
+    setSubcuentaSeleccionada("");
+
+    if (v === "costo") {
+      // ✅ COSTO = únicamente 5001
+      setCuentaSeleccionada("5001");
+    } else {
+      // ✅ GASTO = debe elegir de allowlist
+      setCuentaSeleccionada("");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -84,7 +111,19 @@ const RegistroEgresosGenerales = () => {
       return;
     }
 
-    if (!concept || !cuentaSeleccionada || !totalAmount || !paymentType) {
+    // ✅ Cuenta:
+    // - costo: la forzamos a 5001 automáticamente
+    // - gasto: el usuario debe elegir una permitida
+    if (tipoEgresoUI === "gasto" && !cuentaSeleccionada) {
+      toast({
+        title: "⚠️ Falta seleccionar cuenta",
+        description: "Selecciona una cuenta de gasto válida.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!concept || !totalAmount || !paymentType) {
       toast({
         title: "⚠️ Campos requeridos",
         description: "Completa todos los campos obligatorios",
@@ -114,11 +153,7 @@ const RegistroEgresosGenerales = () => {
     }
 
     const montoPagado =
-      paymentType === "contado"
-        ? montoTotal
-        : paymentType === "parcial"
-          ? Number(paidAmount || 0)
-          : 0;
+      paymentType === "contado" ? montoTotal : paymentType === "parcial" ? Number(paidAmount || 0) : 0;
 
     if (paymentType === "parcial") {
       if (!(montoPagado > 0) || !(montoPagado < montoTotal)) {
@@ -149,7 +184,9 @@ const RegistroEgresosGenerales = () => {
         if (montoPagado > (saldosDisponibles?.efectivo ?? 0)) {
           toast({
             title: "💰 Saldo insuficiente en efectivo",
-            description: `Disponible: $${formatCurrency(saldosDisponibles?.efectivo ?? 0)} | Necesitas: $${formatCurrency(montoPagado)}`,
+            description: `Disponible: $${formatCurrency(saldosDisponibles?.efectivo ?? 0)} | Necesitas: $${formatCurrency(
+              montoPagado
+            )}`,
             variant: "destructive",
           });
           return;
@@ -161,7 +198,9 @@ const RegistroEgresosGenerales = () => {
         if (montoPagado > (saldosDisponibles?.bancos ?? 0)) {
           toast({
             title: "🏦 Saldo insuficiente en bancos",
-            description: `Disponible: $${formatCurrency(saldosDisponibles?.bancos ?? 0)} | Necesitas: $${formatCurrency(montoPagado)}`,
+            description: `Disponible: $${formatCurrency(saldosDisponibles?.bancos ?? 0)} | Necesitas: $${formatCurrency(
+              montoPagado
+            )}`,
             variant: "destructive",
           });
           return;
@@ -209,6 +248,11 @@ const RegistroEgresosGenerales = () => {
       const cantidad = 1;
       const precioUnitario = montoTotal;
 
+      // ✅ Cuenta final:
+      // - costo => 5001 fijo
+      // - gasto => la seleccionada (pero filtrada por allowlist)
+      const cuentaFinal = tipoEgresoUI === "costo" ? "5001" : cuentaSeleccionada;
+
       const payload = {
         // ✅ ahora lo decide el usuario (no lo inferimos por cuenta)
         tipo_egreso: tipoEgresoUI, // "costo" | "gasto"
@@ -220,7 +264,7 @@ const RegistroEgresosGenerales = () => {
         descripcion: concept,
         concepto: concept,
 
-        cuenta_codigo: cuentaSeleccionada,
+        cuenta_codigo: cuentaFinal,
         subcuenta_id: subcuentaSeleccionada || null,
 
         monto_total: montoTotal,
@@ -252,7 +296,9 @@ const RegistroEgresosGenerales = () => {
 
       toast({
         title: "✅ Egreso registrado",
-        description: `Egreso registrado correctamente${result?.numero_asiento ? ` con asiento contable ${result.numero_asiento}` : ""}`,
+        description: `Egreso registrado correctamente${
+          result?.numero_asiento ? ` con asiento contable ${result.numero_asiento}` : ""
+        }`,
       });
 
       resetForm();
@@ -263,8 +309,8 @@ const RegistroEgresosGenerales = () => {
         error?.status === 401
           ? "Tu sesión expiró. Inicia sesión nuevamente."
           : error?.message
-            ? String(error.message)
-            : "No se pudo registrar el egreso. Intenta nuevamente.";
+          ? String(error.message)
+          : "No se pudo registrar el egreso. Intenta nuevamente.";
 
       toast({
         title: "❌ Error",
@@ -296,7 +342,7 @@ const RegistroEgresosGenerales = () => {
                 Define si este movimiento se registrará como <b>Costo</b> o <b>Gasto</b>.
               </p>
 
-              <RadioGroup value={tipoEgresoUI} onValueChange={(v) => setTipoEgresoUI(v as any)}>
+              <RadioGroup value={tipoEgresoUI} onValueChange={(v) => handleTipoEgresoChange(v as any)}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="costo" id="tipo-costo" />
                   <Label htmlFor="tipo-costo">Costo</Label>
@@ -328,26 +374,40 @@ const RegistroEgresosGenerales = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="cuenta">Cuenta *</Label>
-                  <Select
-                    value={cuentaSeleccionada}
-                    onValueChange={(value) => {
-                      setCuentaSeleccionada(value);
-                      setSubcuentaSeleccionada("");
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar cuenta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cuentasData?.cuentasFlat?.map((cuenta: any) => (
-                        <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
-                          {cuenta.codigo} - {cuenta.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                  {/* ✅ COSTO: fijo 5001 | ✅ GASTO: dropdown con allowlist */}
+                  {tipoEgresoUI === "costo" ? (
+                    <Input value="5001 - Costos de venta" disabled />
+                  ) : (
+                    <Select
+                      value={cuentaSeleccionada}
+                      onValueChange={(value) => {
+                        setCuentaSeleccionada(value);
+                        setSubcuentaSeleccionada("");
+                      }}
+                      disabled={!tipoEgresoUI || tipoEgresoUI !== "gasto"}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={!tipoEgresoUI ? "Selecciona primero tipo" : "Seleccionar cuenta"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cuentasGastoPermitidas?.length ? (
+                          cuentasGastoPermitidas.map((cuenta: any) => (
+                            <SelectItem key={String(cuenta.codigo)} value={String(cuenta.codigo)}>
+                              {cuenta.codigo} - {cuenta.nombre}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-sm text-muted-foreground">
+                            No hay cuentas disponibles (revisa que existan 5101–5108 en tu plan de cuentas).
+                          </div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
+                {/* Subcuenta (opcional) */}
                 {cuentaSeleccionada && (
                   <div className="space-y-2">
                     <Label htmlFor="subcuenta">Subcuenta</Label>
@@ -540,21 +600,32 @@ const RegistroEgresosGenerales = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar pago con tarjeta de crédito</AlertDialogTitle>
             <AlertDialogDescription>
-              {paymentMethod?.startsWith("tarjeta_credito_") && tarjetasCredito && (() => {
-                const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
-                const tarjeta = tarjetasCredito.find((t: any) => t.id === tarjetaId);
-                return tarjeta ? (
-                  <>
-                    <div className="space-y-2 my-4">
-                      <p><strong>Tarjeta:</strong> {tarjeta.nombre}</p>
-                      <p><strong>Límite disponible actual:</strong> ${Number(tarjeta.limite_disponible ?? 0).toFixed(2)}</p>
-                      <p><strong>Monto del cargo:</strong> ${Number(pendingSubmit?.montoPagado ?? 0).toFixed(2)}</p>
-                      <p><strong>Límite disponible después:</strong> ${(Number(tarjeta.limite_disponible ?? 0) - Number(pendingSubmit?.montoPagado ?? 0)).toFixed(2)}</p>
-                    </div>
-                    <p>¿Deseas continuar con este pago?</p>
-                  </>
-                ) : null;
-              })()}
+              {paymentMethod?.startsWith("tarjeta_credito_") &&
+                tarjetasCredito &&
+                (() => {
+                  const tarjetaId = paymentMethod.replace("tarjeta_credito_", "");
+                  const tarjeta = tarjetasCredito.find((t: any) => t.id === tarjetaId);
+                  return tarjeta ? (
+                    <>
+                      <div className="space-y-2 my-4">
+                        <p>
+                          <strong>Tarjeta:</strong> {tarjeta.nombre}
+                        </p>
+                        <p>
+                          <strong>Límite disponible actual:</strong> ${Number(tarjeta.limite_disponible ?? 0).toFixed(2)}
+                        </p>
+                        <p>
+                          <strong>Monto del cargo:</strong> ${Number(pendingSubmit?.montoPagado ?? 0).toFixed(2)}
+                        </p>
+                        <p>
+                          <strong>Límite disponible después:</strong>{" "}
+                          ${(Number(tarjeta.limite_disponible ?? 0) - Number(pendingSubmit?.montoPagado ?? 0)).toFixed(2)}
+                        </p>
+                      </div>
+                      <p>¿Deseas continuar con este pago?</p>
+                    </>
+                  ) : null;
+                })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
