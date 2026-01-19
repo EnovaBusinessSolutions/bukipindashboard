@@ -126,10 +126,121 @@ const normalizeAsiento = (json: any): Asiento | null => {
   };
 };
 
+// ✅ Normalizador de transacción de egreso (para que filtros/UI no dependan del shape exacto del backend)
+const normalizeEgresoTx = (t: any) => {
+  const id = t?.id ?? t?._id ?? t?.transaccion_id ?? t?.transaccionId ?? t?.expenseId ?? null;
+
+  const tipo_egreso =
+    t?.tipo_egreso ??
+    t?.tipoEgreso ??
+    t?.tipo ??
+    t?.expenseType ??
+    null;
+
+  const cuenta_codigo =
+    t?.cuenta_codigo ??
+    t?.cuentaCodigo ??
+    t?.cuenta ??
+    t?.cuentaCode ??
+    t?.cuentaPrincipalCodigo ??
+    t?.accountCodigo ??
+    t?.accountCode ??
+    "";
+
+  const descripcion =
+    t?.descripcion ??
+    t?.concepto ??
+    t?.memo ??
+    t?.producto_nombre ??
+    t?.productoNombre ??
+    t?.name ??
+    "";
+
+  const proveedor_nombre = t?.proveedor_nombre ?? t?.proveedorNombre ?? t?.proveedor ?? null;
+  const proveedor_telefono = t?.proveedor_telefono ?? t?.proveedorTelefono ?? null;
+  const proveedor_email = t?.proveedor_email ?? t?.proveedorEmail ?? null;
+  const proveedor_rfc = t?.proveedor_rfc ?? t?.proveedorRfc ?? null;
+
+  const created_at = t?.created_at ?? t?.createdAt ?? null;
+  const fecha = t?.fecha ?? null;
+
+  const cantidad = t?.cantidad ?? null;
+
+  const costo_unitario =
+    t?.costo_unitario ??
+    t?.precio_unitario ??
+    t?.precioUnitario ??
+    t?.unit_cost ??
+    t?.unitCost ??
+    null;
+
+  const monto_total =
+    t?.monto_total ??
+    t?.montoTotal ??
+    t?.monto ??
+    t?.total ??
+    0;
+
+  const monto_pagado = t?.monto_pagado ?? t?.montoPagado ?? 0;
+  const monto_pendiente = t?.monto_pendiente ?? t?.montoPendiente ?? 0;
+
+  const tipo_pago = t?.tipo_pago ?? t?.tipoPago ?? null;
+  const metodo_pago = t?.metodo_pago ?? t?.metodoPago ?? null;
+
+  const estado = t?.estado ?? "activo";
+
+  const numero_asiento =
+    t?.numero_asiento ??
+    t?.numeroAsiento ??
+    t?.asiento_numero ??
+    t?.asientoNumero ??
+    null;
+
+  const detalles_asiento =
+    t?.detalles_asiento ??
+    t?.detalle_asientos ??
+    t?.detalles ??
+    t?.lines ??
+    [];
+
+  const imagen_comprobante = t?.imagen_comprobante ?? t?.imagenComprobante ?? null;
+  const imagen_url = t?.imagen_url ?? t?.imagenUrl ?? imagen_comprobante ?? null;
+
+  const asiento_id = t?.asiento_id ?? t?.asientoId ?? t?.asientoID ?? null;
+
+  return {
+    ...t,
+    id,
+    _id: t?._id ?? t?.id,
+    tipo_egreso,
+    cuenta_codigo,
+    descripcion,
+    proveedor_nombre,
+    proveedor_telefono,
+    proveedor_email,
+    proveedor_rfc,
+    created_at,
+    fecha,
+    cantidad,
+    costo_unitario,
+    monto_total,
+    monto_pagado,
+    monto_pendiente,
+    tipo_pago,
+    metodo_pago,
+    estado,
+    numero_asiento,
+    detalles_asiento,
+    imagen_comprobante,
+    imagen_url,
+    asiento_id,
+  };
+};
+
 const ResumenEgresos = () => {
   // react-query normalmente regresa error/isError; si tu hook no lo expone, igual no rompe.
   const {
-    data: transacciones = [],
+    data: transaccionesRaw = [],
     isLoading: loading,
     isError,
     error,
@@ -138,6 +249,10 @@ const ResumenEgresos = () => {
   const { data: costosVentaInventario, isLoading: loadingCostosVenta }: any = useCostosVentaInventario();
   const { data: productosEgresos = [] }: any = useProductosEgresos();
   const { toast } = useToast();
+
+  const transacciones = useMemo(() => {
+    return (transaccionesRaw || []).map(normalizeEgresoTx);
+  }, [transaccionesRaw]);
 
   // Crear mapa de imágenes de productos por nombre para JOIN manual
   const mapaImagenesProductos = useMemo(() => {
@@ -268,7 +383,7 @@ const ResumenEgresos = () => {
   const transaccionesEgresosUnificadas = useMemo(() => {
     const costosConDetalle =
       costosVentaInventario?.map((c: any) => ({
-        id: c.id,
+        id: c?.id ?? c?._id,
         created_at: c.fecha,
         fecha: c.fecha,
         tipo_egreso: "costo",
@@ -290,74 +405,80 @@ const ResumenEgresos = () => {
         imagen_comprobante: null,
       })) || [];
 
-    const costosVentaDirectos = transaccionesCostosVenta.map((cv: any) => ({
-      id: cv.id,
-      created_at: cv.created_at,
-      fecha: cv.fecha,
-      tipo_egreso: cv.tipo_egreso,
-      descripcion: cv.descripcion,
-      cuenta_codigo: cv.cuenta_codigo,
-      monto_total: safeNum(cv.monto_total),
-      proveedor_nombre: cv.proveedor_nombre,
-      imagen_url:
-        mapaImagenesProductos.get(String(cv.descripcion || "").toLowerCase().trim()) || cv.imagen_comprobante || null,
-      cantidad: safeNum(cv.cantidad),
-      costo_unitario: safeNum(cv.precio_unitario),
-      numero_asiento: cv.numero_asiento || cv.numeroAsiento || null,
-      detalles_asiento: [],
-      tipo_pago: cv.tipo_pago,
-      metodo_pago: cv.metodo_pago,
-      monto_pagado: safeNum(cv.monto_pagado),
-      monto_pendiente: safeNum(cv.monto_pendiente),
-      estado: cv.estado || "activo",
-      imagen_comprobante: cv.imagen_comprobante || null,
-    }));
+    const costosVentaDirectos = transaccionesCostosVenta.map((cv: any) => {
+      const norm = normalizeEgresoTx(cv);
+      return {
+        id: norm.id,
+        created_at: norm.created_at,
+        fecha: norm.fecha,
+        tipo_egreso: norm.tipo_egreso,
+        descripcion: norm.descripcion,
+        cuenta_codigo: norm.cuenta_codigo,
+        monto_total: safeNum(norm.monto_total),
+        proveedor_nombre: norm.proveedor_nombre,
+        imagen_url: mapaImagenesProductos.get(String(norm.descripcion || "").toLowerCase().trim()) || norm.imagen_comprobante || null,
+        cantidad: safeNum(norm.cantidad),
+        costo_unitario: safeNum(norm.costo_unitario),
+        numero_asiento: norm.numero_asiento || null,
+        detalles_asiento: [],
+        tipo_pago: norm.tipo_pago,
+        metodo_pago: norm.metodo_pago,
+        monto_pagado: safeNum(norm.monto_pagado),
+        monto_pendiente: safeNum(norm.monto_pendiente),
+        estado: norm.estado || "activo",
+        imagen_comprobante: norm.imagen_comprobante || null,
+      };
+    });
 
-    const gastosConDetalle = transaccionesGastos.map((g: any) => ({
-      id: g.id,
-      created_at: g.created_at,
-      fecha: g.fecha,
-      tipo_egreso: g.tipo_egreso,
-      descripcion: g.descripcion,
-      cuenta_codigo: g.cuenta_codigo,
-      monto_total: safeNum(g.monto_total),
-      proveedor_nombre: g.proveedor_nombre,
-      imagen_url:
-        mapaImagenesProductos.get(String(g.descripcion || "").toLowerCase().trim()) || g.imagen_comprobante || null,
-      cantidad: safeNum(g.cantidad),
-      costo_unitario: safeNum(g.precio_unitario),
-      numero_asiento: g.numero_asiento || g.numeroAsiento || null,
-      detalles_asiento: [],
-      tipo_pago: g.tipo_pago,
-      metodo_pago: g.metodo_pago,
-      monto_pagado: safeNum(g.monto_pagado),
-      monto_pendiente: safeNum(g.monto_pendiente),
-      estado: g.estado || "activo",
-      imagen_comprobante: g.imagen_comprobante || null,
-    }));
+    const gastosConDetalle = transaccionesGastos.map((g: any) => {
+      const norm = normalizeEgresoTx(g);
+      return {
+        id: norm.id,
+        created_at: norm.created_at,
+        fecha: norm.fecha,
+        tipo_egreso: norm.tipo_egreso,
+        descripcion: norm.descripcion,
+        cuenta_codigo: norm.cuenta_codigo,
+        monto_total: safeNum(norm.monto_total),
+        proveedor_nombre: norm.proveedor_nombre,
+        imagen_url: mapaImagenesProductos.get(String(norm.descripcion || "").toLowerCase().trim()) || norm.imagen_comprobante || null,
+        cantidad: safeNum(norm.cantidad),
+        costo_unitario: safeNum(norm.costo_unitario),
+        numero_asiento: norm.numero_asiento || null,
+        detalles_asiento: [],
+        tipo_pago: norm.tipo_pago,
+        metodo_pago: norm.metodo_pago,
+        monto_pagado: safeNum(norm.monto_pagado),
+        monto_pendiente: safeNum(norm.monto_pendiente),
+        estado: norm.estado || "activo",
+        imagen_comprobante: norm.imagen_comprobante || null,
+      };
+    });
 
-    const otrosGastosConDetalle = transaccionesOtrosGastos.map((og: any) => ({
-      id: og.id,
-      created_at: og.created_at,
-      fecha: og.fecha,
-      tipo_egreso: og.tipo_egreso,
-      descripcion: og.descripcion,
-      cuenta_codigo: og.cuenta_codigo,
-      monto_total: safeNum(og.monto_total),
-      proveedor_nombre: og.proveedor_nombre,
-      imagen_url:
-        mapaImagenesProductos.get(String(og.descripcion || "").toLowerCase().trim()) || og.imagen_comprobante || null,
-      cantidad: safeNum(og.cantidad),
-      costo_unitario: safeNum(og.precio_unitario),
-      numero_asiento: og.numero_asiento || og.numeroAsiento || null,
-      detalles_asiento: [],
-      tipo_pago: og.tipo_pago,
-      metodo_pago: og.metodo_pago,
-      monto_pagado: safeNum(og.monto_pagado),
-      monto_pendiente: safeNum(og.monto_pendiente),
-      estado: og.estado || "activo",
-      imagen_comprobante: og.imagen_comprobante || null,
-    }));
+    const otrosGastosConDetalle = transaccionesOtrosGastos.map((og: any) => {
+      const norm = normalizeEgresoTx(og);
+      return {
+        id: norm.id,
+        created_at: norm.created_at,
+        fecha: norm.fecha,
+        tipo_egreso: norm.tipo_egreso,
+        descripcion: norm.descripcion,
+        cuenta_codigo: norm.cuenta_codigo,
+        monto_total: safeNum(norm.monto_total),
+        proveedor_nombre: norm.proveedor_nombre,
+        imagen_url: mapaImagenesProductos.get(String(norm.descripcion || "").toLowerCase().trim()) || norm.imagen_comprobante || null,
+        cantidad: safeNum(norm.cantidad),
+        costo_unitario: safeNum(norm.costo_unitario),
+        numero_asiento: norm.numero_asiento || null,
+        detalles_asiento: [],
+        tipo_pago: norm.tipo_pago,
+        metodo_pago: norm.metodo_pago,
+        monto_pagado: safeNum(norm.monto_pagado),
+        monto_pendiente: safeNum(norm.monto_pendiente),
+        estado: norm.estado || "activo",
+        imagen_comprobante: norm.imagen_comprobante || null,
+      };
+    });
 
     return [...costosConDetalle, ...costosVentaDirectos, ...gastosConDetalle, ...otrosGastosConDetalle].sort((a, b) => {
       const da = pickISODate(a);
@@ -596,7 +717,9 @@ const ResumenEgresos = () => {
     setFilterCategoriaContable("todos");
   };
 
-  if (loading) {
+  const loadingAll = Boolean(loading || loadingCostosVenta);
+
+  if (loadingAll) {
     return (
       <Card>
         <CardHeader>
@@ -867,8 +990,9 @@ const ResumenEgresos = () => {
                 <TableBody>
                   {transaccionesFiltadasPorCategoria.map((transaccion: any) => {
                     const iso = pickISODate(transaccion);
+                    const rowKey = String(transaccion?.id ?? transaccion?._id ?? `${transaccion?.numero_asiento ?? "row"}-${iso ?? ""}`);
                     return (
-                      <TableRow key={transaccion.id}>
+                      <TableRow key={rowKey}>
                         <TableCell>
                           <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center border">
                             {transaccion.imagen_url ? (
