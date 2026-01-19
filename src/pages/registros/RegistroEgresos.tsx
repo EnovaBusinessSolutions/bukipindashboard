@@ -1,3 +1,4 @@
+// bukipin-dashboard/src/pages/registros/RegistroEgresos.tsx
 import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, BarChart3, Package, FileText, ShoppingCart, Wallet, Receipt, ArrowLeft } from "lucide-react";
@@ -12,8 +13,11 @@ import ResumenEgresos from "@/components/Egresos/ResumenEgresos";
 
 const RegistroEgresos = () => {
   const [selectedEgresoType, setSelectedEgresoType] = useState<string | null>(null);
+
   return (
-    <div className="w-full">
+    // ✅ CLAVE SCROLL: este contenedor NO debe crear scroll extra
+    <div className="w-full min-h-0">
+      {/* Header fijo del módulo (sin overflow) */}
       <div className="p-6 border-b bg-background">
         <h1 className="text-3xl font-bold text-foreground">Gestión de Egresos</h1>
         <p className="text-muted-foreground mt-2">
@@ -21,7 +25,9 @@ const RegistroEgresos = () => {
         </p>
       </div>
 
-      <div className="p-6 pb-0">
+      {/* ✅ CLAVE: no usar "p-6 pb-0" como contenedor de scroll; solo padding interno */}
+      {/* ✅ min-h-0 evita bug en layouts flex + tabs */}
+      <div className="p-6 min-h-0">
         <Tabs defaultValue="registro" className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="registro" className="flex items-center gap-2">
@@ -42,20 +48,22 @@ const RegistroEgresos = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="registro" className="w-full overflow-visible">
+          {/* ✅ IMPORTANTÍSIMO:
+              - NO pongas overflow-visible aquí (provoca overlays/scroll raros con Select/Dialog)
+              - min-h-0 para que el scroll lo maneje el layout padre (DashboardLayout)
+          */}
+          <TabsContent value="registro" className="w-full min-h-0">
             {!selectedEgresoType ? (
               <Card>
                 <CardHeader>
                   <CardTitle>Nuevo Registro de Egreso</CardTitle>
-                  <CardDescription>
-                    Selecciona el tipo de egreso que deseas registrar
-                  </CardDescription>
+                  <CardDescription>Selecciona el tipo de egreso que deseas registrar</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card 
+                    <Card
                       className="cursor-pointer hover:border-primary hover:shadow-md transition-all"
-                      onClick={() => setSelectedEgresoType('precargados')}
+                      onClick={() => setSelectedEgresoType("precargados")}
                     >
                       <CardHeader className="text-center">
                         <div className="flex justify-center mb-4">
@@ -64,15 +72,13 @@ const RegistroEgresos = () => {
                           </div>
                         </div>
                         <CardTitle className="text-lg">Costos y Gastos Precargados</CardTitle>
-                        <CardDescription>
-                          Registra egresos de productos del catálogo
-                        </CardDescription>
+                        <CardDescription>Registra egresos de productos del catálogo</CardDescription>
                       </CardHeader>
                     </Card>
 
-                    <Card 
+                    <Card
                       className="cursor-pointer hover:border-primary hover:shadow-md transition-all"
-                      onClick={() => setSelectedEgresoType('generales')}
+                      onClick={() => setSelectedEgresoType("generales")}
                     >
                       <CardHeader className="text-center">
                         <div className="flex justify-center mb-4">
@@ -81,15 +87,13 @@ const RegistroEgresos = () => {
                           </div>
                         </div>
                         <CardTitle className="text-lg">Costos y Gastos Generales</CardTitle>
-                        <CardDescription>
-                          Registra gastos operativos generales
-                        </CardDescription>
+                        <CardDescription>Registra gastos operativos generales</CardDescription>
                       </CardHeader>
                     </Card>
 
-                    <Card 
+                    <Card
                       className="cursor-pointer hover:border-primary hover:shadow-md transition-all"
-                      onClick={() => setSelectedEgresoType('otros')}
+                      onClick={() => setSelectedEgresoType("otros")}
                     >
                       <CardHeader className="text-center">
                         <div className="flex justify-center mb-4">
@@ -98,9 +102,7 @@ const RegistroEgresos = () => {
                           </div>
                         </div>
                         <CardTitle className="text-lg">Otros Gastos</CardTitle>
-                        <CardDescription>
-                          Registra gastos extraordinarios y diversos
-                        </CardDescription>
+                        <CardDescription>Registra gastos extraordinarios y diversos</CardDescription>
                       </CardHeader>
                     </Card>
                   </div>
@@ -108,31 +110,29 @@ const RegistroEgresos = () => {
               </Card>
             ) : (
               <div className="space-y-4">
-                <Button 
-                  variant="ghost" 
-                  onClick={() => setSelectedEgresoType(null)}
-                  className="mb-4"
-                >
+                <Button variant="ghost" onClick={() => setSelectedEgresoType(null)} className="mb-2">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Volver al menú de selección
                 </Button>
-                
-                {selectedEgresoType === 'precargados' && <RegistroEgresosPrecargados />}
-                {selectedEgresoType === 'generales' && <RegistroEgresosGenerales />}
-                {selectedEgresoType === 'otros' && <RegistroOtrosGastos />}
+
+                {/* ✅ Wrapper sin overflow para evitar scroll anidado */}
+                {selectedEgresoType === "precargados" && <RegistroEgresosPrecargados />}
+                {selectedEgresoType === "generales" && <RegistroEgresosGenerales />}
+                {selectedEgresoType === "otros" && <RegistroOtrosGastos />}
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="resumen" className="w-full overflow-visible">
+          {/* ✅ Misma regla para el resto */}
+          <TabsContent value="resumen" className="w-full min-h-0">
             <ResumenEgresos />
           </TabsContent>
 
-          <TabsContent value="reportes" className="w-full overflow-visible">
+          <TabsContent value="reportes" className="w-full min-h-0">
             <AnalyticaEgresos />
           </TabsContent>
 
-          <TabsContent value="catalogo" className="w-full overflow-visible">
+          <TabsContent value="catalogo" className="w-full min-h-0">
             <CatalogoProductos />
           </TabsContent>
         </Tabs>
