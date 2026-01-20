@@ -16,7 +16,7 @@ import {
   Line,
   Treemap,
 } from "recharts";
-import { AlertCircle, CalendarIcon, Package } from "lucide-react";
+import { AlertCircle, CalendarIcon, Package, TrendingDown } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,56 +63,90 @@ const moneyMXN = (n: number, decimales: number) =>
     maximumFractionDigits: decimales,
   })}`;
 
-// Componente personalizado para el contenido del Treemap (robusto)
-const CustomTreemapContent = (props: any) => {
+// ---------- UI helpers ----------
+const ChartCardEmpty = ({ title = "Sin datos", hint = "No hay información para el rango actual." }: { title?: string; hint?: string }) => (
+  <div className="flex flex-col items-center justify-center h-72 text-muted-foreground">
+    <AlertCircle className="h-10 w-10 mb-3 opacity-60" />
+    <p className="font-medium">{title}</p>
+    <p className="text-xs mt-1 max-w-[28rem] text-center">{hint}</p>
+  </div>
+);
+
+const Chip = ({ children }: { children: React.ReactNode }) => (
+  <span className="inline-flex items-center rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
+    {children}
+  </span>
+);
+
+// Tooltip “pro” y consistente
+const tooltipCardStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid hsl(var(--border))",
+  background: "hsl(var(--background))",
+  boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+};
+
+const tooltipLabelStyle: React.CSSProperties = { color: "hsl(var(--foreground))", fontWeight: 600 };
+
+// Leyenda simple (sin saturar)
+const LegendText = (value: any) => <span className="text-xs text-muted-foreground">{value}</span>;
+
+// -------- Treemap “pro” (rounded + hover) --------
+const TreemapTile = (props: any) => {
   const { x, y, width, height, name, value, fill, dataTotal, decimales = 2 } = props;
 
   const v = toNum(value);
   const total = toNum(dataTotal);
-
   if (!name || total <= 0) return null;
 
-  const porcentaje = ((v / total) * 100).toFixed(1);
+  const pct = total > 0 ? (v / total) * 100 : 0;
+  const porcentaje = pct.toFixed(1);
   const montoFormateado = moneyMXN(v, decimales);
 
-  const titleFontSize = Math.min(width / 8, height / 4, 20);
-  const subtitleFontSize = Math.min(width / 10, height / 6, 16);
+  // no texto si la caja es chica
+  const minSide = Math.min(width, height);
+  const showText = minSide >= 72;
 
-  // No mostrar texto si el bloque es muy pequeño
-  if (titleFontSize < 12) {
-    return (
-      <g>
-        <rect x={x} y={y} width={width} height={height} fill={fill} />
-      </g>
-    );
-  }
+  const rx = Math.min(14, Math.max(8, Math.floor(minSide / 10)));
 
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} fill={fill} />
-
-      <text
-        x={x + width / 2}
-        y={y + height / 2 - titleFontSize / 2}
-        textAnchor="middle"
-        fill="#ffffff"
-        fontSize={titleFontSize}
-        fontWeight="bold"
-      >
-        {name} ({porcentaje}%)
-      </text>
-
-      <text
-        x={x + width / 2}
-        y={y + height / 2 + titleFontSize}
-        textAnchor="middle"
-        fill="#ffffff"
-        fontSize={subtitleFontSize}
-        fontWeight="normal"
-        opacity="0.9"
-      >
-        {montoFormateado}
-      </text>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={fill}
+        rx={rx}
+        ry={rx}
+        stroke="rgba(255,255,255,0.45)"
+        strokeWidth={1}
+      />
+      {showText && (
+        <>
+          <text
+            x={x + 10}
+            y={y + 22}
+            textAnchor="start"
+            fill="#ffffff"
+            fontSize={12}
+            fontWeight={700}
+            opacity={0.95}
+          >
+            {name}
+          </text>
+          <text
+            x={x + 10}
+            y={y + 40}
+            textAnchor="start"
+            fill="#ffffff"
+            fontSize={11}
+            opacity={0.9}
+          >
+            {porcentaje}% · {montoFormateado}
+          </text>
+        </>
+      )}
     </g>
   );
 };
@@ -169,7 +203,6 @@ const AnalyticaEgresos = () => {
     let valor = toNum(monto);
     if (formatoMontos === "miles") valor = valor / 1000;
     if (formatoMontos === "millones") valor = valor / 1_000_000;
-    // Importante: redondeo consistente
     return Number(valor.toFixed(decimales));
   };
 
@@ -234,8 +267,8 @@ const AnalyticaEgresos = () => {
 
   /**
    * IMPORTANTÍSIMO E2E:
-   * NO depender de t.tipo_egreso para clasificar "costo" si el backend no lo llena.
-   * Clasificamos por cuenta_codigo (consistente con el resto del archivo).
+   * NO depender de t.tipo_egreso para clasificar.
+   * Clasificamos por cuenta_codigo.
    */
   const transaccionesPorTipo = useMemo(() => {
     const costoVenta = filteredTransactions.filter((t: any) => {
@@ -264,7 +297,6 @@ const AnalyticaEgresos = () => {
       (t: any) => String(t?.cuenta_codigo ?? "") === "5204"
     );
 
-    // Devolver por selección
     if (tipoEgreso === "costo_inventario") {
       return {
         costoVenta: [],
@@ -302,7 +334,6 @@ const AnalyticaEgresos = () => {
     }
 
     if (tipoEgreso === "costo") {
-      // COSTO = costoVenta (5001/5003/5004) (no depender de tipo_egreso)
       return {
         costoVenta,
         gastos: [],
@@ -314,7 +345,6 @@ const AnalyticaEgresos = () => {
       };
     }
 
-    // "total" o "combinada"
     return {
       costoVenta,
       gastos: gastos51XX,
@@ -330,12 +360,11 @@ const AnalyticaEgresos = () => {
   const datosGraficaFormateados = useMemo(() => {
     if (!datosGraficaRaw) return [];
 
-    // "total" o "combinada": formato combinado esperado
     if (tipoEgreso === "total" || tipoEgreso === "combinada") {
       const arr = normalizeArray<any>(datosGraficaRaw);
       return arr.map((item: any) => ({
         periodo: item?.periodo,
-        monto: formatearMonto(toNum(item?.monto)), // vista única
+        monto: formatearMonto(toNum(item?.monto)),
         costos: formatearMonto(toNum(item?.costos)),
         gastos: formatearMonto(toNum(item?.gastos)),
         costosInventario: formatearMonto(toNum(item?.costosInventario)),
@@ -358,13 +387,13 @@ const AnalyticaEgresos = () => {
     if (totalCostoVenta > 0) data.push({ tipo: "Costo de Venta", monto: formatearMonto(totalCostoVenta) });
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) data.push({ tipo: "Costo Venta Inventario", monto: formatearMonto(totalCostosInventario) });
+    if (totalCostosInventario > 0) data.push({ tipo: "Inventario", monto: formatearMonto(totalCostosInventario) });
 
     const totalGastos = transaccionesPorTipo.gastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
     if (totalGastos > 0) data.push({ tipo: "Gastos", monto: formatearMonto(totalGastos) });
 
     const totalOtrosGastos = transaccionesPorTipo.otrosGastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalOtrosGastos > 0) data.push({ tipo: "Otros Gastos", monto: formatearMonto(totalOtrosGastos) });
+    if (totalOtrosGastos > 0) data.push({ tipo: "Otros", monto: formatearMonto(totalOtrosGastos) });
 
     return data;
   }, [transaccionesPorTipo, formatoMontos, decimales]);
@@ -382,14 +411,13 @@ const AnalyticaEgresos = () => {
     todasTransacciones
       .filter((t: any) => toNum(t?.monto_pagado) > 0)
       .forEach((t: any) => {
-        const metodo = String(t?.metodo_pago ?? "Sin método especificado");
+        const metodo = String(t?.metodo_pago ?? "Sin método");
         const metodoCap = metodo.charAt(0).toUpperCase() + metodo.slice(1);
-
         grouped[metodoCap] = (grouped[metodoCap] ?? 0) + toNum(t?.monto_pagado);
       });
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) grouped["Adquisición de Inventario"] = (grouped["Adquisición de Inventario"] ?? 0) + totalCostosInventario;
+    if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
 
     return Object.entries(grouped)
       .map(([estado, monto]) => ({ estado, monto: formatearMonto(monto) }))
@@ -401,13 +429,13 @@ const AnalyticaEgresos = () => {
     const grouped: Record<string, number> = {};
 
     const resolveSubName = (prefix: string, subId: any) => {
-      if (!subId) return `${prefix} - Sin subcuenta`;
+      if (!subId) return `${prefix} · Sin subcuenta`;
       const s = subcuentas?.find((x: any) => x?.id === subId);
-      return s?.nombre ? `${prefix} - ${s.nombre}` : `${prefix} - Sin subcuenta`;
+      return s?.nombre ? `${prefix} · ${s.nombre}` : `${prefix} · Sin subcuenta`;
     };
 
     transaccionesPorTipo.costoVenta.forEach((t: any) => {
-      const k = resolveSubName("Costo Venta", t?.subcuenta_id);
+      const k = resolveSubName("Costo venta", t?.subcuenta_id);
       grouped[k] = (grouped[k] ?? 0) + toNum(t?.monto_total);
     });
 
@@ -417,12 +445,12 @@ const AnalyticaEgresos = () => {
     });
 
     transaccionesPorTipo.otrosGastos.forEach((t: any) => {
-      const k = resolveSubName("Otros Gastos", t?.subcuenta_id);
+      const k = resolveSubName("Otros", t?.subcuenta_id);
       grouped[k] = (grouped[k] ?? 0) + toNum(t?.monto_total);
     });
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) grouped["Costo Venta Inventario"] = (grouped["Costo Venta Inventario"] ?? 0) + totalCostosInventario;
+    if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
 
     return Object.entries(grouped)
       .map(([subcuenta, monto]) => ({ subcuenta, monto: formatearMonto(monto) }))
@@ -453,7 +481,6 @@ const AnalyticaEgresos = () => {
     transaccionesPorTipo.gastos.forEach((t: any) => agregarACuenta(t?.cuenta_codigo, t?.monto_total));
     transaccionesPorTipo.otrosGastos.forEach((t: any) => agregarACuenta(t?.cuenta_codigo, t?.monto_total));
 
-    // inventario = 5002
     transaccionesPorTipo.costosInventario.forEach((c: any) => agregarACuenta("5002", c?.monto));
 
     return Object.values(grouped)
@@ -483,13 +510,14 @@ const AnalyticaEgresos = () => {
 
     const costosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
 
+    // ✅ No fijamos colores “hard” por marca, solo una paleta suave y consistente
     const data = [
-      { name: "Efectivo", value: formatearMonto(efectivo), fill: "hsl(180, 50%, 55%)" },
-      { name: "Bancos/Tarjeta", value: formatearMonto(bancosTarjeta), fill: "hsl(200, 50%, 55%)" },
+      { name: "Efectivo", value: formatearMonto(efectivo), fill: "hsl(180, 45%, 50%)" },
+      { name: "Bancos / Tarjeta", value: formatearMonto(bancosTarjeta), fill: "hsl(210, 45%, 52%)" },
     ];
 
     if (costosInventario > 0) {
-      data.push({ name: "Adquisición de Inventario", value: formatearMonto(costosInventario), fill: "hsl(220, 45%, 50%)" });
+      data.push({ name: "Inventario", value: formatearMonto(costosInventario), fill: "hsl(230, 40%, 50%)" });
     }
 
     return data.filter((item) => toNum(item.value) > 0);
@@ -509,7 +537,6 @@ const AnalyticaEgresos = () => {
       }
     > = {};
 
-    // Costos de Venta (5001/5003/5004) -> usar descripcion como “producto”
     transaccionesPorTipo.costoVenta.forEach((t: any) => {
       const desc = String(t?.descripcion ?? "Sin descripción");
       const key = `CV-${desc}`;
@@ -528,7 +555,6 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
-    // Gastos (51XX)
     transaccionesPorTipo.gastos.forEach((t: any) => {
       const desc = String(t?.descripcion ?? "Sin descripción");
       const key = `G-${desc}`;
@@ -547,7 +573,6 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
-    // Otros Gastos (5204)
     transaccionesPorTipo.otrosGastos.forEach((t: any) => {
       const desc = String(t?.descripcion ?? "Sin descripción");
       const key = `OG-${desc}`;
@@ -566,7 +591,6 @@ const AnalyticaEgresos = () => {
       grouped[key].transacciones += 1;
     });
 
-    // Inventario (5002) -> usar producto_nombre
     transaccionesPorTipo.costosInventario.forEach((c: any) => {
       const prod = String(c?.producto_nombre ?? "Sin asignación");
       const key = `CI-${prod}`;
@@ -577,7 +601,7 @@ const AnalyticaEgresos = () => {
           monto: 0,
           transacciones: 0,
           tieneAsignacion: !!c?.producto_nombre,
-          categoria: "Costo Venta Inventario",
+          categoria: "Inventario",
         };
       }
       grouped[key].monto += toNum(c?.monto);
@@ -612,15 +636,19 @@ const AnalyticaEgresos = () => {
       if (!grouped[key]) grouped[key] = { nombre: key, monto: 0, transacciones: 0, tieneAsignacion: has };
       grouped[key].monto += toNum(monto);
       grouped[key].transacciones += 1;
-      // si alguna transacción sí tiene asignación, lo mantenemos true
       grouped[key].tieneAsignacion = grouped[key].tieneAsignacion || has;
     };
 
-    transaccionesPorTipo.costoVenta.forEach((t: any) => addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre));
-    transaccionesPorTipo.gastos.forEach((t: any) => addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre));
-    transaccionesPorTipo.otrosGastos.forEach((t: any) => addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre));
+    transaccionesPorTipo.costoVenta.forEach((t: any) =>
+      addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre)
+    );
+    transaccionesPorTipo.gastos.forEach((t: any) =>
+      addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre)
+    );
+    transaccionesPorTipo.otrosGastos.forEach((t: any) =>
+      addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre)
+    );
 
-    // Inventario sin proveedor -> agrupar como "Sin proveedor asignado"
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
     if (totalCostosInventario > 0) {
       if (!grouped["Sin proveedor asignado"]) {
@@ -680,6 +708,48 @@ const AnalyticaEgresos = () => {
     total: toNum(resumenes?.anio?.total),
   };
 
+  // ---- UI: resumen mini bars (pro) ----
+  const SummaryRow = ({
+    label,
+    value,
+    total,
+  }: {
+    label: string;
+    value: number;
+    total: number;
+  }) => {
+    const pct = total > 0 ? (toNum(value) / toNum(total)) * 100 : 0;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">{label}</span>
+          <span className="text-sm font-semibold text-foreground">{moneyMXN(value, decimales)}</span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-muted/40 overflow-hidden">
+          <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+        </div>
+      </div>
+    );
+  };
+
+  const periodChip = useMemo(() => {
+    if (periodFilter === "diario") return `Diario · ${format(fechaAnalisisDiario, "PPP", { locale: es })}`;
+    if (periodFilter === "mensual") return `Mensual · ${format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}`;
+    return "Anual";
+  }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
+
+  const tipoChip = useMemo(() => {
+    const map: Record<string, string> = {
+      total: "Total",
+      costo: "Costo de venta",
+      costo_inventario: "Inventario",
+      gasto: "Gastos",
+      otros_gastos: "Otros",
+      combinada: "Combinada",
+    };
+    return map[tipoEgreso] ?? "Total";
+  }, [tipoEgreso]);
+
   if (loading || !resumenes) {
     return (
       <div className="space-y-6">
@@ -687,7 +757,7 @@ const AnalyticaEgresos = () => {
           {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardContent className="p-6">
-                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-24 w-full" />
               </CardContent>
             </Card>
           ))}
@@ -696,7 +766,7 @@ const AnalyticaEgresos = () => {
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
               <CardContent className="p-6">
-                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-72 w-full" />
               </CardContent>
             </Card>
           ))}
@@ -705,550 +775,363 @@ const AnalyticaEgresos = () => {
     );
   }
 
+  // Colores suaves y consistentes (no súper saturados)
+  const pieColors = ["hsl(180, 45%, 50%)", "hsl(210, 45%, 52%)", "hsl(160, 40%, 46%)", "hsl(230, 40%, 50%)"];
+
   return (
     <div className="space-y-6">
-      {/* Título Highlights de Egresos */}
-      <div>
-        <h2 className="text-2xl font-bold text-primary">Highlights de Egresos</h2>
-        <p className="text-sm text-muted-foreground">Resumen de costos y gastos por período</p>
+      {/* Header compacto */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-primary">Analítica de Egresos</h2>
+            <p className="text-sm text-muted-foreground">
+              Visualiza en un vistazo qué te está costando más: costos, gastos, inventario y otros.
+            </p>
+          </div>
+
+          <div className="hidden md:flex items-center gap-2">
+            <Chip>{periodChip}</Chip>
+            <Chip>Tipo: {tipoChip}</Chip>
+            <Chip>
+              Escala: {formatoMontos === "normal" ? "Normal" : formatoMontos === "miles" ? "Miles" : "Millones"} · {decimales} dec.
+            </Chip>
+          </div>
+        </div>
       </div>
 
-      {/* Resúmenes por Período */}
+      {/* Resúmenes por período (más limpios) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Día */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-primary">Resumen del Día</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Hoy</CardTitle>
+            <CardDescription>Distribución del total diario</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {/* Costos de Venta */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Costos de Venta</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resDia.costosVenta5001, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resDia.costosVenta5001, resDia.total)}%
-                </Badge>
-              </div>
-            </div>
+          <CardContent className="space-y-4">
+            <SummaryRow label="Costo de venta" value={resDia.costosVenta5001} total={resDia.total} />
+            <SummaryRow label="Inventario" value={resDia.costosVenta5002} total={resDia.total} />
+            <SummaryRow label="Gastos" value={resDia.gastos} total={resDia.total} />
+            <SummaryRow label="Otros" value={resDia.otrosGastos} total={resDia.total} />
 
-            {/* Costos de Venta Inventario */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resDia.costosVenta5002, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resDia.costosVenta5002, resDia.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            {/* Gastos */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Gastos</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resDia.gastos, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resDia.gastos, resDia.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            {/* Otros Gastos */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Otros Gastos</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resDia.otrosGastos, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resDia.otrosGastos, resDia.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="h-px bg-border my-2"></div>
-
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-sm font-semibold text-primary">Total Egresos</span>
+            <div className="pt-2 border-t flex items-center justify-between">
+              <span className="text-sm font-semibold text-primary">Total</span>
               <span className="text-lg font-bold text-destructive">{moneyMXN(resDia.total, decimales)}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Mes */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Este mes</CardTitle>
+            <CardDescription>Distribución del total mensual</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Costos de Venta</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resMes.costosVenta5001, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resMes.costosVenta5001, resMes.total)}%
-                </Badge>
-              </div>
-            </div>
+          <CardContent className="space-y-4">
+            <SummaryRow label="Costo de venta" value={resMes.costosVenta5001} total={resMes.total} />
+            <SummaryRow label="Inventario" value={resMes.costosVenta5002} total={resMes.total} />
+            <SummaryRow label="Gastos" value={resMes.gastos} total={resMes.total} />
+            <SummaryRow label="Otros" value={resMes.otrosGastos} total={resMes.total} />
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resMes.costosVenta5002, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resMes.costosVenta5002, resMes.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Gastos</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resMes.gastos, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resMes.gastos, resMes.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Otros Gastos</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resMes.otrosGastos, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resMes.otrosGastos, resMes.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="h-px bg-border my-2"></div>
-
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-sm font-semibold text-primary">Total Egresos</span>
+            <div className="pt-2 border-t flex items-center justify-between">
+              <span className="text-sm font-semibold text-primary">Total</span>
               <span className="text-lg font-bold text-destructive">{moneyMXN(resMes.total, decimales)}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Año */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-primary">Resumen del Año</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Este año</CardTitle>
+            <CardDescription>Distribución del total anual</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Costos de Venta</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resAnio.costosVenta5001, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resAnio.costosVenta5001, resAnio.total)}%
-                </Badge>
-              </div>
-            </div>
+          <CardContent className="space-y-4">
+            <SummaryRow label="Costo de venta" value={resAnio.costosVenta5001} total={resAnio.total} />
+            <SummaryRow label="Inventario" value={resAnio.costosVenta5002} total={resAnio.total} />
+            <SummaryRow label="Gastos" value={resAnio.gastos} total={resAnio.total} />
+            <SummaryRow label="Otros" value={resAnio.otrosGastos} total={resAnio.total} />
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Costo Venta Inventario</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resAnio.costosVenta5002, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resAnio.costosVenta5002, resAnio.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Gastos</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resAnio.gastos, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resAnio.gastos, resAnio.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Otros Gastos</span>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{moneyMXN(resAnio.otrosGastos, decimales)}</span>
-                <Badge variant="outline" className="text-xs bg-teal-50/50 text-teal-700 border-teal-300">
-                  {calcularPorcentaje(resAnio.otrosGastos, resAnio.total)}%
-                </Badge>
-              </div>
-            </div>
-
-            <div className="h-px bg-border my-2"></div>
-
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-sm font-semibold text-primary">Total Egresos</span>
+            <div className="pt-2 border-t flex items-center justify-between">
+              <span className="text-sm font-semibold text-primary">Total</span>
               <span className="text-lg font-bold text-destructive">{moneyMXN(resAnio.total, decimales)}</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Título y Controles Globales */}
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-2xl font-bold text-primary">Analítica de Egresos</h2>
-          <p className="text-sm text-muted-foreground">Análisis detallado con controles personalizables</p>
-        </div>
-
-        {/* Panel de Controles */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Controles (más compactos y limpios) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Controles</CardTitle>
+          <CardDescription>Personaliza el análisis sin complicarte</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Período */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Período de Análisis</CardTitle>
-              <CardDescription>Selecciona el período</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <RadioGroup
-                value={periodFilter}
-                onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")}
-                className="flex flex-col gap-3"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="diario" id="period-daily" />
-                  <Label htmlFor="period-daily" className="cursor-pointer">
-                    Diario
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="mensual" id="period-monthly" />
-                  <Label htmlFor="period-monthly" className="cursor-pointer">
-                    Mensual
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="anual" id="period-annual" />
-                  <Label htmlFor="period-annual" className="cursor-pointer">
-                    Anual
-                  </Label>
-                </div>
-              </RadioGroup>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Período</Label>
+            <RadioGroup
+              value={periodFilter}
+              onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")}
+              className="grid grid-cols-3 gap-2"
+            >
+              <Label className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
+                <RadioGroupItem value="diario" id="period-daily" />
+                <span className="text-sm">Diario</span>
+              </Label>
+              <Label className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
+                <RadioGroupItem value="mensual" id="period-monthly" />
+                <span className="text-sm">Mensual</span>
+              </Label>
+              <Label className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
+                <RadioGroupItem value="anual" id="period-annual" />
+                <span className="text-sm">Anual</span>
+              </Label>
+            </RadioGroup>
 
-              {periodFilter === "diario" && (
-                <div className="pt-2 border-t">
-                  <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-full justify-start text-left font-normal", !fechaAnalisisDiario && "text-muted-foreground")}
-                        size="sm"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(fechaAnalisisDiario, "PPP", { locale: es })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={fechaAnalisisDiario}
-                        onSelect={(date) => date && setFechaAnalisisDiario(date)}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
+            {(periodFilter === "diario" || periodFilter === "mensual") && (
+              <div className="pt-2">
+                <Label className="text-xs text-muted-foreground mb-2 block">
+                  {periodFilter === "diario" ? "Fecha" : "Mes"}
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                      size="sm"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {periodFilter === "diario"
+                        ? format(fechaAnalisisDiario, "PPP", { locale: es })
+                        : format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={periodFilter === "diario" ? fechaAnalisisDiario : fechaAnalisisMensual}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        if (periodFilter === "diario") setFechaAnalisisDiario(date);
+                        else setFechaAnalisisMensual(date);
+                      }}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+          </div>
 
-              {periodFilter === "mensual" && (
-                <div className="pt-2 border-t">
-                  <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-full justify-start text-left font-normal", !fechaAnalisisMensual && "text-muted-foreground")}
-                        size="sm"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={fechaAnalisisMensual}
-                        onSelect={(date) => date && setFechaAnalisisMensual(date)}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Tipo */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Tipo de egreso</Label>
+            <RadioGroup value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="space-y-2">
+              {[
+                { v: "total", label: "Total" },
+                { v: "costo", label: "Costo de venta" },
+                { v: "costo_inventario", label: "Inventario" },
+                { v: "gasto", label: "Gastos" },
+                { v: "otros_gastos", label: "Otros" },
+              ].map((o) => (
+                <Label key={o.v} className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
+                  <RadioGroupItem value={o.v} />
+                  <span className="text-sm">{o.label}</span>
+                </Label>
+              ))}
+            </RadioGroup>
 
-          {/* Tipo de egreso */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tipo de Egreso</CardTitle>
-              <CardDescription>Selecciona qué analizar</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="flex flex-col gap-3">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="costo" id="tipo-costo" />
-                  <Label htmlFor="tipo-costo" className="cursor-pointer">
-                    Costo de Venta
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="costo_inventario" id="tipo-inventario" />
-                  <Label htmlFor="tipo-inventario" className="cursor-pointer">
-                    Costo Inventario
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="gasto" id="tipo-gasto" />
-                  <Label htmlFor="tipo-gasto" className="cursor-pointer">
-                    Gastos
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="otros_gastos" id="tipo-otros" />
-                  <Label htmlFor="tipo-otros" className="cursor-pointer">
-                    Otros Gastos
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="total" id="tipo-total" />
-                  <Label htmlFor="tipo-total" className="cursor-pointer">
-                    Total
-                  </Label>
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
+            {tipoEgreso === "total" && (
+              <div className="pt-2">
+                <Label className="text-xs text-muted-foreground mb-2 block">Vista</Label>
+                <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
+                  <TabsList className="w-full">
+                    <TabsTrigger value="unica" className="flex-1">Línea única</TabsTrigger>
+                    <TabsTrigger value="desglosada" className="flex-1">Desglosada</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            )}
+          </div>
 
           {/* Formato */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Formato de Cifras</CardTitle>
-              <CardDescription>Visualización de montos</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-3 block">Escala</Label>
-                <RadioGroup
-                  value={formatoMontos}
-                  onValueChange={(v) => setFormatoMontos(v as "normal" | "miles" | "millones")}
-                  className="flex flex-col gap-3"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="normal" id="formato-normal" />
-                    <Label htmlFor="formato-normal" className="cursor-pointer">
-                      Normal
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="miles" id="formato-miles" />
-                    <Label htmlFor="formato-miles" className="cursor-pointer">
-                      Miles (K)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="millones" id="formato-millones" />
-                    <Label htmlFor="formato-millones" className="cursor-pointer">
-                      Millones (M)
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Formato</Label>
 
-              <Separator />
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Escala</Label>
+              <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="normal" className="flex-1">Normal</TabsTrigger>
+                  <TabsTrigger value="miles" className="flex-1">Miles</TabsTrigger>
+                  <TabsTrigger value="millones" className="flex-1">Millones</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
 
-              <div>
-                <Label className="text-sm font-medium mb-3 block">Decimales</Label>
-                <RadioGroup
-                  value={decimales.toString()}
-                  onValueChange={(val) => setDecimales(Number(val) as 0 | 1 | 2)}
-                  className="flex flex-col gap-3"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="0" id="decimales-0" />
-                    <Label htmlFor="decimales-0" className="cursor-pointer">
-                      Sin decimales
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="1" id="decimales-1" />
-                    <Label htmlFor="decimales-1" className="cursor-pointer">
-                      1 decimal
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="2" id="decimales-2" />
-                    <Label htmlFor="decimales-2" className="cursor-pointer">
-                      2 decimales
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Decimales</Label>
+              <Tabs value={String(decimales)} onValueChange={(v) => setDecimales(Number(v) as 0 | 1 | 2)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="0" className="flex-1">0</TabsTrigger>
+                  <TabsTrigger value="1" className="flex-1">1</TabsTrigger>
+                  <TabsTrigger value="2" className="flex-1">2</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Gráficas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Evolución */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex flex-col gap-4">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>Evolución de Egresos{getSufijoFormato()}</CardTitle>
-                <CardDescription>Tendencia de egresos en el período seleccionado</CardDescription>
+                <CardTitle className="text-base">Evolución{getSufijoFormato()}</CardTitle>
+                <CardDescription>Tendencia en el tiempo (más útil para detectar picos)</CardDescription>
               </div>
-
-              {tipoEgreso === "total" && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Vista del Total:</span>
-                  <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
-                    <TabsList>
-                      <TabsTrigger value="unica">Línea Única</TabsTrigger>
-                      <TabsTrigger value="desglosada">Desglosada</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              )}
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={datosGraficaFormateados}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="periodo" />
-                <YAxis domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]} padding={{ top: 20, bottom: 0 }} />
-                <Tooltip
-                  formatter={(value: any) => {
-                    const v = toNum(value);
-                    return [`$${v.toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}${getSufijoFormato()}`, "Monto"];
-                  }}
-                  contentStyle={{
-                    borderRadius: "8px",
-                    border: "1px solid hsl(var(--border))",
-                    backgroundColor: "hsl(var(--background))",
-                  }}
-                  labelStyle={{ color: "hsl(var(--foreground))" }}
-                />
-
-                {tipoEgreso === "total" && vistaTotal === "desglosada" ? (
-                  <>
-                    <Line type="monotone" dataKey="costos" name="Costos Manuales" stroke="hsl(180, 25%, 50%)" strokeWidth={2} dot />
-                    <Line type="monotone" dataKey="gastos" name="Gastos" stroke="hsl(0, 70%, 55%)" strokeWidth={2} dot />
-                    <Line type="monotone" dataKey="costosInventario" name="Costo Venta Inventario" stroke="hsl(280, 60%, 55%)" strokeWidth={2} dot />
-                    <Line type="monotone" dataKey="otrosGastos" name="Otros Gastos" stroke="hsl(210, 15%, 55%)" strokeWidth={2} dot />
-                    <Legend />
-                  </>
-                ) : tipoEgreso === "combinada" ? (
-                  <>
-                    <Line type="monotone" dataKey="costos" name="Costos Manuales" stroke="hsl(180, 25%, 50%)" strokeWidth={2} dot />
-                    <Line type="monotone" dataKey="gastos" name="Gastos" stroke="hsl(0, 70%, 55%)" strokeWidth={2} dot />
-                    <Line type="monotone" dataKey="costosInventario" name="Costo Venta Inventario" stroke="hsl(280, 60%, 55%)" strokeWidth={2} dot />
-                    <Line type="monotone" dataKey="otrosGastos" name="Otros Gastos" stroke="hsl(210, 15%, 55%)" strokeWidth={2} dot />
-                    <Legend />
-                  </>
-                ) : (
-                  <Line type="monotone" dataKey="monto" stroke="hsl(180, 25%, 50%)" strokeWidth={2} dot />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Egresos por Tipo */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Egresos por Tipo</CardTitle>
-                <CardDescription>Distribución de costos y gastos</CardDescription>
-              </div>
-              <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                Total: {moneyMXN(totalEgresosPorTipo, decimales)}
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {datosGraficaFormateados?.length ? `${datosGraficaFormateados.length} puntos` : "Sin datos"}
               </Badge>
             </div>
           </CardHeader>
 
-          <CardContent>
-            {datosEgresosPorTipo.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay datos para mostrar</p>
-              </div>
+          <CardContent className="h-80">
+            {datosGraficaFormateados.length === 0 ? (
+              <ChartCardEmpty title="Sin evolución para mostrar" hint="Ajusta el período o registra egresos para ver la tendencia." />
             ) : (
-              <ResponsiveContainer width="100%" height={320}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={datosGraficaFormateados} margin={{ top: 10, right: 18, left: 0, bottom: 6 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="periodo" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
+                    padding={{ top: 12, bottom: 0 }}
+                  />
+                  <Tooltip
+                    formatter={(value: any, name: any) => {
+                      const v = toNum(value);
+                      const label = String(name || "Monto");
+                      return [
+                        `${moneyMXN(v, decimales)}${getSufijoFormato()}`,
+                        label,
+                      ];
+                    }}
+                    contentStyle={tooltipCardStyle}
+                    labelStyle={tooltipLabelStyle}
+                  />
+
+                  {tipoEgreso === "total" && vistaTotal === "desglosada" ? (
+                    <>
+                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke="hsl(180, 45%, 50%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke="hsl(0, 65%, 55%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke="hsl(230, 40%, 50%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke="hsl(210, 20%, 55%)" strokeWidth={2.5} dot={false} />
+                      <Legend formatter={LegendText as any} />
+                    </>
+                  ) : tipoEgreso === "combinada" ? (
+                    <>
+                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke="hsl(180, 45%, 50%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke="hsl(0, 65%, 55%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke="hsl(230, 40%, 50%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke="hsl(210, 20%, 55%)" strokeWidth={2.5} dot={false} />
+                      <Legend formatter={LegendText as any} />
+                    </>
+                  ) : (
+                    <Line type="monotone" dataKey="monto" name="Monto" stroke="hsl(180, 45%, 50%)" strokeWidth={2.8} dot={false} />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Donas (por tipo) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Distribución por tipo</CardTitle>
+                <CardDescription>¿En qué se va el dinero?</CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {moneyMXN(totalEgresosPorTipo, decimales)}
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="h-80">
+            {datosEgresosPorTipo.length === 0 ? (
+              <ChartCardEmpty title="Sin egresos" hint="Registra costos o gastos para que aparezca la distribución." />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={datosEgresosPorTipo}
                     cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
+                    cy="46%"
+                    innerRadius={72}
+                    outerRadius={98}
                     paddingAngle={3}
-                    labelLine
                     dataKey="monto"
                   >
-                    {datosEgresosPorTipo.map((_, index) => {
-                      const colors = ["hsl(180, 50%, 55%)", "hsl(200, 55%, 50%)", "hsl(160, 45%, 50%)", "hsl(220, 50%, 55%)"];
-                      return <Cell key={`cell-${index}`} fill={colors[index % 4]} />;
-                    })}
+                    {datosEgresosPorTipo.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                    ))}
                   </Pie>
+
                   <Tooltip
-                    formatter={(value: any) => [
-                      `$${toNum(value).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`,
-                      "Monto",
-                    ]}
-                    contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                    formatter={(value: any, _name: any, props: any) => {
+                      const label = props?.payload?.tipo || "Monto";
+                      return [`${moneyMXN(toNum(value), decimales)}`, label];
+                    }}
+                    contentStyle={tooltipCardStyle}
+                    labelStyle={tooltipLabelStyle}
                   />
-                  <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-sm">{value}</span>} />
+                  <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
 
-        {/* Métodos de Pago Utilizados */}
+        {/* Donas (por método pago) */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>Métodos de Pago Utilizados</CardTitle>
-                <CardDescription>Desglose de egresos por forma de pago</CardDescription>
+                <CardTitle className="text-base">Métodos de pago</CardTitle>
+                <CardDescription>Solo pagos realizados (sin impuestos)</CardDescription>
               </div>
-              <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                Total: {moneyMXN(totalMetodosPago, decimales)}
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {moneyMXN(totalMetodosPago, decimales)}
               </Badge>
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="h-80">
             {datosEstadoPagos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay datos para mostrar</p>
-              </div>
+              <ChartCardEmpty title="Sin pagos registrados" hint="Si todo está en crédito, aquí no se mostrará monto pagado." />
             ) : (
-              <ResponsiveContainer width="100%" height={320}>
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={datosEstadoPagos} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} labelLine dataKey="monto">
-                    <Cell fill="hsl(160, 60%, 45%)" />
-                    <Cell fill="hsl(200, 50%, 55%)" />
-                    <Cell fill="hsl(220, 45%, 50%)" />
+                  <Pie data={datosEstadoPagos} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
+                    {datosEstadoPagos.map((_, idx) => (
+                      <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
+                    ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: any) => [
-                      `$${toNum(value).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`,
-                      "Monto",
-                    ]}
-                    contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                    formatter={(value: any, _name: any, props: any) => {
+                      const label = props?.payload?.estado || "Monto";
+                      return [`${moneyMXN(toNum(value), decimales)}`, label];
+                    }}
+                    contentStyle={tooltipCardStyle}
+                    labelStyle={tooltipLabelStyle}
                   />
-                  <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-sm">{value}</span>} />
+                  <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -1256,71 +1139,56 @@ const AnalyticaEgresos = () => {
         </Card>
       </div>
 
-      {/* Nuevas Gráficas */}
+      {/* Más gráficas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Egresos por Cuenta/Subcuenta */}
         <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>{vistaAgrupacion === "cuenta" ? "Egresos por Cuenta" : "Egresos por Subcuenta"}</CardTitle>
-                  <CardDescription>
-                    {vistaAgrupacion === "cuenta" ? "Agrupación por cuenta contable completa" : "Desglose detallado por subcuentas"}
-                  </CardDescription>
-                </div>
-                <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                  Total: {moneyMXN(totalEgresosPorCuentaSubcuenta, decimales)}
-                </Badge>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{vistaAgrupacion === "cuenta" ? "Top por cuenta" : "Top por subcuenta"}</CardTitle>
+                <CardDescription>Identifica lo que más pesa</CardDescription>
               </div>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {moneyMXN(totalEgresosPorCuentaSubcuenta, decimales)}
+              </Badge>
+            </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t">
-                <span className="text-sm font-medium text-muted-foreground">Agrupar por:</span>
-                <Tabs value={vistaAgrupacion} onValueChange={(v) => setVistaAgrupacion(v as "cuenta" | "subcuenta")}>
-                  <TabsList className="h-9">
-                    <TabsTrigger value="cuenta" className="text-xs">
-                      Cuenta
-                    </TabsTrigger>
-                    <TabsTrigger value="subcuenta" className="text-xs">
-                      Subcuenta
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
+            <div className="pt-3">
+              <Tabs value={vistaAgrupacion} onValueChange={(v) => setVistaAgrupacion(v as "cuenta" | "subcuenta")}>
+                <TabsList className="h-9">
+                  <TabsTrigger value="cuenta" className="text-xs">Cuenta</TabsTrigger>
+                  <TabsTrigger value="subcuenta" className="text-xs">Subcuenta</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="h-[26rem]">
             {(() => {
               const datosActuales = vistaAgrupacion === "cuenta" ? datosEgresosPorCuenta : datosEgresosPorSubcuenta;
 
               if (!datosActuales.length) {
-                return (
-                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                    <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-                    <p>No hay datos para mostrar</p>
-                  </div>
-                );
+                return <ChartCardEmpty title="Sin datos" hint="Registra egresos o ajusta filtros para ver el top." />;
               }
 
               return (
-                <ResponsiveContainer width="100%" height={350}>
-                  <BarChart data={datosActuales} layout="vertical">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={datosActuales} layout="vertical" margin={{ top: 8, right: 18, left: 6, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       type="number"
+                      tick={{ fontSize: 12 }}
                       tickFormatter={(value: any) => `$${toNum(value).toLocaleString("es-MX")}`}
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                     />
-                    <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 220 : 150} />
+                    <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
                     <Tooltip
-                      formatter={(value: any) => [
-                        `$${toNum(value).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`,
-                        "Monto",
-                      ]}
-                      contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                      formatter={(value: any) => [`${moneyMXN(toNum(value), decimales)}`, "Monto"]}
+                      contentStyle={tooltipCardStyle}
+                      labelStyle={tooltipLabelStyle}
                     />
-                    <Bar dataKey="monto" fill={vistaAgrupacion === "cuenta" ? "hsl(220, 60%, 55%)" : "hsl(180, 50%, 50%)"} />
+                    <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill="hsl(210, 45%, 52%)" />
                   </BarChart>
                 </ResponsiveContainer>
               );
@@ -1328,46 +1196,43 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* Métodos de Pago Treemap */}
+        {/* Treemap métodos pago */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>Métodos de Pago</CardTitle>
-                <CardDescription>Distribución de pagos realizados</CardDescription>
+                <CardTitle className="text-base">Métodos de pago (vista treemap)</CardTitle>
+                <CardDescription>Más visual y rápida de leer</CardDescription>
               </div>
-              <Badge variant="outline" className="text-lg font-bold bg-primary/10 text-primary border-primary/30 px-4 py-2">
-                Total: {moneyMXN(totalEgresosPorMetodoPagoTreemap, decimales)}
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {moneyMXN(totalEgresosPorMetodoPagoTreemap, decimales)}
               </Badge>
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="h-[26rem]">
             {datosEgresosPorMetodoPago.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay datos para mostrar</p>
-              </div>
+              <ChartCardEmpty title="Sin pagos" hint="No hay montos pagados para este período." />
             ) : (
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height="100%">
                 <Treemap
-  data={datosEgresosPorMetodoPago}
-  dataKey="value"
-  aspectRatio={16 / 9}
-  stroke="#fff"
-  content={
-    <CustomTreemapContent
-      dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0)}
-      decimales={decimales}
-    />
-  }
->
+                  data={datosEgresosPorMetodoPago}
+                  dataKey="value"
+                  aspectRatio={16 / 9}
+                  content={
+                    <TreemapTile
+                      dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0)}
+                      decimales={decimales}
+                    />
+                  }
+                >
                   <Tooltip
-                    formatter={(value: any) => [
-                      `$${toNum(value).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`,
-                      "Pagado",
-                    ]}
-                    contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))" }}
+                    formatter={(value: any, _name: any, props: any) => {
+                      const label = props?.payload?.name || "Monto";
+                      return [`${moneyMXN(toNum(value), decimales)}`, label];
+                    }}
+                    contentStyle={tooltipCardStyle}
+                    labelStyle={tooltipLabelStyle}
                   />
                 </Treemap>
               </ResponsiveContainer>
@@ -1376,20 +1241,21 @@ const AnalyticaEgresos = () => {
         </Card>
       </div>
 
-      {/* Tablas de Detalles */}
+      {/* Listas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Egresos por Producto */}
+        {/* Productos */}
         <Card>
-          <CardHeader>
-            <CardTitle>Egresos por Producto</CardTitle>
-            <CardDescription>Top 10 productos con mayor egreso</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Top egresos por concepto</CardTitle>
+            <CardDescription>Productos/servicios (según descripción)</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-3">
             {datosEgresosPorProducto.productos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay productos para mostrar</p>
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Package className="h-10 w-10 mb-3 opacity-60" />
+                <p className="font-medium">Sin conceptos</p>
+                <p className="text-xs mt-1">Aparecerán cuando tengas egresos registrados.</p>
               </div>
             ) : (
               <>
@@ -1400,23 +1266,21 @@ const AnalyticaEgresos = () => {
                   return (
                     <div
                       key={producto.nombre}
-                      className={`flex items-center gap-3 p-3 border rounded-lg ${
-                        !producto.tieneAsignacion ? "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20" : ""
-                      }`}
+                      className={cn(
+                        "flex items-center gap-3 p-3 border rounded-xl bg-card/50",
+                        !producto.tieneAsignacion && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20"
+                      )}
                     >
                       {producto.imagen ? (
-                        <img src={producto.imagen} alt={producto.nombre} className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                        <img src={producto.imagen} alt={producto.nombre} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                       ) : (
                         <div
-                          className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
+                          className={cn(
+                            "w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0",
                             !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
-                          }`}
+                          )}
                         >
-                          <Package
-                            className={`w-5 h-5 ${
-                              !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
-                            }`}
-                          />
+                          <Package className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
                         </div>
                       )}
 
@@ -1424,50 +1288,48 @@ const AnalyticaEgresos = () => {
                         <div className="flex items-center gap-2">
                           <p className="font-medium truncate">{producto.nombre}</p>
                           {!producto.tieneAsignacion && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
                               Sin asignar
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {producto.transacciones} {producto.transacciones === 1 ? "transacción" : "transacciones"}
+                        <p className="text-xs text-muted-foreground">
+                          {producto.transacciones} {producto.transacciones === 1 ? "movimiento" : "movimientos"}
                         </p>
                       </div>
 
                       <div className="text-right flex-shrink-0">
-                        <p className="font-bold text-foreground">{formatearParaVisualizacion(producto.monto)}</p>
-                      </div>
-
-                      <div className="flex-shrink-0">
-                        <Badge variant="outline" className="bg-teal-50/50 text-teal-700 border-teal-300 dark:bg-teal-950/50 dark:text-teal-300">
-                          {porcentaje}%
-                        </Badge>
+                        <p className="font-semibold text-foreground">{formatearParaVisualizacion(producto.monto)}</p>
+                        <p className="text-xs text-muted-foreground">{porcentaje}%</p>
                       </div>
                     </div>
                   );
                 })}
 
                 <div className="flex items-center justify-between pt-3 border-t">
-                  <span className="font-semibold text-primary">Total General</span>
-                  <span className="text-lg font-bold text-foreground">{formatearParaVisualizacion(datosEgresosPorProducto.totalGeneral, true)}</span>
+                  <span className="font-semibold text-primary">Total</span>
+                  <span className="text-lg font-bold text-foreground">
+                    {formatearParaVisualizacion(datosEgresosPorProducto.totalGeneral, true)}
+                  </span>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Egresos por Proveedor */}
+        {/* Proveedores */}
         <Card>
-          <CardHeader>
-            <CardTitle>Egresos por Proveedor</CardTitle>
-            <CardDescription>Top 10 proveedores por monto de egresos</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Top egresos por proveedor</CardTitle>
+            <CardDescription>Concentración de pagos</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-3">
             {datosEgresosPorProveedorMejorado.proveedores.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mb-4 opacity-50" />
-                <p>No hay proveedores para mostrar</p>
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <TrendingDown className="h-10 w-10 mb-3 opacity-60" />
+                <p className="font-medium">Sin proveedores</p>
+                <p className="text-xs mt-1">Aparecerán cuando registres egresos con proveedor.</p>
               </div>
             ) : (
               <>
@@ -1478,39 +1340,35 @@ const AnalyticaEgresos = () => {
                   return (
                     <div
                       key={proveedor.nombre}
-                      className={`flex items-center gap-3 p-3 border rounded-lg ${
-                        !proveedor.tieneAsignacion ? "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20" : ""
-                      }`}
+                      className={cn(
+                        "flex items-center gap-3 p-3 border rounded-xl bg-card/50",
+                        !proveedor.tieneAsignacion && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20"
+                      )}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium truncate">{proveedor.nombre}</p>
                           {!proveedor.tieneAsignacion && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
                               Sin asignar
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {proveedor.transacciones} {proveedor.transacciones === 1 ? "transacción" : "transacciones"}
+                        <p className="text-xs text-muted-foreground">
+                          {proveedor.transacciones} {proveedor.transacciones === 1 ? "movimiento" : "movimientos"}
                         </p>
                       </div>
 
                       <div className="text-right flex-shrink-0">
-                        <p className="font-bold text-foreground">{formatearParaVisualizacion(proveedor.monto)}</p>
-                      </div>
-
-                      <div className="flex-shrink-0">
-                        <Badge variant="outline" className="bg-teal-50/50 text-teal-700 border-teal-300 dark:bg-teal-950/50 dark:text-teal-300">
-                          {porcentaje}%
-                        </Badge>
+                        <p className="font-semibold text-foreground">{formatearParaVisualizacion(proveedor.monto)}</p>
+                        <p className="text-xs text-muted-foreground">{porcentaje}%</p>
                       </div>
                     </div>
                   );
                 })}
 
                 <div className="flex items-center justify-between pt-3 border-t">
-                  <span className="font-semibold text-primary">Total General</span>
+                  <span className="font-semibold text-primary">Total</span>
                   <span className="text-lg font-bold text-foreground">
                     {formatearParaVisualizacion(datosEgresosPorProveedorMejorado.totalGeneral, true)}
                   </span>
