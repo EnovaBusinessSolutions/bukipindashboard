@@ -23,6 +23,7 @@ import {
   Calendar as CalendarIcon,
   Search,
   Filter,
+  Info,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -245,7 +246,7 @@ function DateRangePickerInline({
         <Button
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal h-10 rounded-lg bg-background",
+            "w-full justify-start text-left font-normal h-10 rounded-xl bg-background",
             !value?.from && "text-muted-foreground",
             className
           )}
@@ -262,17 +263,11 @@ function DateRangePickerInline({
           onSelect={(r: any) => onChange({ from: r?.from, to: r?.to })}
           initialFocus
         />
-        <div className="flex items-center justify-between gap-2 p-3 border-t bg-muted/20">
+        <div className="flex items-center justify-between gap-2 p-3 border-t bg-muted/10">
           <div className="text-xs text-muted-foreground">
-            Tip: selecciona inicio y fin. (Si eliges solo un día, se toma como “inicio”.)
+            Selecciona inicio y fin. (Si eliges solo un día, se toma como inicio.)
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onChange({})}
-            className="h-8 px-2"
-            title="Limpiar rango"
-          >
+          <Button size="sm" variant="ghost" onClick={() => onChange({})} className="h-8 px-2">
             Limpiar
           </Button>
         </div>
@@ -356,7 +351,7 @@ const ResumenEgresos = () => {
       if (filterEstadoPago === "pagado" && safeNum(t.monto_pendiente) > 0) return false;
       if (filterEstadoPago === "pendiente" && safeNum(t.monto_pendiente) === 0) return false;
 
-      // ✅ Rango fechas (unificado)
+      // ✅ Rango fechas
       const hasRange = Boolean(dateRange?.from || dateRange?.to);
       if (hasRange && !fecha) return false;
 
@@ -529,13 +524,11 @@ const ResumenEgresos = () => {
       .filter((t: any) => String(t.cuenta_codigo || "") === "5204")
       .reduce((sum: number, t: any) => sum + safeNum(t.monto_total), 0);
 
-    const montoTotal = transaccionesEgresosUnificadas.reduce((sum: number, t: any) => sum + safeNum(t.monto_total), 0);
     const montoPagado = transaccionesEgresosUnificadas.reduce((sum: number, t: any) => sum + safeNum(t.monto_pagado), 0);
     const montoPendiente = transaccionesEgresosUnificadas.reduce((sum: number, t: any) => sum + safeNum(t.monto_pendiente), 0);
 
     return {
       totalTransacciones: transaccionesEgresosUnificadas.length,
-      montoTotal,
       montoPagado,
       montoPendiente,
       totalCostos,
@@ -572,7 +565,8 @@ const ResumenEgresos = () => {
     const pagado = safeNum(t?.monto_pagado);
 
     if (total <= 0) return <Badge variant="outline">—</Badge>;
-    if (pendiente <= 0) return <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">Pagado</Badge>;
+    if (pendiente <= 0)
+      return <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">Pagado</Badge>;
     if (pagado > 0)
       return <Badge className="bg-amber-100 text-amber-800 border border-amber-200">Parcial</Badge>;
     return <Badge className="bg-rose-100 text-rose-700 border border-rose-200">Pendiente</Badge>;
@@ -741,12 +735,18 @@ const ResumenEgresos = () => {
     setFilterEstadoPago("todos");
   };
 
-  // Reset de página cuando cambian filtros
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, filterCategoriaContable, filterProveedor, filterPago, filterEstadoPago, dateRange?.from, dateRange?.to]);
+  }, [
+    searchTerm,
+    filterCategoriaContable,
+    filterProveedor,
+    filterPago,
+    filterEstadoPago,
+    dateRange?.from,
+    dateRange?.to,
+  ]);
 
-  // Paginación
   const totalRows = transaccionesFiltradasPorCategoria.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -754,7 +754,6 @@ const ResumenEgresos = () => {
   const startIndex = (safePage - 1) * PAGE_SIZE;
   const endIndex = Math.min(startIndex + PAGE_SIZE, totalRows);
   const pagedRows = transaccionesFiltradasPorCategoria.slice(startIndex, endIndex);
-
   const rangeText = totalRows === 0 ? "Mostrando 0 de 0" : `Mostrando ${startIndex + 1}–${endIndex} de ${totalRows}`;
 
   const loadingAll = Boolean(loading || loadingCostosVenta);
@@ -802,53 +801,92 @@ const ResumenEgresos = () => {
   return (
     <>
       <Card className="border-muted/60">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <CardTitle className="text-xl">Resumen de Egresos</CardTitle>
+        {/* ✅ Header limpio */}
+        <CardHeader className="pb-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-2xl tracking-tight">Resumen de Egresos</CardTitle>
               <CardDescription>Historial completo de transacciones de egresos</CardDescription>
             </div>
 
-            {/* KPI mini cards (más pro y más claro) */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <div className="rounded-xl border bg-muted/20 px-3 py-2">
+            {/* KPIs compactos, alineados, sin “cajotas” raras */}
+            <div className="grid grid-cols-3 gap-2 w-full lg:w-auto">
+              <div className="rounded-2xl border bg-muted/10 px-4 py-3">
                 <div className="text-[11px] text-muted-foreground">Resultados</div>
-                <div className="text-sm font-semibold">{totalRows}</div>
+                <div className="text-lg font-semibold leading-tight">{totalRows}</div>
               </div>
-              <div className="rounded-xl border bg-muted/20 px-3 py-2">
+              <div className="rounded-2xl border bg-muted/10 px-4 py-3">
                 <div className="text-[11px] text-muted-foreground">Pagado</div>
-                <div className="text-sm font-semibold text-emerald-700">${formatMonto(resumenFiltrado.montoPagado)}</div>
+                <div className="text-lg font-semibold leading-tight text-emerald-700">
+                  ${formatMonto(resumenFiltrado.montoPagado)}
+                </div>
               </div>
-              <div className="rounded-xl border bg-muted/20 px-3 py-2 col-span-2 md:col-span-1">
+              <div className="rounded-2xl border bg-muted/10 px-4 py-3">
                 <div className="text-[11px] text-muted-foreground">Total</div>
-                <div className="text-sm font-semibold">${formatMonto(resumenFiltrado.totalGlobalEgresos)}</div>
+                <div className="text-lg font-semibold leading-tight">
+                  ${formatMonto(resumenFiltrado.totalGlobalEgresos)}
+                </div>
                 {resumenFiltrado.montoPendiente > 0 && (
-                  <div className="text-[11px] text-amber-700">Pendiente: ${formatMonto(resumenFiltrado.montoPendiente)}</div>
+                  <div className="text-[11px] text-amber-700 mt-1">
+                    Pendiente: ${formatMonto(resumenFiltrado.montoPendiente)}
+                  </div>
                 )}
               </div>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent>
-          {/* Filtros */}
-          <div className="mb-5 rounded-xl border bg-muted/20 p-4">
+        <CardContent className="space-y-4">
+          {/* ✅ Filtros: estructura pro (2 filas + tip abajo) */}
+          <div className="rounded-2xl border bg-muted/10 p-4">
             <div className="flex items-center gap-2 mb-4">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <div className="font-semibold">Filtros</div>
-              <div className="text-xs text-muted-foreground">Refina la tabla por fecha, proveedor y estado de pago</div>
+              <div className="h-9 w-9 rounded-xl border bg-background flex items-center justify-center">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="leading-tight">
+                <div className="font-semibold">Filtros</div>
+                <div className="text-xs text-muted-foreground">Refina la tabla por fecha, proveedor y pagos</div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="space-y-2 lg:col-span-2">
+            {/* Fila 1 */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+              <div className="lg:col-span-2 space-y-2">
                 <Label>Rango de fechas</Label>
                 <DateRangePickerInline value={dateRange} onChange={setDateRange} />
               </div>
 
+              <div className="lg:col-span-2 space-y-2">
+                <Label>Buscar</Label>
+                <div className="relative">
+                  <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    className="pl-9 h-10 rounded-xl bg-background"
+                    placeholder="Buscar por descripción o proveedor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>&nbsp;</Label>
+                <Button
+                  variant="outline"
+                  onClick={limpiarFiltros}
+                  className="w-full h-10 rounded-xl bg-background"
+                >
+                  Limpiar filtros
+                </Button>
+              </div>
+            </div>
+
+            {/* Fila 2 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
               <div className="space-y-2">
                 <Label>Categoría contable</Label>
                 <Select value={filterCategoriaContable} onValueChange={setFilterCategoriaContable}>
-                  <SelectTrigger className="h-10 rounded-lg">
+                  <SelectTrigger className="h-10 rounded-xl bg-background">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -863,7 +901,7 @@ const ResumenEgresos = () => {
               <div className="space-y-2">
                 <Label>Proveedor</Label>
                 <Select value={filterProveedor} onValueChange={setFilterProveedor}>
-                  <SelectTrigger className="h-10 rounded-lg">
+                  <SelectTrigger className="h-10 rounded-xl bg-background">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -880,7 +918,7 @@ const ResumenEgresos = () => {
               <div className="space-y-2">
                 <Label>Tipo de pago</Label>
                 <Select value={filterPago} onValueChange={setFilterPago}>
-                  <SelectTrigger className="h-10 rounded-lg">
+                  <SelectTrigger className="h-10 rounded-xl bg-background">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -891,26 +929,11 @@ const ResumenEgresos = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end mt-4">
-              <div className="space-y-2 lg:col-span-2">
-                <Label>Buscar</Label>
-                <div className="relative">
-                  <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <Input
-                    className="pl-9 h-10 rounded-lg bg-background"
-                    placeholder="Buscar por descripción o proveedor..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
 
               <div className="space-y-2">
                 <Label>Estado de pago</Label>
                 <Select value={filterEstadoPago} onValueChange={setFilterEstadoPago}>
-                  <SelectTrigger className="h-10 rounded-lg">
+                  <SelectTrigger className="h-10 rounded-xl bg-background">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -920,28 +943,30 @@ const ResumenEgresos = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
-              <div className="flex items-end">
-                <Button variant="outline" onClick={limpiarFiltros} className="w-full h-10 rounded-lg">
-                  Limpiar filtros
-                </Button>
-              </div>
-
-              <div className="lg:col-span-1 md:col-span-2 flex md:justify-end">
-                <div className="text-right w-full md:w-auto">
-                  <div className="text-xs text-muted-foreground">Tip: clic en</div>
-                  <div className="text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <FileText className="h-3.5 w-3.5" /> para ver “Información general” y “Registro contable”
-                    </span>
-                  </div>
+            {/* ✅ TIP: fuera del grid para que NUNCA se recorte */}
+            <div className="mt-4 rounded-2xl border bg-background p-3">
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 h-8 w-8 rounded-xl bg-muted/30 flex items-center justify-center">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="text-sm leading-relaxed">
+                  <span className="font-medium">Tip:</span>{" "}
+                  Haz clic en el ícono{" "}
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <FileText className="h-4 w-4" /> documento
+                  </span>{" "}
+                  para ver <span className="font-medium">Información general</span> y{" "}
+                  <span className="font-medium">Registro contable</span>.
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Estado vacío */}
           {totalRows === 0 ? (
-            <div className="text-center py-12 text-muted-foreground border rounded-xl bg-muted/10">
+            <div className="text-center py-12 text-muted-foreground border rounded-2xl bg-muted/5">
               <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="font-medium">No hay egresos registrados</p>
               <p className="text-sm mt-2">
@@ -950,12 +975,12 @@ const ResumenEgresos = () => {
             </div>
           ) : (
             <>
-              {/* Tabla pro: sticky header + scroll interno */}
-              <div className="rounded-xl border bg-background overflow-hidden">
+              {/* ✅ Tabla: más “pro” */}
+              <div className="rounded-2xl border bg-background overflow-hidden">
                 <div className="max-h-[560px] overflow-auto">
                   <Table>
-                    <TableHeader className="sticky top-0 z-10 bg-background">
-                      <TableRow className="bg-muted/40">
+                    <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
+                      <TableRow className="bg-muted/20">
                         <TableHead className="w-16">Imagen</TableHead>
                         <TableHead className="whitespace-nowrap">Fecha</TableHead>
                         <TableHead>Descripción</TableHead>
@@ -974,7 +999,11 @@ const ResumenEgresos = () => {
                     <TableBody>
                       {pagedRows.map((transaccion: any, idx: number) => {
                         const iso = pickISODate(transaccion);
-                        const rowKey = String(transaccion?.id ?? transaccion?._id ?? `${transaccion?.numero_asiento ?? "row"}-${iso ?? ""}`);
+                        const rowKey = String(
+                          transaccion?.id ??
+                            transaccion?._id ??
+                            `${transaccion?.numero_asiento ?? "row"}-${iso ?? ""}`
+                        );
 
                         const tipoInfo = getTipoEgresoDisplay(transaccion);
                         const cuentaCodigo = String(transaccion.cuenta_codigo || "");
@@ -983,9 +1012,15 @@ const ResumenEgresos = () => {
                         const isOtros = cuentaCodigo === "5204";
 
                         return (
-                          <TableRow key={rowKey} className={cn("hover:bg-muted/20", idx % 2 === 1 && "bg-muted/5")}>
+                          <TableRow
+                            key={rowKey}
+                            className={cn(
+                              "hover:bg-muted/10",
+                              idx % 2 === 1 && "bg-muted/5"
+                            )}
+                          >
                             <TableCell>
-                              <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted flex items-center justify-center border">
+                              <div className="w-12 h-12 rounded-xl overflow-hidden bg-muted/30 flex items-center justify-center border">
                                 {transaccion.imagen_url ? (
                                   <img
                                     src={transaccion.imagen_url}
@@ -1003,19 +1038,32 @@ const ResumenEgresos = () => {
 
                             <TableCell className="whitespace-nowrap">
                               {iso
-                                ? new Date(iso).toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" })
+                                ? new Date(iso).toLocaleDateString("es-MX", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  })
                                 : "—"}
                             </TableCell>
 
                             <TableCell>
                               <div className="font-semibold leading-tight">{transaccion.descripcion}</div>
                               <div className="text-xs text-muted-foreground mt-0.5">
-                                {isCosto ? "Costo de Venta" : isGastoOp ? "Gasto Operativo" : isOtros ? "Otro gasto" : "Egreso"}
+                                {isCosto
+                                  ? "Costo de Venta"
+                                  : isGastoOp
+                                  ? "Gasto Operativo"
+                                  : isOtros
+                                  ? "Otro gasto"
+                                  : "Egreso"}
                               </div>
                             </TableCell>
 
                             <TableCell>
-                              <Badge variant="outline" className={cn("text-xs font-medium rounded-full px-3 py-1", tipoInfo.className)}>
+                              <Badge
+                                variant="outline"
+                                className={cn("text-xs font-medium rounded-full px-3 py-1", tipoInfo.className)}
+                              >
                                 {tipoInfo.label}
                               </Badge>
                             </TableCell>
@@ -1060,7 +1108,16 @@ const ResumenEgresos = () => {
                             </TableCell>
 
                             <TableCell className="text-right">
-                              <div className={cn("font-semibold", isCosto ? "text-purple-700" : isOtros ? "text-slate-700" : "text-orange-700")}>
+                              <div
+                                className={cn(
+                                  "font-semibold",
+                                  isCosto
+                                    ? "text-purple-700"
+                                    : isOtros
+                                    ? "text-slate-700"
+                                    : "text-orange-700"
+                                )}
+                              >
                                 ${formatMonto(safeNum(transaccion.monto_total))}
                               </div>
 
@@ -1075,9 +1132,13 @@ const ResumenEgresos = () => {
 
                             <TableCell className="whitespace-nowrap">
                               {transaccion.estado === "cancelado" ? (
-                                <Badge variant="destructive" className="rounded-full">Cancelada</Badge>
+                                <Badge variant="destructive" className="rounded-full">
+                                  Cancelada
+                                </Badge>
                               ) : (
-                                <Badge variant="outline" className="rounded-full">Activa</Badge>
+                                <Badge variant="outline" className="rounded-full">
+                                  Activa
+                                </Badge>
                               )}
                             </TableCell>
 
@@ -1094,7 +1155,7 @@ const ResumenEgresos = () => {
                                   }}
                                 >
                                   <DialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" title="Ver detalles" className="h-9 w-9 rounded-lg">
+                                    <Button variant="ghost" size="icon" title="Ver detalles" className="h-9 w-9 rounded-xl">
                                       <FileText className="h-4 w-4" />
                                     </Button>
                                   </DialogTrigger>
@@ -1114,7 +1175,7 @@ const ResumenEgresos = () => {
 
                                         <TabsContent value="general" className="space-y-4">
                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="rounded-xl border p-4 bg-muted/10">
+                                            <div className="rounded-2xl border p-4 bg-muted/10">
                                               <h4 className="font-semibold text-sm mb-2">Información</h4>
                                               <div className="space-y-1 text-sm">
                                                 <p><span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}</p>
@@ -1130,7 +1191,7 @@ const ResumenEgresos = () => {
                                               </div>
                                             </div>
 
-                                            <div className="rounded-xl border p-4 bg-muted/10">
+                                            <div className="rounded-2xl border p-4 bg-muted/10">
                                               <h4 className="font-semibold text-sm mb-2">Montos</h4>
                                               <div className="space-y-1 text-sm">
                                                 <p><span className="font-medium">Total:</span> ${formatMonto(safeNum(selectedTransaction.monto_total))}</p>
@@ -1141,7 +1202,7 @@ const ResumenEgresos = () => {
                                           </div>
 
                                           {selectedTransaction.proveedor_nombre && (
-                                            <div className="rounded-xl border p-4">
+                                            <div className="rounded-2xl border p-4">
                                               <h4 className="font-semibold text-sm mb-2">Proveedor</h4>
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                                 <p><span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}</p>
@@ -1153,7 +1214,7 @@ const ResumenEgresos = () => {
                                           )}
 
                                           {selectedTransaction.comentarios && (
-                                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200/60">
+                                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60">
                                               <p className="font-medium text-blue-700 dark:text-blue-300 text-sm mb-1">💬 Comentarios</p>
                                               <p className="text-blue-600 dark:text-blue-400 text-sm">{selectedTransaction.comentarios}</p>
                                             </div>
@@ -1167,8 +1228,8 @@ const ResumenEgresos = () => {
                                               <p className="mt-2 text-sm text-muted-foreground">Cargando asientos contables...</p>
                                             </div>
                                           ) : currentAsientos?.detalles?.length ? (
-                                            <div className="rounded-xl border overflow-hidden">
-                                              <div className="p-4 border-b bg-muted/20">
+                                            <div className="rounded-2xl border overflow-hidden">
+                                              <div className="p-4 border-b bg-muted/10">
                                                 <div className="font-semibold">Asiento #{currentAsientos.numero_asiento}</div>
                                                 <div className="text-xs text-muted-foreground">
                                                   {currentAsientos.fecha ? new Date(currentAsientos.fecha).toLocaleDateString("es-MX") : ""}
@@ -1177,7 +1238,7 @@ const ResumenEgresos = () => {
 
                                               <div className="overflow-auto">
                                                 <table className="w-full text-sm">
-                                                  <thead className="bg-muted/30">
+                                                  <thead className="bg-muted/20">
                                                     <tr>
                                                       <th className="p-3 text-left">Cuenta</th>
                                                       <th className="p-3 text-left">Descripción</th>
@@ -1210,7 +1271,7 @@ const ResumenEgresos = () => {
                                                       </tr>
                                                     ))}
 
-                                                    <tr className="border-t bg-muted/20 font-bold">
+                                                    <tr className="border-t bg-muted/10 font-bold">
                                                       <td colSpan={2} className="p-3">TOTALES</td>
                                                       <td className="p-3 text-right text-rose-700">
                                                         ${formatMonto(currentAsientos.detalles.reduce((sum, d) => sum + safeNum(d.debe), 0))}
@@ -1224,7 +1285,7 @@ const ResumenEgresos = () => {
                                               </div>
                                             </div>
                                           ) : (
-                                            <div className="p-8 bg-muted/20 rounded-xl border text-center">
+                                            <div className="p-8 bg-muted/10 rounded-2xl border text-center">
                                               <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                                               <p className="text-sm text-muted-foreground">
                                                 No se encontraron registros contables para esta transacción
@@ -1243,7 +1304,7 @@ const ResumenEgresos = () => {
 
                                       {selectedTransaction?.imagen_comprobante ? (
                                         <div className="space-y-2">
-                                          <div className="rounded-xl overflow-hidden border bg-muted/10">
+                                          <div className="rounded-2xl overflow-hidden border bg-muted/10">
                                             <img
                                               src={selectedTransaction.imagen_comprobante}
                                               alt="Comprobante"
@@ -1261,13 +1322,13 @@ const ResumenEgresos = () => {
                                         </div>
                                       ) : (
                                         <div className="space-y-3">
-                                          <div className="p-4 bg-muted/20 rounded-xl border text-center text-sm text-muted-foreground">
+                                          <div className="p-4 bg-muted/10 rounded-2xl border text-center text-sm text-muted-foreground">
                                             No hay comprobante cargado para esta transacción
                                           </div>
 
                                           <div className="flex flex-col items-center gap-2">
                                             <label htmlFor="comprobante-upload" className="cursor-pointer">
-                                              <div className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium inline-flex items-center gap-2">
+                                              <div className="px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors text-sm font-medium inline-flex items-center gap-2">
                                                 <ImageIcon className="h-4 w-4" />
                                                 {uploadingComprobante ? "Cargando..." : "Cargar comprobante"}
                                               </div>
@@ -1294,7 +1355,7 @@ const ResumenEgresos = () => {
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-9 w-9 rounded-lg border-red-300 text-red-600 hover:bg-red-50"
+                                  className="h-9 w-9 rounded-xl border-red-300 text-red-600 hover:bg-red-50"
                                   disabled={transaccion.estado === "cancelado" || isCanceling}
                                   onClick={() => {
                                     setTransaccionACancelar(transaccion);
@@ -1315,37 +1376,57 @@ const ResumenEgresos = () => {
               </div>
 
               {/* Footer paginación */}
-              <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="mt-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="text-sm text-muted-foreground">{rangeText}</div>
 
                 <div className="flex items-center gap-3 justify-end">
-                  <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                  >
                     Anterior
                   </Button>
-                  <div className="text-sm text-muted-foreground">Página {safePage} de {totalPages}</div>
-                  <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}>
+                  <div className="text-sm text-muted-foreground">
+                    Página {safePage} de {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage >= totalPages}
+                  >
                     Siguiente
                   </Button>
                 </div>
               </div>
 
-              {/* Totales por categoría (cards pro) */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="rounded-xl border bg-muted/10 p-4">
+              {/* Totales por categoría (cards) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                <div className="rounded-2xl border bg-muted/5 p-4">
                   <div className="text-xs text-muted-foreground">Costos de Venta (5001–5004)</div>
-                  <div className="text-2xl font-bold text-purple-700 mt-1">${formatMonto(resumenFiltrado.totalCostos)}</div>
+                  <div className="text-2xl font-bold text-purple-700 mt-1">
+                    ${formatMonto(resumenFiltrado.totalCostos)}
+                  </div>
                 </div>
 
-                <div className="rounded-xl border bg-muted/10 p-4">
+                <div className="rounded-2xl border bg-muted/5 p-4">
                   <div className="text-xs text-muted-foreground">Gastos Operativos (5101–5108)</div>
-                  <div className="text-2xl font-bold text-orange-700 mt-1">${formatMonto(resumenFiltrado.totalGastos)}</div>
+                  <div className="text-2xl font-bold text-orange-700 mt-1">
+                    ${formatMonto(resumenFiltrado.totalGastos)}
+                  </div>
                 </div>
 
-                <div className="rounded-xl border bg-muted/10 p-4">
+                <div className="rounded-2xl border bg-muted/5 p-4">
                   <div className="text-xs text-muted-foreground">Total de Egresos</div>
-                  <div className="text-2xl font-bold mt-1">${formatMonto(resumenFiltrado.totalGlobalEgresos)}</div>
+                  <div className="text-2xl font-bold mt-1">
+                    ${formatMonto(resumenFiltrado.totalGlobalEgresos)}
+                  </div>
                   {resumenFiltrado.montoPendiente > 0 && (
-                    <div className="text-sm text-amber-700 mt-1">Pendiente: ${formatMonto(resumenFiltrado.montoPendiente)}</div>
+                    <div className="text-sm text-amber-700 mt-1">
+                      Pendiente: ${formatMonto(resumenFiltrado.montoPendiente)}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1359,7 +1440,9 @@ const ResumenEgresos = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cancelar Transacción</DialogTitle>
-            <DialogDescription>Esta acción creará un asiento de reversión y marcará la transacción como cancelada.</DialogDescription>
+            <DialogDescription>
+              Esta acción creará un asiento de reversión y marcará la transacción como cancelada.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -1394,7 +1477,11 @@ const ResumenEgresos = () => {
             >
               Cerrar
             </Button>
-            <Button variant="destructive" onClick={handleCancelarTransaccion} disabled={isCanceling || !motivoCancelacion.trim()}>
+            <Button
+              variant="destructive"
+              onClick={handleCancelarTransaccion}
+              disabled={isCanceling || !motivoCancelacion.trim()}
+            >
               {isCanceling ? "Cancelando..." : "Confirmar Cancelación"}
             </Button>
           </DialogFooter>
