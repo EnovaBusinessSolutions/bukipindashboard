@@ -116,7 +116,7 @@ const normalizeAsiento = (json: any): Asiento | null => {
   };
 };
 
-// ✅ Normalizador de transacción de egreso (para que filtros/UI no dependan del shape exacto del backend)
+// ✅ Normalizador de transacción de egreso
 const normalizeEgresoTx = (t: any) => {
   const id = t?.id ?? t?._id ?? t?.transaccion_id ?? t?.transaccionId ?? t?.expenseId ?? null;
 
@@ -204,7 +204,6 @@ const normalizeEgresoTx = (t: any) => {
 };
 
 const ResumenEgresos = () => {
-  // react-query normalmente regresa error/isError; si tu hook no lo expone, igual no rompe.
   const {
     data: transaccionesRaw = [],
     isLoading: loading,
@@ -220,7 +219,6 @@ const ResumenEgresos = () => {
     return (transaccionesRaw || []).map(normalizeEgresoTx);
   }, [transaccionesRaw]);
 
-  // Crear mapa de imágenes de productos por nombre para JOIN manual
   const mapaImagenesProductos = useMemo(() => {
     const mapa = new Map<string, string>();
     (productosEgresos || []).forEach((p: any) => {
@@ -235,16 +233,16 @@ const ResumenEgresos = () => {
   const [currentAsientos, setCurrentAsientos] = useState<Asiento | null>(null);
   const [uploadingComprobante, setUploadingComprobante] = useState(false);
 
-  // Estados para filtros (estilo Ingresos)
+  // Filtros (estilo Ingresos)
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategoriaContable, setFilterCategoriaContable] = useState<string>("todos");
   const [filterProveedor, setFilterProveedor] = useState<string>("todos");
-  const [filterPago, setFilterPago] = useState<string>("todos"); // contado|credito|parcial
-  const [filterEstadoPago, setFilterEstadoPago] = useState<string>("todos"); // pagado|pendiente
+  const [filterPago, setFilterPago] = useState<string>("todos");
+  const [filterEstadoPago, setFilterEstadoPago] = useState<string>("todos");
   const [filterFechaInicio, setFilterFechaInicio] = useState<string>("");
   const [filterFechaFin, setFilterFechaFin] = useState<string>("");
 
-  // Paginación 25 en 25
+  // Paginación
   const [page, setPage] = useState(1);
 
   const proveedoresUnicos = useMemo(() => {
@@ -257,13 +255,11 @@ const ResumenEgresos = () => {
 
   const transaccionesFiltradas = useMemo(() => {
     return (transacciones || []).filter((t: any) => {
-      // Filtrar solo costos y gastos + otros
       if (t.tipo_egreso !== "costo" && t.tipo_egreso !== "gasto" && t.tipo_egreso !== "otro") return false;
 
       const iso = pickISODate(t);
       const fecha = iso ? new Date(iso) : null;
 
-      // Búsqueda
       if (
         searchTerm &&
         !String(t.descripcion || "").toLowerCase().includes(searchTerm.toLowerCase()) &&
@@ -272,17 +268,13 @@ const ResumenEgresos = () => {
         return false;
       }
 
-      // Proveedor
       if (filterProveedor !== "todos" && String(t.proveedor_nombre || "") !== String(filterProveedor)) return false;
 
-      // Tipo de pago
       if (filterPago !== "todos" && String(t.tipo_pago || "") !== String(filterPago)) return false;
 
-      // Estado de pago (por pendiente)
       if (filterEstadoPago === "pagado" && safeNum(t.monto_pendiente) > 0) return false;
       if (filterEstadoPago === "pendiente" && safeNum(t.monto_pendiente) === 0) return false;
 
-      // Rango de fechas
       if ((filterFechaInicio || filterFechaFin) && !fecha) return false;
       if (fecha) {
         if (filterFechaInicio && fecha < new Date(filterFechaInicio)) return false;
@@ -431,19 +423,12 @@ const ResumenEgresos = () => {
 
   const transaccionesFiltradasPorCategoria = useMemo(() => {
     if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
-
-    if (filterCategoriaContable === "costos") {
+    if (filterCategoriaContable === "costos")
       return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
-    }
-
-    if (filterCategoriaContable === "gastos") {
+    if (filterCategoriaContable === "gastos")
       return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
-    }
-
-    if (filterCategoriaContable === "otros_gastos") {
+    if (filterCategoriaContable === "otros_gastos")
       return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "") === "5204");
-    }
-
     return transaccionesEgresosUnificadas;
   }, [transaccionesEgresosUnificadas, filterCategoriaContable]);
 
@@ -497,7 +482,6 @@ const ResumenEgresos = () => {
     setLoadingAsientos(true);
     setCurrentAsientos(null);
 
-    // helper: intenta endpoint; 404 = null (silencioso), otros errores = throw
     const tryFetchAsiento = async (url: string) => {
       try {
         const j = await apiFetch(url, { method: "GET" });
@@ -509,7 +493,6 @@ const ResumenEgresos = () => {
     };
 
     try {
-      // 1) Si ya trae detalle (inventario), úsalo directo
       if (Array.isArray(transaccion?.detalles_asiento) && transaccion.detalles_asiento.length) {
         const detalles = transaccion.detalles_asiento.map(normalizeAsientoDetalle);
 
@@ -525,7 +508,6 @@ const ResumenEgresos = () => {
       const id = String(transaccion?.id || "").trim();
       const numeroAsiento = String(transaccion?.numero_asiento || transaccion?.numeroAsiento || "").trim();
 
-      // 2) Asiento por ID (si existe)
       const asientoId = transaccion?.asiento_id ?? transaccion?.asientoId ?? transaccion?.asientoID ?? null;
 
       let asiento: Asiento | null = null;
@@ -534,12 +516,10 @@ const ResumenEgresos = () => {
         asiento = await tryFetchAsiento(`/api/asientos/${encodeURIComponent(String(asientoId))}`);
       }
 
-      // 3) Canonical: by-transaccion
       if (!asiento && id) {
         asiento = await tryFetchAsiento(`/api/asientos/by-transaccion?source=egreso&id=${encodeURIComponent(id)}`);
       }
 
-      // 4) Fallback: by-numero
       if (!asiento && numeroAsiento) {
         asiento = await tryFetchAsiento(`/api/asientos/by-numero?numero_asiento=${encodeURIComponent(numeroAsiento)}`);
       }
@@ -616,7 +596,7 @@ const ResumenEgresos = () => {
     }
   };
 
-  // Estados para cancelación
+  // Cancelación
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [transaccionACancelar, setTransaccionACancelar] = useState<any>(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
@@ -663,10 +643,21 @@ const ResumenEgresos = () => {
     setFilterFechaFin("");
   };
 
-  // Reset a página 1 cuando cambian filtros (para que se sienta igual que Ingresos)
+  // Reset de página cuando cambian filtros
   useEffect(() => {
     setPage(1);
   }, [searchTerm, filterCategoriaContable, filterProveedor, filterPago, filterEstadoPago, filterFechaInicio, filterFechaFin]);
+
+  // ✅ Paginación (SIN hooks para evitar error #310)
+  const totalRows = transaccionesFiltradasPorCategoria.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, totalRows);
+  const pagedRows = transaccionesFiltradasPorCategoria.slice(startIndex, endIndex);
+
+  const rangeText = totalRows === 0 ? "Mostrando 0 de 0" : `Mostrando ${startIndex + 1}–${endIndex} de ${totalRows}`;
 
   const loadingAll = Boolean(loading || loadingCostosVenta);
 
@@ -688,7 +679,6 @@ const ResumenEgresos = () => {
     );
   }
 
-  // ✅ Si el hook falló (404/500), no muestres “no hay”, muestra error real
   if (isError) {
     return (
       <Card>
@@ -711,23 +701,6 @@ const ResumenEgresos = () => {
     );
   }
 
-  // Paginación
-  const totalRows = transaccionesFiltradasPorCategoria.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-
-  const pagedRows = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return transaccionesFiltradasPorCategoria.slice(start, start + PAGE_SIZE);
-  }, [transaccionesFiltradasPorCategoria, safePage]);
-
-  const rangeText = useMemo(() => {
-    if (totalRows === 0) return "Mostrando 0 de 0";
-    const start = (safePage - 1) * PAGE_SIZE + 1;
-    const end = Math.min(safePage * PAGE_SIZE, totalRows);
-    return `Mostrando ${start}–${end} de ${totalRows}`;
-  }, [totalRows, safePage]);
-
   return (
     <>
       <Card>
@@ -737,24 +710,14 @@ const ResumenEgresos = () => {
         </CardHeader>
 
         <CardContent>
-          {/* Caja de filtros + resumen (estilo Ingresos) */}
+          {/* Filtros + resumen (estilo Ingresos) */}
           <div className="mb-6 p-4 border rounded-lg bg-muted/30 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="space-y-2 lg:col-span-2">
                 <Label>Rango de fechas</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="date"
-                    value={filterFechaInicio}
-                    onChange={(e) => setFilterFechaInicio(e.target.value)}
-                    aria-label="Fecha inicio"
-                  />
-                  <Input
-                    type="date"
-                    value={filterFechaFin}
-                    onChange={(e) => setFilterFechaFin(e.target.value)}
-                    aria-label="Fecha fin"
-                  />
+                  <Input type="date" value={filterFechaInicio} onChange={(e) => setFilterFechaInicio(e.target.value)} />
+                  <Input type="date" value={filterFechaFin} onChange={(e) => setFilterFechaFin(e.target.value)} />
                 </div>
               </div>
 
@@ -836,28 +799,19 @@ const ResumenEgresos = () => {
                 </Button>
               </div>
 
-              {/* Resumen a la derecha (como Ingresos) */}
               <div className="lg:col-span-1 md:col-span-2 flex md:justify-end">
                 <div className="text-right w-full md:w-auto">
                   <div className="text-xs text-muted-foreground">Resultados: {totalRows}</div>
-                  <div className="text-lg font-semibold">
-                    Total: ${formatMonto(resumenFiltrado.totalGlobalEgresos)}
-                  </div>
-                  <div className="text-sm text-green-700">
-                    Pagado: ${formatMonto(resumenFiltrado.montoPagado)}
-                  </div>
-                  <div className="text-sm text-orange-700">
-                    Pendiente: ${formatMonto(resumenFiltrado.montoPendiente)}
-                  </div>
+                  <div className="text-lg font-semibold">Total: ${formatMonto(resumenFiltrado.totalGlobalEgresos)}</div>
+                  <div className="text-sm text-green-700">Pagado: ${formatMonto(resumenFiltrado.montoPagado)}</div>
+                  <div className="text-sm text-orange-700">Pendiente: ${formatMonto(resumenFiltrado.montoPendiente)}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Tip estilo Ingresos */}
           <div className="text-xs text-muted-foreground mb-3 text-right">
-            Tip: da clic en el icono <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" /></span>{" "}
-            para ver “Información general” y “Registro contable”
+            Tip: da clic en el icono <FileText className="h-3 w-3 inline-block" /> para ver “Información general” y “Registro contable”
           </div>
 
           {totalRows === 0 ? (
@@ -868,7 +822,6 @@ const ResumenEgresos = () => {
             </div>
           ) : (
             <>
-              {/* Tabla con contenedor redondeado (como Ingresos) */}
               <div className="border rounded-lg overflow-hidden bg-background">
                 <Table>
                   <TableHeader>
@@ -921,11 +874,7 @@ const ResumenEgresos = () => {
 
                           <TableCell className="whitespace-nowrap">
                             {iso
-                              ? new Date(iso).toLocaleDateString("es-MX", {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                })
+                              ? new Date(iso).toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" })
                               : "—"}
                           </TableCell>
 
@@ -943,10 +892,7 @@ const ResumenEgresos = () => {
                           </TableCell>
 
                           <TableCell className="whitespace-nowrap">
-                            <Badge
-                              variant={isCosto ? "destructive" : isGastoOp ? "default" : "secondary"}
-                              className="font-mono text-xs"
-                            >
+                            <Badge variant={isCosto ? "destructive" : isGastoOp ? "default" : "secondary"} className="font-mono text-xs">
                               {cuentaCodigo || "N/A"}
                             </Badge>
                           </TableCell>
@@ -966,19 +912,11 @@ const ResumenEgresos = () => {
                           </TableCell>
 
                           <TableCell className="text-right">
-                            {transaccion.cantidad ? (
-                              <span className="font-medium">{safeNum(transaccion.cantidad)}</span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">-</span>
-                            )}
+                            {transaccion.cantidad ? <span className="font-medium">{safeNum(transaccion.cantidad)}</span> : <span className="text-muted-foreground text-xs">-</span>}
                           </TableCell>
 
                           <TableCell className="text-right">
-                            {transaccion.costo_unitario ? (
-                              <span className="font-medium">${formatMonto(safeNum(transaccion.costo_unitario))}</span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">-</span>
-                            )}
+                            {transaccion.costo_unitario ? <span className="font-medium">${formatMonto(safeNum(transaccion.costo_unitario))}</span> : <span className="text-muted-foreground text-xs">-</span>}
                           </TableCell>
 
                           <TableCell className="text-right">
@@ -988,24 +926,16 @@ const ResumenEgresos = () => {
 
                             {safeNum(transaccion.monto_pagado) > 0 &&
                               safeNum(transaccion.monto_pagado) < safeNum(transaccion.monto_total) && (
-                                <div className="text-xs text-green-700">
-                                  Pagado: ${formatMonto(safeNum(transaccion.monto_pagado))}
-                                </div>
+                                <div className="text-xs text-green-700">Pagado: ${formatMonto(safeNum(transaccion.monto_pagado))}</div>
                               )}
 
                             {safeNum(transaccion.monto_pendiente) > 0 && (
-                              <div className="text-xs text-orange-700">
-                                Pendiente: ${formatMonto(safeNum(transaccion.monto_pendiente))}
-                              </div>
+                              <div className="text-xs text-orange-700">Pendiente: ${formatMonto(safeNum(transaccion.monto_pendiente))}</div>
                             )}
                           </TableCell>
 
                           <TableCell className="whitespace-nowrap">
-                            {transaccion.estado === "cancelado" ? (
-                              <Badge variant="destructive">❌ Cancelada</Badge>
-                            ) : (
-                              <Badge variant="outline">✅ Activa</Badge>
-                            )}
+                            {transaccion.estado === "cancelado" ? <Badge variant="destructive">❌ Cancelada</Badge> : <Badge variant="outline">✅ Activa</Badge>}
                           </TableCell>
 
                           <TableCell className="text-right">
@@ -1044,18 +974,10 @@ const ResumenEgresos = () => {
                                           <div>
                                             <h4 className="font-semibold text-sm mb-2">Información General</h4>
                                             <div className="space-y-1 text-sm">
-                                              <p>
-                                                <span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || "N/A"}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago || "N/A"}
-                                              </p>
+                                              <p><span className="font-medium">Descripción:</span> {selectedTransaction.descripcion}</p>
+                                              <p><span className="font-medium">Tipo:</span> {selectedTransaction.tipo_egreso}</p>
+                                              <p><span className="font-medium">Método de Pago:</span> {selectedTransaction.metodo_pago || "N/A"}</p>
+                                              <p><span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago || "N/A"}</p>
                                               <p>
                                                 <span className="font-medium">Fecha:</span>{" "}
                                                 {pickISODate(selectedTransaction)
@@ -1068,15 +990,9 @@ const ResumenEgresos = () => {
                                           <div>
                                             <h4 className="font-semibold text-sm mb-2">Montos</h4>
                                             <div className="space-y-1 text-sm">
-                                              <p>
-                                                <span className="font-medium">Total:</span> ${formatMonto(safeNum(selectedTransaction.monto_total))}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Pagado:</span> ${formatMonto(safeNum(selectedTransaction.monto_pagado))}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Pendiente:</span> ${formatMonto(safeNum(selectedTransaction.monto_pendiente))}
-                                              </p>
+                                              <p><span className="font-medium">Total:</span> ${formatMonto(safeNum(selectedTransaction.monto_total))}</p>
+                                              <p><span className="font-medium">Pagado:</span> ${formatMonto(safeNum(selectedTransaction.monto_pagado))}</p>
+                                              <p><span className="font-medium">Pendiente:</span> ${formatMonto(safeNum(selectedTransaction.monto_pendiente))}</p>
                                             </div>
                                           </div>
                                         </div>
@@ -1085,24 +1001,10 @@ const ResumenEgresos = () => {
                                           <div>
                                             <h4 className="font-semibold text-sm mb-2">Información del Proveedor</h4>
                                             <div className="grid grid-cols-2 gap-4 text-sm">
-                                              <p>
-                                                <span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}
-                                              </p>
-                                              {selectedTransaction.proveedor_telefono && (
-                                                <p>
-                                                  <span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}
-                                                </p>
-                                              )}
-                                              {selectedTransaction.proveedor_email && (
-                                                <p>
-                                                  <span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}
-                                                </p>
-                                              )}
-                                              {selectedTransaction.proveedor_rfc && (
-                                                <p>
-                                                  <span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}
-                                                </p>
-                                              )}
+                                              <p><span className="font-medium">Nombre:</span> {selectedTransaction.proveedor_nombre}</p>
+                                              {selectedTransaction.proveedor_telefono && <p><span className="font-medium">Teléfono:</span> {selectedTransaction.proveedor_telefono}</p>}
+                                              {selectedTransaction.proveedor_email && <p><span className="font-medium">Email:</span> {selectedTransaction.proveedor_email}</p>}
+                                              {selectedTransaction.proveedor_rfc && <p><span className="font-medium">RFC:</span> {selectedTransaction.proveedor_rfc}</p>}
                                             </div>
                                           </div>
                                         )}
@@ -1163,9 +1065,7 @@ const ResumenEgresos = () => {
                                                     </tr>
                                                   ))}
                                                   <tr className="border-t bg-muted/40 font-bold">
-                                                    <td colSpan={2} className="p-3">
-                                                      TOTALES
-                                                    </td>
+                                                    <td colSpan={2} className="p-3">TOTALES</td>
                                                     <td className="p-3 text-right text-red-600">
                                                       ${formatMonto(currentAsientos.detalles.reduce((sum, d) => sum + safeNum(d.debe), 0))}
                                                     </td>
@@ -1187,7 +1087,6 @@ const ResumenEgresos = () => {
                                     </Tabs>
                                   )}
 
-                                  {/* Comprobante fotográfico */}
                                   <div className="border-t pt-4 mt-6">
                                     <h4 className="font-semibold mb-3 flex items-center gap-2">
                                       <ImageIcon className="h-4 w-4" />
@@ -1266,34 +1165,20 @@ const ResumenEgresos = () => {
                 </Table>
               </div>
 
-              {/* Footer / paginación estilo Ingresos */}
               <div className="mt-4 flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">{rangeText}</div>
 
                 <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>
                     Anterior
                   </Button>
-                  <div className="text-sm text-muted-foreground">
-                    Página {safePage} de {totalPages}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage >= totalPages}
-                  >
+                  <div className="text-sm text-muted-foreground">Página {safePage} de {totalPages}</div>
+                  <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}>
                     Siguiente
                   </Button>
                 </div>
               </div>
 
-              {/* Barra inferior (como tu egresos actual, pero más limpia) */}
               <div className="mt-4 p-4 bg-muted/30 border rounded-lg">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                   <div>
@@ -1337,12 +1222,8 @@ const ResumenEgresos = () => {
             {transaccionACancelar && (
               <div className="p-3 bg-muted rounded-md text-sm">
                 <p className="font-medium mb-2">Transacción a cancelar:</p>
-                <p>
-                  <span className="font-medium">Descripción:</span> {transaccionACancelar.descripcion}
-                </p>
-                <p>
-                  <span className="font-medium">Monto:</span> ${formatMonto(safeNum(transaccionACancelar.monto_total))}
-                </p>
+                <p><span className="font-medium">Descripción:</span> {transaccionACancelar.descripcion}</p>
+                <p><span className="font-medium">Monto:</span> ${formatMonto(safeNum(transaccionACancelar.monto_total))}</p>
               </div>
             )}
           </div>
@@ -1359,11 +1240,7 @@ const ResumenEgresos = () => {
             >
               Cerrar
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancelarTransaccion}
-              disabled={isCanceling || !motivoCancelacion.trim()}
-            >
+            <Button variant="destructive" onClick={handleCancelarTransaccion} disabled={isCanceling || !motivoCancelacion.trim()}>
               {isCanceling ? "Cancelando..." : "Confirmar Cancelación"}
             </Button>
           </DialogFooter>
