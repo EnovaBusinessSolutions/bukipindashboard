@@ -62,7 +62,24 @@ interface AsientoContable {
   }[];
 }
 
-function normalize<T = any>(json: any): T {
+/** ✅ Normaliza cualquier shape para devolver un array (E2E) */
+function asArray<T = any>(json: any): T[] {
+  // 1) {ok:true, data:[...]}
+  if (Array.isArray(json?.data)) return json.data;
+
+  // 2) {ok:true, data:{items:[...]}}
+  if (Array.isArray(json?.data?.items)) return json.data.items;
+
+  // 3) array directo
+  if (Array.isArray(json)) return json;
+
+  // 4) {items:[...]}
+  if (Array.isArray(json?.items)) return json.items;
+
+  return [];
+}
+
+function unwrap<T = any>(json: any): T {
   return (json?.data ?? json) as T;
 }
 
@@ -79,8 +96,59 @@ const safeDate = (s: any): Date | null => {
 
 const isEntrada = (t: string) => t === "entrada" || t === "compra" || t === "ajuste_entrada";
 const isSalida = (t: string) => t === "salida" || t === "venta" || t === "ajuste_salida";
-
 const getMovLabel = (t: string) => (isEntrada(t) ? "Entrada" : isSalida(t) ? "Salida" : "Ajuste");
+
+/** Normalizadores de fields (por si el backend cambia shape) */
+const getMovId = (m: any) => String(m?.id ?? m?._id ?? m?.movimientoId ?? "");
+const getMovProductoId = (m: any) =>
+  String(
+    m?.producto_id ??
+      m?.productoId ??
+      m?.productId ??
+      m?.producto ??
+      m?.product ??
+      m?.producto?._id ??
+      m?.product?._id ??
+      ""
+  );
+
+const getMovTipo = (m: any) =>
+  String(m?.tipo_movimiento ?? m?.tipoMovimiento ?? m?.tipo ?? m?.type ?? "")
+    .toLowerCase()
+    .trim();
+
+const getMovFecha = (m: any) => String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? m?.updated_at ?? "").trim();
+
+const getMovCostoUnit = (m: any) =>
+  n(
+    m?.costo_unitario ??
+      m?.costoUnitario ??
+      m?.unitCost ??
+      m?.costoUnit ??
+      m?.costoCompra ??
+      m?.costo_compra ??
+      m?.precio_unitario ??
+      m?.precioUnitario ??
+      m?.unitPrice ??
+      m?.precio ??
+      m?.price
+  );
+
+const getMovCostoTotal = (m: any) =>
+  n(
+    m?.costo_total ??
+      m?.costoTotal ??
+      m?.total ??
+      m?.monto_total ??
+      m?.montoTotal ??
+      m?.importe_total ??
+      m?.importeTotal ??
+      m?.amount ??
+      m?.monto ??
+      m?.importe
+  );
+
+const getMovCantidad = (m: any) => n(m?.cantidad ?? m?.qty ?? m?.quantity ?? m?.unidades ?? m?.units);
 
 async function getMovimientos(params: { start?: string; end?: string }) {
   const qs = new URLSearchParams();
@@ -88,12 +156,14 @@ async function getMovimientos(params: { start?: string; end?: string }) {
   if (params.end) qs.set("end", params.end);
 
   const json = await apiFetch(`/api/inventario/movimientos?${qs.toString()}`);
-  return normalize<MovimientoInventario[]>(json) || [];
+
+  // ✅ IMPORTANTÍSIMO: aquí estaba el crash (a veces no regresaba array)
+  return asArray<MovimientoInventario>(json);
 }
 
 async function getAsientoByMovimientoId(movimientoId: string) {
   const json = await apiFetch(`/api/inventario/movimientos/${movimientoId}/asiento`);
-  return normalize<AsientoContable | null>(json) ?? null;
+  return unwrap<AsientoContable | null>(json) ?? null;
 }
 
 async function cancelarCompraInventario(payload: { movimientoId: string; motivoCancelacion: string }) {
@@ -101,7 +171,7 @@ async function cancelarCompraInventario(payload: { movimientoId: string; motivoC
     method: "POST",
     body: JSON.stringify({ motivoCancelacion: payload.motivoCancelacion }),
   });
-  return normalize<{ ok: boolean; message?: string }>(json);
+  return unwrap<{ ok: boolean; message?: string }>(json);
 }
 
 const ResumenTransaccionesInventario = () => {
@@ -117,7 +187,6 @@ const ResumenTransaccionesInventario = () => {
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
-  // Movimientos (traemos por fecha, luego filtramos por tipo/producto en cliente)
   const {
     data: movimientosRaw = [],
     isLoading,
@@ -131,13 +200,18 @@ const ResumenTransaccionesInventario = () => {
     retry: 1,
   });
 
-  // Normalizar movimientos (E2E: números + defaults)
+  // ✅ Blindaje extra por si algo raro llega
   const movimientos = useMemo(() => {
-    return (movimientosRaw || []).map((m) => {
-      const tipo = String(m.tipo_movimiento || "").toLowerCase();
-      const costoTotal = n(m.costo_total);
-      const costoUnit = n(m.costo_unitario);
-      const cantidad = n(m.cantidad);
+    const raw = Array.isArray(movimientosRaw) ? movimientosRaw : asArray<any>(movimientosRaw);
+
+    return (raw || []).map((m: any) => {
+      const id = getMovId(m);
+      const tipo = getMovTipo(m);
+      const fecha = getMovFecha(m);
+
+      const costoTotal = getMovCostoTotal(m);
+      const costoUnit = getMovCostoUnit(m);
+      const cantidad = getMovCantidad(m);
 
       const cancelado =
         String(m.estado || "").toLowerCase() === "cancelado" ||
@@ -146,15 +220,29 @@ const ResumenTransaccionesInventario = () => {
         !!m.movimiento_reversion_id ||
         (m.descripcion || "").toUpperCase().includes("CANCELACIÓN");
 
+      const productos =
+        m.productos ??
+        m.producto ??
+        m.product ??
+        (m?.producto_id && typeof m.producto_id === "object" ? m.producto_id : null) ??
+        (m?.productId && typeof m.productId === "object" ? m.productId : null) ??
+        { nombre: "Producto eliminado" };
+
       return {
         ...m,
+        id,
+        producto_id: getMovProductoId(m),
         tipo_movimiento: tipo,
+        fecha,
         costo_total: costoTotal,
         costo_unitario: costoUnit,
         cantidad,
         estado: m.estado ?? null,
         descripcion: m.descripcion ?? "",
-        productos: m.productos ?? { nombre: "Producto eliminado" },
+        productos: {
+          nombre: String(productos?.nombre ?? "Producto eliminado"),
+          imagen_url: productos?.imagen_url ?? productos?.imagenUrl ?? productos?.image ?? undefined,
+        },
         __cancelado: cancelado,
       } as any;
     });
@@ -162,10 +250,9 @@ const ResumenTransaccionesInventario = () => {
 
   const selectedMovimiento = useMemo(() => {
     if (!selectedMovimientoId) return null;
-    return (movimientos as any[]).find((m) => m.id === selectedMovimientoId) || null;
+    return (movimientos as any[]).find((m) => String(m.id) === String(selectedMovimientoId)) || null;
   }, [movimientos, selectedMovimientoId]);
 
-  // Asiento del movimiento seleccionado (por id)
   const { data: asientoDetalle, isLoading: loadingAsiento } = useQuery({
     queryKey: ["inventario-asiento-movimiento", selectedMovimientoId],
     queryFn: async () => {
@@ -179,7 +266,6 @@ const ResumenTransaccionesInventario = () => {
     retry: 1,
   });
 
-  // Cancelación
   const handleCancelarMovimiento = async () => {
     if (!movimientoACancelar || !motivoCancelacion.trim()) {
       toast({
@@ -220,7 +306,6 @@ const ResumenTransaccionesInventario = () => {
     }
   };
 
-  // Productos únicos para filtro
   const productosUnicos = useMemo(() => {
     const set = new Set<string>();
     for (const m of movimientos as any[]) {
@@ -230,7 +315,6 @@ const ResumenTransaccionesInventario = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [movimientos]);
 
-  // Filtros cliente
   const movimientosFiltrados = useMemo(() => {
     return (movimientos as any[]).filter((mov) => {
       if (tipoMovimiento !== "todos") {
@@ -251,7 +335,6 @@ const ResumenTransaccionesInventario = () => {
     });
   }, [movimientos, tipoMovimiento, productoFiltro]);
 
-  // Subtotales
   const totalEntradas = useMemo(() => {
     return movimientosFiltrados
       .filter((m: any) => isEntrada(m.tipo_movimiento))
@@ -339,9 +422,7 @@ const ResumenTransaccionesInventario = () => {
 
           {(fechaInicio || fechaFin) && (
             <div className="mt-4 flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                Tip: si no ves movimientos, borra fechas y vuelve a intentar.
-              </p>
+              <p className="text-xs text-muted-foreground">Tip: si no ves movimientos, borra fechas y vuelve a intentar.</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -488,9 +569,7 @@ const ResumenTransaccionesInventario = () => {
                       </TableCell>
 
                       <TableCell className="text-right">{n(movimiento.cantidad).toLocaleString("es-MX")}</TableCell>
-
                       <TableCell className="text-right">{formatCurrency(n(movimiento.costo_unitario))}</TableCell>
-
                       <TableCell className="text-right font-medium">{formatCurrency(n(movimiento.costo_total))}</TableCell>
 
                       <TableCell className="max-w-xs">
@@ -620,9 +699,7 @@ const ResumenTransaccionesInventario = () => {
                                     ) : !asientoDetalle ? (
                                       <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center space-y-2">
                                         <p>No se encontraron asientos contables para esta transacción</p>
-                                        <p className="text-xs">
-                                          Las entradas (compras) y salidas (ventas) generan asientos automáticamente.
-                                        </p>
+                                        <p className="text-xs">Las entradas (compras) y salidas (ventas) generan asientos automáticamente.</p>
                                       </div>
                                     ) : (
                                       <div className="space-y-4">
@@ -676,14 +753,10 @@ const ResumenTransaccionesInventario = () => {
                                               <TableRow className="border-t-2 bg-muted/50 font-bold">
                                                 <TableCell colSpan={2}>TOTALES</TableCell>
                                                 <TableCell className="text-right">
-                                                  {formatCurrency(
-                                                    asientoDetalle.detalle_asientos?.reduce((sum, d) => sum + n(d.debe), 0) || 0
-                                                  )}
+                                                  {formatCurrency(asientoDetalle.detalle_asientos?.reduce((sum, d) => sum + n(d.debe), 0) || 0)}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                  {formatCurrency(
-                                                    asientoDetalle.detalle_asientos?.reduce((sum, d) => sum + n(d.haber), 0) || 0
-                                                  )}
+                                                  {formatCurrency(asientoDetalle.detalle_asientos?.reduce((sum, d) => sum + n(d.haber), 0) || 0)}
                                                 </TableCell>
                                               </TableRow>
                                             </TableBody>
@@ -704,7 +777,6 @@ const ResumenTransaccionesInventario = () => {
                             </DialogContent>
                           </Dialog>
 
-                          {/* Cancelar (solo compras no canceladas y no reversión) */}
                           {puedeCancelar && (
                             <Button
                               variant="outline"
