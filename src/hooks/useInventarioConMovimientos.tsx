@@ -73,6 +73,8 @@ function asArray<T = any>(json: ApiEnvelope<any>): T[] {
 
 type MovimientoLike = any;
 
+const getMovId = (m: MovimientoLike) => String(m?.id ?? m?._id ?? "");
+
 const getMovProductoId = (m: MovimientoLike) =>
   String(
     m?.producto_id ??
@@ -93,23 +95,81 @@ const getMovTipo = (m: MovimientoLike) =>
     .trim();
 
 const getMovFecha = (m: MovimientoLike) =>
-  String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? "").trim();
+  String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? m?.updated_at ?? "").trim();
 
 const getMovEstado = (m: MovimientoLike) =>
   String(m?.estado ?? m?.status ?? "activo").toLowerCase().trim();
 
-const getMovCantidad = (m: MovimientoLike) => num(m?.cantidad ?? m?.qty ?? m?.quantity);
+const getMovCantidad = (m: MovimientoLike) =>
+  num(m?.cantidad ?? m?.qty ?? m?.quantity ?? m?.unidades ?? m?.units);
 
-const getMovCostoTotal = (m: MovimientoLike) => num(m?.costo_total ?? m?.costoTotal ?? m?.total);
+/**
+ * ✅ Costo TOTAL (muchos aliases)
+ * Hay backends que guardan total como monto/importe/amount.
+ */
+const getMovCostoTotal = (m: MovimientoLike) =>
+  num(
+    m?.costo_total ??
+      m?.costoTotal ??
+      m?.total ??
+      m?.monto_total ??
+      m?.montoTotal ??
+      m?.importe_total ??
+      m?.importeTotal ??
+      m?.amount ??
+      m?.monto ??
+      m?.importe
+  );
 
+/**
+ * ✅ Costo UNITARIO (muchos aliases)
+ * Hay backends que guardan el costo de compra como precio/costoCompra/costo_compra.
+ */
 const getMovCostoUnit = (m: MovimientoLike) =>
-  num(m?.costo_unitario ?? m?.costoUnitario ?? m?.unitCost ?? m?.costoUnit);
+  num(
+    m?.costo_unitario ??
+      m?.costoUnitario ??
+      m?.unitCost ??
+      m?.costoUnit ??
+      m?.costoCompra ??
+      m?.costo_compra ??
+      m?.precio_unitario ??
+      m?.precioUnitario ??
+      m?.unitPrice ??
+      m?.precio ??
+      m?.price
+  );
+
+/**
+ * ✅ Costo unitario efectivo:
+ * - si viene unitario, úsalo
+ * - si viene total y qty > 0, usa total/qty
+ * - si nada viene, 0
+ */
+function getEffectiveUnitCost(m: MovimientoLike): number {
+  const qty = getMovCantidad(m);
+  const unit = getMovCostoUnit(m);
+  if (unit > 0) return unit;
+
+  const total = getMovCostoTotal(m);
+  if (total > 0 && qty > 0) return total / qty;
+
+  const alt =
+    num(m?.costo) ||
+    num(m?.cost) ||
+    num(m?.purchaseCost) ||
+    num(m?.precioCompra) ||
+    num(m?.precio_compra);
+
+  if (alt > 0) return alt;
+
+  return 0;
+}
 
 /** Trae movimientos por tipo desde el endpoint de inventario */
 async function fetchMovimientosPorTipo(tipo: "compra" | "venta" | "ajuste") {
   const params = new URLSearchParams();
   params.set("tipo", tipo);
-  // Si tu backend soporta estos filtros, perfecto. Si no, no rompe.
   params.set("estado", "activo");
   params.set("order", "fecha:desc");
   params.set("limit", "5000");
@@ -146,8 +206,6 @@ export const useInventarioConMovimientos = () => {
         .map((p) => p.raw);
 
       // 2) Movimientos (E2E real)
-      // ✅ NO usar tipo=todos si backend filtra por tipo exacto.
-      // ✅ Traemos compra/venta/ajuste y concatenamos.
       const [comprasRaw, ventasRaw, ajustesRaw] = await Promise.all([
         fetchMovimientosPorTipo("compra"),
         fetchMovimientosPorTipo("venta"),
@@ -162,8 +220,8 @@ export const useInventarioConMovimientos = () => {
         .filter((m) => (getMovEstado(m) === "activo" ? true : !m?.estado && !m?.status))
         .filter((m) => getMovProductoId(m))
         .filter((m) => {
-          const id = String(m?.id ?? m?._id ?? "");
-          if (!id) return true; // si no hay id, no bloqueamos
+          const id = getMovId(m);
+          if (!id) return true;
           if (seen.has(id)) return false;
           seen.add(id);
           return true;
@@ -209,25 +267,26 @@ export const useInventarioConMovimientos = () => {
         const ajustes = movimientosProducto.filter((m) => getMovTipo(m) === "ajuste");
 
         const cantidad_comprada = compras.reduce((sum, m) => sum + getMovCantidad(m), 0);
-
-        const costo_total_compras = compras.reduce((sum, m) => {
-          const ct = getMovCostoTotal(m);
-          if (ct > 0) return sum + ct;
-          const cu = getMovCostoUnit(m);
-          const qty = getMovCantidad(m);
-          return sum + cu * qty;
-        }, 0);
-
         const cantidad_vendida = ventas.reduce((sum, m) => sum + getMovCantidad(m), 0);
 
         // Ajustes: pueden ser + o -
         const ajuste_cantidad = ajustes.reduce((sum, m) => sum + getMovCantidad(m), 0);
-
         const cantidad_stock = cantidad_comprada - cantidad_vendida + ajuste_cantidad;
 
-        // Costo promedio ponderado (solo compras)
-        const costo_unitario = cantidad_comprada > 0 ? costo_total_compras / cantidad_comprada : 0;
+        // ✅ Costo promedio ponderado REAL (solo compras con costo válido)
+        let totalCost = 0;
+        let totalQty = 0;
 
+        for (const m of compras) {
+          const qty = getMovCantidad(m);
+          const unit = getEffectiveUnitCost(m);
+          if (qty > 0 && unit > 0) {
+            totalQty += qty;
+            totalCost += unit * qty;
+          }
+        }
+
+        const costo_unitario = totalQty > 0 ? totalCost / totalQty : 0;
         const valor_total_inventario = cantidad_stock * costo_unitario;
 
         const ultimo_movimiento = movimientosProducto[0] ? getMovFecha(movimientosProducto[0]) : null;
@@ -271,7 +330,15 @@ export const useInventarioConMovimientos = () => {
         const nombre = String(producto?.nombre ?? producto?.name ?? "");
         const descripcion = (producto?.descripcion ?? producto?.description ?? null) as any;
         const imagen_url = (producto?.imagen_url ?? producto?.imagenUrl ?? null) as any;
-        const precio_venta = num(producto?.precio_venta ?? producto?.precioVenta ?? 0);
+
+        // ✅ precio de venta robusto (nuevo modelo)
+        const precio_venta = num(
+          producto?.precio_venta ??
+            producto?.precioVenta ??
+            producto?.precio_venta_sugerido ??
+            producto?.precioVentaSugerido ??
+            0
+        );
 
         const cuenta_codigo = getCuentaCodigo(producto) || "1005";
         const user_id = getUserId(producto);
