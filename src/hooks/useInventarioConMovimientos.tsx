@@ -29,8 +29,7 @@ export type ProductoInventario = {
   estado_rotacion: "alta" | "media" | "baja" | "muy_baja" | "sin_movimiento" | undefined;
 };
 
-type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
-const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
+type ApiEnvelope<T> = { ok?: boolean; data?: any; message?: string } | T;
 
 const num = (v: any) => {
   const n = Number(v ?? 0);
@@ -53,15 +52,52 @@ const getActivo = (p: any) => {
 };
 const getUserId = (p: any) => String(p?.user_id ?? p?.userId ?? p?.owner ?? "");
 
+/** ✅ Normaliza cualquier shape para devolver un array */
+function asArray<T = any>(json: ApiEnvelope<any>): T[] {
+  const j: any = json as any;
+
+  // casos comunes:
+  // 1) {ok:true, data:[...]}
+  if (Array.isArray(j?.data)) return j.data as T[];
+
+  // 2) {ok:true, data:{items:[...]}}
+  if (Array.isArray(j?.data?.items)) return j.data.items as T[];
+
+  // 3) array directo
+  if (Array.isArray(j)) return j as T[];
+
+  // 4) {items:[...]}
+  if (Array.isArray(j?.items)) return j.items as T[];
+
+  return [];
+}
+
 type MovimientoLike = any;
-const getMovProductoId = (m: MovimientoLike) => String(m?.producto_id ?? m?.productoId ?? m?.productId ?? "");
+
+const getMovProductoId = (m: MovimientoLike) =>
+  String(
+    m?.producto_id ??
+      m?.productoId ??
+      m?.productId ??
+      m?.producto ??
+      m?.product ??
+      m?.producto?._id ??
+      m?.product?._id ??
+      ""
+  );
+
 const getMovTipo = (m: MovimientoLike) =>
   String(m?.tipo_movimiento ?? m?.tipoMovimiento ?? m?.tipo ?? "").toLowerCase().trim();
+
 const getMovFecha = (m: MovimientoLike) =>
   String(m?.fecha ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? "").trim();
+
 const getMovEstado = (m: MovimientoLike) => String(m?.estado ?? "activo").toLowerCase().trim();
+
 const getMovCantidad = (m: MovimientoLike) => num(m?.cantidad);
+
 const getMovCostoTotal = (m: MovimientoLike) => num(m?.costo_total ?? m?.costoTotal);
+
 const getMovCostoUnit = (m: MovimientoLike) => num(m?.costo_unitario ?? m?.costoUnitario);
 
 export const useInventarioConMovimientos = () => {
@@ -70,18 +106,16 @@ export const useInventarioConMovimientos = () => {
 
     queryFn: async (): Promise<ProductoInventario[]> => {
       // 1) Productos inventario (cuenta 1005)
-      // ✅ El backend espera cuenta_codigo (query param), pero responde con cuentaCodigo (camel) en data normalizada.
       const productosParams = new URLSearchParams();
       productosParams.set("cuenta_codigo", "1005");
       productosParams.set("activo", "true");
-      // Nota: si el backend no soporta include, no pasa nada
       productosParams.set("include", "subcuentas");
 
       const productosJson = await apiFetch(`/api/productos?${productosParams.toString()}`, {
         method: "GET",
       });
 
-      const productosRaw = unwrap<any[]>(productosJson) || [];
+      const productosRaw = asArray<any>(productosJson);
 
       const productos = productosRaw
         .map((p) => ({
@@ -93,19 +127,22 @@ export const useInventarioConMovimientos = () => {
         .filter((p) => p.id && p.cuentaCodigo === "1005" && p.activo !== false)
         .map((p) => p.raw);
 
-      // 2) Movimientos activos (desc)
+      // 2) Movimientos (endpoint CANÓNICO)
+      // ✅ Aquí estaba el bug: estabas usando /api/movimientos-inventario (500).
+      // ✅ Además, /api/inventario/movimientos devuelve {data:{items:[]}} y hay que leer items.
       const movParams = new URLSearchParams();
-      movParams.set("estado", "activo");
-      movParams.set("order", "fecha:desc");
+      movParams.set("tipo", "todos"); // trae todos (compra/venta/ajuste)
+      // start/end opcionales si luego quieres filtrar por fecha.
 
-      const movimientosJson = await apiFetch(`/api/movimientos-inventario?${movParams.toString()}`, {
+      const movimientosJson = await apiFetch(`/api/inventario/movimientos?${movParams.toString()}`, {
         method: "GET",
       });
 
-      const movimientosRaw = unwrap<any[]>(movimientosJson) || [];
+      const movimientosRaw = asArray<any>(movimientosJson);
 
+      // Normalización mínima
       const movimientos = movimientosRaw
-        .filter((m) => getMovEstado(m) === "activo")
+        .filter((m) => getMovEstado(m) === "activo" || !m?.estado) // si no hay estado, lo tratamos como activo
         .filter((m) => getMovProductoId(m)); // debe traer producto id
 
       // 3) Indexar movimientos por producto
@@ -135,14 +172,23 @@ export const useInventarioConMovimientos = () => {
         const productoId = getId(producto);
         const movimientosProducto = movimientosPorProducto.get(productoId) || [];
 
-        const compras = movimientosProducto.filter((m) => getMovTipo(m) === "compra");
-        const ventas = movimientosProducto.filter((m) => getMovTipo(m) === "venta");
+        // ✅ tipos compatibles
+        const compras = movimientosProducto.filter((m) => {
+          const t = getMovTipo(m);
+          return t === "compra" || t === "entrada";
+        });
+
+        const ventas = movimientosProducto.filter((m) => {
+          const t = getMovTipo(m);
+          return t === "venta" || t === "salida";
+        });
+
         const ajustes = movimientosProducto.filter((m) => getMovTipo(m) === "ajuste");
 
         const cantidad_comprada = compras.reduce((sum, m) => sum + getMovCantidad(m), 0);
+
         const costo_total_compras = compras.reduce((sum, m) => {
           const ct = getMovCostoTotal(m);
-          // si por alguna razón no viene costo_total, intentamos costo_unitario * cantidad
           if (ct > 0) return sum + ct;
           const cu = getMovCostoUnit(m);
           const qty = getMovCantidad(m);
@@ -164,11 +210,7 @@ export const useInventarioConMovimientos = () => {
         const ultimo_movimiento = movimientosProducto[0] ? getMovFecha(movimientosProducto[0]) : null;
 
         // ===== ROTACIÓN =====
-        // compras están en el orden del array (DESC), entonces la más vieja es la última
-        const fecha_primera_compra =
-          compras.length > 0 ? getMovFecha(compras[compras.length - 1]) : null;
-
-        // ventas en DESC, entonces la más nueva es [0]
+        const fecha_primera_compra = compras.length > 0 ? getMovFecha(compras[compras.length - 1]) : null;
         const fecha_ultima_venta = ventas.length > 0 ? getMovFecha(ventas[0]) : null;
 
         let dias_promedio_rotacion: number | undefined = undefined;
@@ -205,9 +247,7 @@ export const useInventarioConMovimientos = () => {
         // ===== MAPEO producto (compat camel + snake) =====
         const nombre = String(producto?.nombre ?? producto?.name ?? "");
         const descripcion = (producto?.descripcion ?? producto?.description ?? null) as any;
-
         const imagen_url = (producto?.imagen_url ?? producto?.imagenUrl ?? null) as any;
-
         const precio_venta = num(producto?.precio_venta ?? producto?.precioVenta ?? 0);
 
         const cuenta_codigo = getCuentaCodigo(producto) || "1005";
@@ -249,7 +289,6 @@ export const useInventarioConMovimientos = () => {
       return productosConMetricas;
     },
 
-    // ✅ para no estar pegando cada ratito
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
