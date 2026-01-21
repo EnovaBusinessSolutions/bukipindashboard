@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +59,38 @@ function normalize<T = any>(json: any): T {
   return (json?.data ?? json) as T;
 }
 
+type ProductoBase = {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  precio?: number;
+  cuentaCodigo?: string | null;
+  subcuentaId?: string | null;
+  activo?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type ProductoInventarioUI = {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  cuentaCodigo?: string | null;
+
+  // UI espera a veces estos
+  imagen_url?: string | null;
+  subcuenta_id?: string | null;
+  precio_venta?: number;
+
+  // “inventario con movimientos”
+  cantidad_stock?: number;
+  costo_unitario?: number;
+
+  // compat
+  subcuentaId?: string | null;
+  precioVenta?: number;
+};
+
 const RegistroProductos = () => {
   const [flowStep, setFlowStep] = useState<FlowStep>("select_type");
   const [selectedProducto, setSelectedProducto] = useState<any>(null);
@@ -74,7 +106,9 @@ const RegistroProductos = () => {
   const [proveedorEmail, setProveedorEmail] = useState("");
   const [proveedorRFC, setProveedorRFC] = useState("");
 
+  // ✅ Hook existente (movimientos/stock) - lo usamos solo para enriquecer (no para listar)
   const { data: productosInventario, isLoading: loadingInventario } = useInventarioConMovimientos();
+
   const { data: subcuentasInventario } = useSubcuentasInventario();
   const { proveedores, createProveedor } = useProveedores();
 
@@ -83,15 +117,118 @@ const RegistroProductos = () => {
   const { data: saldosDisponibles, isLoading: loadingSaldos } = useSaldosDisponibles();
   const { data: tarjetasCredito } = useTarjetasCredito();
 
-  // Productos existentes con movimientos (compras o ventas)
-  const productosExistentes =
-    productosInventario?.filter((p: any) => p.cantidad_comprada > 0 || p.cantidad_vendida > 0) || [];
+  // ✅ NUEVO: catálogo base desde /api/productos (esto es lo que ya confirmaste que trae datos)
+  const [productosBase, setProductosBase] = useState<ProductoBase[]>([]);
+  const [loadingProductosBase, setLoadingProductosBase] = useState(false);
+  const [errorProductosBase, setErrorProductosBase] = useState<string | null>(null);
+
+  const loadProductosBase = async () => {
+    try {
+      setLoadingProductosBase(true);
+      setErrorProductosBase(null);
+
+      // Inventario: cuenta 1005 (según tu sistema)
+      const json = await apiFetch("/api/productos?cuenta_codigo=1005&limit=2000", {
+        method: "GET",
+      });
+
+      const data = normalize<any>(json);
+      const arr = Array.isArray(data) ? data : [];
+
+      setProductosBase(
+        arr.map((p: any) => ({
+          id: String(p.id ?? p._id),
+          nombre: String(p.nombre ?? p.name ?? ""),
+          descripcion: p.descripcion ?? p.description ?? "",
+          precio: typeof p.precio === "number" ? p.precio : Number(p.precio || 0),
+          cuentaCodigo: p.cuentaCodigo ?? p.accountCode ?? null,
+          subcuentaId: p.subcuentaId ? String(p.subcuentaId) : null,
+          activo: typeof p.activo === "boolean" ? p.activo : true,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        }))
+      );
+    } catch (e: any) {
+      console.error(e);
+      setErrorProductosBase(e?.message || "Error cargando productos");
+      setProductosBase([]);
+    } finally {
+      setLoadingProductosBase(false);
+    }
+  };
+
+  // Cargar catálogo base cuando entras a “Producto existente”
+  useEffect(() => {
+    if (flowStep !== "select_existing") return;
+    loadProductosBase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowStep]);
+
+  // ✅ Mapa de inventario por id (para enriquecer stock/costo si viene)
+  const inventarioById = useMemo(() => {
+    const m = new Map<string, any>();
+    (productosInventario || []).forEach((p: any) => {
+      const id = String(p?.id ?? p?._id ?? p?.producto_id ?? p?.product_id ?? p?.productId ?? "");
+      if (id) m.set(id, p);
+    });
+    return m;
+  }, [productosInventario]);
+
+  // ✅ Lista final para UI (base + enrich)
+  const productosParaSeleccion = useMemo<ProductoInventarioUI[]>(() => {
+    const base = productosBase || [];
+    if (!base.length) return [];
+
+    return base
+      .filter((p) => p?.activo !== false)
+      .map((p) => {
+        const inv = inventarioById.get(String(p.id));
+
+        // Fallback por nombre si el hook trae cosas sin ids alineados (opcional)
+        const invByName =
+          !inv && productosInventario
+            ? (productosInventario as any[]).find((x) => String(x?.nombre || "").trim() === String(p.nombre || "").trim())
+            : null;
+
+        const src = inv || invByName || null;
+
+        const cantidad_stock = Number(src?.cantidad_stock ?? src?.stock ?? 0) || 0;
+        const costo_unitario =
+          typeof src?.costo_unitario === "number"
+            ? src.costo_unitario
+            : typeof src?.precio === "number"
+              ? src.precio
+              : typeof p.precio === "number"
+                ? p.precio
+                : 0;
+
+        return {
+          id: String(p.id),
+          nombre: p.nombre,
+          descripcion: p.descripcion || "",
+          cuentaCodigo: p.cuentaCodigo ?? null,
+
+          // UI
+          imagen_url: src?.imagen_url ?? null,
+          subcuenta_id: src?.subcuenta_id ?? (p.subcuentaId ? String(p.subcuentaId) : null),
+          precio_venta: typeof src?.precio_venta === "number" ? src.precio_venta : 0,
+
+          // Inventario
+          cantidad_stock,
+          costo_unitario,
+
+          // compat
+          subcuentaId: p.subcuentaId ?? null,
+          precioVenta: typeof src?.precio_venta === "number" ? src.precio_venta : 0,
+        };
+      });
+  }, [productosBase, inventarioById, productosInventario]);
 
   const filteredProductos = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return productosExistentes;
-    return productosExistentes.filter((p: any) => (p.nombre || "").toLowerCase().includes(term));
-  }, [productosExistentes, searchTerm]);
+    if (!term) return productosParaSeleccion;
+    return productosParaSeleccion.filter((p: any) => (p.nombre || "").toLowerCase().includes(term));
+  }, [productosParaSeleccion, searchTerm]);
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<ProductoForm>({
     defaultValues: {
@@ -139,9 +276,11 @@ const RegistroProductos = () => {
     setSelectedProducto(producto);
 
     setValue("nombre", producto.nombre);
+
+    // ✅ aliases
     setValue("descripcion", producto.descripcion || "");
-    setValue("subcuentaId", producto.subcuenta_id || "");
-    setValue("precioVenta", producto.precio_venta || 0);
+    setValue("subcuentaId", producto.subcuenta_id || producto.subcuentaId || "");
+    setValue("precioVenta", producto.precio_venta || producto.precioVenta || 0);
 
     if (producto.imagen_url) setImagePreview(producto.imagen_url);
 
@@ -162,7 +301,6 @@ const RegistroProductos = () => {
     if (flowStep === "select_existing") setSearchTerm("");
   };
 
-  
   const getSaldoDisponible = () => {
     if (!saldosDisponibles) return 0;
     if (metodoPago === "efectivo") return saldosDisponibles.efectivo || 0;
@@ -204,7 +342,6 @@ const RegistroProductos = () => {
     return { ok: true as const };
   };
 
-  
   async function crearCuentaPorPagarInventario(payload: {
     tipo_egreso: "compra_inventario";
     descripcion: string;
@@ -343,7 +480,6 @@ const RegistroProductos = () => {
       return;
     }
 
-    
     await createProducto.mutateAsync({
       productId: selectedProducto?.id || undefined, // <- si tu hook no lo soporta, puedes ignorarlo en el backend
       nombre: data.nombre,
@@ -355,11 +491,15 @@ const RegistroProductos = () => {
       imagen: selectedImage || undefined,
     } as any);
 
+    // ✅ refrescar catálogo base para que aparezca inmediatamente al volver a “Producto existente”
+    try {
+      await loadProductosBase();
+    } catch (_) {}
+
     // Actualizar saldo tarjeta de crédito si se usó y hubo pago
     if ((tipoPago === "contado" || tipoPago === "parcial") && montoPagado > 0) {
       const tarjetaId = extraerIdTarjetaCredito(data.metodoPago);
       if (tarjetaId) {
-        
         await actualizarSaldoTarjetaCredito(
           tarjetaId,
           montoPagado,
@@ -489,6 +629,9 @@ const RegistroProductos = () => {
 
   // Paso 2: seleccionar producto existente
   if (flowStep === "select_existing") {
+    const isLoadingList = loadingProductosBase;
+    const showError = !!errorProductosBase;
+
     return (
       <div className="space-y-6">
         <Card>
@@ -506,6 +649,7 @@ const RegistroProductos = () => {
               </div>
             </div>
           </CardHeader>
+
           <CardContent>
             <div className="space-y-4">
               <div className="relative">
@@ -518,7 +662,20 @@ const RegistroProductos = () => {
                 />
               </div>
 
-              {loadingInventario ? (
+              {/* Nota de estado */}
+              {showError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {errorProductosBase || "Error cargando productos."}{" "}
+                    <Button variant="link" className="px-1" onClick={loadProductosBase}>
+                      Reintentar
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isLoadingList ? (
                 <div className="text-center py-8 text-muted-foreground">Cargando productos...</div>
               ) : filteredProductos.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -547,10 +704,22 @@ const RegistroProductos = () => {
                             <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
                               {producto.descripcion || "Sin descripción"}
                             </p>
+
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">Stock: {producto.cantidad_stock || 0}</span>
-                              <span className="font-medium text-primary">{formatCurrency(producto.costo_unitario || 0)}</span>
+                              <span className="font-medium text-primary">
+                                {formatCurrency(producto.costo_unitario || 0)}
+                              </span>
                             </div>
+
+                            {/* hint opcional si no hay movimientos */}
+                            {!loadingInventario && (producto.cantidad_stock || 0) === 0 && (
+                              <div className="mt-2">
+                                <Badge variant="outline" className="text-[11px]">
+                                  Sin movimientos aún
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -695,8 +864,8 @@ const RegistroProductos = () => {
                 <div>
                   <Label htmlFor="subcuenta">Subcuenta de Inventario (Opcional)</Label>
                   <Select
-                    onValueChange={(value) => setValue("subcuentaId", value)}
-                    defaultValue={selectedProducto?.subcuenta_id}
+                    onValueChange={(value) => setValue("subcuentaId", value === "__none__" ? "" : value)}
+                    defaultValue={selectedProducto?.subcuenta_id || selectedProducto?.subcuentaId || "__none__"}
                   >
                     <SelectTrigger>
                       <SelectValue
@@ -708,6 +877,7 @@ const RegistroProductos = () => {
                       />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="__none__">Sin subcuenta (Inventario General)</SelectItem>
                       {subcuentasInventario?.map((subcuenta: any) => (
                         <SelectItem key={subcuenta.id} value={subcuenta.id}>
                           {subcuenta.nombre} ({subcuenta.nombreCuentaMadre})
@@ -1003,7 +1173,13 @@ const RegistroProductos = () => {
                   <div className="relative w-full max-w-xs">
                     <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded-md border" />
                     {!selectedProducto && (
-                      <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={clearImage}>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={clearImage}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
