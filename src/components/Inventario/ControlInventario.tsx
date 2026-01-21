@@ -7,19 +7,36 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle, Edit, Check, X } from "lucide-react";
 import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos";
-import { useUpdateProducto } from "@/hooks/useProductos";
 import { formatCurrency } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiFetch } from "@/lib/api";
 
 type InventoryStatus = "disponible" | "agotado" | "negativo";
 type StockLevel = "alto" | "medio" | "bajo";
-
 type StatusFilter = InventoryStatus | StockLevel | "todos";
 
 const n = (v: any) => {
   const num = Number(v ?? 0);
   return Number.isFinite(num) ? num : 0;
 };
+
+const pickPrecioVenta = (p: any) =>
+  n(
+    p?.precio_venta ??
+      p?.precioVenta ??
+      p?.precio_venta_sugerido ??
+      p?.precioVentaSugerido ??
+      0
+  );
+
+const pickCostoCompra = (p: any) =>
+  n(
+    p?.costo_unitario ?? // calculado por movimientos
+      p?.costo_compra ??
+      p?.costoCompra ??
+      p?.precio ?? // compat legacy (precio como costo)
+      0
+  );
 
 const ControlInventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,7 +46,25 @@ const ControlInventario = () => {
   const [tempPrice, setTempPrice] = useState<number>(0);
 
   const { data: productosInventario, isLoading, isError } = useInventarioConMovimientos();
-  const updateProducto = useUpdateProducto();
+
+  // Guardar precio venta (NO costo) directo al backend (E2E)
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  async function savePrecioVenta(productId: string, precioVenta: number) {
+    setSavingId(productId);
+    try {
+      await apiFetch(`/api/productos/${encodeURIComponent(productId)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          // ✅ canonical + compat
+          precioVenta: n(precioVenta),
+          precio_venta: n(precioVenta),
+        }),
+      });
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   // Procesar datos de inventario con métricas calculadas + NORMALIZACIÓN ROBUSTA
   const inventoryData = useMemo(() => {
@@ -40,11 +75,15 @@ const ControlInventario = () => {
       const comprado = n(producto.cantidad_comprada);
       const vendido = n(producto.cantidad_vendida);
 
+      // costo promedio (movimientos)
       const costoUnitario = n(producto.costo_unitario);
       const valorTotal = n(producto.valor_total_inventario);
 
-      // “Precio configurado” (compat): preferimos precio_venta si existe, si no usamos precio
-      const precioConfigurado = n(producto.precio_venta ?? producto.precio ?? 0);
+      // ✅ Precio configurado (VENTA), no costo
+      const precioConfigurado = pickPrecioVenta(producto);
+
+      // ✅ Costo unitario: prioridad movimientos -> costo_compra -> precio
+      const costoCompra = pickCostoCompra(producto);
 
       return {
         ...producto,
@@ -54,7 +93,9 @@ const ControlInventario = () => {
         stock_minimo: 10,
         stock_maximo: 100,
 
-        costo_promedio: costoUnitario,
+        // ✅ costos
+        costo_promedio: costoUnitario > 0 ? costoUnitario : costoCompra,
+
         valor_total: valorTotal,
 
         entradas_mes: comprado,
@@ -139,21 +180,11 @@ const ControlInventario = () => {
 
   const handleSavePrice = async (productId: string) => {
     try {
-      // ✅ Compat: el backend hoy soporta "precio"
-      // 🧩 y dejamos "precio_venta/precioVenta" por si luego lo habilitas en backend sin tocar el front.
-      await updateProducto.mutateAsync({
-        id: productId,
-        precio: n(tempPrice),
-        // @ts-ignore compat
-        precio_venta: n(tempPrice),
-        // @ts-ignore compat
-        precioVenta: n(tempPrice),
-      } as any);
-
+      await savePrecioVenta(productId, n(tempPrice));
       setEditingPrice(null);
       setTempPrice(0);
     } catch (error) {
-      console.error("Error updating price:", error);
+      console.error("Error updating precioVenta:", error);
     }
   };
 
@@ -292,7 +323,7 @@ const ControlInventario = () => {
                     <TableHead>Disponibilidad</TableHead>
                     <TableHead>Nivel</TableHead>
                     <TableHead className="whitespace-nowrap">Costo Unit.</TableHead>
-                    <TableHead className="whitespace-nowrap">Precio Config.</TableHead>
+                    <TableHead className="whitespace-nowrap">Precio Venta</TableHead>
                     <TableHead className="whitespace-nowrap">Valor Total</TableHead>
                     <TableHead className="whitespace-nowrap">Total Comprado</TableHead>
                     <TableHead className="whitespace-nowrap">Total Usado/Vendido</TableHead>
@@ -356,7 +387,9 @@ const ControlInventario = () => {
 
                         <TableCell>{getStockLevelBadge(stockLevel)}</TableCell>
 
-                        <TableCell className="font-semibold">{formatCurrency(producto.costo_promedio)}</TableCell>
+                        <TableCell className="font-semibold" title="Costo unitario promedio (compras)">
+                          {formatCurrency(producto.costo_promedio)}
+                        </TableCell>
 
                         <TableCell>
                           {editingPrice === producto.id ? (
@@ -376,25 +409,34 @@ const ControlInventario = () => {
                                 type="button"
                                 size="sm"
                                 onClick={() => handleSavePrice(producto.id)}
-                                disabled={updateProducto.isPending}
+                                disabled={savingId === producto.id}
                                 className="h-8 w-8 p-0"
                               >
                                 <Check className="h-4 w-4" />
                               </Button>
-                              <Button type="button" size="sm" variant="outline" onClick={handleCancelEdit} className="h-8 w-8 p-0">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelEdit}
+                                className="h-8 w-8 p-0"
+                                disabled={savingId === producto.id}
+                              >
                                 <X className="h-4 w-4" />
                               </Button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-primary">{formatCurrency(producto.precio_configurado || 0)}</span>
+                              <span className="font-medium text-primary">
+                                {formatCurrency(producto.precio_configurado || 0)}
+                              </span>
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => handleEditPrice(producto.id, producto.precio_configurado || 0)}
                                 className="h-8 w-8 p-0"
-                                title="Editar precio configurado"
+                                title="Editar precio de venta"
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
