@@ -75,6 +75,7 @@ type MovimientoLike = any;
 
 const getMovId = (m: MovimientoLike) => String(m?.id ?? m?._id ?? "");
 
+/** ✅ productoId (incluye cuando viene como string o ObjectId o nested) */
 const getMovProductoId = (m: MovimientoLike) =>
   String(
     m?.producto_id ??
@@ -101,50 +102,164 @@ const getMovEstado = (m: MovimientoLike) =>
   String(m?.estado ?? m?.status ?? "activo").toLowerCase().trim();
 
 const getMovCantidad = (m: MovimientoLike) =>
-  num(m?.cantidad ?? m?.qty ?? m?.quantity ?? m?.unidades ?? m?.units);
-
-/**
- * ✅ Costo TOTAL (muchos aliases)
- * Hay backends que guardan total como monto/importe/amount.
- */
-const getMovCostoTotal = (m: MovimientoLike) =>
   num(
-    m?.costo_total ??
-      m?.costoTotal ??
-      m?.total ??
-      m?.monto_total ??
-      m?.montoTotal ??
-      m?.importe_total ??
-      m?.importeTotal ??
-      m?.amount ??
-      m?.monto ??
-      m?.importe
+    m?.cantidad ??
+      m?.qty ??
+      m?.quantity ??
+      m?.unidades ??
+      m?.units ??
+      // ✅ a veces viene nested
+      m?.detalle?.cantidad ??
+      m?.detalle?.qty ??
+      m?.payload?.cantidad ??
+      m?.data?.cantidad
   );
 
+/** -------------------------
+ * ✅ Helpers deep (dot paths)
+ * ------------------------- */
+function getByPath(obj: any, path: string) {
+  if (!obj || !path) return undefined;
+  const parts = path.split(".");
+  let cur = obj;
+  for (const p of parts) {
+    if (cur == null) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+/** lee el primer número >0 desde paths (dot paths) */
+function pickNumberDeep(obj: any, paths: string[]): number {
+  for (const path of paths) {
+    const v = getByPath(obj, path);
+    const n = num(v);
+    if (n > 0) return n;
+  }
+  return 0;
+}
+
 /**
- * ✅ Costo UNITARIO (muchos aliases)
- * Hay backends que guardan el costo de compra como precio/costoCompra/costo_compra.
+ * ✅ Costo TOTAL (root + deep aliases)
  */
-const getMovCostoUnit = (m: MovimientoLike) =>
-  num(
-    m?.costo_unitario ??
-      m?.costoUnitario ??
-      m?.unitCost ??
-      m?.costoUnit ??
-      m?.costoCompra ??
-      m?.costo_compra ??
-      m?.precio_unitario ??
-      m?.precioUnitario ??
-      m?.unitPrice ??
-      m?.precio ??
-      m?.price
-  );
+const getMovCostoTotal = (m: MovimientoLike) => {
+  // root aliases
+  const root =
+    num(
+      m?.costo_total ??
+        m?.costoTotal ??
+        m?.total ??
+        m?.monto_total ??
+        m?.montoTotal ??
+        m?.importe_total ??
+        m?.importeTotal ??
+        m?.amount ??
+        m?.monto ??
+        m?.importe ??
+        m?.totalCompra ??
+        m?.total_compra
+    ) || 0;
+  if (root > 0) return root;
+
+  // deep aliases (muy comunes)
+  return pickNumberDeep(m, [
+    "detalle.costo_total",
+    "detalle.costoTotal",
+    "detalle.total",
+    "detalle.monto_total",
+    "detalle.montoTotal",
+    "detalle.importe_total",
+    "detalle.importeTotal",
+    "detalle.amount",
+    "payload.costo_total",
+    "payload.costoTotal",
+    "payload.total",
+    "payload.monto_total",
+    "payload.montoTotal",
+    "data.costo_total",
+    "data.costoTotal",
+    "data.total",
+    "data.monto_total",
+    "data.montoTotal",
+    "meta.total",
+    "meta.totalCompra",
+    "meta.total_compra",
+    // arrays típicos
+    "items.0.total",
+    "items.0.monto",
+    "items.0.importe",
+  ]);
+};
+
+/**
+ * ✅ Costo UNITARIO (root + deep aliases)
+ */
+const getMovCostoUnit = (m: MovimientoLike) => {
+  const root =
+    num(
+      m?.costo_unitario ??
+        m?.costoUnitario ??
+        m?.unitCost ??
+        m?.costoUnit ??
+        m?.costoCompra ??
+        m?.costo_compra ??
+        m?.precio_unitario ??
+        m?.precioUnitario ??
+        m?.unitPrice ??
+        m?.precio ??
+        m?.price ??
+        m?.precioUnitarioCompra ??
+        m?.precio_unitario_compra
+    ) || 0;
+  if (root > 0) return root;
+
+  return pickNumberDeep(m, [
+    "detalle.costo_unitario",
+    "detalle.costoUnitario",
+    "detalle.unitCost",
+    "detalle.unit_cost",
+    "detalle.costoCompra",
+    "detalle.costo_compra",
+    "detalle.precioUnitario",
+    "detalle.precio_unitario",
+    "detalle.unitPrice",
+    "detalle.unit_price",
+    "detalle.precioUnitarioCompra",
+    "detalle.precio_unitario_compra",
+    "payload.costo_unitario",
+    "payload.costoUnitario",
+    "payload.unitCost",
+    "payload.costoCompra",
+    "payload.costo_compra",
+    "payload.precioUnitario",
+    "payload.precio_unitario",
+    "payload.precioUnitarioCompra",
+    "payload.precio_unitario_compra",
+    "data.costo_unitario",
+    "data.costoUnitario",
+    "data.unitCost",
+    "data.costoCompra",
+    "data.costo_compra",
+    "data.precioUnitario",
+    "data.precio_unitario",
+    "data.precioUnitarioCompra",
+    "data.precio_unitario_compra",
+    // arrays típicos
+    "items.0.costo_unitario",
+    "items.0.costoUnitario",
+    "items.0.unitCost",
+    "items.0.precioUnitario",
+    "items.0.precioUnitarioCompra",
+    "items.0.precio",
+    "items.0.price",
+  ]);
+};
 
 /**
  * ✅ Costo unitario efectivo:
  * - si viene unitario, úsalo
  * - si viene total y qty > 0, usa total/qty
- * - si nada viene, 0
+ * - si trae otros alias, úsalo
  */
 function getEffectiveUnitCost(m: MovimientoLike): number {
   const qty = getMovCantidad(m);
@@ -154,15 +269,18 @@ function getEffectiveUnitCost(m: MovimientoLike): number {
   const total = getMovCostoTotal(m);
   if (total > 0 && qty > 0) return total / qty;
 
+  // extra alias sueltos
   const alt =
     num(m?.costo) ||
     num(m?.cost) ||
     num(m?.purchaseCost) ||
     num(m?.precioCompra) ||
-    num(m?.precio_compra);
+    num(m?.precio_compra) ||
+    num(m?.detalle?.costo) ||
+    num(m?.payload?.costo) ||
+    0;
 
   if (alt > 0) return alt;
-
   return 0;
 }
 
@@ -214,7 +332,7 @@ export const useInventarioConMovimientos = () => {
 
       const movimientosRaw = [...comprasRaw, ...ventasRaw, ...ajustesRaw];
 
-      // Deduplicar por id si el backend llega a repetir items
+      // Deduplicar por id
       const seen = new Set<string>();
       const movimientos = movimientosRaw
         .filter((m) => (getMovEstado(m) === "activo" ? true : !m?.estado && !m?.status))
@@ -273,7 +391,7 @@ export const useInventarioConMovimientos = () => {
         const ajuste_cantidad = ajustes.reduce((sum, m) => sum + getMovCantidad(m), 0);
         const cantidad_stock = cantidad_comprada - cantidad_vendida + ajuste_cantidad;
 
-        // ✅ Costo promedio ponderado REAL (solo compras con costo válido)
+        // ✅ Costo promedio ponderado (solo compras con costo válido)
         let totalCost = 0;
         let totalQty = 0;
 
@@ -286,7 +404,21 @@ export const useInventarioConMovimientos = () => {
           }
         }
 
-        const costo_unitario = totalQty > 0 ? totalCost / totalQty : 0;
+        let costo_unitario = totalQty > 0 ? totalCost / totalQty : 0;
+
+        // ✅ Fallback FINAL: si no se pudo desde movimientos, usa el costoCompra guardado en el producto
+        // (en tus docs ya existe costoCompra y costo_compra)
+        if (costo_unitario <= 0) {
+          const fallback =
+            num(producto?.costoCompra) ||
+            num(producto?.costo_compra) ||
+            num(producto?.precioCompra) ||
+            num(producto?.precio_compra) ||
+            0;
+
+          if (fallback > 0) costo_unitario = fallback;
+        }
+
         const valor_total_inventario = cantidad_stock * costo_unitario;
 
         const ultimo_movimiento = movimientosProducto[0] ? getMovFecha(movimientosProducto[0]) : null;
@@ -331,7 +463,7 @@ export const useInventarioConMovimientos = () => {
         const descripcion = (producto?.descripcion ?? producto?.description ?? null) as any;
         const imagen_url = (producto?.imagen_url ?? producto?.imagenUrl ?? null) as any;
 
-        // ✅ precio de venta robusto (nuevo modelo)
+        // ✅ precio de venta robusto
         const precio_venta = num(
           producto?.precio_venta ??
             producto?.precioVenta ??
