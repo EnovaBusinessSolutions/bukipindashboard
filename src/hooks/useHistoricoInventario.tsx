@@ -25,12 +25,22 @@ export type DatoHistoricoMes = {
 type Periodo = "mensual" | "anual";
 
 type MovimientoInventario = {
-  fecha: string; // YYYY-MM-DD
-  tipo_movimiento: "compra" | "venta" | "ajuste";
+  fecha?: string; // YYYY-MM-DD o ISO
+  createdAt?: string; // ISO
+  tipo_movimiento?: "compra" | "venta" | "ajuste";
+  tipoMovimiento?: "compra" | "venta" | "ajuste";
+
   cantidad: number | string;
-  costo_total: number | string | null;
-  costo_unitario: number | string | null;
+
+  costo_total?: number | string | null;
+  costoTotal?: number | string | null;
+
+  costo_unitario?: number | string | null;
+  costoUnitario?: number | string | null;
+
   producto_id?: string | null;
+  productoId?: string | null;
+
   estado?: string;
 };
 
@@ -39,6 +49,26 @@ type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string } | T;
 const unwrap = <T,>(json: ApiEnvelope<T>): T => {
   return (json as any)?.data ?? (json as T);
 };
+
+const num = (v: any) => {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const pickFecha = (m: MovimientoInventario): string | null => {
+  const raw = m.fecha ?? m.createdAt ?? null;
+  if (!raw) return null;
+  return String(raw);
+};
+
+const pickTipo = (m: MovimientoInventario): "compra" | "venta" | "ajuste" | null => {
+  const t = (m.tipo_movimiento ?? m.tipoMovimiento ?? null) as any;
+  if (t === "compra" || t === "venta" || t === "ajuste") return t;
+  return null;
+};
+
+const pickCostoTotal = (m: MovimientoInventario) => num(m.costo_total ?? m.costoTotal ?? 0);
+const pickCostoUnitario = (m: MovimientoInventario) => num(m.costo_unitario ?? m.costoUnitario ?? 0);
 
 export const useHistoricoInventario = (productoId: string | null, periodo: Periodo = "anual") => {
   return useQuery({
@@ -51,13 +81,22 @@ export const useHistoricoInventario = (productoId: string | null, periodo: Perio
       const params = new URLSearchParams();
       params.set("periodo", periodo);
       params.set("from", format(fechaInicio, "yyyy-MM-dd"));
-      if (productoId && productoId !== "total") params.set("productoId", productoId);
+
+      // ✅ Soporta ambos nombres para no romper compat
+      if (productoId && productoId !== "total") {
+        params.set("productoId", productoId);
+        params.set("producto_id", productoId);
+      }
 
       const json = await apiFetch(`/api/inventario/movimientos/historico?${params.toString()}`, {
         method: "GET",
       });
 
-      const movimientos = unwrap<MovimientoInventario[]>(json) || [];
+      const movimientos = (unwrap<MovimientoInventario[]>(json) || []).filter((m) => {
+        // si backend manda estado, respetamos; si no, lo asumimos activo
+        const st = (m as any)?.estado ?? "activo";
+        return st === "activo";
+      });
 
       // Generar todos los períodos según el tipo seleccionado
       let todosPeriodos: DatoHistoricoMes[];
@@ -97,8 +136,20 @@ export const useHistoricoInventario = (productoId: string | null, periodo: Perio
       // Agrupar movimientos por período
       const movimientosPorPeriodo: Record<string, DatoHistoricoMes> = {};
 
-      movimientos.forEach((movimiento) => {
-        const fecha = parseISO(movimiento.fecha);
+      for (const movimiento of movimientos) {
+        const fechaRaw = pickFecha(movimiento);
+        const tipo = pickTipo(movimiento);
+        if (!fechaRaw || !tipo) continue;
+
+        let fecha: Date;
+        try {
+          // parseISO aguanta YYYY-MM-DD y ISO, pero mejor envolvemos por seguridad
+          fecha = parseISO(fechaRaw);
+          if (Number.isNaN(fecha.getTime())) fecha = new Date(fechaRaw);
+        } catch {
+          fecha = new Date(fechaRaw);
+        }
+        if (Number.isNaN(fecha.getTime())) continue;
 
         const periodoKey =
           periodo === "mensual"
@@ -117,17 +168,17 @@ export const useHistoricoInventario = (productoId: string | null, periodo: Perio
           };
         }
 
-        const cantidad = Number(movimiento.cantidad) || 0;
-        const costoTotal = Number(movimiento.costo_total) || 0;
-        const costoUnitario = Number(movimiento.costo_unitario) || 0;
+        const cantidad = num(movimiento.cantidad);
+        const costoTotal = pickCostoTotal(movimiento);
+        const costoUnitario = pickCostoUnitario(movimiento);
 
-        if (movimiento.tipo_movimiento === "compra") {
+        if (tipo === "compra") {
           movimientosPorPeriodo[periodoKey].compras += cantidad;
           movimientosPorPeriodo[periodoKey].compras_valor += costoTotal;
-        } else if (movimiento.tipo_movimiento === "venta") {
+        } else if (tipo === "venta") {
           movimientosPorPeriodo[periodoKey].ventas += cantidad;
           movimientosPorPeriodo[periodoKey].ventas_valor += cantidad * costoUnitario;
-        } else if (movimiento.tipo_movimiento === "ajuste") {
+        } else if (tipo === "ajuste") {
           // Ajuste positivo = entra stock (lo tratamos como compra)
           if (cantidad > 0) {
             movimientosPorPeriodo[periodoKey].compras += cantidad;
@@ -139,7 +190,7 @@ export const useHistoricoInventario = (productoId: string | null, periodo: Perio
             movimientosPorPeriodo[periodoKey].ventas_valor += abs * costoUnitario;
           }
         }
-      });
+      }
 
       // Combinar todos los períodos con los movimientos
       const datosHistoricos = todosPeriodos.map((p) => movimientosPorPeriodo[p.mes] || p);
@@ -158,5 +209,9 @@ export const useHistoricoInventario = (productoId: string | null, periodo: Perio
       return datosHistoricos;
     },
     enabled: true, // Siempre habilitado para soportar "total"
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 };

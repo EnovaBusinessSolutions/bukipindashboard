@@ -179,6 +179,25 @@ async function lookupProductoPorNombre(nombre: string): Promise<ProductoConSubcu
 }
 
 /** =========================
+ * Helpers: invalidación E2E
+ * ========================= */
+function invalidateInventarioRelatedQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  // ✅ No sabemos tus queryKeys exactos, así que invalidamos por “familias”
+  queryClient.invalidateQueries({
+    predicate: (q) => {
+      const k0 = Array.isArray(q.queryKey) ? q.queryKey[0] : "";
+      const key = String(k0 || "").toLowerCase();
+      return (
+        key.includes("inventario") ||
+        key.includes("movimientos") ||
+        key.includes("inventory") ||
+        key.includes("kardex")
+      );
+    },
+  });
+}
+
+/** =========================
  * Queries
  * ========================= */
 
@@ -227,6 +246,7 @@ export const useCreateProducto = () => {
 
   return useMutation({
     mutationFn: async ({
+      productId,
       nombre,
       precio,
       precioVenta,
@@ -235,6 +255,8 @@ export const useCreateProducto = () => {
       subcuentaId,
       imagen,
     }: {
+      // ✅ CLAVE E2E: si viene productId, ES RESTOCK y no dependemos del nombre
+      productId?: string;
       nombre: string;
       precio: number;
       precioVenta?: number;
@@ -252,10 +274,58 @@ export const useCreateProducto = () => {
       // Normaliza subcuenta: "" => null
       const subId = subcuentaId ? String(subcuentaId).trim() : null;
 
+      // ==========================
+      // INVENTARIO (1005)
+      // ==========================
       if (esCompraInventario) {
-        const costoTotal = Number(precio) * Number(cantidad || 0);
+        const qty = Number(cantidad || 0);
+        const costoUnit = Number(precio);
+        const costoTotal = costoUnit * qty;
 
-        // 1) lookup opcional
+        // 0) Si viene productId => RESTOCK directo (fuente de verdad)
+        if (productId) {
+          // opcional: actualizar metadatos del producto
+          const patch: any = {};
+          if (descripcion !== undefined) patch.descripcion = descripcion || null;
+          if (imagenUrl !== null) patch.imagen_url = imagenUrl;
+          if (subcuentaId !== undefined) patch.subcuentaId = subId;
+          if (precioVenta !== undefined) patch.precio_venta = Number(precioVenta);
+
+          if (Object.keys(patch).length) {
+            await apiFetch(`/api/productos/${encodeURIComponent(productId)}`, {
+              method: "PUT",
+              body: JSON.stringify(patch),
+            });
+          }
+
+          // movimiento compra
+          await apiFetch("/api/movimientos-inventario", {
+            method: "POST",
+            body: JSON.stringify({
+              // 🔁 enviamos aliases para compat backend
+              producto_id: productId,
+              productoId: productId,
+
+              tipo_movimiento: "compra",
+              tipoMovimiento: "compra",
+              tipo: "compra",
+
+              cantidad: qty,
+
+              costo_unitario: costoUnit,
+              costoUnitario: costoUnit,
+
+              costo_total: costoTotal,
+              costoTotal: costoTotal,
+
+              descripcion: "Compra adicional de inventario",
+            }),
+          });
+
+          return { id: productId, esActualizacion: true };
+        }
+
+        // 1) lookup opcional por nombre (solo cuando NO hay productId)
         let productoExistente = await lookupProductoPorNombre(nombre);
 
         // 2) fallback cache
@@ -265,16 +335,14 @@ export const useCreateProducto = () => {
             cached.find((p) => (p.nombre || "").trim().toLowerCase() === nombre.trim().toLowerCase()) || null;
         }
 
+        // Si existe por nombre => restock
         if (productoExistente?.id) {
-          // ✅ Actualiza producto existente (IMPORTANTE: ahora es PUT, no PATCH)
           const patch: any = {};
-
           if (descripcion !== undefined) patch.descripcion = descripcion || null;
-          if (imagenUrl !== null) patch.imagen_url = imagenUrl; // (si tu backend no lo guarda aún, no rompe)
-          if (subcuentaId !== undefined) patch.subcuentaId = subId; // ✅ CAMEL
+          if (imagenUrl !== null) patch.imagen_url = imagenUrl;
+          if (subcuentaId !== undefined) patch.subcuentaId = subId;
           if (precioVenta !== undefined) patch.precio_venta = Number(precioVenta);
 
-          // si hay algo que actualizar
           if (Object.keys(patch).length) {
             await apiFetch(`/api/productos/${encodeURIComponent(productoExistente.id)}`, {
               method: "PUT",
@@ -282,15 +350,24 @@ export const useCreateProducto = () => {
             });
           }
 
-          // movimiento de compra
           await apiFetch("/api/movimientos-inventario", {
             method: "POST",
             body: JSON.stringify({
               producto_id: productoExistente.id,
+              productoId: productoExistente.id,
+
               tipo_movimiento: "compra",
-              cantidad: Number(cantidad),
-              costo_unitario: Number(precio),
-              costo_total: Number(costoTotal),
+              tipoMovimiento: "compra",
+              tipo: "compra",
+
+              cantidad: qty,
+
+              costo_unitario: costoUnit,
+              costoUnitario: costoUnit,
+
+              costo_total: costoTotal,
+              costoTotal: costoTotal,
+
               descripcion: "Compra adicional de inventario",
             }),
           });
@@ -305,8 +382,8 @@ export const useCreateProducto = () => {
             nombre,
             descripcion: descripcion || null,
             precio: Number(precio),
-            cuentaCodigo,              // ✅ CAMEL (backend lo usa)
-            subcuentaId: subId,         // ✅ CAMEL (backend lo usa)
+            cuentaCodigo,      // ✅ CAMEL (backend lo usa)
+            subcuentaId: subId, // ✅ CAMEL (backend lo usa)
             activo: true,
 
             // extras legacy (si tu modelo los tiene; si no, backend los ignora)
@@ -322,10 +399,20 @@ export const useCreateProducto = () => {
           method: "POST",
           body: JSON.stringify({
             producto_id: creado.id,
+            productoId: creado.id,
+
             tipo_movimiento: "compra",
-            cantidad: Number(cantidad),
-            costo_unitario: Number(precio),
-            costo_total: Number(costoTotal),
+            tipoMovimiento: "compra",
+            tipo: "compra",
+
+            cantidad: qty,
+
+            costo_unitario: costoUnit,
+            costoUnitario: costoUnit,
+
+            costo_total: costoTotal,
+            costoTotal: costoTotal,
+
             descripcion: "Compra inicial - Nuevo producto en inventario",
           }),
         });
@@ -333,15 +420,17 @@ export const useCreateProducto = () => {
         return { ...creado, esActualizacion: false };
       }
 
-      // ===== Servicios (4001) =====
+      // ==========================
+      // SERVICIOS (4001)
+      // ==========================
       const json = await apiFetch("/api/productos", {
         method: "POST",
         body: JSON.stringify({
           nombre,
           descripcion: descripcion || null,
           precio: Number(precio),
-          cuentaCodigo,              // ✅ CAMEL
-          subcuentaId: subId,        // ✅ CAMEL
+          cuentaCodigo,       // ✅ CAMEL
+          subcuentaId: subId, // ✅ CAMEL
           activo: true,
 
           // extras legacy
@@ -354,8 +443,12 @@ export const useCreateProducto = () => {
     },
 
     onSuccess: (data: any) => {
+      // ✅ refrescar catálogo
       queryClient.invalidateQueries({ queryKey: ["productos"] });
       queryClient.invalidateQueries({ queryKey: ["productos-servicios"] });
+
+      // ✅ refrescar inventario/movimientos (E2E real)
+      invalidateInventarioRelatedQueries(queryClient);
 
       if (data?.esActualizacion) {
         toast({
