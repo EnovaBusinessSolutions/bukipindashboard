@@ -182,7 +182,9 @@ async function lookupProductoPorNombre(nombre: string): Promise<ProductoConSubcu
  * Helpers: invalidación E2E
  * ========================= */
 function invalidateInventarioRelatedQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  // ✅ No sabemos tus queryKeys exactos, así que invalidamos por “familias”
+  // ✅ invalidación "por familias" + key exacta del inventario
+  queryClient.invalidateQueries({ queryKey: ["inventario-con-movimientos"] });
+
   queryClient.invalidateQueries({
     predicate: (q) => {
       const k0 = Array.isArray(q.queryKey) ? q.queryKey[0] : "";
@@ -191,7 +193,8 @@ function invalidateInventarioRelatedQueries(queryClient: ReturnType<typeof useQu
         key.includes("inventario") ||
         key.includes("movimientos") ||
         key.includes("inventory") ||
-        key.includes("kardex")
+        key.includes("kardex") ||
+        key.includes("histori") // historico/historial
       );
     },
   });
@@ -302,7 +305,7 @@ export const useCreateProducto = () => {
           await apiFetch("/api/movimientos-inventario", {
             method: "POST",
             body: JSON.stringify({
-              // 🔁 enviamos aliases para compat backend
+              // aliases para compat
               producto_id: productId,
               productoId: productId,
 
@@ -330,9 +333,11 @@ export const useCreateProducto = () => {
 
         // 2) fallback cache
         if (!productoExistente) {
-          const cached = (queryClient.getQueryData(["productos"]) as ProductoConSubcuenta[] | undefined) || [];
+          const cached =
+            (queryClient.getQueryData(["productos"]) as ProductoConSubcuenta[] | undefined) || [];
           productoExistente =
-            cached.find((p) => (p.nombre || "").trim().toLowerCase() === nombre.trim().toLowerCase()) || null;
+            cached.find((p) => (p.nombre || "").trim().toLowerCase() === nombre.trim().toLowerCase()) ||
+            null;
         }
 
         // Si existe por nombre => restock
@@ -382,11 +387,11 @@ export const useCreateProducto = () => {
             nombre,
             descripcion: descripcion || null,
             precio: Number(precio),
-            cuentaCodigo,      // ✅ CAMEL (backend lo usa)
-            subcuentaId: subId, // ✅ CAMEL (backend lo usa)
+            cuentaCodigo,       // ✅ CAMEL
+            subcuentaId: subId, // ✅ CAMEL
             activo: true,
 
-            // extras legacy (si tu modelo los tiene; si no, backend los ignora)
+            // extras legacy
             precio_venta: Number(precioVenta || 0),
             imagen_url: imagenUrl,
           }),
@@ -504,16 +509,14 @@ export const useUpdateProducto = () => {
       if (descripcion !== undefined) updateData.descripcion = descripcion || null;
       if (precio !== undefined) updateData.precio = Number(precio);
 
-      // si tu backend aún no guarda imagen_url, esto no rompe
       if (imagenUrl !== undefined) updateData.imagen_url = imagenUrl;
 
-      // ✅ CLAVE: el backend nuevo espera subcuentaId (camel)
+      // ✅ backend nuevo espera subcuentaId (camel)
       if (typeof subcuentaId !== "undefined") {
         const v = subcuentaId ? String(subcuentaId).trim() : null;
-        updateData.subcuentaId = v; // ✅ CAMEL
+        updateData.subcuentaId = v;
       }
 
-      // ✅ CLAVE: tu backend no tiene PATCH, usa PUT
       const json = await apiFetch(`/api/productos/${encodeURIComponent(id)}`, {
         method: "PUT",
         body: JSON.stringify(updateData),
@@ -525,6 +528,10 @@ export const useUpdateProducto = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["productos"] });
       queryClient.invalidateQueries({ queryKey: ["productos-servicios"] });
+
+      // ✅ por si el update impacta inventario/rotación/analytics
+      invalidateInventarioRelatedQueries(queryClient);
+
       toast({
         title: "Producto actualizado",
         description: "El producto se ha actualizado correctamente",
@@ -549,7 +556,6 @@ export const useDeleteProducto = () => {
     mutationFn: async (id: string) => {
       if (!id) throw new Error("Falta id del producto.");
 
-      // ✅ backend: PUT /api/productos/:id con { activo:false }
       await apiFetch(`/api/productos/${encodeURIComponent(id)}`, {
         method: "PUT",
         body: JSON.stringify({ activo: false }),
@@ -561,6 +567,8 @@ export const useDeleteProducto = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["productos"] });
       queryClient.invalidateQueries({ queryKey: ["productos-servicios"] });
+      invalidateInventarioRelatedQueries(queryClient);
+
       toast({
         title: "Producto eliminado",
         description: "El producto ha sido desactivado exitosamente",

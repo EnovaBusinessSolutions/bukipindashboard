@@ -56,7 +56,6 @@ const getUserId = (p: any) => String(p?.user_id ?? p?.userId ?? p?.owner ?? "");
 function asArray<T = any>(json: ApiEnvelope<any>): T[] {
   const j: any = json as any;
 
-  // casos comunes:
   // 1) {ok:true, data:[...]}
   if (Array.isArray(j?.data)) return j.data as T[];
 
@@ -83,22 +82,41 @@ const getMovProductoId = (m: MovimientoLike) =>
       m?.product ??
       m?.producto?._id ??
       m?.product?._id ??
+      m?.productoId?._id ??
+      m?.productId?._id ??
       ""
   );
 
 const getMovTipo = (m: MovimientoLike) =>
-  String(m?.tipo_movimiento ?? m?.tipoMovimiento ?? m?.tipo ?? "").toLowerCase().trim();
+  String(m?.tipo_movimiento ?? m?.tipoMovimiento ?? m?.tipo ?? m?.type ?? "")
+    .toLowerCase()
+    .trim();
 
 const getMovFecha = (m: MovimientoLike) =>
-  String(m?.fecha ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? "").trim();
+  String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? "").trim();
 
-const getMovEstado = (m: MovimientoLike) => String(m?.estado ?? "activo").toLowerCase().trim();
+const getMovEstado = (m: MovimientoLike) =>
+  String(m?.estado ?? m?.status ?? "activo").toLowerCase().trim();
 
-const getMovCantidad = (m: MovimientoLike) => num(m?.cantidad);
+const getMovCantidad = (m: MovimientoLike) => num(m?.cantidad ?? m?.qty ?? m?.quantity);
 
-const getMovCostoTotal = (m: MovimientoLike) => num(m?.costo_total ?? m?.costoTotal);
+const getMovCostoTotal = (m: MovimientoLike) => num(m?.costo_total ?? m?.costoTotal ?? m?.total);
 
-const getMovCostoUnit = (m: MovimientoLike) => num(m?.costo_unitario ?? m?.costoUnitario);
+const getMovCostoUnit = (m: MovimientoLike) =>
+  num(m?.costo_unitario ?? m?.costoUnitario ?? m?.unitCost ?? m?.costoUnit);
+
+/** Trae movimientos por tipo desde el endpoint de inventario */
+async function fetchMovimientosPorTipo(tipo: "compra" | "venta" | "ajuste") {
+  const params = new URLSearchParams();
+  params.set("tipo", tipo);
+  // Si tu backend soporta estos filtros, perfecto. Si no, no rompe.
+  params.set("estado", "activo");
+  params.set("order", "fecha:desc");
+  params.set("limit", "5000");
+
+  const json = await apiFetch(`/api/inventario/movimientos?${params.toString()}`, { method: "GET" });
+  return asArray<any>(json);
+}
 
 export const useInventarioConMovimientos = () => {
   return useQuery({
@@ -127,23 +145,29 @@ export const useInventarioConMovimientos = () => {
         .filter((p) => p.id && p.cuentaCodigo === "1005" && p.activo !== false)
         .map((p) => p.raw);
 
-      // 2) Movimientos (endpoint CANÓNICO)
-      // ✅ Aquí estaba el bug: estabas usando /api/movimientos-inventario (500).
-      // ✅ Además, /api/inventario/movimientos devuelve {data:{items:[]}} y hay que leer items.
-      const movParams = new URLSearchParams();
-      movParams.set("tipo", "todos"); // trae todos (compra/venta/ajuste)
-      // start/end opcionales si luego quieres filtrar por fecha.
+      // 2) Movimientos (E2E real)
+      // ✅ NO usar tipo=todos si backend filtra por tipo exacto.
+      // ✅ Traemos compra/venta/ajuste y concatenamos.
+      const [comprasRaw, ventasRaw, ajustesRaw] = await Promise.all([
+        fetchMovimientosPorTipo("compra"),
+        fetchMovimientosPorTipo("venta"),
+        fetchMovimientosPorTipo("ajuste"),
+      ]);
 
-      const movimientosJson = await apiFetch(`/api/inventario/movimientos?${movParams.toString()}`, {
-        method: "GET",
-      });
+      const movimientosRaw = [...comprasRaw, ...ventasRaw, ...ajustesRaw];
 
-      const movimientosRaw = asArray<any>(movimientosJson);
-
-      // Normalización mínima
+      // Deduplicar por id si el backend llega a repetir items
+      const seen = new Set<string>();
       const movimientos = movimientosRaw
-        .filter((m) => getMovEstado(m) === "activo" || !m?.estado) // si no hay estado, lo tratamos como activo
-        .filter((m) => getMovProductoId(m)); // debe traer producto id
+        .filter((m) => (getMovEstado(m) === "activo" ? true : !m?.estado && !m?.status))
+        .filter((m) => getMovProductoId(m))
+        .filter((m) => {
+          const id = String(m?.id ?? m?._id ?? "");
+          if (!id) return true; // si no hay id, no bloqueamos
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
 
       // 3) Indexar movimientos por producto
       const movimientosPorProducto = new Map<string, MovimientoLike[]>();
@@ -172,7 +196,6 @@ export const useInventarioConMovimientos = () => {
         const productoId = getId(producto);
         const movimientosProducto = movimientosPorProducto.get(productoId) || [];
 
-        // ✅ tipos compatibles
         const compras = movimientosProducto.filter((m) => {
           const t = getMovTipo(m);
           return t === "compra" || t === "entrada";
