@@ -64,18 +64,10 @@ interface AsientoContable {
 
 /** ✅ Normaliza cualquier shape para devolver un array (E2E) */
 function asArray<T = any>(json: any): T[] {
-  // 1) {ok:true, data:[...]}
   if (Array.isArray(json?.data)) return json.data;
-
-  // 2) {ok:true, data:{items:[...]}}
   if (Array.isArray(json?.data?.items)) return json.data.items;
-
-  // 3) array directo
   if (Array.isArray(json)) return json;
-
-  // 4) {items:[...]}
   if (Array.isArray(json?.items)) return json.items;
-
   return [];
 }
 
@@ -83,10 +75,15 @@ function unwrap<T = any>(json: any): T {
   return (json?.data ?? json) as T;
 }
 
-const n = (v: any) => {
-  const num = Number(v ?? 0);
-  return Number.isFinite(num) ? num : 0;
-};
+/** ✅ Número robusto: soporta "1,200", "$30.00", "", null */
+function n(v: any, def = 0) {
+  if (v === null || v === undefined) return def;
+  const s = String(v).trim();
+  if (!s) return def;
+  const cleaned = s.replace(/[$,\s]/g, "");
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : def;
+}
 
 const safeDate = (s: any): Date | null => {
   if (!s) return null;
@@ -117,7 +114,8 @@ const getMovTipo = (m: any) =>
     .toLowerCase()
     .trim();
 
-const getMovFecha = (m: any) => String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? m?.updated_at ?? "").trim();
+const getMovFecha = (m: any) =>
+  String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? m?.updated_at ?? "").trim();
 
 const getMovCostoUnit = (m: any) =>
   n(
@@ -150,20 +148,46 @@ const getMovCostoTotal = (m: any) =>
 
 const getMovCantidad = (m: any) => n(m?.cantidad ?? m?.qty ?? m?.quantity ?? m?.unidades ?? m?.units);
 
+/** ✅ Derivación E2E: si falta unit o total, lo calculamos */
+function getEffectiveUnitCost(m: any) {
+  const unit = getMovCostoUnit(m);
+  if (unit > 0) return unit;
+
+  const total = getMovCostoTotal(m);
+  const qty = getMovCantidad(m);
+  if (total > 0 && qty > 0) return total / qty;
+
+  return 0;
+}
+
+function getEffectiveTotalCost(m: any) {
+  const total = getMovCostoTotal(m);
+  if (total > 0) return total;
+
+  const unit = getEffectiveUnitCost(m);
+  const qty = getMovCantidad(m);
+  if (unit > 0 && qty > 0) return unit * qty;
+
+  return 0;
+}
+
 async function getMovimientos(params: { start?: string; end?: string }) {
   const qs = new URLSearchParams();
   if (params.start) qs.set("start", params.start);
   if (params.end) qs.set("end", params.end);
 
   const json = await apiFetch(`/api/inventario/movimientos?${qs.toString()}`);
-
-  // ✅ IMPORTANTÍSIMO: aquí estaba el crash (a veces no regresaba array)
   return asArray<MovimientoInventario>(json);
 }
 
+/** ✅ Blindaje: si /asiento da 404 o no existe, regresamos null sin romper UI */
 async function getAsientoByMovimientoId(movimientoId: string) {
-  const json = await apiFetch(`/api/inventario/movimientos/${movimientoId}/asiento`);
-  return unwrap<AsientoContable | null>(json) ?? null;
+  try {
+    const json = await apiFetch(`/api/inventario/movimientos/${movimientoId}/asiento`);
+    return unwrap<AsientoContable | null>(json) ?? null;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function cancelarCompraInventario(payload: { movimientoId: string; motivoCancelacion: string }) {
@@ -200,7 +224,7 @@ const ResumenTransaccionesInventario = () => {
     retry: 1,
   });
 
-  // ✅ Blindaje extra por si algo raro llega
+  // ✅ Normalización + derivación de costos E2E
   const movimientos = useMemo(() => {
     const raw = Array.isArray(movimientosRaw) ? movimientosRaw : asArray<any>(movimientosRaw);
 
@@ -209,16 +233,16 @@ const ResumenTransaccionesInventario = () => {
       const tipo = getMovTipo(m);
       const fecha = getMovFecha(m);
 
-      const costoTotal = getMovCostoTotal(m);
-      const costoUnit = getMovCostoUnit(m);
       const cantidad = getMovCantidad(m);
+      const costoUnit = getEffectiveUnitCost(m);
+      const costoTotal = getEffectiveTotalCost(m);
 
       const cancelado =
         String(m.estado || "").toLowerCase() === "cancelado" ||
         !!m.motivo_cancelacion ||
         !!m.fecha_cancelacion ||
         !!m.movimiento_reversion_id ||
-        (m.descripcion || "").toUpperCase().includes("CANCELACIÓN");
+        String(m.descripcion || "").toUpperCase().includes("CANCELACIÓN");
 
       const productos =
         m.productos ??
@@ -234,9 +258,9 @@ const ResumenTransaccionesInventario = () => {
         producto_id: getMovProductoId(m),
         tipo_movimiento: tipo,
         fecha,
-        costo_total: costoTotal,
-        costo_unitario: costoUnit,
         cantidad,
+        costo_unitario: costoUnit,
+        costo_total: costoTotal,
         estado: m.estado ?? null,
         descripcion: m.descripcion ?? "",
         productos: {
@@ -263,7 +287,7 @@ const ResumenTransaccionesInventario = () => {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-    retry: 1,
+    retry: 0, // ✅ no reintentar si 404 / no existe
   });
 
   const handleCancelarMovimiento = async () => {
@@ -618,9 +642,7 @@ const ResumenTransaccionesInventario = () => {
                                       <div className="flex items-start gap-2">
                                         <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
                                         <div className="flex-1">
-                                          <p className="font-medium text-red-700 dark:text-red-300 text-sm">
-                                            Movimiento Cancelado
-                                          </p>
+                                          <p className="font-medium text-red-700 dark:text-red-300 text-sm">Movimiento Cancelado</p>
                                           {!!selectedMovimiento.motivo_cancelacion && (
                                             <p className="text-sm text-red-600 dark:text-red-400 mt-1">
                                               {selectedMovimiento.motivo_cancelacion}
@@ -699,7 +721,7 @@ const ResumenTransaccionesInventario = () => {
                                     ) : !asientoDetalle ? (
                                       <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center space-y-2">
                                         <p>No se encontraron asientos contables para esta transacción</p>
-                                        <p className="text-xs">Las entradas (compras) y salidas (ventas) generan asientos automáticamente.</p>
+                                        <p className="text-xs">Si el endpoint /asiento no existe o no hay asientoId, aquí se mostrará vacío.</p>
                                       </div>
                                     ) : (
                                       <div className="space-y-4">
@@ -848,7 +870,7 @@ const ResumenTransaccionesInventario = () => {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Costo Total:</span>
-                    <span className="ml-2 font-medium">{formatCurrency(n(movimientoACancelar.costo_total))}</span>
+                    <span className="ml-2 font-medium">{formatCurrency(getEffectiveTotalCost(movimientoACancelar))}</span>
                   </div>
                 </div>
               </div>
