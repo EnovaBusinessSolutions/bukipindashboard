@@ -56,17 +56,23 @@ const getUserId = (p: any) => String(p?.user_id ?? p?.userId ?? p?.owner ?? "");
 function asArray<T = any>(json: ApiEnvelope<any>): T[] {
   const j: any = json as any;
 
-  // 1) {ok:true, data:[...]}
+  // {ok:true, data:[...]}
   if (Array.isArray(j?.data)) return j.data as T[];
 
-  // 2) {ok:true, data:{items:[...]}}
+  // {ok:true, data:{items:[...]}}
   if (Array.isArray(j?.data?.items)) return j.data.items as T[];
 
-  // 3) array directo
+  // {ok:true, data:{movimientos:[...]}}
+  if (Array.isArray(j?.data?.movimientos)) return j.data.movimientos as T[];
+
+  // array directo
   if (Array.isArray(j)) return j as T[];
 
-  // 4) {items:[...]}
+  // {items:[...]}
   if (Array.isArray(j?.items)) return j.items as T[];
+
+  // {movimientos:[...]}
+  if (Array.isArray(j?.movimientos)) return j.movimientos as T[];
 
   return [];
 }
@@ -81,6 +87,8 @@ const getMovProductoId = (m: MovimientoLike) =>
     m?.producto_id ??
       m?.productoId ??
       m?.productId ??
+      m?.productoIdString ??
+      m?.productIdString ??
       m?.producto ??
       m?.product ??
       m?.producto?._id ??
@@ -98,9 +106,6 @@ const getMovTipo = (m: MovimientoLike) =>
 const getMovFecha = (m: MovimientoLike) =>
   String(m?.fecha ?? m?.date ?? m?.createdAt ?? m?.created_at ?? m?.updatedAt ?? m?.updated_at ?? "").trim();
 
-const getMovEstado = (m: MovimientoLike) =>
-  String(m?.estado ?? m?.status ?? "activo").toLowerCase().trim();
-
 const getMovCantidad = (m: MovimientoLike) =>
   num(
     m?.cantidad ??
@@ -112,7 +117,10 @@ const getMovCantidad = (m: MovimientoLike) =>
       m?.detalle?.cantidad ??
       m?.detalle?.qty ??
       m?.payload?.cantidad ??
-      m?.data?.cantidad
+      m?.data?.cantidad ??
+      // ✅ alias común en ventas inventariadas
+      m?.cantidadVendida ??
+      m?.cantidad_vendida
   );
 
 /** -------------------------
@@ -143,7 +151,6 @@ function pickNumberDeep(obj: any, paths: string[]): number {
  * ✅ Costo TOTAL (root + deep aliases)
  */
 const getMovCostoTotal = (m: MovimientoLike) => {
-  // root aliases
   const root =
     num(
       m?.costo_total ??
@@ -161,7 +168,6 @@ const getMovCostoTotal = (m: MovimientoLike) => {
     ) || 0;
   if (root > 0) return root;
 
-  // deep aliases (muy comunes)
   return pickNumberDeep(m, [
     "detalle.costo_total",
     "detalle.costoTotal",
@@ -184,7 +190,6 @@ const getMovCostoTotal = (m: MovimientoLike) => {
     "meta.total",
     "meta.totalCompra",
     "meta.total_compra",
-    // arrays típicos
     "items.0.total",
     "items.0.monto",
     "items.0.importe",
@@ -244,7 +249,6 @@ const getMovCostoUnit = (m: MovimientoLike) => {
     "data.precio_unitario",
     "data.precioUnitarioCompra",
     "data.precio_unitario_compra",
-    // arrays típicos
     "items.0.costo_unitario",
     "items.0.costoUnitario",
     "items.0.unitCost",
@@ -259,7 +263,6 @@ const getMovCostoUnit = (m: MovimientoLike) => {
  * ✅ Costo unitario efectivo:
  * - si viene unitario, úsalo
  * - si viene total y qty > 0, usa total/qty
- * - si trae otros alias, úsalo
  */
 function getEffectiveUnitCost(m: MovimientoLike): number {
   const qty = getMovCantidad(m);
@@ -269,7 +272,6 @@ function getEffectiveUnitCost(m: MovimientoLike): number {
   const total = getMovCostoTotal(m);
   if (total > 0 && qty > 0) return total / qty;
 
-  // extra alias sueltos
   const alt =
     num(m?.costo) ||
     num(m?.cost) ||
@@ -284,16 +286,107 @@ function getEffectiveUnitCost(m: MovimientoLike): number {
   return 0;
 }
 
-/** Trae movimientos por tipo desde el endpoint de inventario */
-async function fetchMovimientosPorTipo(tipo: "compra" | "venta" | "ajuste") {
-  const params = new URLSearchParams();
-  params.set("tipo", tipo);
-  params.set("estado", "activo");
-  params.set("order", "fecha:desc");
-  params.set("limit", "5000");
+/** ✅ Cancelación robusta */
+function isCancelled(m: any): boolean {
+  const c =
+    m?.cancelado ??
+    m?.isCanceled ??
+    m?.isCancelled ??
+    m?.canceled ??
+    m?.cancelled ??
+    m?.anulado ??
+    m?.isAnulado ??
+    false;
 
-  const json = await apiFetch(`/api/inventario/movimientos?${params.toString()}`, { method: "GET" });
-  return asArray<any>(json);
+  if (typeof c === "boolean") return c;
+
+  const st = String(m?.estado ?? m?.status ?? "").toLowerCase();
+  if (st === "cancelado" || st === "cancelled" || st === "canceled" || st === "anulado") return true;
+
+  return false;
+}
+
+/** ✅ movimientos activos (no cancelados) */
+function isActiveMovimiento(m: any): boolean {
+  if (isCancelled(m)) return false;
+
+  const st = String(m?.estado ?? m?.status ?? "activo").toLowerCase().trim();
+
+  // aceptamos "activo" o vacío (legacy)
+  if (!st) return true;
+  if (st === "activo") return true;
+
+  // cualquier otro status lo consideramos NO activo
+  return false;
+}
+
+/** Trae productos inventariados (preferir inventario=1; fallback cuenta 1005) */
+async function fetchProductosInventario() {
+  // ✅ 1) preferido: inventario=1 (tu consola mostró que este es el flujo real)
+  try {
+    const json = await apiFetch(`/api/productos?inventario=1`, { method: "GET" });
+    const arr = asArray<any>(json);
+    if (arr.length) return arr;
+  } catch (_) {}
+
+  // ✅ 2) fallback: cuenta_codigo=1005 (si tu backend lo soporta)
+  try {
+    const params = new URLSearchParams();
+    params.set("cuenta_codigo", "1005");
+    params.set("activo", "true");
+    params.set("include", "subcuentas");
+    const json = await apiFetch(`/api/productos?${params.toString()}`, { method: "GET" });
+    return asArray<any>(json);
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Trae movimientos inventario (preferir /api/movimientos-inventario; fallbacks legacy si existen) */
+async function fetchMovimientosInventario() {
+  // ✅ 1) endpoint real (backend nuevo)
+  try {
+    const params = new URLSearchParams();
+    params.set("limit", "5000");
+    params.set("order", "fecha:desc");
+    // algunos backends usan estado; otros ignoran. No estorba.
+    params.set("estado", "activo");
+
+    const json = await apiFetch(`/api/movimientos-inventario?${params.toString()}`, { method: "GET" });
+    const arr = asArray<any>(json);
+    if (arr.length) return arr;
+  } catch (_) {}
+
+  // ✅ 2) fallback legacy: /api/inventario/movimientos (si existiera)
+  try {
+    const params = new URLSearchParams();
+    params.set("limit", "5000");
+    params.set("order", "fecha:desc");
+    params.set("estado", "activo");
+
+    const json = await apiFetch(`/api/inventario/movimientos?${params.toString()}`, { method: "GET" });
+    const arr = asArray<any>(json);
+    if (arr.length) return arr;
+  } catch (_) {}
+
+  // ✅ 3) fallback legacy por tipo (tu versión previa)
+  const tipos: Array<"compra" | "venta" | "ajuste"> = ["compra", "venta", "ajuste"];
+  const out: any[] = [];
+
+  for (const tipo of tipos) {
+    try {
+      const params = new URLSearchParams();
+      params.set("tipo", tipo);
+      params.set("estado", "activo");
+      params.set("order", "fecha:desc");
+      params.set("limit", "5000");
+
+      const json = await apiFetch(`/api/inventario/movimientos?${params.toString()}`, { method: "GET" });
+      out.push(...asArray<any>(json));
+    } catch (_) {}
+  }
+
+  return out;
 }
 
 export const useInventarioConMovimientos = () => {
@@ -301,17 +394,8 @@ export const useInventarioConMovimientos = () => {
     queryKey: ["inventario-con-movimientos"],
 
     queryFn: async (): Promise<ProductoInventario[]> => {
-      // 1) Productos inventario (cuenta 1005)
-      const productosParams = new URLSearchParams();
-      productosParams.set("cuenta_codigo", "1005");
-      productosParams.set("activo", "true");
-      productosParams.set("include", "subcuentas");
-
-      const productosJson = await apiFetch(`/api/productos?${productosParams.toString()}`, {
-        method: "GET",
-      });
-
-      const productosRaw = asArray<any>(productosJson);
+      // 1) Productos inventario
+      const productosRaw = await fetchProductosInventario();
 
       const productos = productosRaw
         .map((p) => ({
@@ -320,30 +404,26 @@ export const useInventarioConMovimientos = () => {
           cuentaCodigo: getCuentaCodigo(p),
           activo: getActivo(p),
         }))
-        .filter((p) => p.id && p.cuentaCodigo === "1005" && p.activo !== false)
+        .filter((p) => p.id && (p.cuentaCodigo === "1005" || !p.cuentaCodigo) && p.activo !== false)
         .map((p) => p.raw);
 
       // 2) Movimientos (E2E real)
-      const [comprasRaw, ventasRaw, ajustesRaw] = await Promise.all([
-        fetchMovimientosPorTipo("compra"),
-        fetchMovimientosPorTipo("venta"),
-        fetchMovimientosPorTipo("ajuste"),
-      ]);
+      const movimientosRaw = await fetchMovimientosInventario();
 
-      const movimientosRaw = [...comprasRaw, ...ventasRaw, ...ajustesRaw];
+      // Filtrar activos + con productoId
+      const movimientos0 = movimientosRaw
+        .filter((m) => isActiveMovimiento(m))
+        .filter((m) => !!getMovProductoId(m));
 
       // Deduplicar por id
       const seen = new Set<string>();
-      const movimientos = movimientosRaw
-        .filter((m) => (getMovEstado(m) === "activo" ? true : !m?.estado && !m?.status))
-        .filter((m) => getMovProductoId(m))
-        .filter((m) => {
-          const id = getMovId(m);
-          if (!id) return true;
-          if (seen.has(id)) return false;
-          seen.add(id);
-          return true;
-        });
+      const movimientos = movimientos0.filter((m) => {
+        const id = getMovId(m);
+        if (!id) return true;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
 
       // 3) Indexar movimientos por producto
       const movimientosPorProducto = new Map<string, MovimientoLike[]>();
@@ -372,6 +452,7 @@ export const useInventarioConMovimientos = () => {
         const productoId = getId(producto);
         const movimientosProducto = movimientosPorProducto.get(productoId) || [];
 
+        // ✅ normalizar tipos
         const compras = movimientosProducto.filter((m) => {
           const t = getMovTipo(m);
           return t === "compra" || t === "entrada";
@@ -387,8 +468,13 @@ export const useInventarioConMovimientos = () => {
         const cantidad_comprada = compras.reduce((sum, m) => sum + getMovCantidad(m), 0);
         const cantidad_vendida = ventas.reduce((sum, m) => sum + getMovCantidad(m), 0);
 
-        // Ajustes: pueden ser + o -
-        const ajuste_cantidad = ajustes.reduce((sum, m) => sum + getMovCantidad(m), 0);
+        // Ajustes: por compat, si alguna vez viene delta negativo, lo respetamos
+        const ajuste_cantidad = ajustes.reduce((sum, m) => {
+          const delta =
+            num(m?.delta ?? m?.cantidad_delta ?? m?.cantidadDelta ?? m?.ajuste ?? m?.adjustment) || getMovCantidad(m);
+          return sum + delta;
+        }, 0);
+
         const cantidad_stock = cantidad_comprada - cantidad_vendida + ajuste_cantidad;
 
         // ✅ Costo promedio ponderado (solo compras con costo válido)
@@ -407,7 +493,6 @@ export const useInventarioConMovimientos = () => {
         let costo_unitario = totalQty > 0 ? totalCost / totalQty : 0;
 
         // ✅ Fallback FINAL: si no se pudo desde movimientos, usa el costoCompra guardado en el producto
-        // (en tus docs ya existe costoCompra y costo_compra)
         if (costo_unitario <= 0) {
           const fallback =
             num(producto?.costoCompra) ||
