@@ -1763,13 +1763,23 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
               clienteId: clienteId,
               fechaVencimiento: fechaVencimiento || null,
               comentarios: comentarios.trim() || null,
-              // Campos específicos para inventario
-              productoId: producto.id,
-              cantidadVendida: producto.cantidad,
-              precioVenta: producto.precioUnitario,
-              costoPersonalizado: tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado 
-                ? parseFloat(costoPersonalizado) 
-                : undefined
+              // ✅ Campos canónicos para que el backend NO caiga en qty=1
+productId: producto.id,
+qty: producto.cantidad,
+cantidad: producto.cantidad,
+
+// ✅ recomendado: fuerza el modo “array items” del backend
+items: [{ productId: producto.id, qty: producto.cantidad }],
+
+// (Legacy, puedes dejarlo por compat)
+productoId: producto.id,
+cantidadVendida: producto.cantidad,
+
+precioVenta: producto.precioUnitario,
+costoPersonalizado:
+  tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado
+    ? parseFloat(costoPersonalizado)
+    : undefined,
             }
           });
           
@@ -1818,8 +1828,20 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
             // Datos adicionales para inventario (flujo antiguo, no debería llegar aquí)
             ...(selectedIncomeType === "inventariados" && selectedInventoryProduct
   ? {
+      // ✅ canónico
+      productId: selectedInventoryProduct.id,
+      qty: Number(inventoryQuantity || "1"),
+      cantidad: Number(inventoryQuantity || "1"),
+
+      // ✅ recomendado: items[] para que el backend entre por extractSaleItems()
+      items: [
+        { productId: selectedInventoryProduct.id, qty: Number(inventoryQuantity || "1") },
+      ],
+
+      // legacy
       productoId: selectedInventoryProduct.id,
       cantidadVendida: Number(inventoryQuantity || "1"),
+
       precioVenta: Number(inventoryProductPrice || "0"),
       costoPersonalizado:
         tipoCostoInventarioNegativo === "personalizado" && costoPersonalizado
