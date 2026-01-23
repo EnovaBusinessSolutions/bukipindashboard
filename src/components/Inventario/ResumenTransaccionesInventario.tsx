@@ -47,18 +47,42 @@ interface MovimientoInventario {
   };
 }
 
+/**
+ * ✅ Asiento (shape real que devuelve /api/asientos/* mapeado por asientos.js)
+ */
 interface AsientoContable {
-  id: string;
-  numero_asiento: string;
-  descripcion: string;
-  fecha: string;
-  detalle_asientos: {
-    id: string;
-    cuenta_codigo: string;
-    debe: number;
-    haber: number;
-    descripcion: string;
-    cuentas?: { nombre: string };
+  id?: string;
+  _id?: string;
+
+  numeroAsiento?: string | null;
+  numero_asiento?: string | null;
+  numero?: string | null;
+
+  asiento_fecha?: string | null; // YYYY-MM-DD
+  fecha?: any;
+
+  descripcion?: string | null;
+  concepto?: string | null;
+
+  source?: string | null;
+
+  detalle_asientos?: {
+    cuenta_codigo?: string | null;
+    cuenta_nombre?: string | null;
+    debe?: number;
+    haber?: number;
+    descripcion?: string;
+    memo?: string;
+    // compat antigua (por si)
+    cuentas?: { nombre?: string };
+  }[];
+
+  detalles?: {
+    cuenta_codigo?: string | null;
+    cuenta_nombre?: string | null;
+    debe?: number;
+    haber?: number;
+    descripcion?: string;
   }[];
 }
 
@@ -171,31 +195,115 @@ function getEffectiveTotalCost(m: any) {
   return 0;
 }
 
+/**
+ * ✅ Movimientos:
+ * - primero intenta endpoint NUEVO: /api/movimientos-inventario
+ * - si no existe, cae a endpoint LEGACY: /api/inventario/movimientos
+ */
 async function getMovimientos(params: { start?: string; end?: string }) {
   const qs = new URLSearchParams();
   if (params.start) qs.set("start", params.start);
   if (params.end) qs.set("end", params.end);
 
-  const json = await apiFetch(`/api/inventario/movimientos?${qs.toString()}`);
-  return asArray<MovimientoInventario>(json);
-}
-
-/** ✅ Blindaje: si /asiento da 404 o no existe, regresamos null sin romper UI */
-async function getAsientoByMovimientoId(movimientoId: string) {
+  // NEW
   try {
-    const json = await apiFetch(`/api/inventario/movimientos/${movimientoId}/asiento`);
-    return unwrap<AsientoContable | null>(json) ?? null;
-  } catch (e) {
-    return null;
+    const json = await apiFetch(`/api/movimientos-inventario?${qs.toString()}`);
+    return asArray<MovimientoInventario>(json);
+  } catch (_) {
+    // LEGACY
+    const json = await apiFetch(`/api/inventario/movimientos?${qs.toString()}`);
+    return asArray<MovimientoInventario>(json);
   }
 }
 
+/**
+ * ✅ Asiento por movimiento (E2E real):
+ * El módulo de inventario crea JournalEntry con:
+ *   source: "inventario"
+ *   sourceId: <movementId>
+ * Por eso se obtiene SIEMPRE desde:
+ *   /api/asientos/by-transaccion?source=inventario&id=<movementId>
+ *
+ * (Esto elimina el bug donde el front mostraba el ObjectId como "Número")
+ */
+async function getAsientoByMovimientoId(movimientoId: string) {
+  if (!movimientoId) return null;
+
+  try {
+    const json = await apiFetch(
+      `/api/asientos/by-transaccion?source=inventario&id=${encodeURIComponent(String(movimientoId).trim())}`
+    );
+
+    // asientos.js puede devolver {ok:true,data:{...}} o spread con fields
+    const payload = unwrap<any>(json);
+
+    const asiento: AsientoContable | null =
+      (payload?.asiento ?? payload?.item ?? payload?.data ?? payload) || null;
+
+    return asiento ?? null;
+  } catch (e) {
+    // fallback: si no encuentra por source, intentamos sin source (por si se guardó con otra fuente)
+    try {
+      const json2 = await apiFetch(`/api/asientos/by-transaccion?id=${encodeURIComponent(String(movimientoId).trim())}`);
+      const payload2 = unwrap<any>(json2);
+      const asiento2: AsientoContable | null =
+        (payload2?.asiento ?? payload2?.item ?? payload2?.data ?? payload2) || null;
+      return asiento2 ?? null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/**
+ * ✅ Cancelación:
+ * - primero intenta legacy POST /api/inventario/movimientos/:id/cancel (si tu sistema lo tiene)
+ * - si no existe, usa DELETE /api/movimientos-inventario/:id (soft cancel)
+ */
 async function cancelarCompraInventario(payload: { movimientoId: string; motivoCancelacion: string }) {
-  const json = await apiFetch(`/api/inventario/movimientos/${payload.movimientoId}/cancel`, {
-    method: "POST",
-    body: JSON.stringify({ motivoCancelacion: payload.motivoCancelacion }),
-  });
-  return unwrap<{ ok: boolean; message?: string }>(json);
+  // LEGACY
+  try {
+    const json = await apiFetch(`/api/inventario/movimientos/${payload.movimientoId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ motivoCancelacion: payload.motivoCancelacion }),
+    });
+    return unwrap<{ ok: boolean; message?: string }>(json);
+  } catch (_) {
+    // NEW
+    const json2 = await apiFetch(`/api/movimientos-inventario/${payload.movimientoId}`, {
+      method: "DELETE",
+    });
+    const out = unwrap<any>(json2);
+    return { ok: !!(out?.ok ?? true), message: out?.message } as { ok: boolean; message?: string };
+  }
+}
+
+function getAsientoNumero(a: AsientoContable | null) {
+  if (!a) return "-";
+  const v = a.numeroAsiento ?? a.numero_asiento ?? a.numero ?? null;
+  return v && String(v).trim() ? String(v).trim() : "-";
+}
+
+function getAsientoConcepto(a: AsientoContable | null) {
+  if (!a) return "-";
+  const v = a.descripcion ?? a.concepto ?? null;
+  return v && String(v).trim() ? String(v).trim() : "-";
+}
+
+function getAsientoFecha(a: AsientoContable | null) {
+  if (!a) return null;
+  // preferimos asiento_fecha (YYYY-MM-DD)
+  if (a.asiento_fecha) return safeDate(`${a.asiento_fecha}T00:00:00`);
+  return safeDate(a.fecha);
+}
+
+function getAsientoLines(a: AsientoContable | null) {
+  if (!a) return [];
+  const lines =
+    (Array.isArray(a.detalle_asientos) && a.detalle_asientos.length ? a.detalle_asientos : null) ??
+    (Array.isArray(a.detalles) && a.detalles.length ? (a.detalles as any) : null) ??
+    [];
+  return Array.isArray(lines) ? lines : [];
 }
 
 const ResumenTransaccionesInventario = () => {
@@ -287,7 +395,7 @@ const ResumenTransaccionesInventario = () => {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-    retry: 0, // ✅ no reintentar si 404 / no existe
+    retry: 0,
   });
 
   const handleCancelarMovimiento = async () => {
@@ -391,6 +499,14 @@ const ResumenTransaccionesInventario = () => {
       </Card>
     );
   }
+
+  const asientoLines = getAsientoLines(asientoDetalle || null);
+  const asientoNumero = getAsientoNumero(asientoDetalle || null);
+  const asientoConcepto = getAsientoConcepto(asientoDetalle || null);
+  const asientoFecha = getAsientoFecha(asientoDetalle || null);
+
+  const totalDebe = asientoLines.reduce((sum: number, d: any) => sum + n(d?.debe, 0), 0);
+  const totalHaber = asientoLines.reduce((sum: number, d: any) => sum + n(d?.haber, 0), 0);
 
   return (
     <div className="space-y-6">
@@ -721,24 +837,24 @@ const ResumenTransaccionesInventario = () => {
                                     ) : !asientoDetalle ? (
                                       <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center space-y-2">
                                         <p>No se encontraron asientos contables para esta transacción</p>
-                                        <p className="text-xs">Si el endpoint /asiento no existe o no hay asientoId, aquí se mostrará vacío.</p>
+                                        <p className="text-xs">
+                                          Tip: si esperabas asiento, revisa que el JournalEntry se haya creado con source="inventario"
+                                          y sourceId = movimientoId.
+                                        </p>
                                       </div>
                                     ) : (
                                       <div className="space-y-4">
                                         <div className="p-4 bg-muted rounded-lg">
                                           <div className="grid grid-cols-2 gap-4 text-sm">
                                             <div>
-                                              <span className="font-medium">Número:</span> {asientoDetalle.numero_asiento}
+                                              <span className="font-medium">Número:</span> {asientoNumero}
                                             </div>
                                             <div>
                                               <span className="font-medium">Fecha:</span>{" "}
-                                              {(() => {
-                                                const d = safeDate(asientoDetalle.fecha);
-                                                return d ? format(d, "dd/MM/yyyy") : "-";
-                                              })()}
+                                              {asientoFecha ? format(asientoFecha, "dd/MM/yyyy") : "-"}
                                             </div>
                                             <div className="col-span-2">
-                                              <span className="font-medium">Descripción:</span> {asientoDetalle.descripcion}
+                                              <span className="font-medium">Descripción:</span> {asientoConcepto}
                                             </div>
                                           </div>
                                         </div>
@@ -747,39 +863,44 @@ const ResumenTransaccionesInventario = () => {
                                           <Table>
                                             <TableHeader>
                                               <TableRow>
-                                                <TableHead className="w-[220px]">Cuenta</TableHead>
+                                                <TableHead className="w-[260px]">Cuenta</TableHead>
                                                 <TableHead>Descripción</TableHead>
                                                 <TableHead className="text-right w-[160px]">Debe</TableHead>
                                                 <TableHead className="text-right w-[160px]">Haber</TableHead>
                                               </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                              {asientoDetalle.detalle_asientos?.map((detalle, idx) => (
-                                                <TableRow key={idx}>
-                                                  <TableCell>
-                                                    <div>
-                                                      <div className="font-medium text-sm">{detalle.cuenta_codigo}</div>
-                                                      <div className="text-xs text-muted-foreground">{detalle.cuentas?.nombre || ""}</div>
-                                                    </div>
-                                                  </TableCell>
-                                                  <TableCell className="text-sm">{detalle.descripcion}</TableCell>
-                                                  <TableCell className="text-right font-medium">
-                                                    {n(detalle.debe) > 0 ? formatCurrency(n(detalle.debe)) : "-"}
-                                                  </TableCell>
-                                                  <TableCell className="text-right font-medium">
-                                                    {n(detalle.haber) > 0 ? formatCurrency(n(detalle.haber)) : "-"}
-                                                  </TableCell>
-                                                </TableRow>
-                                              ))}
+                                              {asientoLines.map((detalle: any, idx: number) => {
+                                                const codigo = String(detalle?.cuenta_codigo || "").trim();
+                                                const nombre =
+                                                  String(detalle?.cuenta_nombre || "").trim() ||
+                                                  String(detalle?.cuentas?.nombre || "").trim();
+
+                                                const desc = String(detalle?.descripcion || detalle?.memo || "").trim();
+
+                                                return (
+                                                  <TableRow key={idx}>
+                                                    <TableCell>
+                                                      <div>
+                                                        <div className="font-medium text-sm">{codigo || "-"}</div>
+                                                        <div className="text-xs text-muted-foreground">{nombre || ""}</div>
+                                                      </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-sm">{desc || "-"}</TableCell>
+                                                    <TableCell className="text-right font-medium">
+                                                      {n(detalle?.debe, 0) > 0 ? formatCurrency(n(detalle?.debe, 0)) : "-"}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium">
+                                                      {n(detalle?.haber, 0) > 0 ? formatCurrency(n(detalle?.haber, 0)) : "-"}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                );
+                                              })}
 
                                               <TableRow className="border-t-2 bg-muted/50 font-bold">
                                                 <TableCell colSpan={2}>TOTALES</TableCell>
-                                                <TableCell className="text-right">
-                                                  {formatCurrency(asientoDetalle.detalle_asientos?.reduce((sum, d) => sum + n(d.debe), 0) || 0)}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                  {formatCurrency(asientoDetalle.detalle_asientos?.reduce((sum, d) => sum + n(d.haber), 0) || 0)}
-                                                </TableCell>
+                                                <TableCell className="text-right">{formatCurrency(totalDebe)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(totalHaber)}</TableCell>
                                               </TableRow>
                                             </TableBody>
                                           </Table>
