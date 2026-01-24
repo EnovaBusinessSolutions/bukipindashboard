@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 export interface TransaccionEgreso {
@@ -45,7 +46,17 @@ const toNumber = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const toISODate = (d: Date) => d.toISOString().split("T")[0];
+const toISODate = (d: Date) => {
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt.toISOString().split("T")[0];
+};
+
+const addDays = (d: Date, days: number) => {
+  const dt = new Date(d);
+  dt.setDate(dt.getDate() + days);
+  return dt;
+};
 
 const pick = <T = any>(obj: any, keys: string[], fallback: T): T => {
   for (const k of keys) {
@@ -58,18 +69,21 @@ const pick = <T = any>(obj: any, keys: string[], fallback: T): T => {
 const normalizeTx = (t: any): TransaccionEgreso => {
   const id = String(pick(t, ["id", "_id"], ""));
 
-  const createdAt = String(
-    pick(t, ["created_at", "createdAt", "fecha", "date"], "")
-  );
+  const createdAt = String(pick(t, ["created_at", "createdAt", "fecha", "date"], ""));
 
   const montoTotal = toNumber(pick(t, ["monto_total", "montoTotal", "total"], 0));
   const montoPagado = toNumber(pick(t, ["monto_pagado", "montoPagado"], 0));
-  const montoPendiente = toNumber(pick(t, ["monto_pendiente", "montoPendiente"], Math.max(montoTotal - montoPagado, 0)));
+  const montoPendiente = toNumber(
+    pick(t, ["monto_pendiente", "montoPendiente"], Math.max(montoTotal - montoPagado, 0))
+  );
 
   return {
     id,
     tipo_egreso: String(pick(t, ["tipo_egreso", "tipoEgreso", "tipo"], "")),
-    subtipo_egreso: pick(t, ["subtipo_egreso", "subtipoEgreso"], null) != null ? String(pick(t, ["subtipo_egreso", "subtipoEgreso"], "")) : null,
+    subtipo_egreso:
+      pick(t, ["subtipo_egreso", "subtipoEgreso"], null) != null
+        ? String(pick(t, ["subtipo_egreso", "subtipoEgreso"], ""))
+        : null,
 
     descripcion: String(pick(t, ["descripcion", "concepto", "descripcionEgreso"], "")),
     concepto: pick(t, ["concepto"], null) != null ? String(pick(t, ["concepto"], "")) : null,
@@ -79,7 +93,10 @@ const normalizeTx = (t: any): TransaccionEgreso => {
     monto_pendiente: montoPendiente,
 
     tipo_pago: String(pick(t, ["tipo_pago", "tipoPago"], "")),
-    metodo_pago: pick(t, ["metodo_pago", "metodoPago"], null) != null ? String(pick(t, ["metodo_pago", "metodoPago"], "")) : null,
+    metodo_pago:
+      pick(t, ["metodo_pago", "metodoPago"], null) != null
+        ? String(pick(t, ["metodo_pago", "metodoPago"], ""))
+        : null,
 
     proveedor_nombre:
       pick(t, ["proveedor_nombre", "proveedorNombre"], null) != null
@@ -105,15 +122,22 @@ const normalizeTx = (t: any): TransaccionEgreso => {
         ? String(pick(t, ["imagen_comprobante", "imagenComprobante"], ""))
         : null,
 
-    cuenta_codigo: pick(t, ["cuenta_codigo", "cuentaCodigo"], null) != null ? String(pick(t, ["cuenta_codigo", "cuentaCodigo"], "")) : null,
-    subcuenta_id: pick(t, ["subcuenta_id", "subcuentaId"], null) != null ? String(pick(t, ["subcuenta_id", "subcuentaId"], "")) : null,
+    cuenta_codigo:
+      pick(t, ["cuenta_codigo", "cuentaCodigo"], null) != null
+        ? String(pick(t, ["cuenta_codigo", "cuentaCodigo"], ""))
+        : null,
+
+    subcuenta_id:
+      pick(t, ["subcuenta_id", "subcuentaId"], null) != null
+        ? String(pick(t, ["subcuenta_id", "subcuentaId"], ""))
+        : null,
 
     estado: String(pick(t, ["estado"], "activo")),
   };
 };
 
 /**
- * Intenta endpoints en orden (para compat E2E)
+ * Intenta endpoints en orden (compat E2E)
  */
 const fetchWithFallback = async (paths: string[]) => {
   let lastErr: any = null;
@@ -138,52 +162,83 @@ export const useTransaccionesEgresos = (
   fechaDiaria?: Date,
   fechaMensual?: Date
 ) => {
+  // ✅ Keys estables (NO Date objects en queryKey)
+  const diarioKey = useMemo(() => (fechaDiaria ? toISODate(fechaDiaria) : ""), [fechaDiaria]);
+
+  const mensualKey = useMemo(() => {
+    if (!fechaMensual) return "";
+    const y = fechaMensual.getFullYear();
+    const m = String(fechaMensual.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }, [fechaMensual]);
+
+  const anualYear = useMemo(() => {
+    // si hay fechaMensual, usa ese año para “Anual” (consistente con selector)
+    const base = fechaMensual ?? fechaDiaria ?? new Date();
+    return base.getFullYear();
+  }, [fechaMensual, fechaDiaria]);
+
   return useQuery({
-    queryKey: ["transacciones-egresos", limit, periodFilter, fechaDiaria, fechaMensual],
+    queryKey: [
+      "transacciones-egresos",
+      {
+        limit,
+        periodFilter: periodFilter ?? "none",
+        diario: diarioKey,
+        mensual: mensualKey,
+        anualYear,
+      },
+    ],
+
     queryFn: async (): Promise<TransaccionEgreso[]> => {
       const params = new URLSearchParams();
       params.set("estado", "activo");
 
-      // filtros de fecha
+      // ✅ rangos con end EXCLUSIVO (más robusto)
       if (periodFilter === "diario" && fechaDiaria) {
-        const d = toISODate(fechaDiaria);
-        params.set("start", d);
-        params.set("end", d);
+        const start = toISODate(fechaDiaria);
+        const end = toISODate(addDays(fechaDiaria, 1));
+        params.set("start", start);
+        params.set("end", end);
       } else if (periodFilter === "mensual" && fechaMensual) {
-        const year = fechaMensual.getFullYear();
-        const month = fechaMensual.getMonth();
-        const firstDay = toISODate(new Date(year, month, 1));
-        const lastDay = toISODate(new Date(year, month + 1, 0));
-        params.set("start", firstDay);
-        params.set("end", lastDay);
+        const y = fechaMensual.getFullYear();
+        const m = fechaMensual.getMonth();
+        const start = toISODate(new Date(y, m, 1));
+        const end = toISODate(new Date(y, m + 1, 1));
+        params.set("start", start);
+        params.set("end", end);
       } else if (periodFilter === "anual") {
-        const year = new Date().getFullYear();
-        params.set("start", `${year}-01-01`);
-        params.set("end", `${year}-12-31`);
+        const start = `${anualYear}-01-01`;
+        const end = `${anualYear + 1}-01-01`;
+        params.set("start", start);
+        params.set("end", end);
       } else {
         params.set("limit", String(limit));
       }
 
       const qs = params.toString();
 
-      // ✅ Endpoints a intentar (orden: preferido → fallback)
       const candidates = [
-        `/api/egresos/transacciones?${qs}`,              // el que esperabas
-        `/api/egresos?${qs}`,                           // fallback común (si montaste router como /api/egresos)
-        `/api/expense-transactions?${qs}`,              // fallback común (si tu backend quedó con nombre literal)
+        `/api/egresos/transacciones?${qs}`,
+        `/api/egresos?${qs}`,
+        `/api/expense-transactions?${qs}`,
       ];
 
       const json: AnyJson = await fetchWithFallback(candidates);
       const items = normalizeArray<any>(json);
 
       const mapped = items.map(normalizeTx);
-
-      // ordenar desc por fecha
       mapped.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+
       return mapped;
     },
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
+
+    // ✅ React Query v5: mantener datos previos
+    placeholderData: keepPreviousData,
+
+    // ✅ Cache más agresivo para analítica
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
