@@ -173,10 +173,7 @@ const AnalyticaEgresos = () => {
     []
   );
 
-  const MONTHS_SHORT = useMemo(
-    () => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
-    []
-  );
+  const MONTHS_SHORT = useMemo(() => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"], []);
 
   const YEARS = useMemo(() => {
     const base = new Date().getFullYear();
@@ -400,6 +397,66 @@ const AnalyticaEgresos = () => {
     return "Otros Gastos";
   };
 
+  // ✅ Rango actual de análisis (para que el donut respete diario/mensual/anual)
+  const rangoAnalisis = useMemo(() => {
+    let start: Date;
+    let end: Date;
+
+    if (periodFilter === "diario") {
+      const d = new Date(fechaAnalisisDiario);
+      start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+      end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+    } else if (periodFilter === "mensual") {
+      const d = new Date(fechaAnalisisMensual);
+      start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+    } else {
+      const y = fechaAnalisisMensual.getFullYear();
+      start = new Date(y, 0, 1, 0, 0, 0, 0);
+      end = new Date(y + 1, 0, 1, 0, 0, 0, 0);
+    }
+
+    return { start, end };
+  }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
+
+  // ✅ Totales por tipo DENTRO del rango (para donut rubro vs demás)
+  const totalesEgresosEnRango = useMemo(() => {
+    const { start, end } = rangoAnalisis;
+
+    let costoVentas = 0;
+    let gastosOperativos = 0;
+    let otrosGastos = 0;
+    let costoVentasInventario = 0;
+
+    for (const t of filteredTransactions || []) {
+      const d = getDateAny(t);
+      if (!inRange(d, start, end)) continue;
+
+      const cc = String(t?.cuenta_codigo ?? "");
+      const monto = toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
+
+      if (cc === "5001" || cc === "5003" || cc === "5004") costoVentas += monto;
+      else if (cc.startsWith("51") && cc !== "5109" && cc !== "5110") gastosOperativos += monto;
+      else if (cc === "5204") otrosGastos += monto;
+    }
+
+    for (const c of costosVentaInventario || []) {
+      const d = getDateAny(c);
+      if (!inRange(d, start, end)) continue;
+      costoVentasInventario += toNum(c?.monto ?? c?.total ?? 0);
+    }
+
+    const total = costoVentas + costoVentasInventario + gastosOperativos + otrosGastos;
+
+    return {
+      costoVentas,
+      costoVentasInventario,
+      gastosOperativos,
+      otrosGastos,
+      total,
+    };
+  }, [filteredTransactions, costosVentaInventario, rangoAnalisis, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
+
   // ✅✅✅ SERIE EVOLUCIÓN (E2E REAL) — basada en los mismos datos que “Resumen de Egresos”
   const evolucion = useMemo(() => {
     // rango según periodo
@@ -566,33 +623,32 @@ const AnalyticaEgresos = () => {
     };
   }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual]);
 
-  // Egresos por Tipo (RAW) — siempre muestra la distribución general
-  const datosEgresosPorTipo = useMemo(() => {
-    const data: { tipo: string; monto: number }[] = [];
+  // ✅ NUEVA LÓGICA DONUT (captura 3): Rubro elegido vs Demás egresos (en el período actual)
+  const donutRubroVsDemas = useMemo(() => {
+    const total = toNum(totalesEgresosEnRango.total);
+    const labelSel = getTipoLabel(tipoEgreso);
 
-    const totalCostoVentas = filteredTransactions
-      .filter((t: any) => ["5001", "5003", "5004"].includes(String(t?.cuenta_codigo ?? "")))
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalCostoVentas > 0) data.push({ tipo: "Costo de Ventas", monto: totalCostoVentas });
+    const selected =
+      tipoEgreso === "costo"
+        ? toNum(totalesEgresosEnRango.costoVentas)
+        : tipoEgreso === "costo_inventario"
+        ? toNum(totalesEgresosEnRango.costoVentasInventario)
+        : tipoEgreso === "gasto"
+        ? toNum(totalesEgresosEnRango.gastosOperativos)
+        : toNum(totalesEgresosEnRango.otrosGastos);
 
-    const totalCostoVentasInventario = costosVentaInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostoVentasInventario > 0) data.push({ tipo: "Costo de Ventas Inventario", monto: totalCostoVentasInventario });
+    const rest = Math.max(0, total - selected);
 
-    const totalGastosOperativos = filteredTransactions
-      .filter((t: any) => {
-        const cc = String(t?.cuenta_codigo ?? "");
-        return cc.startsWith("51") && cc !== "5109" && cc !== "5110";
-      })
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalGastosOperativos > 0) data.push({ tipo: "Gastos Operativos", monto: totalGastosOperativos });
+    // slices para el gráfico (no metemos slices de 0)
+    const slices: { key: "selected" | "rest"; label: string; value: number }[] = [];
+    if (selected > 0) slices.push({ key: "selected", label: labelSel, value: selected });
+    if (rest > 0) slices.push({ key: "rest", label: "Demás egresos", value: rest });
 
-    const totalOtrosGastos = filteredTransactions
-      .filter((t: any) => String(t?.cuenta_codigo ?? "") === "5204")
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalOtrosGastos > 0) data.push({ tipo: "Otros Gastos", monto: totalOtrosGastos });
+    // rows para el listado (aquí sí mostramos ambas aunque selected=0, si hay total)
+    const rows = total > 0 ? [{ key: "selected" as const, label: labelSel, value: selected }, { key: "rest" as const, label: "Demás egresos", value: rest }] : [];
 
-    return data;
-  }, [filteredTransactions, costosVentaInventario]);
+    return { total, selected, rest, slices, rows, labelSel };
+  }, [totalesEgresosEnRango, tipoEgreso]);
 
   // Métodos de pago utilizados (sin impuestos) + inventario como adquisición (RAW)
   const datosEstadoPagos = useMemo(() => {
@@ -859,7 +915,6 @@ const AnalyticaEgresos = () => {
   }, [transaccionesPorTipo]);
 
   // Totales RAW
-  const totalEgresosPorTipo = useMemo(() => datosEgresosPorTipo.reduce((sum, item) => sum + toNum(item.monto), 0), [datosEgresosPorTipo]);
   const totalMetodosPago = useMemo(() => datosEstadoPagos.reduce((sum, item) => sum + toNum(item.monto), 0), [datosEstadoPagos]);
 
   const totalEgresosPorCuentaSubcuenta = useMemo(() => {
@@ -912,7 +967,15 @@ const AnalyticaEgresos = () => {
     total: number;
   }) => (
     <>
-      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={12} opacity={0.75}>
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        style={{ fill: "hsl(var(--foreground))" }}
+        fontSize={12}
+        opacity={0.75}
+      >
         Total
       </text>
       <text
@@ -982,6 +1045,34 @@ const AnalyticaEgresos = () => {
     gastos: toNum(highlights?.anio?.gastos),
     otrosGastos: toNum(highlights?.anio?.otrosGastos),
     total: toNum(highlights?.anio?.total),
+  };
+
+  // ✅✅ Breakdown row (igual estilo que Ingresos: dot + label + % + $)
+  const DonutBreakdownRow = ({
+    label,
+    value,
+    total,
+    color,
+  }: {
+    label: string;
+    value: number;
+    total: number;
+    color: string;
+  }) => {
+    const pct = total > 0 ? (toNum(value) / toNum(total)) * 100 : 0;
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+          <span className="text-sm text-foreground truncate">{label}</span>
+        </div>
+
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <span className="text-sm text-muted-foreground tabular-nums">{pct.toFixed(1)}%</span>
+          <span className="text-sm font-semibold text-foreground tabular-nums">{formatMoneyScaled(toNum(value), false)}</span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -1409,45 +1500,81 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* Donas (por tipo) */}
+        {/* ✅✅✅ Donut (por tipo) — NUEVA LÓGICA: Rubro seleccionado vs Demás egresos (captura 3) */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-base">Distribución por tipo</CardTitle>
-                <CardDescription>¿En qué se va el dinero?</CardDescription>
+                <CardDescription>{getTipoLabel(tipoEgreso)} vs. demás egresos</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {formatMoneyScaled(totalEgresosPorTipo, true)}
+                {formatMoneyScaled(toNum(donutRubroVsDemas.total), true)}
               </Badge>
             </div>
           </CardHeader>
 
           <CardContent className="h-80">
-            {datosEgresosPorTipo.length === 0 ? (
+            {toNum(donutRubroVsDemas.total) <= 0 ? (
               <ChartCardEmpty title="Sin egresos" hint="Registra costos o gastos para que aparezca la distribución." />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={datosEgresosPorTipo} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
-                    {datosEgresosPorTipo.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
-                    ))}
-                  </Pie>
+              <div className="h-full flex flex-col">
+                <div className="flex-1 min-h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donutRubroVsDemas.slices.map((s) => ({ tipo: s.label, monto: s.value, key: s.key }))}
+                        cx="50%"
+                        cy="44%"
+                        innerRadius={78}
+                        outerRadius={104}
+                        paddingAngle={2}
+                        dataKey="monto"
+                        startAngle={90}
+                        endAngle={-270}
+                        cornerRadius={12}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={3}
+                      >
+                        {donutRubroVsDemas.slices.map((s, idx) => {
+                          const fill =
+                            s.key === "selected"
+                              ? CHART.primary
+                              : "hsl(var(--muted))"; // visual “resto” igual estilo ingresos
+                          return <Cell key={`${s.key}-${idx}`} fill={fill} />;
+                        })}
+                      </Pie>
 
-                  <DonutCenterLabel total={totalEgresosPorTipo} />
+                      <DonutCenterLabel total={toNum(donutRubroVsDemas.total)} />
 
-                  <Tooltip
-                    formatter={(value: any, _name: any, props: any) => {
-                      const label = props?.payload?.tipo || "Monto";
-                      return [formatMoneyScaled(toNum(value), true), label];
-                    }}
-                    contentStyle={tooltipCardStyle}
-                    labelStyle={tooltipLabelStyle}
+                      <Tooltip
+                        formatter={(value: any, _name: any, props: any) => {
+                          const label = props?.payload?.tipo || "Monto";
+                          return [formatMoneyScaled(toNum(value), true), label];
+                        }}
+                        contentStyle={tooltipCardStyle}
+                        labelStyle={tooltipLabelStyle}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* ✅ Lista estilo “Ingresos” */}
+                <div className="pt-3 space-y-2">
+                  <DonutBreakdownRow
+                    label={donutRubroVsDemas.labelSel}
+                    value={toNum(donutRubroVsDemas.selected)}
+                    total={toNum(donutRubroVsDemas.total)}
+                    color={CHART.primary}
                   />
-                  <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
-                </PieChart>
-              </ResponsiveContainer>
+                  <DonutBreakdownRow
+                    label="Demás egresos"
+                    value={toNum(donutRubroVsDemas.rest)}
+                    total={toNum(donutRubroVsDemas.total)}
+                    color={"hsl(var(--muted))"}
+                  />
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
