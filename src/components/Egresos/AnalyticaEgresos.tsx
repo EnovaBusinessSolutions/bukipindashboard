@@ -1,5 +1,5 @@
 // bukipin-dashboard/src/components/Egresos/AnalyticaEgresos.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -27,6 +27,13 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { format } from "date-fns";
@@ -253,6 +260,18 @@ const AnalyticaEgresos = () => {
 
   // ✅✅✅ IMPORTANTE: por default "Por cuenta" (como Registro de Ingresos)
   const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("cuenta");
+
+  // ✅ TOPs estilo Ingresos: orden + modal + búsqueda + paginación
+const [ordenConceptos, setOrdenConceptos] = useState<"desc" | "asc">("desc");
+const [openConceptos, setOpenConceptos] = useState(false);
+const [qConceptos, setQConceptos] = useState("");
+const [pageConceptos, setPageConceptos] = useState(1);
+
+const [ordenProveedores, setOrdenProveedores] = useState<"desc" | "asc">("desc");
+const [openProveedores, setOpenProveedores] = useState(false);
+const [qProveedores, setQProveedores] = useState("");
+const [pageProveedores, setPageProveedores] = useState(1);
+
 
   // ✅ Mes/Año selector como en Ingresos
   const MONTHS = useMemo(
@@ -1132,9 +1151,9 @@ const AnalyticaEgresos = () => {
     const totalGeneral = productosArray.reduce((sum, p) => sum + toNum(p.monto), 0);
 
     return {
-      productos: productosArray.slice(0, 10),
-      totalGeneral,
-    };
+  productos: productosArray, // ✅ lista completa para modal + top 10 en UI
+  totalGeneral,
+};
   }, [transaccionesPorTipo, mapaImagenesProductos]);
 
   // Egresos por Proveedor (Top 10) RAW
@@ -1179,10 +1198,78 @@ const AnalyticaEgresos = () => {
     const totalGeneral = proveedoresArray.reduce((sum, p) => sum + toNum(p.monto), 0);
 
     return {
-      proveedores: proveedoresArray.slice(0, 10),
-      totalGeneral,
-    };
+  proveedores: proveedoresArray, // ✅ lista completa para modal + top 10 en UI
+  totalGeneral,
+};
   }, [transaccionesPorTipo]);
+
+// -----------------------------
+// ✅ TOPs (Conceptos y Proveedores) estilo Ingresos
+// -----------------------------
+const PAGE_SIZE = 8;
+const TOP_N = 10;
+
+const sortByMonto = <T extends { monto: number }>(arr: T[], order: "asc" | "desc") => {
+  const copy = [...arr];
+  copy.sort((a, b) => (order === "desc" ? toNum(b.monto) - toNum(a.monto) : toNum(a.monto) - toNum(b.monto)));
+  return copy;
+};
+
+const normalizeText = (s: any) =>
+  String(s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+// Conceptos (productos/servicios)
+const conceptosSorted = useMemo(() => {
+  return sortByMonto(datosEgresosPorProducto.productos || [], ordenConceptos);
+}, [datosEgresosPorProducto.productos, ordenConceptos]);
+
+const conceptosTop10 = useMemo(() => conceptosSorted.slice(0, TOP_N), [conceptosSorted]);
+
+const conceptosFiltered = useMemo(() => {
+  const q = normalizeText(qConceptos);
+  if (!q) return conceptosSorted;
+  return conceptosSorted.filter((x: any) => normalizeText(x?.nombre).includes(q));
+}, [conceptosSorted, qConceptos]);
+
+const conceptosTotalPages = useMemo(() => Math.max(1, Math.ceil(conceptosFiltered.length / PAGE_SIZE)), [conceptosFiltered.length]);
+
+const conceptosPageSafe = useMemo(() => Math.min(pageConceptos, conceptosTotalPages), [pageConceptos, conceptosTotalPages]);
+
+const conceptosPageItems = useMemo(() => {
+  const start = (conceptosPageSafe - 1) * PAGE_SIZE;
+  return conceptosFiltered.slice(start, start + PAGE_SIZE);
+}, [conceptosFiltered, conceptosPageSafe]);
+
+// Proveedores
+const proveedoresSorted = useMemo(() => {
+  return sortByMonto(datosEgresosPorProveedorMejorado.proveedores || [], ordenProveedores);
+}, [datosEgresosPorProveedorMejorado.proveedores, ordenProveedores]);
+
+const proveedoresTop10 = useMemo(() => proveedoresSorted.slice(0, TOP_N), [proveedoresSorted]);
+
+const proveedoresFiltered = useMemo(() => {
+  const q = normalizeText(qProveedores);
+  if (!q) return proveedoresSorted;
+  return proveedoresSorted.filter((x: any) => normalizeText(x?.nombre).includes(q));
+}, [proveedoresSorted, qProveedores]);
+
+const proveedoresTotalPages = useMemo(() => Math.max(1, Math.ceil(proveedoresFiltered.length / PAGE_SIZE)), [proveedoresFiltered.length]);
+
+const proveedoresPageSafe = useMemo(() => Math.min(pageProveedores, proveedoresTotalPages), [pageProveedores, proveedoresTotalPages]);
+
+const proveedoresPageItems = useMemo(() => {
+  const start = (proveedoresPageSafe - 1) * PAGE_SIZE;
+  return proveedoresFiltered.slice(start, start + PAGE_SIZE);
+}, [proveedoresFiltered, proveedoresPageSafe]);
+
+// Reset page al cambiar búsqueda o orden (como UX pro)
+useEffect(() => setPageConceptos(1), [qConceptos, ordenConceptos]);
+useEffect(() => setPageProveedores(1), [qProveedores, ordenProveedores]);
+
 
   // Totales RAW
   const totalEgresosPorCuentaSubcuenta = useMemo(() => {
@@ -2117,9 +2204,29 @@ const AnalyticaEgresos = () => {
         {/* Productos */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Top egresos por concepto</CardTitle>
-            <CardDescription>Productos/servicios (según descripción)</CardDescription>
-          </CardHeader>
+  <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0">
+      <CardTitle className="text-base">Top egresos por concepto</CardTitle>
+      <CardDescription>Productos/servicios (según descripción)</CardDescription>
+    </div>
+
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 rounded-full"
+        onClick={() => setOrdenConceptos((p) => (p === "desc" ? "asc" : "desc"))}
+      >
+        Orden: {ordenConceptos === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+      </Button>
+
+      <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={() => setOpenConceptos(true)}>
+        Ver todos
+      </Button>
+    </div>
+  </div>
+</CardHeader>
+
 
           <CardContent className="space-y-3">
             {datosEgresosPorProducto.productos.length === 0 ? (
@@ -2130,7 +2237,7 @@ const AnalyticaEgresos = () => {
               </div>
             ) : (
               <>
-                {datosEgresosPorProducto.productos.map((producto: any) => {
+                {conceptosTop10.map((producto: any) => {
                   const total = toNum(datosEgresosPorProducto.totalGeneral);
                   const porcentaje = total > 0 ? calcularPorcentaje(toNum(producto.monto), total) : "0.0";
 
@@ -2181,6 +2288,112 @@ const AnalyticaEgresos = () => {
                   <span className="font-semibold text-primary">Total</span>
                   <span className="text-lg font-bold text-foreground">{formatMoneyScaled(datosEgresosPorProducto.totalGeneral, true)}</span>
                 </div>
+                <Dialog open={openConceptos} onOpenChange={setOpenConceptos}>
+  <DialogContent className="sm:max-w-2xl">
+    <DialogHeader>
+      <DialogTitle>Productos</DialogTitle>
+      <p className="text-sm text-muted-foreground">Lista completa para análisis detallado</p>
+    </DialogHeader>
+
+    <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex-1">
+        <Input value={qConceptos} onChange={(e) => setQConceptos(e.target.value)} placeholder="Buscar producto..." />
+      </div>
+
+      <Button
+        variant="outline"
+        className="rounded-full"
+        onClick={() => setOrdenConceptos((p) => (p === "desc" ? "asc" : "desc"))}
+      >
+        Orden: {ordenConceptos === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+      </Button>
+    </div>
+
+    <div className="space-y-3 pt-2">
+      {conceptosPageItems.map((producto: any) => {
+        const total = toNum(datosEgresosPorProducto.totalGeneral);
+        const porcentaje = total > 0 ? calcularPorcentaje(toNum(producto.monto), total) : "0.0";
+
+        return (
+          <div
+            key={`modal-${producto.categoria}-${producto.nombre}`}
+            className={cn(
+              "flex items-center gap-3 p-3 border rounded-xl bg-card/50",
+              !producto.tieneAsignacion && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20"
+            )}
+          >
+            {producto.imagen ? (
+              <img src={producto.imagen} alt={producto.nombre} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+            ) : (
+              <div
+                className={cn(
+                  "w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0",
+                  !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
+                )}
+              >
+                <Package className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-medium truncate">{producto.nombre}</p>
+                {!producto.tieneAsignacion && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                    Sin asignar
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {producto.transacciones} {producto.transacciones === 1 ? "transacción" : "transacciones"}
+              </p>
+            </div>
+
+            <div className="text-right flex-shrink-0">
+              <p className="font-semibold text-foreground">{formatMoneyScaled(toNum(producto.monto), true)}</p>
+              <p className="text-xs text-muted-foreground">{porcentaje}%</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+      <p className="text-xs text-muted-foreground">
+        {(() => {
+          const total = conceptosFiltered.length;
+          const start = total === 0 ? 0 : (conceptosPageSafe - 1) * PAGE_SIZE + 1;
+          const end = Math.min(conceptosPageSafe * PAGE_SIZE, total);
+          return `Mostrando ${start}-${end} de ${total}`;
+        })()}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={conceptosPageSafe <= 1}
+          onClick={() => setPageConceptos((p) => Math.max(1, p - 1))}
+        >
+          Anterior
+        </Button>
+
+        <span className="text-sm tabular-nums">
+          {conceptosPageSafe} / {conceptosTotalPages}
+        </span>
+
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={conceptosPageSafe >= conceptosTotalPages}
+          onClick={() => setPageConceptos((p) => Math.min(conceptosTotalPages, p + 1))}
+        >
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
               </>
             )}
           </CardContent>
@@ -2189,9 +2402,28 @@ const AnalyticaEgresos = () => {
         {/* Proveedores */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Top egresos por proveedor</CardTitle>
-            <CardDescription>Concentración de pagos</CardDescription>
-          </CardHeader>
+  <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0">
+      <CardTitle className="text-base">Top egresos por proveedor</CardTitle>
+      <CardDescription>Concentración de pagos</CardDescription>
+    </div>
+
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 rounded-full"
+        onClick={() => setOrdenProveedores((p) => (p === "desc" ? "asc" : "desc"))}
+      >
+        Orden: {ordenProveedores === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+      </Button>
+
+      <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={() => setOpenProveedores(true)}>
+        Ver todos
+      </Button>
+    </div>
+  </div>
+</CardHeader>
 
           <CardContent className="space-y-3">
             {datosEgresosPorProveedorMejorado.proveedores.length === 0 ? (
@@ -2202,7 +2434,7 @@ const AnalyticaEgresos = () => {
               </div>
             ) : (
               <>
-                {datosEgresosPorProveedorMejorado.proveedores.map((proveedor: any) => {
+                {proveedoresTop10.map((proveedor: any) => {
                   const total = toNum(datosEgresosPorProveedorMejorado.totalGeneral);
                   const porcentaje = total > 0 ? calcularPorcentaje(toNum(proveedor.monto), total) : "0.0";
 
@@ -2240,6 +2472,99 @@ const AnalyticaEgresos = () => {
                   <span className="font-semibold text-primary">Total</span>
                   <span className="text-lg font-bold text-foreground">{formatMoneyScaled(datosEgresosPorProveedorMejorado.totalGeneral, true)}</span>
                 </div>
+                <Dialog open={openProveedores} onOpenChange={setOpenProveedores}>
+  <DialogContent className="sm:max-w-2xl">
+    <DialogHeader>
+      <DialogTitle>Proveedores</DialogTitle>
+      <p className="text-sm text-muted-foreground">Lista completa para análisis detallado</p>
+    </DialogHeader>
+
+    <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex-1">
+        <Input value={qProveedores} onChange={(e) => setQProveedores(e.target.value)} placeholder="Buscar proveedor..." />
+      </div>
+
+      <Button
+        variant="outline"
+        className="rounded-full"
+        onClick={() => setOrdenProveedores((p) => (p === "desc" ? "asc" : "desc"))}
+      >
+        Orden: {ordenProveedores === "desc" ? "Mayor → Menor" : "Menor → Mayor"}
+      </Button>
+    </div>
+
+    <div className="space-y-3 pt-2">
+      {proveedoresPageItems.map((proveedor: any) => {
+        const total = toNum(datosEgresosPorProveedorMejorado.totalGeneral);
+        const porcentaje = total > 0 ? calcularPorcentaje(toNum(proveedor.monto), total) : "0.0";
+
+        return (
+          <div
+            key={`modal-${proveedor.nombre}`}
+            className={cn(
+              "flex items-center gap-3 p-3 border rounded-xl bg-card/50",
+              !proveedor.tieneAsignacion && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20"
+            )}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-medium truncate">{proveedor.nombre}</p>
+                {!proveedor.tieneAsignacion && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">
+                    Sin asignar
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {proveedor.transacciones} {proveedor.transacciones === 1 ? "transacción" : "transacciones"}
+              </p>
+            </div>
+
+            <div className="text-right flex-shrink-0">
+              <p className="font-semibold text-foreground">{formatMoneyScaled(toNum(proveedor.monto), true)}</p>
+              <p className="text-xs text-muted-foreground">{porcentaje}%</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+      <p className="text-xs text-muted-foreground">
+        {(() => {
+          const total = proveedoresFiltered.length;
+          const start = total === 0 ? 0 : (proveedoresPageSafe - 1) * PAGE_SIZE + 1;
+          const end = Math.min(proveedoresPageSafe * PAGE_SIZE, total);
+          return `Mostrando ${start}-${end} de ${total}`;
+        })()}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={proveedoresPageSafe <= 1}
+          onClick={() => setPageProveedores((p) => Math.max(1, p - 1))}
+        >
+          Anterior
+        </Button>
+
+        <span className="text-sm tabular-nums">
+          {proveedoresPageSafe} / {proveedoresTotalPages}
+        </span>
+
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={proveedoresPageSafe >= proveedoresTotalPages}
+          onClick={() => setPageProveedores((p) => Math.min(proveedoresTotalPages, p + 1))}
+        >
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
               </>
             )}
           </CardContent>
