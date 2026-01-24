@@ -27,7 +27,6 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -57,14 +56,14 @@ const normalizeArray = <T,>(raw: any): T[] => {
   return Array.isArray(candidate) ? candidate : [];
 };
 
-const moneyMXN = (n: number, decimales: number) =>
-  `$${toNum(n).toLocaleString("es-MX", {
-    minimumFractionDigits: decimales,
-    maximumFractionDigits: decimales,
-  })}`;
-
 // ---------- UI helpers ----------
-const ChartCardEmpty = ({ title = "Sin datos", hint = "No hay información para el rango actual." }: { title?: string; hint?: string }) => (
+const ChartCardEmpty = ({
+  title = "Sin datos",
+  hint = "No hay información para el rango actual.",
+}: {
+  title?: string;
+  hint?: string;
+}) => (
   <div className="flex flex-col items-center justify-center h-72 text-muted-foreground">
     <AlertCircle className="h-10 w-10 mb-3 opacity-60" />
     <p className="font-medium">{title}</p>
@@ -91,9 +90,18 @@ const tooltipLabelStyle: React.CSSProperties = { color: "hsl(var(--foreground))"
 // Leyenda simple (sin saturar)
 const LegendText = (value: any) => <span className="text-xs text-muted-foreground">{value}</span>;
 
+// Colores “theme-friendly”
+const CHART = {
+  primary: "hsl(var(--primary))",
+  destructive: "hsl(var(--destructive))",
+  accent: "hsl(var(--accent))",
+  muted: "hsl(var(--muted-foreground))",
+  ring: "hsl(var(--ring))",
+};
+
 // -------- Treemap “pro” (rounded + hover) --------
 const TreemapTile = (props: any) => {
-  const { x, y, width, height, name, value, fill, dataTotal, decimales = 2 } = props;
+  const { x, y, width, height, name, value, fill, dataTotal, formatMoneyScaled } = props;
 
   const v = toNum(value);
   const total = toNum(dataTotal);
@@ -101,7 +109,6 @@ const TreemapTile = (props: any) => {
 
   const pct = total > 0 ? (v / total) * 100 : 0;
   const porcentaje = pct.toFixed(1);
-  const montoFormateado = moneyMXN(v, decimales);
 
   // no texto si la caja es chica
   const minSide = Math.min(width, height);
@@ -124,26 +131,11 @@ const TreemapTile = (props: any) => {
       />
       {showText && (
         <>
-          <text
-            x={x + 10}
-            y={y + 22}
-            textAnchor="start"
-            fill="#ffffff"
-            fontSize={12}
-            fontWeight={700}
-            opacity={0.95}
-          >
+          <text x={x + 10} y={y + 22} textAnchor="start" fill="#ffffff" fontSize={12} fontWeight={700} opacity={0.95}>
             {name}
           </text>
-          <text
-            x={x + 10}
-            y={y + 40}
-            textAnchor="start"
-            fill="#ffffff"
-            fontSize={11}
-            opacity={0.9}
-          >
-            {porcentaje}% · {montoFormateado}
+          <text x={x + 10} y={y + 40} textAnchor="start" fill="#ffffff" fontSize={11} opacity={0.9}>
+            {porcentaje}% · {formatMoneyScaled(v, true)}
           </text>
         </>
       )}
@@ -192,23 +184,27 @@ const AnalyticaEgresos = () => {
   const loading =
     !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!resumenQuery?.isLoading || !!graficaQuery?.isLoading;
 
-  // Formato de montos (escala + decimales)
+  // ---- Formato/escala SOLO PARA VISUAL ----
   const getSufijoFormato = () => {
     if (formatoMontos === "miles") return " (Miles)";
     if (formatoMontos === "millones") return " (Millones)";
     return "";
   };
 
-  const formatearMonto = (monto: number) => {
-    let valor = toNum(monto);
-    if (formatoMontos === "miles") valor = valor / 1000;
-    if (formatoMontos === "millones") valor = valor / 1_000_000;
-    return Number(valor.toFixed(decimales));
+  const scale = (n: number) => {
+    const v = toNum(n);
+    if (formatoMontos === "miles") return v / 1000;
+    if (formatoMontos === "millones") return v / 1_000_000;
+    return v;
   };
 
-  const formatearParaVisualizacion = (monto: number, incluirSufijo = false) => {
+  const formatMoneyScaled = (raw: number, incluirSufijo = false) => {
+    const v = scale(raw);
     const sufijo = incluirSufijo ? getSufijoFormato() : "";
-    return `${moneyMXN(toNum(monto), decimales)}${sufijo}`;
+    return `$${v.toLocaleString("es-MX", {
+      minimumFractionDigits: decimales,
+      maximumFractionDigits: decimales,
+    })}${sufijo}`;
   };
 
   const calcularPorcentaje = (monto: number, total: number): string => {
@@ -222,9 +218,7 @@ const AnalyticaEgresos = () => {
     const mapa = new Map<string, string>();
     (productosEgresos || []).forEach((p: any) => {
       const nombre = String(p?.nombre ?? "").toLowerCase().trim();
-      if (nombre && p?.imagen_url) {
-        mapa.set(nombre, p.imagen_url);
-      }
+      if (nombre && p?.imagen_url) mapa.set(nombre, p.imagen_url);
     });
     return mapa;
   }, [productosEgresos]);
@@ -356,7 +350,7 @@ const AnalyticaEgresos = () => {
     };
   }, [filteredTransactions, filteredTransactionsSinImpuestos, costosVentaInventario, tipoEgreso]);
 
-  // Datos para gráfica (formateados)
+  // Datos para gráfica (RAW, sin escala)
   const datosGraficaFormateados = useMemo(() => {
     if (!datosGraficaRaw) return [];
 
@@ -364,41 +358,41 @@ const AnalyticaEgresos = () => {
       const arr = normalizeArray<any>(datosGraficaRaw);
       return arr.map((item: any) => ({
         periodo: item?.periodo,
-        monto: formatearMonto(toNum(item?.monto)),
-        costos: formatearMonto(toNum(item?.costos)),
-        gastos: formatearMonto(toNum(item?.gastos)),
-        costosInventario: formatearMonto(toNum(item?.costosInventario)),
-        otrosGastos: formatearMonto(toNum(item?.otrosGastos)),
+        monto: toNum(item?.monto),
+        costos: toNum(item?.costos),
+        gastos: toNum(item?.gastos),
+        costosInventario: toNum(item?.costosInventario),
+        otrosGastos: toNum(item?.otrosGastos),
       }));
     }
 
     const arr = normalizeArray<DatosEvolucionSimple>(datosGraficaRaw);
     return arr.map((item: any) => ({
       periodo: item?.periodo,
-      monto: formatearMonto(toNum(item?.monto)),
+      monto: toNum(item?.monto),
     }));
-  }, [datosGraficaRaw, tipoEgreso, formatoMontos, decimales]);
+  }, [datosGraficaRaw, tipoEgreso]);
 
-  // Egresos por Tipo
+  // Egresos por Tipo (RAW)
   const datosEgresosPorTipo = useMemo(() => {
     const data: { tipo: string; monto: number }[] = [];
 
     const totalCostoVenta = transaccionesPorTipo.costoVenta.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalCostoVenta > 0) data.push({ tipo: "Costo de Venta", monto: formatearMonto(totalCostoVenta) });
+    if (totalCostoVenta > 0) data.push({ tipo: "Costo de Venta", monto: totalCostoVenta });
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) data.push({ tipo: "Inventario", monto: formatearMonto(totalCostosInventario) });
+    if (totalCostosInventario > 0) data.push({ tipo: "Inventario", monto: totalCostosInventario });
 
     const totalGastos = transaccionesPorTipo.gastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalGastos > 0) data.push({ tipo: "Gastos", monto: formatearMonto(totalGastos) });
+    if (totalGastos > 0) data.push({ tipo: "Gastos", monto: totalGastos });
 
     const totalOtrosGastos = transaccionesPorTipo.otrosGastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalOtrosGastos > 0) data.push({ tipo: "Otros", monto: formatearMonto(totalOtrosGastos) });
+    if (totalOtrosGastos > 0) data.push({ tipo: "Otros", monto: totalOtrosGastos });
 
     return data;
-  }, [transaccionesPorTipo, formatoMontos, decimales]);
+  }, [transaccionesPorTipo]);
 
-  // Métodos de pago utilizados (sin impuestos) + inventario como adquisición
+  // Métodos de pago utilizados (sin impuestos) + inventario como adquisición (RAW)
   const datosEstadoPagos = useMemo(() => {
     const grouped: Record<string, number> = {};
 
@@ -420,17 +414,19 @@ const AnalyticaEgresos = () => {
     if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
 
     return Object.entries(grouped)
-      .map(([estado, monto]) => ({ estado, monto: formatearMonto(monto) }))
+      .map(([estado, monto]) => ({ estado, monto }))
       .sort((a, b) => b.monto - a.monto);
-  }, [transaccionesPorTipo, formatoMontos, decimales]);
+  }, [transaccionesPorTipo]);
 
-  // Egresos por Subcuenta (Top 10)
+  // Egresos por Subcuenta (Top 10) RAW
   const datosEgresosPorSubcuenta = useMemo(() => {
     const grouped: Record<string, number> = {};
 
+    const getId = (x: any) => String(x?.id ?? x?._id ?? "");
     const resolveSubName = (prefix: string, subId: any) => {
-      if (!subId) return `${prefix} · Sin subcuenta`;
-      const s = subcuentas?.find((x: any) => x?.id === subId);
+      const id = String(subId ?? "");
+      if (!id) return `${prefix} · Sin subcuenta`;
+      const s = (subcuentas || []).find((x: any) => getId(x) === id);
       return s?.nombre ? `${prefix} · ${s.nombre}` : `${prefix} · Sin subcuenta`;
     };
 
@@ -453,12 +449,12 @@ const AnalyticaEgresos = () => {
     if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
 
     return Object.entries(grouped)
-      .map(([subcuenta, monto]) => ({ subcuenta, monto: formatearMonto(monto) }))
+      .map(([subcuenta, monto]) => ({ subcuenta, monto }))
       .sort((a, b) => b.monto - a.monto)
       .slice(0, 10);
-  }, [transaccionesPorTipo, subcuentas, formatoMontos, decimales]);
+  }, [transaccionesPorTipo, subcuentas]);
 
-  // Egresos por Cuenta (Top 15)
+  // Egresos por Cuenta (Top 15) RAW
   const datosEgresosPorCuenta = useMemo(() => {
     const grouped: Record<string, { codigo: string; nombre: string; monto: number }> = {};
 
@@ -480,16 +476,15 @@ const AnalyticaEgresos = () => {
     transaccionesPorTipo.costoVenta.forEach((t: any) => agregarACuenta(t?.cuenta_codigo, t?.monto_total));
     transaccionesPorTipo.gastos.forEach((t: any) => agregarACuenta(t?.cuenta_codigo, t?.monto_total));
     transaccionesPorTipo.otrosGastos.forEach((t: any) => agregarACuenta(t?.cuenta_codigo, t?.monto_total));
-
     transaccionesPorTipo.costosInventario.forEach((c: any) => agregarACuenta("5002", c?.monto));
 
     return Object.values(grouped)
-      .map((item) => ({ subcuenta: item.nombre, monto: formatearMonto(item.monto) }))
+      .map((item) => ({ subcuenta: item.nombre, monto: item.monto }))
       .sort((a, b) => b.monto - a.monto)
       .slice(0, 15);
-  }, [transaccionesPorTipo, cuentasFlat, formatoMontos, decimales]);
+  }, [transaccionesPorTipo, cuentasFlat]);
 
-  // Egresos por Método de Pago (Treemap)
+  // Egresos por Método de Pago (Treemap) RAW
   const datosEgresosPorMetodoPago = useMemo(() => {
     const todasTransacciones = [
       ...transaccionesPorTipo.sinImpuestosCostoVenta,
@@ -510,20 +505,17 @@ const AnalyticaEgresos = () => {
 
     const costosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
 
-    // ✅ No fijamos colores “hard” por marca, solo una paleta suave y consistente
     const data = [
-      { name: "Efectivo", value: formatearMonto(efectivo), fill: "hsl(180, 45%, 50%)" },
-      { name: "Bancos / Tarjeta", value: formatearMonto(bancosTarjeta), fill: "hsl(210, 45%, 52%)" },
+      { name: "Efectivo", value: efectivo, fill: "hsl(var(--primary))" },
+      { name: "Bancos / Tarjeta", value: bancosTarjeta, fill: "hsl(var(--accent))" },
     ];
 
-    if (costosInventario > 0) {
-      data.push({ name: "Inventario", value: formatearMonto(costosInventario), fill: "hsl(230, 40%, 50%)" });
-    }
+    if (costosInventario > 0) data.push({ name: "Inventario", value: costosInventario, fill: "hsl(var(--ring))" });
 
     return data.filter((item) => toNum(item.value) > 0);
-  }, [transaccionesPorTipo, formatoMontos, decimales]);
+  }, [transaccionesPorTipo]);
 
-  // Egresos por Producto (Top 10)
+  // Egresos por Producto (Top 10) RAW
   const datosEgresosPorProducto = useMemo(() => {
     const grouped: Record<
       string,
@@ -609,17 +601,15 @@ const AnalyticaEgresos = () => {
     });
 
     const productosArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
-    const totalGeneralRaw = productosArray.reduce((sum, p) => sum + toNum(p.monto), 0);
-
-    const productosFormateados = productosArray.map((p) => ({ ...p, monto: formatearMonto(p.monto) }));
+    const totalGeneral = productosArray.reduce((sum, p) => sum + toNum(p.monto), 0);
 
     return {
-      productos: productosFormateados.slice(0, 10),
-      totalGeneral: formatearMonto(totalGeneralRaw),
+      productos: productosArray.slice(0, 10),
+      totalGeneral,
     };
-  }, [transaccionesPorTipo, formatoMontos, decimales, mapaImagenesProductos]);
+  }, [transaccionesPorTipo, mapaImagenesProductos]);
 
-  // Egresos por Proveedor (Top 10)
+  // Egresos por Proveedor (Top 10) RAW
   const datosEgresosPorProveedorMejorado = useMemo(() => {
     const grouped: Record<
       string,
@@ -651,25 +641,21 @@ const AnalyticaEgresos = () => {
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
     if (totalCostosInventario > 0) {
-      if (!grouped["Sin proveedor asignado"]) {
-        grouped["Sin proveedor asignado"] = { nombre: "Sin proveedor asignado", monto: 0, transacciones: 0, tieneAsignacion: false };
-      }
+      if (!grouped["Sin proveedor asignado"]) grouped["Sin proveedor asignado"] = { nombre: "Sin proveedor asignado", monto: 0, transacciones: 0, tieneAsignacion: false };
       grouped["Sin proveedor asignado"].monto += totalCostosInventario;
       grouped["Sin proveedor asignado"].transacciones += transaccionesPorTipo.costosInventario.length;
     }
 
     const proveedoresArray = Object.values(grouped).sort((a, b) => b.monto - a.monto);
-    const totalGeneralRaw = proveedoresArray.reduce((sum, p) => sum + toNum(p.monto), 0);
-
-    const proveedoresFormateados = proveedoresArray.map((p) => ({ ...p, monto: formatearMonto(p.monto) }));
+    const totalGeneral = proveedoresArray.reduce((sum, p) => sum + toNum(p.monto), 0);
 
     return {
-      proveedores: proveedoresFormateados.slice(0, 10),
-      totalGeneral: formatearMonto(totalGeneralRaw),
+      proveedores: proveedoresArray.slice(0, 10),
+      totalGeneral,
     };
-  }, [transaccionesPorTipo, formatoMontos, decimales]);
+  }, [transaccionesPorTipo]);
 
-  // Totales para badges
+  // Totales RAW
   const totalEgresosPorTipo = useMemo(() => datosEgresosPorTipo.reduce((sum, item) => sum + toNum(item.monto), 0), [datosEgresosPorTipo]);
   const totalMetodosPago = useMemo(() => datosEstadoPagos.reduce((sum, item) => sum + toNum(item.monto), 0), [datosEstadoPagos]);
 
@@ -709,21 +695,13 @@ const AnalyticaEgresos = () => {
   };
 
   // ---- UI: resumen mini bars (pro) ----
-  const SummaryRow = ({
-    label,
-    value,
-    total,
-  }: {
-    label: string;
-    value: number;
-    total: number;
-  }) => {
+  const SummaryRow = ({ label, value, total }: { label: string; value: number; total: number }) => {
     const pct = total > 0 ? (toNum(value) / toNum(total)) * 100 : 0;
     return (
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">{label}</span>
-          <span className="text-sm font-semibold text-foreground">{moneyMXN(value, decimales)}</span>
+          <span className="text-sm font-semibold text-foreground">{formatMoneyScaled(value, false)}</span>
         </div>
         <div className="h-2 w-full rounded-full bg-muted/40 overflow-hidden">
           <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
@@ -775,8 +753,27 @@ const AnalyticaEgresos = () => {
     );
   }
 
-  // Colores suaves y consistentes (no súper saturados)
-  const pieColors = ["hsl(180, 45%, 50%)", "hsl(210, 45%, 52%)", "hsl(160, 40%, 46%)", "hsl(230, 40%, 50%)"];
+  // Donas palette (theme-friendly)
+  const pieColors = [CHART.primary, CHART.destructive, CHART.accent, CHART.ring];
+
+  const DonutCenterLabel = ({
+    cx = "50%",
+    cy = "46%",
+    total,
+  }: {
+    cx?: string | number;
+    cy?: string | number;
+    total: number;
+  }) => (
+    <>
+      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={12} opacity={0.75}>
+        Total
+      </text>
+      <text x={cx} y={typeof cy === "number" ? cy + 18 : cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={16} fontWeight={800}>
+        {formatMoneyScaled(total, false)}
+      </text>
+    </>
+  );
 
   return (
     <div className="space-y-6">
@@ -800,7 +797,7 @@ const AnalyticaEgresos = () => {
         </div>
       </div>
 
-      {/* Resúmenes por período (más limpios) */}
+      {/* Resúmenes por período */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-2">
@@ -815,7 +812,7 @@ const AnalyticaEgresos = () => {
 
             <div className="pt-2 border-t flex items-center justify-between">
               <span className="text-sm font-semibold text-primary">Total</span>
-              <span className="text-lg font-bold text-destructive">{moneyMXN(resDia.total, decimales)}</span>
+              <span className="text-lg font-bold text-destructive">{formatMoneyScaled(resDia.total, true)}</span>
             </div>
           </CardContent>
         </Card>
@@ -833,7 +830,7 @@ const AnalyticaEgresos = () => {
 
             <div className="pt-2 border-t flex items-center justify-between">
               <span className="text-sm font-semibold text-primary">Total</span>
-              <span className="text-lg font-bold text-destructive">{moneyMXN(resMes.total, decimales)}</span>
+              <span className="text-lg font-bold text-destructive">{formatMoneyScaled(resMes.total, true)}</span>
             </div>
           </CardContent>
         </Card>
@@ -851,13 +848,13 @@ const AnalyticaEgresos = () => {
 
             <div className="pt-2 border-t flex items-center justify-between">
               <span className="text-sm font-semibold text-primary">Total</span>
-              <span className="text-lg font-bold text-destructive">{moneyMXN(resAnio.total, decimales)}</span>
+              <span className="text-lg font-bold text-destructive">{formatMoneyScaled(resAnio.total, true)}</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Controles (más compactos y limpios) */}
+      {/* Controles */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Controles</CardTitle>
@@ -888,16 +885,10 @@ const AnalyticaEgresos = () => {
 
             {(periodFilter === "diario" || periodFilter === "mensual") && (
               <div className="pt-2">
-                <Label className="text-xs text-muted-foreground mb-2 block">
-                  {periodFilter === "diario" ? "Fecha" : "Mes"}
-                </Label>
+                <Label className="text-xs text-muted-foreground mb-2 block">{periodFilter === "diario" ? "Fecha" : "Mes"}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                      size="sm"
-                    >
+                    <Button variant="outline" className="w-full justify-start text-left font-normal" size="sm">
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {periodFilter === "diario"
                         ? format(fechaAnalisisDiario, "PPP", { locale: es })
@@ -945,8 +936,12 @@ const AnalyticaEgresos = () => {
                 <Label className="text-xs text-muted-foreground mb-2 block">Vista</Label>
                 <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
                   <TabsList className="w-full">
-                    <TabsTrigger value="unica" className="flex-1">Línea única</TabsTrigger>
-                    <TabsTrigger value="desglosada" className="flex-1">Desglosada</TabsTrigger>
+                    <TabsTrigger value="unica" className="flex-1">
+                      Línea única
+                    </TabsTrigger>
+                    <TabsTrigger value="desglosada" className="flex-1">
+                      Desglosada
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
@@ -961,9 +956,15 @@ const AnalyticaEgresos = () => {
               <Label className="text-xs text-muted-foreground">Escala</Label>
               <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)}>
                 <TabsList className="w-full">
-                  <TabsTrigger value="normal" className="flex-1">Normal</TabsTrigger>
-                  <TabsTrigger value="miles" className="flex-1">Miles</TabsTrigger>
-                  <TabsTrigger value="millones" className="flex-1">Millones</TabsTrigger>
+                  <TabsTrigger value="normal" className="flex-1">
+                    Normal
+                  </TabsTrigger>
+                  <TabsTrigger value="miles" className="flex-1">
+                    Miles
+                  </TabsTrigger>
+                  <TabsTrigger value="millones" className="flex-1">
+                    Millones
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -972,9 +973,15 @@ const AnalyticaEgresos = () => {
               <Label className="text-xs text-muted-foreground">Decimales</Label>
               <Tabs value={String(decimales)} onValueChange={(v) => setDecimales(Number(v) as 0 | 1 | 2)}>
                 <TabsList className="w-full">
-                  <TabsTrigger value="0" className="flex-1">0</TabsTrigger>
-                  <TabsTrigger value="1" className="flex-1">1</TabsTrigger>
-                  <TabsTrigger value="2" className="flex-1">2</TabsTrigger>
+                  <TabsTrigger value="0" className="flex-1">
+                    0
+                  </TabsTrigger>
+                  <TabsTrigger value="1" className="flex-1">
+                    1
+                  </TabsTrigger>
+                  <TabsTrigger value="2" className="flex-1">
+                    2
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -1008,6 +1015,7 @@ const AnalyticaEgresos = () => {
                   <XAxis dataKey="periodo" tick={{ fontSize: 12 }} />
                   <YAxis
                     tick={{ fontSize: 12 }}
+                    tickFormatter={(v: any) => scale(toNum(v)).toLocaleString("es-MX", { maximumFractionDigits: decimales })}
                     domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
                     padding={{ top: 12, bottom: 0 }}
                   />
@@ -1015,10 +1023,7 @@ const AnalyticaEgresos = () => {
                     formatter={(value: any, name: any) => {
                       const v = toNum(value);
                       const label = String(name || "Monto");
-                      return [
-                        `${moneyMXN(v, decimales)}${getSufijoFormato()}`,
-                        label,
-                      ];
+                      return [formatMoneyScaled(v, true), label];
                     }}
                     contentStyle={tooltipCardStyle}
                     labelStyle={tooltipLabelStyle}
@@ -1026,22 +1031,22 @@ const AnalyticaEgresos = () => {
 
                   {tipoEgreso === "total" && vistaTotal === "desglosada" ? (
                     <>
-                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke="hsl(180, 45%, 50%)" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke="hsl(0, 65%, 55%)" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke="hsl(230, 40%, 50%)" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke="hsl(210, 20%, 55%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
                       <Legend formatter={LegendText as any} />
                     </>
                   ) : tipoEgreso === "combinada" ? (
                     <>
-                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke="hsl(180, 45%, 50%)" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke="hsl(0, 65%, 55%)" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke="hsl(230, 40%, 50%)" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke="hsl(210, 20%, 55%)" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
                       <Legend formatter={LegendText as any} />
                     </>
                   ) : (
-                    <Line type="monotone" dataKey="monto" name="Monto" stroke="hsl(180, 45%, 50%)" strokeWidth={2.8} dot={false} />
+                    <Line type="monotone" dataKey="monto" name="Monto" stroke={CHART.primary} strokeWidth={2.8} dot={false} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -1058,7 +1063,7 @@ const AnalyticaEgresos = () => {
                 <CardDescription>¿En qué se va el dinero?</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {moneyMXN(totalEgresosPorTipo, decimales)}
+                {formatMoneyScaled(totalEgresosPorTipo, true)}
               </Badge>
             </div>
           </CardHeader>
@@ -1069,24 +1074,18 @@ const AnalyticaEgresos = () => {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={datosEgresosPorTipo}
-                    cx="50%"
-                    cy="46%"
-                    innerRadius={72}
-                    outerRadius={98}
-                    paddingAngle={3}
-                    dataKey="monto"
-                  >
+                  <Pie data={datosEgresosPorTipo} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
                     {datosEgresosPorTipo.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
                     ))}
                   </Pie>
 
+                  <DonutCenterLabel total={totalEgresosPorTipo} />
+
                   <Tooltip
                     formatter={(value: any, _name: any, props: any) => {
                       const label = props?.payload?.tipo || "Monto";
-                      return [`${moneyMXN(toNum(value), decimales)}`, label];
+                      return [formatMoneyScaled(toNum(value), true), label];
                     }}
                     contentStyle={tooltipCardStyle}
                     labelStyle={tooltipLabelStyle}
@@ -1107,7 +1106,7 @@ const AnalyticaEgresos = () => {
                 <CardDescription>Solo pagos realizados (sin impuestos)</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {moneyMXN(totalMetodosPago, decimales)}
+                {formatMoneyScaled(totalMetodosPago, true)}
               </Badge>
             </div>
           </CardHeader>
@@ -1123,10 +1122,13 @@ const AnalyticaEgresos = () => {
                       <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
                     ))}
                   </Pie>
+
+                  <DonutCenterLabel total={totalMetodosPago} />
+
                   <Tooltip
                     formatter={(value: any, _name: any, props: any) => {
                       const label = props?.payload?.estado || "Monto";
-                      return [`${moneyMXN(toNum(value), decimales)}`, label];
+                      return [formatMoneyScaled(toNum(value), true), label];
                     }}
                     contentStyle={tooltipCardStyle}
                     labelStyle={tooltipLabelStyle}
@@ -1150,15 +1152,19 @@ const AnalyticaEgresos = () => {
                 <CardDescription>Identifica lo que más pesa</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {moneyMXN(totalEgresosPorCuentaSubcuenta, decimales)}
+                {formatMoneyScaled(totalEgresosPorCuentaSubcuenta, true)}
               </Badge>
             </div>
 
             <div className="pt-3">
               <Tabs value={vistaAgrupacion} onValueChange={(v) => setVistaAgrupacion(v as "cuenta" | "subcuenta")}>
                 <TabsList className="h-9">
-                  <TabsTrigger value="cuenta" className="text-xs">Cuenta</TabsTrigger>
-                  <TabsTrigger value="subcuenta" className="text-xs">Subcuenta</TabsTrigger>
+                  <TabsTrigger value="cuenta" className="text-xs">
+                    Cuenta
+                  </TabsTrigger>
+                  <TabsTrigger value="subcuenta" className="text-xs">
+                    Subcuenta
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -1168,9 +1174,7 @@ const AnalyticaEgresos = () => {
             {(() => {
               const datosActuales = vistaAgrupacion === "cuenta" ? datosEgresosPorCuenta : datosEgresosPorSubcuenta;
 
-              if (!datosActuales.length) {
-                return <ChartCardEmpty title="Sin datos" hint="Registra egresos o ajusta filtros para ver el top." />;
-              }
+              if (!datosActuales.length) return <ChartCardEmpty title="Sin datos" hint="Registra egresos o ajusta filtros para ver el top." />;
 
               return (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1179,16 +1183,19 @@ const AnalyticaEgresos = () => {
                     <XAxis
                       type="number"
                       tick={{ fontSize: 12 }}
-                      tickFormatter={(value: any) => `$${toNum(value).toLocaleString("es-MX")}`}
+                      tickFormatter={(v: any) => {
+                        const s = scale(toNum(v));
+                        return `$${s.toLocaleString("es-MX", { maximumFractionDigits: decimales })}`;
+                      }}
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                     />
                     <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
                     <Tooltip
-                      formatter={(value: any) => [`${moneyMXN(toNum(value), decimales)}`, "Monto"]}
+                      formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
                       contentStyle={tooltipCardStyle}
                       labelStyle={tooltipLabelStyle}
                     />
-                    <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill="hsl(210, 45%, 52%)" />
+                    <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill={CHART.accent} />
                   </BarChart>
                 </ResponsiveContainer>
               );
@@ -1205,7 +1212,7 @@ const AnalyticaEgresos = () => {
                 <CardDescription>Más visual y rápida de leer</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {moneyMXN(totalEgresosPorMetodoPagoTreemap, decimales)}
+                {formatMoneyScaled(totalEgresosPorMetodoPagoTreemap, true)}
               </Badge>
             </div>
           </CardHeader>
@@ -1221,15 +1228,15 @@ const AnalyticaEgresos = () => {
                   aspectRatio={16 / 9}
                   content={
                     <TreemapTile
-                      dataTotal={datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0)}
-                      decimales={decimales}
+                      dataTotal={totalEgresosPorMetodoPagoTreemap}
+                      formatMoneyScaled={formatMoneyScaled}
                     />
                   }
                 >
                   <Tooltip
                     formatter={(value: any, _name: any, props: any) => {
                       const label = props?.payload?.name || "Monto";
-                      return [`${moneyMXN(toNum(value), decimales)}`, label];
+                      return [formatMoneyScaled(toNum(value), true), label];
                     }}
                     contentStyle={tooltipCardStyle}
                     labelStyle={tooltipLabelStyle}
@@ -1261,11 +1268,11 @@ const AnalyticaEgresos = () => {
               <>
                 {datosEgresosPorProducto.productos.map((producto: any) => {
                   const total = toNum(datosEgresosPorProducto.totalGeneral);
-                  const porcentaje = total > 0 ? ((toNum(producto.monto) / total) * 100).toFixed(1) : "0.0";
+                  const porcentaje = total > 0 ? calcularPorcentaje(toNum(producto.monto), total) : "0.0";
 
                   return (
                     <div
-                      key={producto.nombre}
+                      key={`${producto.categoria}-${producto.nombre}`}
                       className={cn(
                         "flex items-center gap-3 p-3 border rounded-xl bg-card/50",
                         !producto.tieneAsignacion && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20"
@@ -1299,7 +1306,7 @@ const AnalyticaEgresos = () => {
                       </div>
 
                       <div className="text-right flex-shrink-0">
-                        <p className="font-semibold text-foreground">{formatearParaVisualizacion(producto.monto)}</p>
+                        <p className="font-semibold text-foreground">{formatMoneyScaled(toNum(producto.monto), true)}</p>
                         <p className="text-xs text-muted-foreground">{porcentaje}%</p>
                       </div>
                     </div>
@@ -1308,9 +1315,7 @@ const AnalyticaEgresos = () => {
 
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total</span>
-                  <span className="text-lg font-bold text-foreground">
-                    {formatearParaVisualizacion(datosEgresosPorProducto.totalGeneral, true)}
-                  </span>
+                  <span className="text-lg font-bold text-foreground">{formatMoneyScaled(datosEgresosPorProducto.totalGeneral, true)}</span>
                 </div>
               </>
             )}
@@ -1335,7 +1340,7 @@ const AnalyticaEgresos = () => {
               <>
                 {datosEgresosPorProveedorMejorado.proveedores.map((proveedor: any) => {
                   const total = toNum(datosEgresosPorProveedorMejorado.totalGeneral);
-                  const porcentaje = total > 0 ? ((toNum(proveedor.monto) / total) * 100).toFixed(1) : "0.0";
+                  const porcentaje = total > 0 ? calcularPorcentaje(toNum(proveedor.monto), total) : "0.0";
 
                   return (
                     <div
@@ -1360,7 +1365,7 @@ const AnalyticaEgresos = () => {
                       </div>
 
                       <div className="text-right flex-shrink-0">
-                        <p className="font-semibold text-foreground">{formatearParaVisualizacion(proveedor.monto)}</p>
+                        <p className="font-semibold text-foreground">{formatMoneyScaled(toNum(proveedor.monto), true)}</p>
                         <p className="text-xs text-muted-foreground">{porcentaje}%</p>
                       </div>
                     </div>
@@ -1369,9 +1374,7 @@ const AnalyticaEgresos = () => {
 
                 <div className="flex items-center justify-between pt-3 border-t">
                   <span className="font-semibold text-primary">Total</span>
-                  <span className="text-lg font-bold text-foreground">
-                    {formatearParaVisualizacion(datosEgresosPorProveedorMejorado.totalGeneral, true)}
-                  </span>
+                  <span className="text-lg font-bold text-foreground">{formatMoneyScaled(datosEgresosPorProveedorMejorado.totalGeneral, true)}</span>
                 </div>
               </>
             )}
