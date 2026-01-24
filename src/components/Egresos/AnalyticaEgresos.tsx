@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -154,6 +155,40 @@ const AnalyticaEgresos = () => {
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
   const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("subcuenta");
+
+  // ✅ Mes/Año selector como en Ingresos
+  const MONTHS = useMemo(
+    () => [
+      { label: "Enero", value: 0 },
+      { label: "Febrero", value: 1 },
+      { label: "Marzo", value: 2 },
+      { label: "Abril", value: 3 },
+      { label: "Mayo", value: 4 },
+      { label: "Junio", value: 5 },
+      { label: "Julio", value: 6 },
+      { label: "Agosto", value: 7 },
+      { label: "Septiembre", value: 8 },
+      { label: "Octubre", value: 9 },
+      { label: "Noviembre", value: 10 },
+      { label: "Diciembre", value: 11 },
+    ],
+    []
+  );
+
+  const YEARS = useMemo(() => {
+    const base = new Date().getFullYear();
+    const min = base - 10;
+    const max = base + 1;
+
+    const selectedYear = fechaAnalisisMensual.getFullYear();
+    const ys: number[] = [];
+    for (let y = min; y <= max; y++) ys.push(y);
+
+    if (!ys.includes(selectedYear)) ys.push(selectedYear);
+    ys.sort((a, b) => a - b);
+
+    return ys;
+  }, [fechaAnalisisMensual]);
 
   // Queries
   const transQuery = useTransaccionesEgresos(1000, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
@@ -959,11 +994,6 @@ const AnalyticaEgresos = () => {
       <div>
         <h3 className="text-xl font-bold text-foreground mb-6">Analítica de egresos</h3>
 
-        {/* ✅ SOLO 3 BLOQUES Y EN ESTE ORDEN:
-            1) Tipo de Egreso
-            2) Periodo de Análisis
-            3) Formato de Cifras
-        */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* 1) Tipo de Egreso */}
           <Card>
@@ -1032,7 +1062,8 @@ const AnalyticaEgresos = () => {
                 </div>
               </RadioGroup>
 
-              {(periodFilter === "diario" || periodFilter === "mensual") && (
+              {/* ✅ Diario = calendario */}
+              {periodFilter === "diario" && (
                 <div className="pt-4">
                   <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
 
@@ -1040,23 +1071,127 @@ const AnalyticaEgresos = () => {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start text-left font-normal" size="sm">
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {periodFilter === "diario"
-                          ? format(fechaAnalisisDiario, "PPP", { locale: es })
-                          : format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                        {format(fechaAnalisisDiario, "PPP", { locale: es })}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={periodFilter === "diario" ? fechaAnalisisDiario : fechaAnalisisMensual}
+                        selected={fechaAnalisisDiario}
                         onSelect={(date) => {
                           if (!date) return;
-                          if (periodFilter === "diario") setFechaAnalisisDiario(date);
-                          else setFechaAnalisisMensual(date);
+                          setFechaAnalisisDiario(date);
                         }}
                         initialFocus
                         className="pointer-events-auto"
                       />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+
+              {/* ✅ Mensual = selector Mes + Año (como Ingresos) */}
+              {periodFilter === "mensual" && (
+                <div className="pt-4">
+                  <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal" size="sm">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                      </Button>
+                    </PopoverTrigger>
+
+                    <PopoverContent className="w-[340px] p-4" align="start">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Mes</Label>
+                          <Select
+                            value={String(fechaAnalisisMensual.getMonth())}
+                            onValueChange={(v) => {
+                              const month = Number(v);
+                              const y = fechaAnalisisMensual.getFullYear();
+                              setFechaAnalisisMensual(new Date(y, month, 1));
+                            }}
+                          >
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder="Mes" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MONTHS.map((m) => (
+                                <SelectItem key={m.value} value={String(m.value)}>
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Año</Label>
+                          <Select
+                            value={String(fechaAnalisisMensual.getFullYear())}
+                            onValueChange={(v) => {
+                              const year = Number(v);
+                              const m = fechaAnalisisMensual.getMonth();
+                              setFechaAnalisisMensual(new Date(year, m, 1));
+                            }}
+                          >
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder="Año" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {YEARS.map((y) => (
+                                <SelectItem key={y} value={String(y)}>
+                                  {y}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+
+              {/* ✅ Anual = selector de Año (como Ingresos) */}
+              {periodFilter === "anual" && (
+                <div className="pt-4">
+                  <Label className="text-xs text-muted-foreground mb-2 block">Año específico</Label>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal" size="sm">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {String(fechaAnalisisMensual.getFullYear())}
+                      </Button>
+                    </PopoverTrigger>
+
+                    <PopoverContent className="w-[260px] p-4" align="start">
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Año</Label>
+                        <Select
+                          value={String(fechaAnalisisMensual.getFullYear())}
+                          onValueChange={(v) => {
+                            const year = Number(v);
+                            // Para anual usamos el año, el mes queda fijo en enero
+                            setFechaAnalisisMensual(new Date(year, 0, 1));
+                          }}
+                        >
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Año" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {YEARS.map((y) => (
+                              <SelectItem key={y} value={String(y)}>
+                                {y}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 </div>
