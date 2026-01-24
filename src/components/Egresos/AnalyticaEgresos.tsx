@@ -34,7 +34,8 @@ import { cn } from "@/lib/utils";
 
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
-import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
+// ❌ YA NO usamos resumenQuery para highlights (era la causa del “todo en 0”)
+// import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
 import { useEgresosPorPeriodo, DatosEvolucionSimple } from "@/hooks/useEgresosPorPeriodo";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useCuentas } from "@/hooks/useCuentas";
@@ -156,7 +157,8 @@ const AnalyticaEgresos = () => {
   // Queries
   const transQuery = useTransaccionesEgresos(1000, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
   const costosInvQuery = useCostosVentaInventario(periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
-  const resumenQuery = useResumenEgresosPorPeriodo() as any;
+  // ❌ Ya no dependemos de esto para highlights
+  // const resumenQuery = useResumenEgresosPorPeriodo() as any;
   const graficaQuery = useEgresosPorPeriodo(periodFilter, tipoEgreso, fechaAnalisisDiario, fechaAnalisisMensual) as any;
 
   const subcuentasQuery = useSubcuentas() as any;
@@ -166,7 +168,6 @@ const AnalyticaEgresos = () => {
   // Normalización E2E del shape
   const transacciones = useMemo(() => normalizeArray<any>(transQuery?.data), [transQuery?.data]);
   const costosVentaInventario = useMemo(() => normalizeArray<any>(costosInvQuery?.data), [costosInvQuery?.data]);
-  const resumenes = resumenQuery?.data?.data ?? resumenQuery?.data ?? null;
 
   const subcuentas = useMemo(() => normalizeArray<any>(subcuentasQuery?.data), [subcuentasQuery?.data]);
   const productosEgresos = useMemo(() => normalizeArray<any>(productosQuery?.data), [productosQuery?.data]);
@@ -180,7 +181,7 @@ const AnalyticaEgresos = () => {
   const datosGraficaRaw = graficaQuery?.data?.data ?? graficaQuery?.data ?? null;
 
   const loading =
-    !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!resumenQuery?.isLoading || !!graficaQuery?.isLoading;
+    !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!graficaQuery?.isLoading;
 
   // ---- Formato/escala SOLO PARA VISUAL ----
   const getSufijoFormato = (fmt: "normal" | "miles" | "millones") => {
@@ -199,19 +200,45 @@ const AnalyticaEgresos = () => {
   const formatMoneyScaledWith = (fmt: "normal" | "miles" | "millones", raw: number, incluirSufijo = false) => {
     const v = scaleWith(fmt, raw);
     const sufijo = incluirSufijo ? getSufijoFormato(fmt) : "";
-    // ✅ IMPORTANTE: aquí YA incluye "$"
     return `$${v.toLocaleString("es-MX", {
       minimumFractionDigits: decimales,
       maximumFractionDigits: decimales,
     })}${sufijo}`;
   };
 
-  const formatMoneyScaled = (raw: number, incluirSufijo = false) => formatMoneyScaledWith(formatoMontos, raw, incluirSufijo);
+  const formatMoneyScaled = (raw: number, incluirSufijo = false) =>
+    formatMoneyScaledWith(formatoMontos, raw, incluirSufijo);
 
   const calcularPorcentaje = (monto: number, total: number): string => {
     const t = toNum(total);
     if (t === 0) return "0.0";
     return ((toNum(monto) / t) * 100).toFixed(1);
+  };
+
+  // ✅ fecha robusta (porque cada endpoint manda distinto)
+  const getDateAny = (x: any): Date | null => {
+    const raw =
+      x?.fecha ??
+      x?.date ??
+      x?.createdAt ??
+      x?.created_at ??
+      x?.updatedAt ??
+      x?.updated_at ??
+      x?.fecha_egreso ??
+      x?.fechaEgreso ??
+      x?.fecha_movimiento ??
+      x?.fechaMovimiento ??
+      null;
+
+    if (!raw) return null;
+    const d = raw instanceof Date ? raw : new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const inRange = (d: Date | null, start: Date, end: Date) => {
+    if (!d) return false;
+    const t = d.getTime();
+    return t >= start.getTime() && t < end.getTime();
   };
 
   // JOIN manual: imagenes por nombre
@@ -227,7 +254,7 @@ const AnalyticaEgresos = () => {
   /**
    * Filtrar transacciones operativas:
    * - Costos de venta: 5001, 5003, 5004
-   * - Costo inventario: 5002
+   * - Costo inventario: (NO se toma de transacciones en highlights; viene de hook inventario)
    * - Gastos: 51XX (excepto 5109, 5110 si aplica)
    * - Otros gastos: 5204
    */
@@ -238,7 +265,6 @@ const AnalyticaEgresos = () => {
         if (!cc) return false;
 
         if (cc === "5001" || cc === "5003" || cc === "5004") return true;
-        if (cc === "5002") return true;
 
         if (cc.startsWith("51") && cc !== "5109" && cc !== "5110") return true;
 
@@ -374,7 +400,72 @@ const AnalyticaEgresos = () => {
     }));
   }, [datosGraficaRaw, tipoEgreso]);
 
-  // Egresos por Tipo (RAW) ✅ NOMBRES NUEVOS
+  // ✅✅✅ HIGHLIGHTS E2E (misma base que la tabla de Resumen: transacciones)
+  // - Día: hoy
+  // - Mes: mes seleccionado (fechaAnalisisMensual)
+  // - Año: año del mes seleccionado
+  // - Inventario: SOLO hook inventario
+  const highlights = useMemo(() => {
+    const hoy = new Date();
+    const startDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0, 0);
+    const endDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1, 0, 0, 0, 0);
+
+    const startMes = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth(), 1, 0, 0, 0, 0);
+    const endMes = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 1, 0, 0, 0, 0);
+
+    const startAnio = new Date(fechaAnalisisMensual.getFullYear(), 0, 1, 0, 0, 0, 0);
+    const endAnio = new Date(fechaAnalisisMensual.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+
+    const sumTx = (list: any[], start: Date, end: Date) => {
+      let costosVenta = 0;
+      let gastos = 0;
+      let otrosGastos = 0;
+
+      for (const t of list) {
+        const d = getDateAny(t);
+        if (!inRange(d, start, end)) continue;
+
+        const cc = String(t?.cuenta_codigo ?? "");
+        const monto = toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
+
+        if (cc === "5001" || cc === "5003" || cc === "5004") costosVenta += monto;
+        else if (cc.startsWith("51") && cc !== "5109" && cc !== "5110") gastos += monto;
+        else if (cc === "5204") otrosGastos += monto;
+      }
+
+      return { costosVenta, gastos, otrosGastos };
+    };
+
+    const sumInv = (list: any[], start: Date, end: Date) => {
+      let inv = 0;
+      for (const c of list) {
+        const d = getDateAny(c);
+        if (!inRange(d, start, end)) continue;
+        inv += toNum(c?.monto ?? c?.total ?? 0);
+      }
+      return inv;
+    };
+
+    const diaTx = sumTx(filteredTransactions, startDia, endDia);
+    const mesTx = sumTx(filteredTransactions, startMes, endMes);
+    const anioTx = sumTx(filteredTransactions, startAnio, endAnio);
+
+    const diaInv = sumInv(costosVentaInventario, startDia, endDia);
+    const mesInv = sumInv(costosVentaInventario, startMes, endMes);
+    const anioInv = sumInv(costosVentaInventario, startAnio, endAnio);
+
+    const diaTotal = diaTx.costosVenta + diaInv + diaTx.gastos + diaTx.otrosGastos;
+    const mesTotal = mesTx.costosVenta + mesInv + mesTx.gastos + mesTx.otrosGastos;
+    const anioTotal = anioTx.costosVenta + anioInv + anioTx.gastos + anioTx.otrosGastos;
+
+    return {
+      dia: { ...diaTx, costosVentaInventario: diaInv, total: diaTotal },
+      mes: { ...mesTx, costosVentaInventario: mesInv, total: mesTotal },
+      anio: { ...anioTx, costosVentaInventario: anioInv, total: anioTotal },
+    };
+  }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual]);
+
+  // Egresos por Tipo (RAW)
   const datosEgresosPorTipo = useMemo(() => {
     const data: { tipo: string; monto: number }[] = [];
 
@@ -671,37 +762,12 @@ const AnalyticaEgresos = () => {
     [datosEgresosPorMetodoPago]
   );
 
-  // Resúmenes (blindados)
-  const resDia = {
-    costosVenta5001: toNum(resumenes?.dia?.costosVenta5001),
-    costosVenta5002: toNum(resumenes?.dia?.costosVenta5002),
-    gastos: toNum(resumenes?.dia?.gastos),
-    otrosGastos: toNum(resumenes?.dia?.otrosGastos),
-    total: toNum(resumenes?.dia?.total),
-  };
-
-  const resMes = {
-    costosVenta5001: toNum(resumenes?.mes?.costosVenta5001),
-    costosVenta5002: toNum(resumenes?.mes?.costosVenta5002),
-    gastos: toNum(resumenes?.mes?.gastos),
-    otrosGastos: toNum(resumenes?.mes?.otrosGastos),
-    total: toNum(resumenes?.mes?.total),
-  };
-
-  const resAnio = {
-    costosVenta5001: toNum(resumenes?.anio?.costosVenta5001),
-    costosVenta5002: toNum(resumenes?.anio?.costosVenta5002),
-    gastos: toNum(resumenes?.anio?.gastos),
-    otrosGastos: toNum(resumenes?.anio?.otrosGastos),
-    total: toNum(resumenes?.anio?.total),
-  };
-
   // ✅ Labels como en Ventas (visuales, no afectan lógica)
   const labelHoy = useMemo(() => format(new Date(), "dd/MM/yyyy", { locale: es }), []);
   const labelMes = useMemo(() => format(fechaAnalisisMensual, "MMMM/yyyy", { locale: es }), [fechaAnalisisMensual]);
-  const labelAno = useMemo(() => format(new Date(), "yyyy", { locale: es }), []);
+  const labelAno = useMemo(() => format(new Date(fechaAnalisisMensual.getFullYear(), 0, 1), "yyyy", { locale: es }), [fechaAnalisisMensual]);
 
-  if (loading || !resumenes) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -754,7 +820,6 @@ const AnalyticaEgresos = () => {
     costoVentasInventario: CHART.ring,
     gastosOperativos: CHART.destructive,
     otrosGastos: CHART.accent,
-    total: CHART.destructive,
   };
 
   // ✅ helper para highlights (usa formato propio como Ventas)
@@ -773,21 +838,45 @@ const AnalyticaEgresos = () => {
       <span className={cn("text-sm", bold ? "font-bold" : "font-medium")} style={{ color }}>
         {label}
       </span>
-      {/* ✅ FIX: NO agregar "$" aquí porque formatMoneyScaledWith ya lo trae */}
       <span className={cn("text-foreground", bold ? "font-extrabold" : "font-semibold")}>
         {formatMoneyScaledWith(highlightsScaleFormat, value, false)}
       </span>
     </div>
   );
 
+  // ✅ Resúmenes ya NO dependen del endpoint “resumenes”
+  const resDia = {
+    costosVenta5001: toNum(highlights?.dia?.costosVenta),
+    costosVenta5002: toNum(highlights?.dia?.costosVentaInventario),
+    gastos: toNum(highlights?.dia?.gastos),
+    otrosGastos: toNum(highlights?.dia?.otrosGastos),
+    total: toNum(highlights?.dia?.total),
+  };
+
+  const resMes = {
+    costosVenta5001: toNum(highlights?.mes?.costosVenta),
+    costosVenta5002: toNum(highlights?.mes?.costosVentaInventario),
+    gastos: toNum(highlights?.mes?.gastos),
+    otrosGastos: toNum(highlights?.mes?.otrosGastos),
+    total: toNum(highlights?.mes?.total),
+  };
+
+  const resAnio = {
+    costosVenta5001: toNum(highlights?.anio?.costosVenta),
+    costosVenta5002: toNum(highlights?.anio?.costosVentaInventario),
+    gastos: toNum(highlights?.anio?.gastos),
+    otrosGastos: toNum(highlights?.anio?.otrosGastos),
+    total: toNum(highlights?.anio?.total),
+  };
+
   return (
     <div className="space-y-6">
-      {/* ✅ Título correcto + SIN descripción */}
+      {/* ✅ Título */}
       <div>
         <h3 className="text-xl font-bold text-foreground mb-1">Highlights de egresos</h3>
       </div>
 
-      {/* ✅ HIGHLIGHTS (igual que Ventas) */}
+      {/* ✅ HIGHLIGHTS */}
       <div className="mb-2">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <p className="text-sm text-muted-foreground">Ajusta el formato numérico de los highlights</p>
@@ -834,12 +923,10 @@ const AnalyticaEgresos = () => {
 
               <div className="h-px bg-border" />
 
+              {/* ✅ TOTAL EN NEGRO (como pediste) */}
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold" style={{ color: HL.total }}>
-                  Total Egresos:
-                </span>
-                {/* ✅ FIX: sin "$" extra */}
-                <span className="text-xl font-bold" style={{ color: HL.total }}>
+                <span className="text-sm font-bold text-foreground">Total Egresos:</span>
+                <span className="text-xl font-bold text-foreground">
                   {formatMoneyScaledWith(highlightsScaleFormat, resDia.total, false)}
                 </span>
               </div>
@@ -858,11 +945,10 @@ const AnalyticaEgresos = () => {
 
               <div className="h-px bg-border" />
 
+              {/* ✅ TOTAL EN NEGRO */}
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold" style={{ color: HL.total }}>
-                  Total Egresos:
-                </span>
-                <span className="text-xl font-bold" style={{ color: HL.total }}>
+                <span className="text-sm font-bold text-foreground">Total Egresos:</span>
+                <span className="text-xl font-bold text-foreground">
                   {formatMoneyScaledWith(highlightsScaleFormat, resMes.total, false)}
                 </span>
               </div>
@@ -881,11 +967,10 @@ const AnalyticaEgresos = () => {
 
               <div className="h-px bg-border" />
 
+              {/* ✅ TOTAL EN NEGRO */}
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold" style={{ color: HL.total }}>
-                  Total Egresos:
-                </span>
-                <span className="text-xl font-bold" style={{ color: HL.total }}>
+                <span className="text-sm font-bold text-foreground">Total Egresos:</span>
+                <span className="text-xl font-bold text-foreground">
                   {formatMoneyScaledWith(highlightsScaleFormat, resAnio.total, false)}
                 </span>
               </div>
@@ -894,10 +979,10 @@ const AnalyticaEgresos = () => {
         </div>
       </div>
 
-      {/* ✅ Separador como Ventas */}
+      {/* ✅ Separador */}
       <div className="my-8 border-t-2 border-primary/20" />
 
-      {/* ✅ CONTROLES (4 cards como Ventas) */}
+      {/* ✅ CONTROLES */}
       <div>
         <h3 className="text-xl font-bold text-foreground mb-6">Controles de análisis</h3>
 
@@ -909,11 +994,7 @@ const AnalyticaEgresos = () => {
               <CardDescription>Selecciona el período</CardDescription>
             </CardHeader>
             <CardContent>
-              <RadioGroup
-                value={periodFilter}
-                onValueChange={(v) => setPeriodFilter(v as any)}
-                className="flex flex-col gap-3"
-              >
+              <RadioGroup value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)} className="flex flex-col gap-3">
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="diario" id="eg-period-diario" />
                   <Label htmlFor="eg-period-diario" className="cursor-pointer">
