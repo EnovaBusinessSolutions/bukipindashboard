@@ -225,7 +225,7 @@ const PaymentsTreemapTile = (props: any) => {
             fill="#ffffff"
             fontSize={11}
             fontWeight={700}
-            opacity={0.90}
+            opacity={0.9}
           >
             {porcentaje}%
           </text>
@@ -250,7 +250,9 @@ const AnalyticaEgresos = () => {
 
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
-  const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("subcuenta");
+
+  // ✅✅✅ IMPORTANTE: por default "Por cuenta" (como Registro de Ingresos)
+  const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("cuenta");
 
   // ✅ Mes/Año selector como en Ingresos
   const MONTHS = useMemo(
@@ -901,152 +903,145 @@ const AnalyticaEgresos = () => {
   }, [transaccionesPorTipo, cuentasFlat]);
 
   /**
- * ✅✅✅ MÉTODOS DE PAGO — E2E CERTERO (según captura 3)
- * - Se integra “debajo por rubro” (el rubro actual: costo | gasto | otros)
- * - Solo considera pagos reales (Pagado Total o Pago Parcial) usando monto_pagado
- * - Para costo_inventario: NO APLICA (mensaje)
- * - Clasifica en: Efectivo vs Bancos / Tarjeta (transferencia, tarjeta, banco, spei, etc.)
- * - Métricas estilo Ingresos:
- *   - Total real (Highlights): suma de monto_pagado en el período para el rubro
- *   - Sumado por métodos: suma de categorías del treemap
- *   - Diferencia: Total real - Sumado por métodos (debe ser ~0)
- */
-const datosMetodoPagoEgresos = useMemo(() => {
-  // ✅ Tipos para que TS no “rompa” el union al usar .filter()
-  type MetodoPagoKey = "efectivo" | "bancos" | "otros";
-  type MetodoPagoDatum = { name: string; value: number; fill: string; key: MetodoPagoKey };
-  type MetodoPagoRow = { key: MetodoPagoKey; label: string; value: number; color: string };
+   * ✅✅✅ MÉTODOS DE PAGO — E2E CERTERO
+   * - Solo considera pagos reales (Pagado Total o Pago Parcial) usando monto_pagado
+   * - Para costo_inventario: NO APLICA (mensaje)
+   * - Clasifica en: Efectivo vs Bancos / Tarjeta (transferencia, tarjeta, banco, spei, etc.)
+   */
+  const datosMetodoPagoEgresos = useMemo(() => {
+    // ✅ Tipos para que TS no “rompa” el union al usar .filter()
+    type MetodoPagoKey = "efectivo" | "bancos" | "otros";
+    type MetodoPagoDatum = { name: string; value: number; fill: string; key: MetodoPagoKey };
+    type MetodoPagoRow = { key: MetodoPagoKey; label: string; value: number; color: string };
 
-  if (tipoEgreso === "costo_inventario") {
-    return {
-      applicable: false,
-      totalReal: 0,
-      sumByMethods: 0,
-      diff: 0,
-      totalTreemap: 0,
-      data: [] as MetodoPagoDatum[],
-      rows: [] as MetodoPagoRow[],
+    if (tipoEgreso === "costo_inventario") {
+      return {
+        applicable: false,
+        totalReal: 0,
+        sumByMethods: 0,
+        diff: 0,
+        totalTreemap: 0,
+        data: [] as MetodoPagoDatum[],
+        rows: [] as MetodoPagoRow[],
+      };
+    }
+
+    const { start, end } = rangoAnalisis;
+
+    const fuente =
+      tipoEgreso === "costo"
+        ? transaccionesPorTipo.sinImpuestosCostoVenta
+        : tipoEgreso === "gasto"
+        ? transaccionesPorTipo.sinImpuestosGastos
+        : transaccionesPorTipo.sinImpuestosOtrosGastos;
+
+    const EPS = 0.01;
+
+    const norm = (s: any) =>
+      String(s ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const getMontoTotal = (t: any) => toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
+    const getMontoPagado = (t: any) =>
+      toNum(t?.monto_pagado ?? t?.pagado ?? t?.montoPagado ?? t?.total_pagado ?? t?.totalPagado ?? 0);
+
+    const deriveEstado = (t: any): "pagado" | "parcial" | "credito" => {
+      const rawEstado = norm(t?.estado_pago ?? t?.estadoPago ?? t?.estatus_pago ?? t?.estatusPago ?? "");
+      if (rawEstado) {
+        if (rawEstado.includes("parcial")) return "parcial";
+        if (rawEstado.includes("credito") || rawEstado.includes("pendiente")) return "credito";
+        if (rawEstado.includes("pagado")) return "pagado";
+      }
+
+      const total = getMontoTotal(t);
+      const pagado = getMontoPagado(t);
+
+      if (total <= EPS) return "credito";
+      if (pagado >= total - EPS) return "pagado";
+      if (pagado > EPS && pagado < total - EPS) return "parcial";
+
+      const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? "");
+      if (mp.includes("credito")) return "credito";
+
+      return "credito";
     };
-  }
 
-  const { start, end } = rangoAnalisis;
+    const classifyMethod = (t: any): MetodoPagoKey => {
+      const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? t?.metodo ?? "");
+      if (!mp) return "otros";
 
-  const fuente =
-    tipoEgreso === "costo"
-      ? transaccionesPorTipo.sinImpuestosCostoVenta
-      : tipoEgreso === "gasto"
-      ? transaccionesPorTipo.sinImpuestosGastos
-      : transaccionesPorTipo.sinImpuestosOtrosGastos;
+      if (mp.includes("efect")) return "efectivo";
 
-  const EPS = 0.01;
+      if (
+        mp.includes("transfer") ||
+        mp.includes("banco") ||
+        mp.includes("spei") ||
+        mp.includes("tarjet") ||
+        mp.includes("debito") ||
+        mp.includes("credito") ||
+        mp.includes("tdc") ||
+        mp.includes("tdd")
+      ) {
+        return "bancos";
+      }
 
-  const norm = (s: any) =>
-    String(s ?? "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim();
+      if (mp.includes("caja")) return "efectivo";
 
-  const getMontoTotal = (t: any) => toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
-  const getMontoPagado = (t: any) =>
-    toNum(t?.monto_pagado ?? t?.pagado ?? t?.montoPagado ?? t?.total_pagado ?? t?.totalPagado ?? 0);
+      return "otros";
+    };
 
-  const deriveEstado = (t: any): "pagado" | "parcial" | "credito" => {
-    const rawEstado = norm(t?.estado_pago ?? t?.estadoPago ?? t?.estatus_pago ?? t?.estatusPago ?? "");
-    if (rawEstado) {
-      if (rawEstado.includes("parcial")) return "parcial";
-      if (rawEstado.includes("credito") || rawEstado.includes("pendiente")) return "credito";
-      if (rawEstado.includes("pagado")) return "pagado";
+    let totalReal = 0;
+    const acc: Record<MetodoPagoKey, number> = { efectivo: 0, bancos: 0, otros: 0 };
+
+    for (const t of fuente || []) {
+      const d = getDateAny(t);
+      if (!inRange(d, start, end)) continue;
+
+      const estado = deriveEstado(t);
+      if (estado === "credito") continue;
+
+      const pagado = getMontoPagado(t);
+      if (pagado <= EPS) continue;
+
+      totalReal += pagado;
+
+      const bucket = classifyMethod(t);
+      acc[bucket] += pagado;
     }
 
-    const total = getMontoTotal(t);
-    const pagado = getMontoPagado(t);
+    const base: MetodoPagoDatum[] = [
+      { key: "efectivo", name: "Efectivo", value: acc.efectivo, fill: "hsl(var(--primary))" },
+      { key: "bancos", name: "Bancos / Tarjeta", value: acc.bancos, fill: "hsl(var(--accent))" },
+      { key: "otros", name: "Otros", value: acc.otros, fill: "hsl(var(--ring))" },
+    ];
 
-    if (total <= EPS) return "credito";
-    if (pagado >= total - EPS) return "pagado";
-    if (pagado > EPS && pagado < total - EPS) return "parcial";
+    // ✅ Type-guard: mantiene el union de key
+    const data: MetodoPagoDatum[] = base.filter((x): x is MetodoPagoDatum => toNum(x.value) > 0);
 
-    const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? "");
-    if (mp.includes("credito")) return "credito";
+    const sumByMethods = data.reduce((s, it) => s + toNum(it.value), 0);
+    const diff = totalReal - sumByMethods;
 
-    return "credito";
-  };
+    const rows: MetodoPagoRow[] = [
+      { key: "efectivo", label: "Efectivo", value: acc.efectivo, color: "hsl(var(--primary))" },
+      { key: "bancos", label: "Bancos / Tarjeta", value: acc.bancos, color: "hsl(var(--accent))" },
+      ...(acc.otros > 0
+        ? ([{ key: "otros", label: "Otros", value: acc.otros, color: "hsl(var(--ring))" }] satisfies MetodoPagoRow[])
+        : ([] as MetodoPagoRow[])),
+    ];
 
-  const classifyMethod = (t: any): MetodoPagoKey => {
-    const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? t?.metodo ?? "");
-    if (!mp) return "otros";
-
-    if (mp.includes("efect")) return "efectivo";
-
-    if (
-      mp.includes("transfer") ||
-      mp.includes("banco") ||
-      mp.includes("spei") ||
-      mp.includes("tarjet") ||
-      mp.includes("debito") ||
-      mp.includes("credito") ||
-      mp.includes("tdc") ||
-      mp.includes("tdd")
-    ) {
-      return "bancos";
-    }
-
-    if (mp.includes("caja")) return "efectivo";
-
-    return "otros";
-  };
-
-  let totalReal = 0;
-  const acc: Record<MetodoPagoKey, number> = { efectivo: 0, bancos: 0, otros: 0 };
-
-  for (const t of fuente || []) {
-    const d = getDateAny(t);
-    if (!inRange(d, start, end)) continue;
-
-    const estado = deriveEstado(t);
-    if (estado === "credito") continue;
-
-    const pagado = getMontoPagado(t);
-    if (pagado <= EPS) continue;
-
-    totalReal += pagado;
-
-    const bucket = classifyMethod(t);
-    acc[bucket] += pagado;
-  }
-
-  const base: MetodoPagoDatum[] = [
-    { key: "efectivo", name: "Efectivo", value: acc.efectivo, fill: "hsl(var(--primary))" },
-    { key: "bancos", name: "Bancos / Tarjeta", value: acc.bancos, fill: "hsl(var(--accent))" },
-    { key: "otros", name: "Otros", value: acc.otros, fill: "hsl(var(--ring))" },
-  ];
-
-  // ✅ Type-guard: mantiene el union de key
-  const data: MetodoPagoDatum[] = base.filter((x): x is MetodoPagoDatum => toNum(x.value) > 0);
-
-  const sumByMethods = data.reduce((s, it) => s + toNum(it.value), 0);
-  const diff = totalReal - sumByMethods;
-
-  const rows: MetodoPagoRow[] = [
-  { key: "efectivo", label: "Efectivo", value: acc.efectivo, color: "hsl(var(--primary))" },
-  { key: "bancos", label: "Bancos / Tarjeta", value: acc.bancos, color: "hsl(var(--accent))" },
-  ...(acc.otros > 0
-    ? ([{ key: "otros", label: "Otros", value: acc.otros, color: "hsl(var(--ring))" }] satisfies MetodoPagoRow[])
-    : ([] as MetodoPagoRow[])),
-];
-
-
-  return {
-    applicable: true,
-    totalReal,
-    sumByMethods,
-    diff,
-    totalTreemap: sumByMethods,
-    data,
-    rows,
-  };
-}, [tipoEgreso, transaccionesPorTipo, rangoAnalisis]);
-
+    return {
+      applicable: true,
+      totalReal,
+      sumByMethods,
+      diff,
+      totalTreemap: sumByMethods,
+      data,
+      rows,
+    };
+  }, [tipoEgreso, transaccionesPorTipo, rangoAnalisis]);
 
   // Egresos por Producto (Top 10) RAW
   const datosEgresosPorProducto = useMemo(() => {
@@ -1365,6 +1360,22 @@ const datosMetodoPagoEgresos = useMemo(() => {
     );
   };
 
+  // ✅✅✅ “Pill” selector estilo Ingresos para Cuenta/Subcuenta
+  const TopSelectorPill = () => (
+    <div className="pt-3">
+      <Tabs value={vistaAgrupacion} onValueChange={(v) => setVistaAgrupacion(v as "cuenta" | "subcuenta")}>
+        <TabsList className="h-9 bg-muted/30 border rounded-full p-1">
+          <TabsTrigger value="cuenta" className="text-xs rounded-full px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            Por cuenta
+          </TabsTrigger>
+          <TabsTrigger value="subcuenta" className="text-xs rounded-full px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            Por subcuenta
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* ✅ Título */}
@@ -1379,11 +1390,7 @@ const datosMetodoPagoEgresos = useMemo(() => {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Formato:</span>
-            <RadioGroup
-              value={highlightsScaleFormat}
-              onValueChange={(v) => setHighlightsScaleFormat(v as any)}
-              className="flex items-center gap-4"
-            >
+            <RadioGroup value={highlightsScaleFormat} onValueChange={(v) => setHighlightsScaleFormat(v as any)} className="flex items-center gap-4">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="normal" id="eg-high-general" />
                 <Label htmlFor="eg-high-general" className="cursor-pointer text-sm">
@@ -1949,30 +1956,23 @@ const datosMetodoPagoEgresos = useMemo(() => {
 
       {/* Más gráficas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Egresos por Cuenta/Subcuenta */}
+        {/* ✅✅✅ Egresos por Cuenta/Subcuenta (estética como Registro de Ingresos) */}
         <Card>
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">{vistaAgrupacion === "cuenta" ? "Top por cuenta" : "Top por subcuenta"}</CardTitle>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle className="text-base">
+                  {vistaAgrupacion === "cuenta" ? "Top por cuenta" : "Top por subcuenta"}
+                </CardTitle>
                 <CardDescription>Identifica lo que más pesa</CardDescription>
+
+                {/* ✅ selector tipo ingresos */}
+                <TopSelectorPill />
               </div>
+
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                 {formatMoneyScaled(totalEgresosPorCuentaSubcuenta, true)}
               </Badge>
-            </div>
-
-            <div className="pt-3">
-              <Tabs value={vistaAgrupacion} onValueChange={(v) => setVistaAgrupacion(v as "cuenta" | "subcuenta")}>
-                <TabsList className="h-9">
-                  <TabsTrigger value="cuenta" className="text-xs">
-                    Cuenta
-                  </TabsTrigger>
-                  <TabsTrigger value="subcuenta" className="text-xs">
-                    Subcuenta
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
             </div>
           </CardHeader>
 
@@ -1983,23 +1983,53 @@ const datosMetodoPagoEgresos = useMemo(() => {
               if (!datosActuales.length) return <ChartCardEmpty title="Sin datos" hint="Registra egresos o ajusta filtros para ver el top." />;
 
               return (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={datosActuales} layout="vertical" margin={{ top: 8, right: 18, left: 6, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(v: any) => {
-                        const s = scaleWith(formatoMontos, toNum(v));
-                        return `$${s.toLocaleString("es-MX", { maximumFractionDigits: decimales })}`;
-                      }}
-                      domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
-                    />
-                    <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]} contentStyle={tooltipCardStyle} labelStyle={tooltipLabelStyle} />
-                    <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill={CHART.accent} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="h-full rounded-2xl border bg-muted/10 p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={datosActuales} layout="vertical" margin={{ top: 10, right: 16, left: 10, bottom: 10 }}>
+                      {/* grid suave (como ingresos) */}
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v: any) => {
+                          const s = scaleWith(formatoMontos, toNum(v));
+                          return `$${s.toLocaleString("es-MX", { maximumFractionDigits: decimales })}`;
+                        }}
+                        domain={[0, (dataMax: number) => Math.ceil((Number(dataMax) || 0) * 1.18)]}
+                      />
+
+                      <YAxis
+                        dataKey="subcuenta"
+                        type="category"
+                        width={vistaAgrupacion === "cuenta" ? 240 : 190}
+                        tick={{ fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+
+                      <Tooltip
+                        formatter={(value: any, _name: any, props: any) => {
+                          const label = props?.payload?.subcuenta ?? "Monto";
+                          return [formatMoneyScaled(toNum(value), true), label];
+                        }}
+                        contentStyle={tooltipCardStyle}
+                        labelStyle={tooltipLabelStyle}
+                        cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.25 }}
+                      />
+
+                      <Bar
+                        dataKey="monto"
+                        radius={[12, 12, 12, 12]}
+                        fill={CHART.accent}
+                        barSize={14}
+                        background={{ fill: "hsl(var(--muted))", fillOpacity: 0.25, radius: 12 }}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               );
             })()}
           </CardContent>
@@ -2071,13 +2101,7 @@ const datosMetodoPagoEgresos = useMemo(() => {
                 {/* ✅ legend pills */}
                 <div className="pt-3 flex flex-wrap gap-2">
                   {datosMetodoPagoEgresos.rows.map((r) => (
-                    <MetodoPagoPill
-                      key={r.key}
-                      label={r.label}
-                      value={toNum(r.value)}
-                      total={toNum(datosMetodoPagoEgresos.totalTreemap)}
-                      color={r.color}
-                    />
+                    <MetodoPagoPill key={r.key} label={r.label} value={toNum(r.value)} total={toNum(datosMetodoPagoEgresos.totalTreemap)} color={r.color} />
                   ))}
                 </div>
 
@@ -2127,9 +2151,7 @@ const datosMetodoPagoEgresos = useMemo(() => {
                             !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
                           )}
                         >
-                          <Package
-                            className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
-                          />
+                          <Package className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
                         </div>
                       )}
 
