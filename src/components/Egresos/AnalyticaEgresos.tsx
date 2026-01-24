@@ -133,6 +133,108 @@ const TreemapTile = (props: any) => {
   );
 };
 
+/**
+ * Treemap “Métodos de pago” estilo PRO (como Ingresos):
+ * - Texto centrado (label + $ + %)
+ * - Barra superior tipo “pill”
+ */
+const PaymentsTreemapTile = (props: any) => {
+  const { x, y, width, height, name, value, fill, dataTotal, formatMoneyScaled } = props;
+
+  const v = toNum(value);
+  const total = toNum(dataTotal);
+  if (!name || total <= 0) return null;
+
+  const pct = total > 0 ? (v / total) * 100 : 0;
+  const porcentaje = pct.toFixed(1);
+
+  const minSide = Math.min(width, height);
+  const rx = Math.min(18, Math.max(12, Math.floor(minSide / 9)));
+
+  // si muy chico, evitamos texto grande
+  const showCentered = minSide >= 120;
+  const showCompact = !showCentered && minSide >= 84;
+
+  const pad = 10;
+  const pillH = Math.min(18, Math.max(14, Math.floor(height * 0.085)));
+  const pillW = Math.max(40, Math.min(width - pad * 2, Math.floor(width * 0.7)));
+
+  const cx = x + width / 2;
+  const cy = y + height / 2;
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={fill}
+        rx={rx}
+        ry={rx}
+        stroke="rgba(255,255,255,0.55)"
+        strokeWidth={1}
+      />
+
+      {/* top “pill” */}
+      <rect
+        x={x + pad}
+        y={y + pad}
+        width={pillW}
+        height={pillH}
+        rx={pillH / 2}
+        ry={pillH / 2}
+        fill="rgba(255,255,255,0.18)"
+        stroke="rgba(255,255,255,0.20)"
+        strokeWidth={1}
+      />
+
+      {(showCentered || showCompact) && (
+        <>
+          <text
+            x={cx}
+            y={cy - (showCentered ? 10 : 8)}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#ffffff"
+            fontSize={showCentered ? 15 : 13}
+            fontWeight={800}
+            opacity={0.95}
+          >
+            {name}
+          </text>
+
+          <text
+            x={cx}
+            y={cy + (showCentered ? 10 : 8)}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#ffffff"
+            fontSize={showCentered ? 13 : 12}
+            fontWeight={800}
+            opacity={0.95}
+          >
+            {formatMoneyScaled(v, false)}
+          </text>
+
+          <text
+            x={cx}
+            y={cy + (showCentered ? 30 : 26)}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#ffffff"
+            fontSize={11}
+            fontWeight={700}
+            opacity={0.90}
+          >
+            {porcentaje}%
+          </text>
+        </>
+      )}
+    </g>
+  );
+};
+
 const AnalyticaEgresos = () => {
   // ✅ Precisión eliminada del UI (se queda fijo a 2 decimales como en analítica de ingresos)
   const decimales: 0 | 1 | 2 = 2;
@@ -169,10 +271,7 @@ const AnalyticaEgresos = () => {
     []
   );
 
-  const MONTHS_SHORT = useMemo(
-    () => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
-    []
-  );
+  const MONTHS_SHORT = useMemo(() => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"], []);
 
   const YEARS = useMemo(() => {
     const base = new Date().getFullYear();
@@ -454,7 +553,7 @@ const AnalyticaEgresos = () => {
       otrosGastos,
       total,
     };
-  }, [filteredTransactions, costosVentaInventario, rangoAnalisis, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
+  }, [filteredTransactions, costosVentaInventario, rangoAnalisis]);
 
   // ✅✅✅ SERIE EVOLUCIÓN (E2E REAL) — basada en los mismos datos que “Resumen de Egresos”
   const evolucion = useMemo(() => {
@@ -551,17 +650,12 @@ const AnalyticaEgresos = () => {
   }, [periodFilter, tipoEgreso]);
 
   const evolucionTitle = useMemo(() => {
-    // Igual estilo que Ingresos
     const tipo = getTipoLabel(tipoEgreso);
     if (tipoEgreso === "costo_inventario") return `Evolución de Costo de Ventas Inventario`;
     return `Evolución de ${tipo}`;
   }, [tipoEgreso]);
 
   // ✅✅✅ HIGHLIGHTS E2E (misma base que la tabla de Resumen: transacciones)
-  // - Día: hoy
-  // - Mes: mes seleccionado (fechaAnalisisMensual)
-  // - Año: año del mes seleccionado
-  // - Inventario: SOLO hook inventario
   const highlights = useMemo(() => {
     const hoy = new Date();
     const startDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0, 0);
@@ -622,7 +716,7 @@ const AnalyticaEgresos = () => {
     };
   }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual]);
 
-  // ✅ NUEVA LÓGICA DONUT (captura 3): Rubro elegido vs Demás egresos (en el período actual)
+  // ✅ NUEVA LÓGICA DONUT: Rubro elegido vs Demás egresos (en el período actual)
   const donutRubroVsDemas = useMemo(() => {
     const total = toNum(totalesEgresosEnRango.total);
     const labelSel = getTipoLabel(tipoEgreso);
@@ -638,12 +732,10 @@ const AnalyticaEgresos = () => {
 
     const rest = Math.max(0, total - selected);
 
-    // slices para el gráfico (no metemos slices de 0)
     const slices: { key: "selected" | "rest"; label: string; value: number }[] = [];
     if (selected > 0) slices.push({ key: "selected", label: labelSel, value: selected });
     if (rest > 0) slices.push({ key: "rest", label: "Demás egresos", value: rest });
 
-    // rows para el listado (aquí sí mostramos ambas aunque selected=0, si hay total)
     const rows =
       total > 0
         ? [
@@ -657,11 +749,6 @@ const AnalyticaEgresos = () => {
 
   // -----------------------------
   // ✅✅✅ ESTADO DE PAGO (E2E)
-  // Replicar lógica estilo “Ventas Netas”:
-  // - Se distribuye por estado usando MONTO TOTAL del movimiento
-  // - Estados: Pagado Total / Pago Parcial / Crédito
-  // - Respeta el rango actual (diario/mensual/anual)
-  // - Para costo_inventario NO aplica (mensaje)
   // -----------------------------
   const datosEstadoPagoEgresos = useMemo(() => {
     if (tipoEgreso === "costo_inventario") {
@@ -686,14 +773,7 @@ const AnalyticaEgresos = () => {
 
     const getMontoTotal = (t: any) => toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
     const getMontoPagado = (t: any) =>
-      toNum(
-        t?.monto_pagado ??
-          t?.pagado ??
-          t?.montoPagado ??
-          t?.total_pagado ??
-          t?.totalPagado ??
-          0
-      );
+      toNum(t?.monto_pagado ?? t?.pagado ?? t?.montoPagado ?? t?.total_pagado ?? t?.totalPagado ?? 0);
 
     const norm = (s: any) =>
       String(s ?? "")
@@ -703,7 +783,6 @@ const AnalyticaEgresos = () => {
         .trim();
 
     const deriveEstado = (t: any): "pagado" | "parcial" | "credito" => {
-      // si backend manda estado explícito, lo respetamos
       const rawEstado = norm(t?.estado_pago ?? t?.estadoPago ?? t?.estatus_pago ?? t?.estatusPago ?? "");
       if (rawEstado) {
         if (rawEstado.includes("parcial")) return "parcial";
@@ -714,23 +793,17 @@ const AnalyticaEgresos = () => {
       const total = getMontoTotal(t);
       const pagado = getMontoPagado(t);
 
-      if (total <= EPS) return "credito"; // fallback seguro
+      if (total <= EPS) return "credito";
       if (pagado >= total - EPS) return "pagado";
       if (pagado > EPS && pagado < total - EPS) return "parcial";
 
-      // si metodo_pago indica crédito, lo marcamos como crédito
       const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? "");
       if (mp.includes("credito")) return "credito";
 
-      // default
       return "credito";
     };
 
-    const acc = {
-      pagado: 0,
-      parcial: 0,
-      credito: 0,
-    };
+    const acc = { pagado: 0, parcial: 0, credito: 0 };
 
     for (const t of fuente || []) {
       const d = getDateAny(t);
@@ -827,36 +900,153 @@ const AnalyticaEgresos = () => {
       .slice(0, 15);
   }, [transaccionesPorTipo, cuentasFlat]);
 
-  // Egresos por Método de Pago (Treemap) RAW
-  const datosEgresosPorMetodoPago = useMemo(() => {
-    const todasTransacciones = [
-      ...transaccionesPorTipo.sinImpuestosCostoVenta,
-      ...transaccionesPorTipo.sinImpuestosGastos,
-      ...transaccionesPorTipo.sinImpuestosOtrosGastos,
-    ];
+  /**
+ * ✅✅✅ MÉTODOS DE PAGO — E2E CERTERO (según captura 3)
+ * - Se integra “debajo por rubro” (el rubro actual: costo | gasto | otros)
+ * - Solo considera pagos reales (Pagado Total o Pago Parcial) usando monto_pagado
+ * - Para costo_inventario: NO APLICA (mensaje)
+ * - Clasifica en: Efectivo vs Bancos / Tarjeta (transferencia, tarjeta, banco, spei, etc.)
+ * - Métricas estilo Ingresos:
+ *   - Total real (Highlights): suma de monto_pagado en el período para el rubro
+ *   - Sumado por métodos: suma de categorías del treemap
+ *   - Diferencia: Total real - Sumado por métodos (debe ser ~0)
+ */
+const datosMetodoPagoEgresos = useMemo(() => {
+  // ✅ Tipos para que TS no “rompa” el union al usar .filter()
+  type MetodoPagoKey = "efectivo" | "bancos" | "otros";
+  type MetodoPagoDatum = { name: string; value: number; fill: string; key: MetodoPagoKey };
+  type MetodoPagoRow = { key: MetodoPagoKey; label: string; value: number; color: string };
 
-    const efectivo = todasTransacciones
-      .filter((t: any) => String(t?.metodo_pago ?? "") === "efectivo" && toNum(t?.monto_pagado) > 0)
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_pagado), 0);
+  if (tipoEgreso === "costo_inventario") {
+    return {
+      applicable: false,
+      totalReal: 0,
+      sumByMethods: 0,
+      diff: 0,
+      totalTreemap: 0,
+      data: [] as MetodoPagoDatum[],
+      rows: [] as MetodoPagoRow[],
+    };
+  }
 
-    const bancosTarjeta = todasTransacciones
-      .filter((t: any) => {
-        const mp = String(t?.metodo_pago ?? "");
-        return mp && mp !== "efectivo" && toNum(t?.monto_pagado) > 0;
-      })
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_pagado), 0);
+  const { start, end } = rangoAnalisis;
 
-    const costosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
+  const fuente =
+    tipoEgreso === "costo"
+      ? transaccionesPorTipo.sinImpuestosCostoVenta
+      : tipoEgreso === "gasto"
+      ? transaccionesPorTipo.sinImpuestosGastos
+      : transaccionesPorTipo.sinImpuestosOtrosGastos;
 
-    const data = [
-      { name: "Efectivo", value: efectivo, fill: "hsl(var(--primary))" },
-      { name: "Bancos / Tarjeta", value: bancosTarjeta, fill: "hsl(var(--accent))" },
-    ];
+  const EPS = 0.01;
 
-    if (costosInventario > 0) data.push({ name: "Inventario", value: costosInventario, fill: "hsl(var(--ring))" });
+  const norm = (s: any) =>
+    String(s ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
 
-    return data.filter((item) => toNum(item.value) > 0);
-  }, [transaccionesPorTipo]);
+  const getMontoTotal = (t: any) => toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
+  const getMontoPagado = (t: any) =>
+    toNum(t?.monto_pagado ?? t?.pagado ?? t?.montoPagado ?? t?.total_pagado ?? t?.totalPagado ?? 0);
+
+  const deriveEstado = (t: any): "pagado" | "parcial" | "credito" => {
+    const rawEstado = norm(t?.estado_pago ?? t?.estadoPago ?? t?.estatus_pago ?? t?.estatusPago ?? "");
+    if (rawEstado) {
+      if (rawEstado.includes("parcial")) return "parcial";
+      if (rawEstado.includes("credito") || rawEstado.includes("pendiente")) return "credito";
+      if (rawEstado.includes("pagado")) return "pagado";
+    }
+
+    const total = getMontoTotal(t);
+    const pagado = getMontoPagado(t);
+
+    if (total <= EPS) return "credito";
+    if (pagado >= total - EPS) return "pagado";
+    if (pagado > EPS && pagado < total - EPS) return "parcial";
+
+    const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? "");
+    if (mp.includes("credito")) return "credito";
+
+    return "credito";
+  };
+
+  const classifyMethod = (t: any): MetodoPagoKey => {
+    const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? t?.metodo ?? "");
+    if (!mp) return "otros";
+
+    if (mp.includes("efect")) return "efectivo";
+
+    if (
+      mp.includes("transfer") ||
+      mp.includes("banco") ||
+      mp.includes("spei") ||
+      mp.includes("tarjet") ||
+      mp.includes("debito") ||
+      mp.includes("credito") ||
+      mp.includes("tdc") ||
+      mp.includes("tdd")
+    ) {
+      return "bancos";
+    }
+
+    if (mp.includes("caja")) return "efectivo";
+
+    return "otros";
+  };
+
+  let totalReal = 0;
+  const acc: Record<MetodoPagoKey, number> = { efectivo: 0, bancos: 0, otros: 0 };
+
+  for (const t of fuente || []) {
+    const d = getDateAny(t);
+    if (!inRange(d, start, end)) continue;
+
+    const estado = deriveEstado(t);
+    if (estado === "credito") continue;
+
+    const pagado = getMontoPagado(t);
+    if (pagado <= EPS) continue;
+
+    totalReal += pagado;
+
+    const bucket = classifyMethod(t);
+    acc[bucket] += pagado;
+  }
+
+  const base: MetodoPagoDatum[] = [
+    { key: "efectivo", name: "Efectivo", value: acc.efectivo, fill: "hsl(var(--primary))" },
+    { key: "bancos", name: "Bancos / Tarjeta", value: acc.bancos, fill: "hsl(var(--accent))" },
+    { key: "otros", name: "Otros", value: acc.otros, fill: "hsl(var(--ring))" },
+  ];
+
+  // ✅ Type-guard: mantiene el union de key
+  const data: MetodoPagoDatum[] = base.filter((x): x is MetodoPagoDatum => toNum(x.value) > 0);
+
+  const sumByMethods = data.reduce((s, it) => s + toNum(it.value), 0);
+  const diff = totalReal - sumByMethods;
+
+  const rows: MetodoPagoRow[] = [
+  { key: "efectivo", label: "Efectivo", value: acc.efectivo, color: "hsl(var(--primary))" },
+  { key: "bancos", label: "Bancos / Tarjeta", value: acc.bancos, color: "hsl(var(--accent))" },
+  ...(acc.otros > 0
+    ? ([{ key: "otros", label: "Otros", value: acc.otros, color: "hsl(var(--ring))" }] satisfies MetodoPagoRow[])
+    : ([] as MetodoPagoRow[])),
+];
+
+
+  return {
+    applicable: true,
+    totalReal,
+    sumByMethods,
+    diff,
+    totalTreemap: sumByMethods,
+    data,
+    rows,
+  };
+}, [tipoEgreso, transaccionesPorTipo, rangoAnalisis]);
+
 
   // Egresos por Producto (Top 10) RAW
   const datosEgresosPorProducto = useMemo(() => {
@@ -1005,8 +1195,6 @@ const AnalyticaEgresos = () => {
     return datos.reduce((sum, item) => sum + toNum(item.monto), 0);
   }, [vistaAgrupacion, datosEgresosPorCuenta, datosEgresosPorSubcuenta]);
 
-  const totalEgresosPorMetodoPagoTreemap = useMemo(() => datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0), [datosEgresosPorMetodoPago]);
-
   // ✅ Labels como en Ventas (visuales, no afectan lógica)
   const labelHoy = useMemo(() => format(new Date(), "dd/MM/yyyy", { locale: es }), []);
   const labelMes = useMemo(() => format(fechaAnalisisMensual, "MMMM/yyyy", { locale: es }), [fechaAnalisisMensual]);
@@ -1047,15 +1235,7 @@ const AnalyticaEgresos = () => {
     total: number;
   }) => (
     <>
-      <text
-        x={cx}
-        y={cy}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        style={{ fill: "hsl(var(--foreground))" }}
-        fontSize={12}
-        opacity={0.75}
-      >
+      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={12} opacity={0.75}>
         Total
       </text>
       <text
@@ -1162,6 +1342,29 @@ const AnalyticaEgresos = () => {
     credito: "hsl(var(--muted))",
   };
 
+  // ✅ “pill” row para métodos de pago (estilo pro como Ingresos)
+  const MetodoPagoPill = ({
+    label,
+    value,
+    total,
+    color,
+  }: {
+    label: string;
+    value: number;
+    total: number;
+    color: string;
+  }) => {
+    const pct = total > 0 ? (toNum(value) / toNum(total)) * 100 : 0;
+
+    return (
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-muted/30">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        <span className="text-sm text-muted-foreground tabular-nums">{pct.toFixed(1)}%</span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* ✅ Título */}
@@ -1176,7 +1379,11 @@ const AnalyticaEgresos = () => {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Formato:</span>
-            <RadioGroup value={highlightsScaleFormat} onValueChange={(v) => setHighlightsScaleFormat(v as any)} className="flex items-center gap-4">
+            <RadioGroup
+              value={highlightsScaleFormat}
+              onValueChange={(v) => setHighlightsScaleFormat(v as any)}
+              className="flex items-center gap-4"
+            >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="normal" id="eg-high-general" />
                 <Label htmlFor="eg-high-general" className="cursor-pointer text-sm">
@@ -1684,10 +1891,7 @@ const AnalyticaEgresos = () => {
                 hint="El desglose de estatus de pago para costo de venta inventario no aplica, ya que este rubro se adquirió desde la plantilla inventario."
               />
             ) : toNum(datosEstadoPagoEgresos.total) <= 0 ? (
-              <ChartCardEmpty
-                title="Sin datos de estado de pago"
-                hint="Registra egresos dentro del período seleccionado para visualizar el desglose."
-              />
+              <ChartCardEmpty title="Sin datos de estado de pago" hint="Registra egresos dentro del período seleccionado para visualizar el desglose." />
             ) : (
               <div className="h-full flex flex-col">
                 <div className="flex-1 min-h-[220px]">
@@ -1741,8 +1945,6 @@ const AnalyticaEgresos = () => {
             )}
           </CardContent>
         </Card>
-
-        {/* ✅✅✅ (ELIMINADO) Donut de “Métodos de pago” */}
       </div>
 
       {/* Más gráficas */}
@@ -1794,11 +1996,7 @@ const AnalyticaEgresos = () => {
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                     />
                     <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
-                      contentStyle={tooltipCardStyle}
-                      labelStyle={tooltipLabelStyle}
-                    />
+                    <Tooltip formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]} contentStyle={tooltipCardStyle} labelStyle={tooltipLabelStyle} />
                     <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill={CHART.accent} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1807,41 +2005,84 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* Treemap métodos pago */}
+        {/* ✅✅✅ Métodos de pago (PRO) */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-base">Métodos de pago (vista treemap)</CardTitle>
-                <CardDescription>Más visual y rápida de leer</CardDescription>
+                <CardTitle className="text-base">Métodos de pago — {getTipoLabel(tipoEgreso)}</CardTitle>
+                <CardDescription>Distribución de pagos reales por método</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {formatMoneyScaled(totalEgresosPorMetodoPagoTreemap, true)}
+                {formatMoneyScaled(toNum(datosMetodoPagoEgresos.totalTreemap), true)}
               </Badge>
             </div>
           </CardHeader>
 
           <CardContent className="h-[26rem]">
-            {datosEgresosPorMetodoPago.length === 0 ? (
-              <ChartCardEmpty title="Sin pagos" hint="No hay montos pagados para este período." />
+            {!datosMetodoPagoEgresos.applicable ? (
+              <ChartCardEmpty
+                title="No aplica para Costo de Ventas Inventario"
+                hint="El desglose de Método de pago para costo de venta inventario no aplica, ya que este rubro se adquirió desde la plantilla inventario."
+              />
+            ) : toNum(datosMetodoPagoEgresos.totalTreemap) <= 0 ? (
+              <ChartCardEmpty
+                title="Sin pagos para mostrar"
+                hint="Registra egresos pagados (total o parcial) dentro del período seleccionado para visualizar el desglose por método."
+              />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <Treemap
-                  data={datosEgresosPorMetodoPago}
-                  dataKey="value"
-                  aspectRatio={16 / 9}
-                  content={<TreemapTile dataTotal={totalEgresosPorMetodoPagoTreemap} formatMoneyScaled={formatMoneyScaled} />}
-                >
-                  <Tooltip
-                    formatter={(value: any, _name: any, props: any) => {
-                      const label = props?.payload?.name || "Monto";
-                      return [formatMoneyScaled(toNum(value), true), label];
-                    }}
-                    contentStyle={tooltipCardStyle}
-                    labelStyle={tooltipLabelStyle}
-                  />
-                </Treemap>
-              </ResponsiveContainer>
+              <div className="h-full flex flex-col">
+                {/* ✅ mini-cards estilo Ingresos */}
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="rounded-xl border bg-muted/20 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">Total real (Highlights)</p>
+                    <p className="text-sm font-bold text-foreground tabular-nums">{formatMoneyScaled(toNum(datosMetodoPagoEgresos.totalReal), false)}</p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/20 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">Sumado por métodos</p>
+                    <p className="text-sm font-bold text-foreground tabular-nums">{formatMoneyScaled(toNum(datosMetodoPagoEgresos.sumByMethods), false)}</p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/20 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">Diferencia</p>
+                    <p className="text-sm font-bold text-foreground tabular-nums">{formatMoneyScaled(toNum(datosMetodoPagoEgresos.diff), false)}</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-[210px] rounded-2xl border bg-muted/10 p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <Treemap
+                      data={datosMetodoPagoEgresos.data}
+                      dataKey="value"
+                      aspectRatio={16 / 9}
+                      content={<PaymentsTreemapTile dataTotal={toNum(datosMetodoPagoEgresos.totalTreemap)} formatMoneyScaled={formatMoneyScaled} />}
+                    >
+                      <Tooltip
+                        formatter={(value: any, _name: any, props: any) => {
+                          const label = props?.payload?.name || "Monto";
+                          return [formatMoneyScaled(toNum(value), true), label];
+                        }}
+                        contentStyle={tooltipCardStyle}
+                        labelStyle={tooltipLabelStyle}
+                      />
+                    </Treemap>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* ✅ legend pills */}
+                <div className="pt-3 flex flex-wrap gap-2">
+                  {datosMetodoPagoEgresos.rows.map((r) => (
+                    <MetodoPagoPill
+                      key={r.key}
+                      label={r.label}
+                      value={toNum(r.value)}
+                      total={toNum(datosMetodoPagoEgresos.totalTreemap)}
+                      color={r.color}
+                    />
+                  ))}
+                </div>
+
+                <p className="text-xs text-muted-foreground pt-2">Tip: pasa el cursor sobre un bloque para ver el detalle.</p>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1887,10 +2128,7 @@ const AnalyticaEgresos = () => {
                           )}
                         >
                           <Package
-                            className={cn(
-                              "w-5 h-5",
-                              !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
-                            )}
+                            className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
                           />
                         </div>
                       )}
