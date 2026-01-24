@@ -139,17 +139,18 @@ const TreemapTile = (props: any) => {
 };
 
 const AnalyticaEgresos = () => {
+  // ✅ Precisión eliminada del UI (se queda fijo a 2 decimales como en analítica de ingresos)
+  const decimales: 0 | 1 | 2 = 2;
+
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
-  const [decimales, setDecimales] = useState<0 | 1 | 2>(2);
 
   // ✅ Como Ventas: formato SOLO para highlights (independiente)
   const [highlightsScaleFormat, setHighlightsScaleFormat] = useState<"normal" | "miles" | "millones">("normal");
 
-  const [tipoEgreso, setTipoEgreso] = useState<
-    "total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada"
-  >("total");
-  const [vistaTotal, setVistaTotal] = useState<"unica" | "desglosada">("unica");
+  // ✅ Solo 4 opciones (sin “Total”)
+  const [tipoEgreso, setTipoEgreso] = useState<"costo" | "costo_inventario" | "gasto" | "otros_gastos">("costo");
+
   const [fechaAnalisisDiario, setFechaAnalisisDiario] = useState<Date>(new Date());
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
   const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("subcuenta");
@@ -157,9 +158,7 @@ const AnalyticaEgresos = () => {
   // Queries
   const transQuery = useTransaccionesEgresos(1000, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
   const costosInvQuery = useCostosVentaInventario(periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
-  // ❌ Ya no dependemos de esto para highlights
-  // const resumenQuery = useResumenEgresosPorPeriodo() as any;
-  const graficaQuery = useEgresosPorPeriodo(periodFilter, tipoEgreso, fechaAnalisisDiario, fechaAnalisisMensual) as any;
+  const graficaQuery = useEgresosPorPeriodo(periodFilter, tipoEgreso as any, fechaAnalisisDiario, fechaAnalisisMensual) as any;
 
   const subcuentasQuery = useSubcuentas() as any;
   const productosQuery = useProductosEgresos() as any;
@@ -180,8 +179,7 @@ const AnalyticaEgresos = () => {
 
   const datosGraficaRaw = graficaQuery?.data?.data ?? graficaQuery?.data ?? null;
 
-  const loading =
-    !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!graficaQuery?.isLoading;
+  const loading = !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!graficaQuery?.isLoading;
 
   // ---- Formato/escala SOLO PARA VISUAL ----
   const getSufijoFormato = (fmt: "normal" | "miles" | "millones") => {
@@ -206,8 +204,7 @@ const AnalyticaEgresos = () => {
     })}${sufijo}`;
   };
 
-  const formatMoneyScaled = (raw: number, incluirSufijo = false) =>
-    formatMoneyScaledWith(formatoMontos, raw, incluirSufijo);
+  const formatMoneyScaled = (raw: number, incluirSufijo = false) => formatMoneyScaledWith(formatoMontos, raw, incluirSufijo);
 
   const calcularPorcentaje = (monto: number, total: number): string => {
     const t = toNum(total);
@@ -265,9 +262,7 @@ const AnalyticaEgresos = () => {
         if (!cc) return false;
 
         if (cc === "5001" || cc === "5003" || cc === "5004") return true;
-
         if (cc.startsWith("51") && cc !== "5109" && cc !== "5110") return true;
-
         if (cc === "5204") return true;
 
         return false;
@@ -314,9 +309,7 @@ const AnalyticaEgresos = () => {
       return cc.startsWith("51") && cc !== "5109" && cc !== "5110";
     });
 
-    const otrosGastos5204SinImp = filteredTransactionsSinImpuestos.filter(
-      (t: any) => String(t?.cuenta_codigo ?? "") === "5204"
-    );
+    const otrosGastos5204SinImp = filteredTransactionsSinImpuestos.filter((t: any) => String(t?.cuenta_codigo ?? "") === "5204");
 
     if (tipoEgreso === "costo_inventario") {
       return {
@@ -354,51 +347,34 @@ const AnalyticaEgresos = () => {
       };
     }
 
-    if (tipoEgreso === "costo") {
-      return {
-        costoVenta,
-        gastos: [],
-        otrosGastos: [],
-        costosInventario: [],
-        sinImpuestosCostoVenta: costoVentaSinImp,
-        sinImpuestosGastos: [],
-        sinImpuestosOtrosGastos: [],
-      };
-    }
-
+    // costo
     return {
       costoVenta,
-      gastos: gastos51XX,
-      otrosGastos: otrosGastos5204,
-      costosInventario: costosVentaInventario,
+      gastos: [],
+      otrosGastos: [],
+      costosInventario: [],
       sinImpuestosCostoVenta: costoVentaSinImp,
-      sinImpuestosGastos: gastos51XXSinImp,
-      sinImpuestosOtrosGastos: otrosGastos5204SinImp,
+      sinImpuestosGastos: [],
+      sinImpuestosOtrosGastos: [],
     };
   }, [filteredTransactions, filteredTransactionsSinImpuestos, costosVentaInventario, tipoEgreso]);
 
   // Datos para gráfica (RAW, sin escala)
   const datosGraficaFormateados = useMemo(() => {
     if (!datosGraficaRaw) return [];
-
-    if (tipoEgreso === "total" || tipoEgreso === "combinada") {
-      const arr = normalizeArray<any>(datosGraficaRaw);
-      return arr.map((item: any) => ({
-        periodo: item?.periodo,
-        monto: toNum(item?.monto),
-        costos: toNum(item?.costos),
-        gastos: toNum(item?.gastos),
-        costosInventario: toNum(item?.costosInventario),
-        otrosGastos: toNum(item?.otrosGastos),
-      }));
-    }
-
     const arr = normalizeArray<DatosEvolucionSimple>(datosGraficaRaw);
     return arr.map((item: any) => ({
       periodo: item?.periodo,
       monto: toNum(item?.monto),
     }));
-  }, [datosGraficaRaw, tipoEgreso]);
+  }, [datosGraficaRaw]);
+
+  const getTipoLabel = (t: typeof tipoEgreso) => {
+    if (t === "costo") return "Costo de Ventas";
+    if (t === "costo_inventario") return "Costo de Ventas Inventario";
+    if (t === "gasto") return "Gastos Operativos";
+    return "Otros Gastos";
+  };
 
   // ✅✅✅ HIGHLIGHTS E2E (misma base que la tabla de Resumen: transacciones)
   // - Día: hoy
@@ -465,24 +441,33 @@ const AnalyticaEgresos = () => {
     };
   }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual]);
 
-  // Egresos por Tipo (RAW)
+  // Egresos por Tipo (RAW) — siempre muestra la distribución general
   const datosEgresosPorTipo = useMemo(() => {
     const data: { tipo: string; monto: number }[] = [];
 
-    const totalCostoVentas = transaccionesPorTipo.costoVenta.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
+    const totalCostoVentas = filteredTransactions
+      .filter((t: any) => ["5001", "5003", "5004"].includes(String(t?.cuenta_codigo ?? "")))
+      .reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
     if (totalCostoVentas > 0) data.push({ tipo: "Costo de Ventas", monto: totalCostoVentas });
 
-    const totalCostoVentasInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
+    const totalCostoVentasInventario = costosVentaInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
     if (totalCostoVentasInventario > 0) data.push({ tipo: "Costo de Ventas Inventario", monto: totalCostoVentasInventario });
 
-    const totalGastosOperativos = transaccionesPorTipo.gastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
+    const totalGastosOperativos = filteredTransactions
+      .filter((t: any) => {
+        const cc = String(t?.cuenta_codigo ?? "");
+        return cc.startsWith("51") && cc !== "5109" && cc !== "5110";
+      })
+      .reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
     if (totalGastosOperativos > 0) data.push({ tipo: "Gastos Operativos", monto: totalGastosOperativos });
 
-    const totalOtrosGastos = transaccionesPorTipo.otrosGastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
+    const totalOtrosGastos = filteredTransactions
+      .filter((t: any) => String(t?.cuenta_codigo ?? "") === "5204")
+      .reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
     if (totalOtrosGastos > 0) data.push({ tipo: "Otros Gastos", monto: totalOtrosGastos });
 
     return data;
-  }, [transaccionesPorTipo]);
+  }, [filteredTransactions, costosVentaInventario]);
 
   // Métodos de pago utilizados (sin impuestos) + inventario como adquisición (RAW)
   const datosEstadoPagos = useMemo(() => {
@@ -757,10 +742,7 @@ const AnalyticaEgresos = () => {
     return datos.reduce((sum, item) => sum + toNum(item.monto), 0);
   }, [vistaAgrupacion, datosEgresosPorCuenta, datosEgresosPorSubcuenta]);
 
-  const totalEgresosPorMetodoPagoTreemap = useMemo(
-    () => datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0),
-    [datosEgresosPorMetodoPago]
-  );
+  const totalEgresosPorMetodoPagoTreemap = useMemo(() => datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0), [datosEgresosPorMetodoPago]);
 
   // ✅ Labels como en Ventas (visuales, no afectan lógica)
   const labelHoy = useMemo(() => format(new Date(), "dd/MM/yyyy", { locale: es }), []);
@@ -923,12 +905,9 @@ const AnalyticaEgresos = () => {
 
               <div className="h-px bg-border" />
 
-              {/* ✅ TOTAL EN NEGRO (como pediste) */}
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-foreground">Total Egresos:</span>
-                <span className="text-xl font-bold text-foreground">
-                  {formatMoneyScaledWith(highlightsScaleFormat, resDia.total, false)}
-                </span>
+                <span className="text-xl font-bold text-foreground">{formatMoneyScaledWith(highlightsScaleFormat, resDia.total, false)}</span>
               </div>
             </CardContent>
           </Card>
@@ -945,12 +924,9 @@ const AnalyticaEgresos = () => {
 
               <div className="h-px bg-border" />
 
-              {/* ✅ TOTAL EN NEGRO */}
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-foreground">Total Egresos:</span>
-                <span className="text-xl font-bold text-foreground">
-                  {formatMoneyScaledWith(highlightsScaleFormat, resMes.total, false)}
-                </span>
+                <span className="text-xl font-bold text-foreground">{formatMoneyScaledWith(highlightsScaleFormat, resMes.total, false)}</span>
               </div>
             </CardContent>
           </Card>
@@ -967,12 +943,9 @@ const AnalyticaEgresos = () => {
 
               <div className="h-px bg-border" />
 
-              {/* ✅ TOTAL EN NEGRO */}
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-foreground">Total Egresos:</span>
-                <span className="text-xl font-bold text-foreground">
-                  {formatMoneyScaledWith(highlightsScaleFormat, resAnio.total, false)}
-                </span>
+                <span className="text-xl font-bold text-foreground">{formatMoneyScaledWith(highlightsScaleFormat, resAnio.total, false)}</span>
               </div>
             </CardContent>
           </Card>
@@ -982,15 +955,59 @@ const AnalyticaEgresos = () => {
       {/* ✅ Separador */}
       <div className="my-8 border-t-2 border-primary/20" />
 
-      {/* ✅ CONTROLES */}
+      {/* ✅ ANALÍTICA DE EGRESOS (antes “Controles de análisis”) */}
       <div>
-        <h3 className="text-xl font-bold text-foreground mb-6">Controles de análisis</h3>
+        <h3 className="text-xl font-bold text-foreground mb-6">Analítica de egresos</h3>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-          {/* 1) Período */}
+        {/* ✅ SOLO 3 BLOQUES Y EN ESTE ORDEN:
+            1) Tipo de Egreso
+            2) Periodo de Análisis
+            3) Formato de Cifras
+        */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* 1) Tipo de Egreso */}
           <Card>
             <CardHeader>
-              <CardTitle>Período</CardTitle>
+              <CardTitle>Tipo de Egreso</CardTitle>
+              <CardDescription>Selecciona qué analizar</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="flex flex-col gap-3">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="costo" id="eg-tipo-costo" />
+                  <Label htmlFor="eg-tipo-costo" className="cursor-pointer">
+                    Costo de Ventas
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="costo_inventario" id="eg-tipo-inv" />
+                  <Label htmlFor="eg-tipo-inv" className="cursor-pointer">
+                    Costo de Ventas Inventario
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="gasto" id="eg-tipo-gasto" />
+                  <Label htmlFor="eg-tipo-gasto" className="cursor-pointer">
+                    Gastos Operativos
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="otros_gastos" id="eg-tipo-otros" />
+                  <Label htmlFor="eg-tipo-otros" className="cursor-pointer">
+                    Otros Gastos
+                  </Label>
+                </div>
+              </RadioGroup>
+            </CardContent>
+          </Card>
+
+          {/* 2) Periodo de Análisis */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Periodo de Análisis</CardTitle>
               <CardDescription>Selecciona el período</CardDescription>
             </CardHeader>
             <CardContent>
@@ -1017,9 +1034,7 @@ const AnalyticaEgresos = () => {
 
               {(periodFilter === "diario" || periodFilter === "mensual") && (
                 <div className="pt-4">
-                  <Label className="text-xs text-muted-foreground mb-2 block">
-                    {periodFilter === "diario" ? "Fecha" : "Mes"}
-                  </Label>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Fecha específica</Label>
 
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1049,68 +1064,10 @@ const AnalyticaEgresos = () => {
             </CardContent>
           </Card>
 
-          {/* 2) Tipo */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tipo de egreso</CardTitle>
-              <CardDescription>Qué quieres visualizar</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="flex flex-col gap-3">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="total" id="eg-tipo-total" />
-                  <Label htmlFor="eg-tipo-total" className="cursor-pointer">
-                    Total
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="costo" id="eg-tipo-costo" />
-                  <Label htmlFor="eg-tipo-costo" className="cursor-pointer">
-                    Costo de Ventas
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="costo_inventario" id="eg-tipo-inv" />
-                  <Label htmlFor="eg-tipo-inv" className="cursor-pointer">
-                    Costo de Ventas Inventario
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="gasto" id="eg-tipo-gasto" />
-                  <Label htmlFor="eg-tipo-gasto" className="cursor-pointer">
-                    Gastos Operativos
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="otros_gastos" id="eg-tipo-otros" />
-                  <Label htmlFor="eg-tipo-otros" className="cursor-pointer">
-                    Otros Gastos
-                  </Label>
-                </div>
-              </RadioGroup>
-
-              {tipoEgreso === "total" && (
-                <div className="pt-4">
-                  <Label className="text-xs text-muted-foreground mb-2 block">Vista (solo Total)</Label>
-                  <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
-                    <TabsList className="w-full">
-                      <TabsTrigger value="unica" className="flex-1">
-                        Línea única
-                      </TabsTrigger>
-                      <TabsTrigger value="desglosada" className="flex-1">
-                        Desglosada
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* 3) Formato de cifras */}
           <Card>
             <CardHeader>
-              <CardTitle>Formato de cifras</CardTitle>
+              <CardTitle>Formato de Cifras</CardTitle>
               <CardDescription>Visualización de montos</CardDescription>
             </CardHeader>
             <CardContent>
@@ -1118,7 +1075,7 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="normal" id="eg-scale-normal" />
                   <Label htmlFor="eg-scale-normal" className="cursor-pointer">
-                    Normal
+                    General
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1136,36 +1093,6 @@ const AnalyticaEgresos = () => {
               </RadioGroup>
             </CardContent>
           </Card>
-
-          {/* 4) Decimales */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Precisión</CardTitle>
-              <CardDescription>Decimales / precisión</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup value={String(decimales)} onValueChange={(v) => setDecimales(Number(v) as 0 | 1 | 2)} className="flex flex-col gap-3">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="0" id="eg-dec-0" />
-                  <Label htmlFor="eg-dec-0" className="cursor-pointer">
-                    0 decimales
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="1" id="eg-dec-1" />
-                  <Label htmlFor="eg-dec-1" className="cursor-pointer">
-                    1 decimal
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="2" id="eg-dec-2" />
-                  <Label htmlFor="eg-dec-2" className="cursor-pointer">
-                    2 decimales
-                  </Label>
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
@@ -1176,7 +1103,10 @@ const AnalyticaEgresos = () => {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-base">Evolución{getSufijoFormato(formatoMontos)}</CardTitle>
+                <CardTitle className="text-base">
+                  Evolución — {getTipoLabel(tipoEgreso)}
+                  {getSufijoFormato(formatoMontos)}
+                </CardTitle>
                 <CardDescription>Tendencia en el tiempo (útil para detectar picos)</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
@@ -1200,34 +1130,11 @@ const AnalyticaEgresos = () => {
                     padding={{ top: 12, bottom: 0 }}
                   />
                   <Tooltip
-                    formatter={(value: any, name: any) => {
-                      const v = toNum(value);
-                      const label = String(name || "Monto");
-                      return [formatMoneyScaled(v, true), label];
-                    }}
+                    formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
                     contentStyle={tooltipCardStyle}
                     labelStyle={tooltipLabelStyle}
                   />
-
-                  {tipoEgreso === "total" && vistaTotal === "desglosada" ? (
-                    <>
-                      <Line type="monotone" dataKey="costos" name="Costo de Ventas" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="costosInventario" name="Costo de Ventas Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="gastos" name="Gastos Operativos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="otrosGastos" name="Otros Gastos" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
-                      <Legend formatter={LegendText as any} />
-                    </>
-                  ) : tipoEgreso === "combinada" ? (
-                    <>
-                      <Line type="monotone" dataKey="costos" name="Costo de Ventas" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="costosInventario" name="Costo de Ventas Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="gastos" name="Gastos Operativos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="otrosGastos" name="Otros Gastos" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
-                      <Legend formatter={LegendText as any} />
-                    </>
-                  ) : (
-                    <Line type="monotone" dataKey="monto" name="Monto" stroke={CHART.primary} strokeWidth={2.8} dot={false} />
-                  )}
+                  <Line type="monotone" dataKey="monto" name="Monto" stroke={CHART.primary} strokeWidth={2.8} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
