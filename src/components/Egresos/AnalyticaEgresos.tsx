@@ -7,12 +7,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  Treemap,
   AreaChart,
   Area,
   Brush,
@@ -81,9 +79,6 @@ const tooltipCardStyle: React.CSSProperties = {
 
 const tooltipLabelStyle: React.CSSProperties = { color: "hsl(var(--foreground))", fontWeight: 600 };
 
-// Leyenda simple (sin saturar)
-const LegendText = (value: any) => <span className="text-xs text-muted-foreground">{value}</span>;
-
 // Colores “theme-friendly”
 const CHART = {
   primary: "hsl(var(--primary))",
@@ -91,50 +86,6 @@ const CHART = {
   accent: "hsl(var(--accent))",
   muted: "hsl(var(--muted-foreground))",
   ring: "hsl(var(--ring))",
-};
-
-// -------- Treemap “pro” (rounded + hover) --------
-const TreemapTile = (props: any) => {
-  const { x, y, width, height, name, value, fill, dataTotal, formatMoneyScaled } = props;
-
-  const v = toNum(value);
-  const total = toNum(dataTotal);
-  if (!name || total <= 0) return null;
-
-  const pct = total > 0 ? (v / total) * 100 : 0;
-  const porcentaje = pct.toFixed(1);
-
-  // no texto si la caja es chica
-  const minSide = Math.min(width, height);
-  const showText = minSide >= 72;
-
-  const rx = Math.min(14, Math.max(8, Math.floor(minSide / 10)));
-
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fill={fill}
-        rx={rx}
-        ry={rx}
-        stroke="rgba(255,255,255,0.45)"
-        strokeWidth={1}
-      />
-      {showText && (
-        <>
-          <text x={x + 10} y={y + 22} textAnchor="start" fill="#ffffff" fontSize={12} fontWeight={700} opacity={0.95}>
-            {name}
-          </text>
-          <text x={x + 10} y={y + 40} textAnchor="start" fill="#ffffff" fontSize={11} opacity={0.9}>
-            {porcentaje}% · {formatMoneyScaled(v, true)}
-          </text>
-        </>
-      )}
-    </g>
-  );
 };
 
 const AnalyticaEgresos = () => {
@@ -173,10 +124,7 @@ const AnalyticaEgresos = () => {
     []
   );
 
-  const MONTHS_SHORT = useMemo(
-    () => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
-    []
-  );
+  const MONTHS_SHORT = useMemo(() => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"], []);
 
   const YEARS = useMemo(() => {
     const base = new Date().getFullYear();
@@ -555,17 +503,12 @@ const AnalyticaEgresos = () => {
   }, [periodFilter, tipoEgreso]);
 
   const evolucionTitle = useMemo(() => {
-    // Igual estilo que Ingresos
     const tipo = getTipoLabel(tipoEgreso);
     if (tipoEgreso === "costo_inventario") return `Evolución de Costo de Ventas Inventario`;
     return `Evolución de ${tipo}`;
   }, [tipoEgreso]);
 
-  // ✅✅✅ HIGHLIGHTS E2E (misma base que la tabla de Resumen: transacciones)
-  // - Día: hoy
-  // - Mes: mes seleccionado (fechaAnalisisMensual)
-  // - Año: año del mes seleccionado
-  // - Inventario: SOLO hook inventario
+  // ✅✅✅ HIGHLIGHTS E2E
   const highlights = useMemo(() => {
     const hoy = new Date();
     const startDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0, 0);
@@ -626,7 +569,7 @@ const AnalyticaEgresos = () => {
     };
   }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual]);
 
-  // ✅ NUEVA LÓGICA DONUT (captura 3): Rubro elegido vs Demás egresos (en el período actual)
+  // ✅ NUEVA LÓGICA DONUT: Rubro elegido vs Demás egresos (en el período actual)
   const donutRubroVsDemas = useMemo(() => {
     const total = toNum(totalesEgresosEnRango.total);
     const labelSel = getTipoLabel(tipoEgreso);
@@ -642,12 +585,10 @@ const AnalyticaEgresos = () => {
 
     const rest = Math.max(0, total - selected);
 
-    // slices para el gráfico (no metemos slices de 0)
     const slices: { key: "selected" | "rest"; label: string; value: number }[] = [];
     if (selected > 0) slices.push({ key: "selected", label: labelSel, value: selected });
     if (rest > 0) slices.push({ key: "rest", label: "Demás egresos", value: rest });
 
-    // rows para el listado (aquí sí mostramos ambas aunque selected=0, si hay total)
     const rows =
       total > 0
         ? [
@@ -661,11 +602,6 @@ const AnalyticaEgresos = () => {
 
   // -----------------------------
   // ✅✅✅ ESTADO DE PAGO (E2E)
-  // Replicar lógica estilo “Ventas Netas”:
-  // - Se distribuye por estado usando MONTO TOTAL del movimiento
-  // - Estados: Pagado Total / Pago Parcial / Crédito
-  // - Respeta el rango actual (diario/mensual/anual)
-  // - Para costo_inventario NO aplica (mensaje)
   // -----------------------------
   const datosEstadoPagoEgresos = useMemo(() => {
     if (tipoEgreso === "costo_inventario") {
@@ -690,14 +626,7 @@ const AnalyticaEgresos = () => {
 
     const getMontoTotal = (t: any) => toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
     const getMontoPagado = (t: any) =>
-      toNum(
-        t?.monto_pagado ??
-          t?.pagado ??
-          t?.montoPagado ??
-          t?.total_pagado ??
-          t?.totalPagado ??
-          0
-      );
+      toNum(t?.monto_pagado ?? t?.pagado ?? t?.montoPagado ?? t?.total_pagado ?? t?.totalPagado ?? 0);
 
     const norm = (s: any) =>
       String(s ?? "")
@@ -707,7 +636,6 @@ const AnalyticaEgresos = () => {
         .trim();
 
     const deriveEstado = (t: any): "pagado" | "parcial" | "credito" => {
-      // si backend manda estado explícito, lo respetamos
       const rawEstado = norm(t?.estado_pago ?? t?.estadoPago ?? t?.estatus_pago ?? t?.estatusPago ?? "");
       if (rawEstado) {
         if (rawEstado.includes("parcial")) return "parcial";
@@ -718,23 +646,17 @@ const AnalyticaEgresos = () => {
       const total = getMontoTotal(t);
       const pagado = getMontoPagado(t);
 
-      if (total <= EPS) return "credito"; // fallback seguro
+      if (total <= EPS) return "credito";
       if (pagado >= total - EPS) return "pagado";
       if (pagado > EPS && pagado < total - EPS) return "parcial";
 
-      // si metodo_pago indica crédito, lo marcamos como crédito
       const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? "");
       if (mp.includes("credito")) return "credito";
 
-      // default
       return "credito";
     };
 
-    const acc = {
-      pagado: 0,
-      parcial: 0,
-      credito: 0,
-    };
+    const acc = { pagado: 0, parcial: 0, credito: 0 };
 
     for (const t of fuente || []) {
       const d = getDateAny(t);
@@ -757,39 +679,8 @@ const AnalyticaEgresos = () => {
 
     const slices = rows.filter((r) => toNum(r.monto) > 0);
 
-    return {
-      applicable: true,
-      total: totalGeneral,
-      rows,
-      slices,
-    };
+    return { applicable: true, total: totalGeneral, rows, slices };
   }, [tipoEgreso, transaccionesPorTipo, rangoAnalisis]);
-
-  // Métodos de pago utilizados (sin impuestos) + inventario como adquisición (RAW)
-  const datosEstadoPagos = useMemo(() => {
-    const grouped: Record<string, number> = {};
-
-    const todasTransacciones = [
-      ...transaccionesPorTipo.sinImpuestosCostoVenta,
-      ...transaccionesPorTipo.sinImpuestosGastos,
-      ...transaccionesPorTipo.sinImpuestosOtrosGastos,
-    ];
-
-    todasTransacciones
-      .filter((t: any) => toNum(t?.monto_pagado) > 0)
-      .forEach((t: any) => {
-        const metodo = String(t?.metodo_pago ?? "Sin método");
-        const metodoCap = metodo.charAt(0).toUpperCase() + metodo.slice(1);
-        grouped[metodoCap] = (grouped[metodoCap] ?? 0) + toNum(t?.monto_pagado);
-      });
-
-    const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
-
-    return Object.entries(grouped)
-      .map(([estado, monto]) => ({ estado, monto }))
-      .sort((a, b) => b.monto - a.monto);
-  }, [transaccionesPorTipo]);
 
   // Egresos por Subcuenta (Top 10) RAW
   const datosEgresosPorSubcuenta = useMemo(() => {
@@ -856,37 +747,6 @@ const AnalyticaEgresos = () => {
       .sort((a, b) => b.monto - a.monto)
       .slice(0, 15);
   }, [transaccionesPorTipo, cuentasFlat]);
-
-  // Egresos por Método de Pago (Treemap) RAW
-  const datosEgresosPorMetodoPago = useMemo(() => {
-    const todasTransacciones = [
-      ...transaccionesPorTipo.sinImpuestosCostoVenta,
-      ...transaccionesPorTipo.sinImpuestosGastos,
-      ...transaccionesPorTipo.sinImpuestosOtrosGastos,
-    ];
-
-    const efectivo = todasTransacciones
-      .filter((t: any) => String(t?.metodo_pago ?? "") === "efectivo" && toNum(t?.monto_pagado) > 0)
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_pagado), 0);
-
-    const bancosTarjeta = todasTransacciones
-      .filter((t: any) => {
-        const mp = String(t?.metodo_pago ?? "");
-        return mp && mp !== "efectivo" && toNum(t?.monto_pagado) > 0;
-      })
-      .reduce((sum: number, t: any) => sum + toNum(t?.monto_pagado), 0);
-
-    const costosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-
-    const data = [
-      { name: "Efectivo", value: efectivo, fill: "hsl(var(--primary))" },
-      { name: "Bancos / Tarjeta", value: bancosTarjeta, fill: "hsl(var(--accent))" },
-    ];
-
-    if (costosInventario > 0) data.push({ name: "Inventario", value: costosInventario, fill: "hsl(var(--ring))" });
-
-    return data.filter((item) => toNum(item.value) > 0);
-  }, [transaccionesPorTipo]);
 
   // Egresos por Producto (Top 10) RAW
   const datosEgresosPorProducto = useMemo(() => {
@@ -1002,15 +862,9 @@ const AnalyticaEgresos = () => {
       grouped[key].tieneAsignacion = grouped[key].tieneAsignacion || has;
     };
 
-    transaccionesPorTipo.costoVenta.forEach((t: any) =>
-      addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre)
-    );
-    transaccionesPorTipo.gastos.forEach((t: any) =>
-      addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre)
-    );
-    transaccionesPorTipo.otrosGastos.forEach((t: any) =>
-      addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre)
-    );
+    transaccionesPorTipo.costoVenta.forEach((t: any) => addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre));
+    transaccionesPorTipo.gastos.forEach((t: any) => addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre));
+    transaccionesPorTipo.otrosGastos.forEach((t: any) => addProv(String(t?.proveedor_nombre ?? "Sin proveedor asignado"), t?.monto_total, !!t?.proveedor_nombre));
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
     if (totalCostosInventario > 0) {
@@ -1029,15 +883,10 @@ const AnalyticaEgresos = () => {
     };
   }, [transaccionesPorTipo]);
 
-  // Totales RAW
-  const totalMetodosPago = useMemo(() => datosEstadoPagos.reduce((sum, item) => sum + toNum(item.monto), 0), [datosEstadoPagos]);
-
   const totalEgresosPorCuentaSubcuenta = useMemo(() => {
     const datos = vistaAgrupacion === "cuenta" ? datosEgresosPorCuenta : datosEgresosPorSubcuenta;
     return datos.reduce((sum, item) => sum + toNum(item.monto), 0);
   }, [vistaAgrupacion, datosEgresosPorCuenta, datosEgresosPorSubcuenta]);
-
-  const totalEgresosPorMetodoPagoTreemap = useMemo(() => datosEgresosPorMetodoPago.reduce((sum, item) => sum + toNum(item.value), 0), [datosEgresosPorMetodoPago]);
 
   // ✅ Labels como en Ventas (visuales, no afectan lógica)
   const labelHoy = useMemo(() => format(new Date(), "dd/MM/yyyy", { locale: es }), []);
@@ -1069,9 +918,6 @@ const AnalyticaEgresos = () => {
     );
   }
 
-  // Donas palette (theme-friendly)
-  const pieColors = [CHART.primary, CHART.ring, CHART.destructive, CHART.accent];
-
   const DonutCenterLabel = ({
     cx = "50%",
     cy = "46%",
@@ -1082,15 +928,7 @@ const AnalyticaEgresos = () => {
     total: number;
   }) => (
     <>
-      <text
-        x={cx}
-        y={cy}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        style={{ fill: "hsl(var(--foreground))" }}
-        fontSize={12}
-        opacity={0.75}
-      >
+      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={12} opacity={0.75}>
         Total
       </text>
       <text
@@ -1107,7 +945,7 @@ const AnalyticaEgresos = () => {
     </>
   );
 
-  // ✅ Colores de highlights (consistentes con analítica)
+  // ✅ Colores de highlights
   const HL = {
     costoVentas: CHART.primary,
     costoVentasInventario: CHART.ring,
@@ -1115,7 +953,6 @@ const AnalyticaEgresos = () => {
     otrosGastos: CHART.accent,
   };
 
-  // ✅ helper para highlights (usa formato propio como Ventas)
   const HighlightRow = ({
     label,
     value,
@@ -1137,7 +974,6 @@ const AnalyticaEgresos = () => {
     </div>
   );
 
-  // ✅ Resúmenes ya NO dependen del endpoint “resumenes”
   const resDia = {
     costosVenta5001: toNum(highlights?.dia?.costosVenta),
     costosVenta5002: toNum(highlights?.dia?.costosVentaInventario),
@@ -1162,7 +998,6 @@ const AnalyticaEgresos = () => {
     total: toNum(highlights?.anio?.total),
   };
 
-  // ✅✅ Breakdown row (igual estilo que Ingresos: dot + label + % + $)
   const DonutBreakdownRow = ({
     label,
     value,
@@ -1190,7 +1025,7 @@ const AnalyticaEgresos = () => {
     );
   };
 
-  // ✅ Paleta estados de pago (similar al panel de ingresos)
+  // ✅ Paleta estados de pago
   const PAY_STATUS_COLORS: Record<"pagado" | "parcial" | "credito", string> = {
     pagado: CHART.primary,
     parcial: CHART.ring,
@@ -1211,7 +1046,11 @@ const AnalyticaEgresos = () => {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Formato:</span>
-            <RadioGroup value={highlightsScaleFormat} onValueChange={(v) => setHighlightsScaleFormat(v as any)} className="flex items-center gap-4">
+            <RadioGroup
+              value={highlightsScaleFormat}
+              onValueChange={(v) => setHighlightsScaleFormat(v as any)}
+              className="flex items-center gap-4"
+            >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="normal" id="eg-high-general" />
                 <Label htmlFor="eg-high-general" className="cursor-pointer text-sm">
@@ -1570,15 +1409,11 @@ const AnalyticaEgresos = () => {
                   </defs>
 
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-
                   <XAxis dataKey="periodo" tick={{ fontSize: 12 }} minTickGap={18} height={30} />
-
                   <YAxis
                     tick={{ fontSize: 12 }}
                     tickFormatter={(v: any) =>
-                      scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", {
-                        maximumFractionDigits: decimales,
-                      })
+                      scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", { maximumFractionDigits: decimales })
                     }
                     domain={[0, (dataMax: number) => Math.ceil((Number(dataMax) || 0) * 1.15)]}
                     padding={{ top: 10, bottom: 0 }}
@@ -1600,12 +1435,7 @@ const AnalyticaEgresos = () => {
                     fill="url(#egresosArea)"
                     fillOpacity={1}
                     dot={false}
-                    activeDot={{
-                      r: 5,
-                      stroke: CHART.primary,
-                      strokeWidth: 2,
-                      fill: "hsl(var(--background))",
-                    }}
+                    activeDot={{ r: 5, stroke: CHART.primary, strokeWidth: 2, fill: "hsl(var(--background))" }}
                   />
 
                   <Brush
@@ -1622,7 +1452,7 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* ✅✅✅ Donut (por tipo) — NUEVA LÓGICA: Rubro seleccionado vs Demás egresos (captura 3) */}
+        {/* Distribución por tipo */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
@@ -1678,7 +1508,6 @@ const AnalyticaEgresos = () => {
                   </ResponsiveContainer>
                 </div>
 
-                {/* ✅ Lista estilo “Ingresos” */}
                 <div className="pt-3 space-y-2">
                   <DonutBreakdownRow
                     label={donutRubroVsDemas.labelSel}
@@ -1698,7 +1527,7 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* ✅✅✅ Estado de Pagos (replica analítica de ingresos) */}
+        {/* ✅✅✅ Estado de Pagos (ÚNICO gráfico de pagos que se queda) */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
@@ -1719,10 +1548,7 @@ const AnalyticaEgresos = () => {
                 hint="El desglose de estatus de pago para costo de venta inventario no aplica, ya que este rubro se adquirió desde la plantilla inventario."
               />
             ) : toNum(datosEstadoPagoEgresos.total) <= 0 ? (
-              <ChartCardEmpty
-                title="Sin datos de estado de pago"
-                hint="Registra egresos dentro del período seleccionado para visualizar el desglose."
-              />
+              <ChartCardEmpty title="Sin datos de estado de pago" hint="Registra egresos dentro del período seleccionado para visualizar el desglose." />
             ) : (
               <div className="h-full flex flex-col">
                 <div className="flex-1 min-h-[220px]">
@@ -1773,49 +1599,6 @@ const AnalyticaEgresos = () => {
                   ))}
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Donas (por método pago) */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Métodos de pago</CardTitle>
-                <CardDescription>Solo pagos realizados (sin impuestos)</CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {formatMoneyScaled(totalMetodosPago, true)}
-              </Badge>
-            </div>
-          </CardHeader>
-
-          <CardContent className="h-80">
-            {datosEstadoPagos.length === 0 ? (
-              <ChartCardEmpty title="Sin pagos registrados" hint="Si todo está en crédito, aquí no se mostrará monto pagado." />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={datosEstadoPagos} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
-                    {datosEstadoPagos.map((_, idx) => (
-                      <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
-                    ))}
-                  </Pie>
-
-                  <DonutCenterLabel total={totalMetodosPago} />
-
-                  <Tooltip
-                    formatter={(value: any, _name: any, props: any) => {
-                      const label = props?.payload?.estado || "Monto";
-                      return [formatMoneyScaled(toNum(value), true), label];
-                    }}
-                    contentStyle={tooltipCardStyle}
-                    labelStyle={tooltipLabelStyle}
-                  />
-                  <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
-                </PieChart>
-              </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
@@ -1870,55 +1653,12 @@ const AnalyticaEgresos = () => {
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                     />
                     <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
-                      contentStyle={tooltipCardStyle}
-                      labelStyle={tooltipLabelStyle}
-                    />
+                    <Tooltip formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]} contentStyle={tooltipCardStyle} labelStyle={tooltipLabelStyle} />
                     <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill={CHART.accent} />
                   </BarChart>
                 </ResponsiveContainer>
               );
             })()}
-          </CardContent>
-        </Card>
-
-        {/* Treemap métodos pago */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Métodos de pago (vista treemap)</CardTitle>
-                <CardDescription>Más visual y rápida de leer</CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {formatMoneyScaled(totalEgresosPorMetodoPagoTreemap, true)}
-              </Badge>
-            </div>
-          </CardHeader>
-
-          <CardContent className="h-[26rem]">
-            {datosEgresosPorMetodoPago.length === 0 ? (
-              <ChartCardEmpty title="Sin pagos" hint="No hay montos pagados para este período." />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <Treemap
-                  data={datosEgresosPorMetodoPago}
-                  dataKey="value"
-                  aspectRatio={16 / 9}
-                  content={<TreemapTile dataTotal={totalEgresosPorMetodoPagoTreemap} formatMoneyScaled={formatMoneyScaled} />}
-                >
-                  <Tooltip
-                    formatter={(value: any, _name: any, props: any) => {
-                      const label = props?.payload?.name || "Monto";
-                      return [formatMoneyScaled(toNum(value), true), label];
-                    }}
-                    contentStyle={tooltipCardStyle}
-                    labelStyle={tooltipLabelStyle}
-                  />
-                </Treemap>
-              </ResponsiveContainer>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -1956,18 +1696,8 @@ const AnalyticaEgresos = () => {
                       {producto.imagen ? (
                         <img src={producto.imagen} alt={producto.nombre} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                       ) : (
-                        <div
-                          className={cn(
-                            "w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0",
-                            !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
-                          )}
-                        >
-                          <Package
-                            className={cn(
-                              "w-5 h-5",
-                              !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
-                            )}
-                          />
+                        <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0", !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted")}>
+                          <Package className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
                         </div>
                       )}
 
