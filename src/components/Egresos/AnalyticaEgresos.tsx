@@ -62,6 +62,31 @@ const normalizeArray = <T,>(raw: any): T[] => {
   return Array.isArray(candidate) ? candidate : [];
 };
 
+// ✅ Costos inventario: el backend/hook a veces devuelve OBJETO (no array).
+// Esta función intenta extraer un listado usable para sums, evolución y tops.
+const normalizeCostosInventario = (raw: any): any[] => {
+  const root = raw?.data ?? raw;
+
+  // 1) si ya viene como array directo (o data/items/results), úsalo
+  const arr = normalizeArray<any>(root);
+  if (arr.length) return arr;
+
+  // 2) shapes típicos: movimientos/rows/entries/detalle
+  const maybe =
+    root?.movimientos ??
+    root?.movs ??
+    root?.rows ??
+    root?.entries ??
+    root?.detalle ??
+    root?.costos ??
+    root?.items ??
+    root?.results ??
+    [];
+
+  return Array.isArray(maybe) ? maybe : [];
+};
+
+
 // ---------- UI helpers ----------
 const ChartCardEmpty = ({
   title = "Sin datos",
@@ -319,7 +344,8 @@ const [pageProveedores, setPageProveedores] = useState(1);
 
   // Normalización E2E del shape
   const transacciones = useMemo(() => normalizeArray<any>(transQuery?.data), [transQuery?.data]);
-  const costosVentaInventario = useMemo(() => normalizeArray<any>(costosInvQuery?.data), [costosInvQuery?.data]);
+  const costosVentaInventario = useMemo(() => normalizeCostosInventario(costosInvQuery?.data), [costosInvQuery?.data]);
+
 
   const subcuentas = useMemo(() => normalizeArray<any>(subcuentasQuery?.data), [subcuentasQuery?.data]);
   const productosEgresos = useMemo(() => normalizeArray<any>(productosQuery?.data), [productosQuery?.data]);
@@ -376,6 +402,7 @@ const [pageProveedores, setPageProveedores] = useState(1);
       x?.fechaEgreso ??
       x?.fecha_movimiento ??
       x?.fechaMovimiento ??
+      x?.periodo ??
       null;
 
     if (!raw) return null;
@@ -560,10 +587,21 @@ const [pageProveedores, setPageProveedores] = useState(1);
     }
 
     for (const c of costosVentaInventario || []) {
-      const d = getDateAny(c);
-      if (!inRange(d, start, end)) continue;
-      costoVentasInventario += toNum(c?.monto ?? c?.total ?? 0);
-    }
+  const d = getDateAny(c);
+  if (!inRange(d, start, end)) continue;
+
+  const m = toNum(
+    c?.monto ??
+      c?.monto_total ??
+      c?.total ??
+      c?.debe ??      // ✅ cuando viene desde asientos
+      c?.debit ??     // ✅ cuando viene en inglés
+      0
+  );
+
+  costoVentasInventario += m;
+}
+
 
     const total = costoVentas + costoVentasInventario + gastosOperativos + otrosGastos;
 
@@ -607,9 +645,19 @@ const [pageProveedores, setPageProveedores] = useState(1);
         : transaccionesPorTipo.costosInventario;
 
     const getMonto = (x: any) => {
-      if (tipoEgreso === "costo_inventario") return toNum(x?.monto ?? x?.total ?? 0);
-      return toNum(x?.monto_total ?? x?.total ?? x?.monto ?? 0);
-    };
+  if (tipoEgreso === "costo_inventario") {
+    return toNum(
+      x?.monto ??
+        x?.monto_total ??
+        x?.total ??
+        x?.debe ??
+        x?.debit ??
+        0
+    );
+  }
+  return toNum(x?.monto_total ?? x?.total ?? x?.monto ?? 0);
+};
+
 
     // bucketing
     if (periodFilter === "diario") {
@@ -709,14 +757,23 @@ const [pageProveedores, setPageProveedores] = useState(1);
     };
 
     const sumInv = (list: any[], start: Date, end: Date) => {
-      let inv = 0;
-      for (const c of list) {
-        const d = getDateAny(c);
-        if (!inRange(d, start, end)) continue;
-        inv += toNum(c?.monto ?? c?.total ?? 0);
-      }
-      return inv;
-    };
+  let inv = 0;
+  for (const c of list) {
+    const d = getDateAny(c);
+    if (!inRange(d, start, end)) continue;
+
+    inv += toNum(
+      c?.monto ??
+        c?.monto_total ??
+        c?.total ??
+        c?.debe ??
+        c?.debit ??
+        0
+    );
+  }
+  return inv;
+};
+
 
     const diaTx = sumTx(filteredTransactions, startDia, endDia);
     const mesTx = sumTx(filteredTransactions, startMes, endMes);
