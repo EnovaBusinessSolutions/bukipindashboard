@@ -199,6 +199,7 @@ const AnalyticaEgresos = () => {
   const formatMoneyScaledWith = (fmt: "normal" | "miles" | "millones", raw: number, incluirSufijo = false) => {
     const v = scaleWith(fmt, raw);
     const sufijo = incluirSufijo ? getSufijoFormato(fmt) : "";
+    // ✅ IMPORTANTE: aquí YA incluye "$"
     return `$${v.toLocaleString("es-MX", {
       minimumFractionDigits: decimales,
       maximumFractionDigits: decimales,
@@ -373,21 +374,21 @@ const AnalyticaEgresos = () => {
     }));
   }, [datosGraficaRaw, tipoEgreso]);
 
-  // Egresos por Tipo (RAW)
+  // Egresos por Tipo (RAW) ✅ NOMBRES NUEVOS
   const datosEgresosPorTipo = useMemo(() => {
     const data: { tipo: string; monto: number }[] = [];
 
-    const totalCostoVenta = transaccionesPorTipo.costoVenta.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalCostoVenta > 0) data.push({ tipo: "Costo de Venta", monto: totalCostoVenta });
+    const totalCostoVentas = transaccionesPorTipo.costoVenta.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
+    if (totalCostoVentas > 0) data.push({ tipo: "Costo de Ventas", monto: totalCostoVentas });
 
-    const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) data.push({ tipo: "Inventario", monto: totalCostosInventario });
+    const totalCostoVentasInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
+    if (totalCostoVentasInventario > 0) data.push({ tipo: "Costo de Ventas Inventario", monto: totalCostoVentasInventario });
 
-    const totalGastos = transaccionesPorTipo.gastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalGastos > 0) data.push({ tipo: "Gastos", monto: totalGastos });
+    const totalGastosOperativos = transaccionesPorTipo.gastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
+    if (totalGastosOperativos > 0) data.push({ tipo: "Gastos Operativos", monto: totalGastosOperativos });
 
     const totalOtrosGastos = transaccionesPorTipo.otrosGastos.reduce((sum: number, t: any) => sum + toNum(t?.monto_total), 0);
-    if (totalOtrosGastos > 0) data.push({ tipo: "Otros", monto: totalOtrosGastos });
+    if (totalOtrosGastos > 0) data.push({ tipo: "Otros Gastos", monto: totalOtrosGastos });
 
     return data;
   }, [transaccionesPorTipo]);
@@ -431,22 +432,22 @@ const AnalyticaEgresos = () => {
     };
 
     transaccionesPorTipo.costoVenta.forEach((t: any) => {
-      const k = resolveSubName("Costo venta", t?.subcuenta_id);
+      const k = resolveSubName("Costo de Ventas", t?.subcuenta_id);
       grouped[k] = (grouped[k] ?? 0) + toNum(t?.monto_total);
     });
 
     transaccionesPorTipo.gastos.forEach((t: any) => {
-      const k = resolveSubName("Gastos", t?.subcuenta_id);
+      const k = resolveSubName("Gastos Operativos", t?.subcuenta_id);
       grouped[k] = (grouped[k] ?? 0) + toNum(t?.monto_total);
     });
 
     transaccionesPorTipo.otrosGastos.forEach((t: any) => {
-      const k = resolveSubName("Otros", t?.subcuenta_id);
+      const k = resolveSubName("Otros Gastos", t?.subcuenta_id);
       grouped[k] = (grouped[k] ?? 0) + toNum(t?.monto_total);
     });
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
+    if (totalCostosInventario > 0) grouped["Costo de Ventas Inventario"] = (grouped["Costo de Ventas Inventario"] ?? 0) + totalCostosInventario;
 
     return Object.entries(grouped)
       .map(([subcuenta, monto]) => ({ subcuenta, monto }))
@@ -540,7 +541,7 @@ const AnalyticaEgresos = () => {
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
-          categoria: "Costo Venta",
+          categoria: "Costo de Ventas",
         };
       }
       grouped[key].monto += toNum(t?.monto_total);
@@ -558,7 +559,7 @@ const AnalyticaEgresos = () => {
           monto: 0,
           transacciones: 0,
           tieneAsignacion: true,
-          categoria: "Gastos",
+          categoria: "Gastos Operativos",
         };
       }
       grouped[key].monto += toNum(t?.monto_total);
@@ -593,7 +594,7 @@ const AnalyticaEgresos = () => {
           monto: 0,
           transacciones: 0,
           tieneAsignacion: !!c?.producto_nombre,
-          categoria: "Inventario",
+          categoria: "Costo de Ventas Inventario",
         };
       }
       grouped[key].monto += toNum(c?.monto);
@@ -641,7 +642,8 @@ const AnalyticaEgresos = () => {
 
     const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
     if (totalCostosInventario > 0) {
-      if (!grouped["Sin proveedor asignado"]) grouped["Sin proveedor asignado"] = { nombre: "Sin proveedor asignado", monto: 0, transacciones: 0, tieneAsignacion: false };
+      if (!grouped["Sin proveedor asignado"])
+        grouped["Sin proveedor asignado"] = { nombre: "Sin proveedor asignado", monto: 0, transacciones: 0, tieneAsignacion: false };
       grouped["Sin proveedor asignado"].monto += totalCostosInventario;
       grouped["Sin proveedor asignado"].transacciones += transaccionesPorTipo.costosInventario.length;
     }
@@ -725,7 +727,7 @@ const AnalyticaEgresos = () => {
   }
 
   // Donas palette (theme-friendly)
-  const pieColors = [CHART.primary, CHART.destructive, CHART.accent, CHART.ring];
+  const pieColors = [CHART.primary, CHART.ring, CHART.destructive, CHART.accent];
 
   const DonutCenterLabel = ({
     cx = "50%",
@@ -746,22 +748,43 @@ const AnalyticaEgresos = () => {
     </>
   );
 
+  // ✅ Colores de highlights (consistentes con analítica)
+  const HL = {
+    costoVentas: CHART.primary,
+    costoVentasInventario: CHART.ring,
+    gastosOperativos: CHART.destructive,
+    otrosGastos: CHART.accent,
+    total: CHART.destructive,
+  };
+
   // ✅ helper para highlights (usa formato propio como Ventas)
-  const HighlightRow = ({ label, value }: { label: string; value: number }) => (
+  const HighlightRow = ({
+    label,
+    value,
+    color,
+    bold = false,
+  }: {
+    label: string;
+    value: number;
+    color: string;
+    bold?: boolean;
+  }) => (
     <div className="flex justify-between items-center">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-semibold text-foreground">${formatMoneyScaledWith(highlightsScaleFormat, value, false)}</span>
+      <span className={cn("text-sm", bold ? "font-bold" : "font-medium")} style={{ color }}>
+        {label}
+      </span>
+      {/* ✅ FIX: NO agregar "$" aquí porque formatMoneyScaledWith ya lo trae */}
+      <span className={cn("text-foreground", bold ? "font-extrabold" : "font-semibold")}>
+        {formatMoneyScaledWith(highlightsScaleFormat, value, false)}
+      </span>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      {/* ✅ Título + descripción (como Ventas: simple y consistente) */}
+      {/* ✅ Título correcto + SIN descripción */}
       <div>
-        <h3 className="text-xl font-bold text-foreground mb-1">Analítica de Egresos</h3>
-        <p className="text-sm text-muted-foreground">
-          Visualiza en un vistazo qué te está costando más: costos, gastos, inventario y otros.
-        </p>
+        <h3 className="text-xl font-bold text-foreground mb-1">Highlights de egresos</h3>
       </div>
 
       {/* ✅ HIGHLIGHTS (igual que Ventas) */}
@@ -804,16 +827,21 @@ const AnalyticaEgresos = () => {
               <CardTitle className="text-lg font-semibold text-primary">Resumen del Día ({labelHoy})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <HighlightRow label="Costo de venta:" value={resDia.costosVenta5001} />
-              <HighlightRow label="Inventario:" value={resDia.costosVenta5002} />
-              <HighlightRow label="Gastos:" value={resDia.gastos} />
-              <HighlightRow label="Otros:" value={resDia.otrosGastos} />
+              <HighlightRow label="Costo de Ventas:" value={resDia.costosVenta5001} color={HL.costoVentas} />
+              <HighlightRow label="Costo de Ventas Inventario:" value={resDia.costosVenta5002} color={HL.costoVentasInventario} />
+              <HighlightRow label="Gastos Operativos:" value={resDia.gastos} color={HL.gastosOperativos} />
+              <HighlightRow label="Otros Gastos:" value={resDia.otrosGastos} color={HL.otrosGastos} />
 
               <div className="h-px bg-border" />
 
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-primary">Total:</span>
-                <span className="text-xl font-bold text-destructive">${formatMoneyScaledWith(highlightsScaleFormat, resDia.total, false)}</span>
+                <span className="text-sm font-bold" style={{ color: HL.total }}>
+                  Total Egresos:
+                </span>
+                {/* ✅ FIX: sin "$" extra */}
+                <span className="text-xl font-bold" style={{ color: HL.total }}>
+                  {formatMoneyScaledWith(highlightsScaleFormat, resDia.total, false)}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -823,16 +851,20 @@ const AnalyticaEgresos = () => {
               <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes ({labelMes})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <HighlightRow label="Costo de venta:" value={resMes.costosVenta5001} />
-              <HighlightRow label="Inventario:" value={resMes.costosVenta5002} />
-              <HighlightRow label="Gastos:" value={resMes.gastos} />
-              <HighlightRow label="Otros:" value={resMes.otrosGastos} />
+              <HighlightRow label="Costo de Ventas:" value={resMes.costosVenta5001} color={HL.costoVentas} />
+              <HighlightRow label="Costo de Ventas Inventario:" value={resMes.costosVenta5002} color={HL.costoVentasInventario} />
+              <HighlightRow label="Gastos Operativos:" value={resMes.gastos} color={HL.gastosOperativos} />
+              <HighlightRow label="Otros Gastos:" value={resMes.otrosGastos} color={HL.otrosGastos} />
 
               <div className="h-px bg-border" />
 
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-primary">Total:</span>
-                <span className="text-xl font-bold text-destructive">${formatMoneyScaledWith(highlightsScaleFormat, resMes.total, false)}</span>
+                <span className="text-sm font-bold" style={{ color: HL.total }}>
+                  Total Egresos:
+                </span>
+                <span className="text-xl font-bold" style={{ color: HL.total }}>
+                  {formatMoneyScaledWith(highlightsScaleFormat, resMes.total, false)}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -842,16 +874,20 @@ const AnalyticaEgresos = () => {
               <CardTitle className="text-lg font-semibold text-primary">Resumen del Año ({labelAno})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <HighlightRow label="Costo de venta:" value={resAnio.costosVenta5001} />
-              <HighlightRow label="Inventario:" value={resAnio.costosVenta5002} />
-              <HighlightRow label="Gastos:" value={resAnio.gastos} />
-              <HighlightRow label="Otros:" value={resAnio.otrosGastos} />
+              <HighlightRow label="Costo de Ventas:" value={resAnio.costosVenta5001} color={HL.costoVentas} />
+              <HighlightRow label="Costo de Ventas Inventario:" value={resAnio.costosVenta5002} color={HL.costoVentasInventario} />
+              <HighlightRow label="Gastos Operativos:" value={resAnio.gastos} color={HL.gastosOperativos} />
+              <HighlightRow label="Otros Gastos:" value={resAnio.otrosGastos} color={HL.otrosGastos} />
 
               <div className="h-px bg-border" />
 
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-primary">Total:</span>
-                <span className="text-xl font-bold text-destructive">${formatMoneyScaledWith(highlightsScaleFormat, resAnio.total, false)}</span>
+                <span className="text-sm font-bold" style={{ color: HL.total }}>
+                  Total Egresos:
+                </span>
+                <span className="text-xl font-bold" style={{ color: HL.total }}>
+                  {formatMoneyScaledWith(highlightsScaleFormat, resAnio.total, false)}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -949,25 +985,25 @@ const AnalyticaEgresos = () => {
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="costo" id="eg-tipo-costo" />
                   <Label htmlFor="eg-tipo-costo" className="cursor-pointer">
-                    Costo de venta
+                    Costo de Ventas
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="costo_inventario" id="eg-tipo-inv" />
                   <Label htmlFor="eg-tipo-inv" className="cursor-pointer">
-                    Inventario
+                    Costo de Ventas Inventario
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="gasto" id="eg-tipo-gasto" />
                   <Label htmlFor="eg-tipo-gasto" className="cursor-pointer">
-                    Gastos
+                    Gastos Operativos
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="otros_gastos" id="eg-tipo-otros" />
                   <Label htmlFor="eg-tipo-otros" className="cursor-pointer">
-                    Otros
+                    Otros Gastos
                   </Label>
                 </div>
               </RadioGroup>
@@ -1094,18 +1130,18 @@ const AnalyticaEgresos = () => {
 
                   {tipoEgreso === "total" && vistaTotal === "desglosada" ? (
                     <>
-                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costos" name="Costo de Ventas" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costosInventario" name="Costo de Ventas Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="gastos" name="Gastos Operativos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="otrosGastos" name="Otros Gastos" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
                       <Legend formatter={LegendText as any} />
                     </>
                   ) : tipoEgreso === "combinada" ? (
                     <>
-                      <Line type="monotone" dataKey="costos" name="Costo de venta" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="gastos" name="Gastos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="costosInventario" name="Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="otrosGastos" name="Otros" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costos" name="Costo de Ventas" stroke={CHART.primary} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="costosInventario" name="Costo de Ventas Inventario" stroke={CHART.ring} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="gastos" name="Gastos Operativos" stroke={CHART.destructive} strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="otrosGastos" name="Otros Gastos" stroke={CHART.accent} strokeWidth={2.5} dot={false} />
                       <Legend formatter={LegendText as any} />
                     </>
                   ) : (
