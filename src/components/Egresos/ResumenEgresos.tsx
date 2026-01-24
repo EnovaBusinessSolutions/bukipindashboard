@@ -76,6 +76,18 @@ const pickISODate = (t: any) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
+// ✅ Asegura arrays aunque el hook devuelva { ok:true, data:[...] } o shapes similares
+const toArray = (v: any): any[] => {
+  if (Array.isArray(v)) return v;
+  if (Array.isArray(v?.data)) return v.data;
+  if (Array.isArray(v?.data?.items)) return v.data.items;
+  if (Array.isArray(v?.items)) return v.items;
+  if (Array.isArray(v?.rows)) return v.rows;
+  if (Array.isArray(v?.data?.rows)) return v.data.rows;
+  return [];
+};
+
+
 // ✅ Normalizadores E2E
 const normalizeAsientoDetalle = (d: any): AsientoDetalle => {
   const cuenta_codigo =
@@ -284,7 +296,12 @@ const ResumenEgresos = () => {
     error,
   }: any = useTransaccionesEgresos(200);
 
-  const { data: costosVentaInventario, isLoading: loadingCostosVenta }: any = useCostosVentaInventario();
+  const { data: costosVentaInventarioRaw, isLoading: loadingCostosVenta }: any = useCostosVentaInventario();
+
+const costosVentaInventarioArr = useMemo(() => {
+  return toArray(costosVentaInventarioRaw);
+}, [costosVentaInventarioRaw]);
+
   const { data: productosEgresos = [] }: any = useProductosEgresos();
   const { toast } = useToast();
 
@@ -365,49 +382,51 @@ const ResumenEgresos = () => {
   }, [transacciones, searchTerm, filterProveedor, filterPago, filterEstadoPago, dateRange]);
 
   const transaccionesCostosVenta = useMemo(() => {
-    return transaccionesFiltradas.filter(
-      (t: any) => t.cuenta_codigo === "5001" || t.cuenta_codigo === "5003" || t.cuenta_codigo === "5004"
-    );
-  }, [transaccionesFiltradas]);
+  return (transacciones || []).filter(
+    (t: any) => t.cuenta_codigo === "5001" || t.cuenta_codigo === "5003" || t.cuenta_codigo === "5004"
+  );
+}, [transacciones]);
 
   const transaccionesGastos = useMemo(() => {
-    return transaccionesFiltradas.filter(
-      (t: any) =>
-        t.cuenta_codigo &&
-        String(t.cuenta_codigo).startsWith("51") &&
-        t.cuenta_codigo !== "5109" &&
-        t.cuenta_codigo !== "5110"
-    );
-  }, [transaccionesFiltradas]);
+  return (transacciones || []).filter(
+    (t: any) =>
+      t.cuenta_codigo &&
+      String(t.cuenta_codigo).startsWith("51") &&
+      t.cuenta_codigo !== "5109" &&
+      t.cuenta_codigo !== "5110"
+  );
+}, [transacciones]);
+
 
   const transaccionesOtrosGastos = useMemo(() => {
-    return transaccionesFiltradas.filter((t: any) => t.cuenta_codigo === "5204");
-  }, [transaccionesFiltradas]);
+  return (transacciones || []).filter((t: any) => t.cuenta_codigo === "5204");
+}, [transacciones]);
+
 
   const transaccionesEgresosUnificadas = useMemo(() => {
-    const costosConDetalle =
-      costosVentaInventario?.map((c: any) => ({
-        id: c?.id ?? c?._id,
-        created_at: c.fecha,
-        fecha: c.fecha,
-        tipo_egreso: "costo",
-        descripcion: c.producto_nombre,
-        cuenta_codigo:
-          c.detalles_asiento?.find((d: any) => String(d.cuenta_codigo).startsWith("50"))?.cuenta_codigo || "5002",
-        monto_total: safeNum(c.monto),
-        proveedor_nombre: null,
-        imagen_url: c.producto_imagen,
-        cantidad: safeNum(c.cantidad),
-        costo_unitario: safeNum(c.costo_unitario),
-        numero_asiento: c.numero_asiento,
-        detalles_asiento: c.detalles_asiento || [],
-        tipo_pago: null,
-        metodo_pago: null,
-        monto_pagado: safeNum(c.monto),
-        monto_pendiente: 0,
-        estado: "activo",
-        imagen_comprobante: null,
-      })) || [];
+   const costosConDetalle: any[] = costosVentaInventarioArr.map((c: any) => ({
+  id: c?.id ?? c?._id,
+  created_at: c.fecha,
+  fecha: c.fecha,
+  tipo_egreso: "costo",
+  descripcion: c.producto_nombre,
+  cuenta_codigo:
+    c.detalles_asiento?.find((d: any) => String(d.cuenta_codigo).startsWith("50"))?.cuenta_codigo || "5002",
+  monto_total: safeNum(c.monto),
+  proveedor_nombre: null,
+  imagen_url: c.producto_imagen,
+  cantidad: safeNum(c.cantidad),
+  costo_unitario: safeNum(c.costo_unitario),
+  numero_asiento: c.numero_asiento,
+  detalles_asiento: c.detalles_asiento || [],
+  tipo_pago: null,
+  metodo_pago: null,
+  monto_pagado: safeNum(c.monto),
+  monto_pendiente: 0,
+  estado: "activo",
+  imagen_comprobante: null,
+}));
+
 
     const costosVentaDirectos = transaccionesCostosVenta.map((cv: any) => {
       const norm = normalizeEgresoTx(cv);
@@ -498,18 +517,23 @@ const ResumenEgresos = () => {
       const db = pickISODate(b);
       return new Date(db || 0).getTime() - new Date(da || 0).getTime();
     });
-  }, [costosVentaInventario, transaccionesCostosVenta, transaccionesGastos, transaccionesOtrosGastos, mapaImagenesProductos]);
+  }, [costosVentaInventarioArr, transaccionesCostosVenta, transaccionesGastos, transaccionesOtrosGastos, mapaImagenesProductos]);
 
   const transaccionesFiltradasPorCategoria = useMemo(() => {
-    if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
-    if (filterCategoriaContable === "costos")
-      return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
-    if (filterCategoriaContable === "gastos")
-      return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
-    if (filterCategoriaContable === "otros_gastos")
-      return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "") === "5204");
-    return transaccionesEgresosUnificadas;
-  }, [transaccionesEgresosUnificadas, filterCategoriaContable]);
+  if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
+
+  if (filterCategoriaContable === "costos")
+    return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
+
+  if (filterCategoriaContable === "gastos")
+    return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
+
+  if (filterCategoriaContable === "otros_gastos")
+    return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "") === "5204");
+
+  return transaccionesEgresosUnificadas;
+}, [transaccionesEgresosUnificadas, filterCategoriaContable]);
+
 
   const resumenFiltrado = useMemo(() => {
     const totalCostos = transaccionesEgresosUnificadas
