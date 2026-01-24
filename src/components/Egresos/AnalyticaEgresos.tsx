@@ -12,12 +12,10 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   Treemap,
-  AreaChart,   
-  Area,        
-  Brush,   
+  AreaChart,
+  Area,
+  Brush,
 } from "recharts";
 import { AlertCircle, CalendarIcon, Package, TrendingDown } from "lucide-react";
 
@@ -38,9 +36,6 @@ import { cn } from "@/lib/utils";
 
 import { useTransaccionesEgresos } from "@/hooks/useTransaccionesEgresos";
 import { useCostosVentaInventario } from "@/hooks/useCostosVentaInventario";
-// ❌ YA NO usamos resumenQuery para highlights (era la causa del “todo en 0”)
-// import { useResumenEgresosPorPeriodo } from "@/hooks/useResumenEgresosPorPeriodo";
-import { useEgresosPorPeriodo, DatosEvolucionSimple } from "@/hooks/useEgresosPorPeriodo";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
@@ -178,6 +173,11 @@ const AnalyticaEgresos = () => {
     []
   );
 
+  const MONTHS_SHORT = useMemo(
+    () => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
+    []
+  );
+
   const YEARS = useMemo(() => {
     const base = new Date().getFullYear();
     const min = base - 10;
@@ -196,7 +196,6 @@ const AnalyticaEgresos = () => {
   // Queries
   const transQuery = useTransaccionesEgresos(1000, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
   const costosInvQuery = useCostosVentaInventario(periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
-  const graficaQuery = useEgresosPorPeriodo(periodFilter, tipoEgreso as any, fechaAnalisisDiario, fechaAnalisisMensual) as any;
 
   const subcuentasQuery = useSubcuentas() as any;
   const productosQuery = useProductosEgresos() as any;
@@ -215,9 +214,7 @@ const AnalyticaEgresos = () => {
     return Array.isArray(arr) ? arr : [];
   }, [cuentasData]);
 
-  const datosGraficaRaw = graficaQuery?.data?.data ?? graficaQuery?.data ?? null;
-
-  const loading = !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!graficaQuery?.isLoading;
+  const loading = !!transQuery?.isLoading || !!costosInvQuery?.isLoading;
 
   // ---- Formato/escala SOLO PARA VISUAL ----
   const getSufijoFormato = (fmt: "normal" | "miles" | "millones") => {
@@ -289,7 +286,6 @@ const AnalyticaEgresos = () => {
   /**
    * Filtrar transacciones operativas:
    * - Costos de venta: 5001, 5003, 5004
-   * - Costo inventario: (NO se toma de transacciones en highlights; viene de hook inventario)
    * - Gastos: 51XX (excepto 5109, 5110 si aplica)
    * - Otros gastos: 5204
    */
@@ -397,22 +393,113 @@ const AnalyticaEgresos = () => {
     };
   }, [filteredTransactions, filteredTransactionsSinImpuestos, costosVentaInventario, tipoEgreso]);
 
-  // Datos para gráfica (RAW, sin escala)
-  const datosGraficaFormateados = useMemo(() => {
-    if (!datosGraficaRaw) return [];
-    const arr = normalizeArray<DatosEvolucionSimple>(datosGraficaRaw);
-    return arr.map((item: any) => ({
-      periodo: item?.periodo,
-      monto: toNum(item?.monto),
-    }));
-  }, [datosGraficaRaw]);
-
   const getTipoLabel = (t: typeof tipoEgreso) => {
     if (t === "costo") return "Costo de Ventas";
     if (t === "costo_inventario") return "Costo de Ventas Inventario";
     if (t === "gasto") return "Gastos Operativos";
     return "Otros Gastos";
   };
+
+  // ✅✅✅ SERIE EVOLUCIÓN (E2E REAL) — basada en los mismos datos que “Resumen de Egresos”
+  const evolucion = useMemo(() => {
+    // rango según periodo
+    let start: Date;
+    let end: Date;
+
+    if (periodFilter === "diario") {
+      const d = new Date(fechaAnalisisDiario);
+      start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+      end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+    } else if (periodFilter === "mensual") {
+      const d = new Date(fechaAnalisisMensual);
+      start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+    } else {
+      const y = fechaAnalisisMensual.getFullYear();
+      start = new Date(y, 0, 1, 0, 0, 0, 0);
+      end = new Date(y + 1, 0, 1, 0, 0, 0, 0);
+    }
+
+    // fuente según tipo
+    const fuente =
+      tipoEgreso === "costo"
+        ? transaccionesPorTipo.costoVenta
+        : tipoEgreso === "gasto"
+        ? transaccionesPorTipo.gastos
+        : tipoEgreso === "otros_gastos"
+        ? transaccionesPorTipo.otrosGastos
+        : transaccionesPorTipo.costosInventario;
+
+    const getMonto = (x: any) => {
+      if (tipoEgreso === "costo_inventario") return toNum(x?.monto ?? x?.total ?? 0);
+      return toNum(x?.monto_total ?? x?.total ?? x?.monto ?? 0);
+    };
+
+    // bucketing
+    if (periodFilter === "diario") {
+      const buckets = Array.from({ length: 24 }).map((_, h) => ({
+        periodo: `${String(h).padStart(2, "0")}:00`,
+        monto: 0,
+      }));
+
+      for (const item of fuente || []) {
+        const d = getDateAny(item);
+        if (!inRange(d, start, end) || !d) continue;
+        const h = d.getHours();
+        buckets[h].monto += getMonto(item);
+      }
+
+      return buckets;
+    }
+
+    if (periodFilter === "mensual") {
+      const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+      const buckets = Array.from({ length: daysInMonth }).map((_, i) => ({
+        periodo: `Día ${i + 1}`,
+        monto: 0,
+      }));
+
+      for (const item of fuente || []) {
+        const d = getDateAny(item);
+        if (!inRange(d, start, end) || !d) continue;
+        const dayIdx = d.getDate() - 1;
+        if (dayIdx >= 0 && dayIdx < buckets.length) buckets[dayIdx].monto += getMonto(item);
+      }
+
+      return buckets;
+    }
+
+    // anual
+    const buckets = Array.from({ length: 12 }).map((_, i) => ({
+      periodo: MONTHS_SHORT[i],
+      monto: 0,
+    }));
+
+    for (const item of fuente || []) {
+      const d = getDateAny(item);
+      if (!inRange(d, start, end) || !d) continue;
+      const m = d.getMonth();
+      buckets[m].monto += getMonto(item);
+    }
+
+    return buckets;
+  }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual, tipoEgreso, transaccionesPorTipo, MONTHS_SHORT]);
+
+  const evolucionHasData = useMemo(() => evolucion.some((p) => toNum(p?.monto) > 0), [evolucion]);
+
+  const evolucionSubtitle = useMemo(() => {
+    const tipo = getTipoLabel(tipoEgreso);
+    if (periodFilter === "diario") return `${tipo} — por hora del día`;
+    if (periodFilter === "mensual") return `${tipo} — por día del mes`;
+    return `${tipo} — por mes del año`;
+  }, [periodFilter, tipoEgreso]);
+
+  const evolucionTitle = useMemo(() => {
+    // Igual estilo que Ingresos
+    const tipo = getTipoLabel(tipoEgreso);
+    if (tipoEgreso === "costo_inventario") return `Evolución de Costo de Ventas Inventario`;
+    return `Evolución de ${tipo}`;
+  }, [tipoEgreso]);
 
   // ✅✅✅ HIGHLIGHTS E2E (misma base que la tabla de Resumen: transacciones)
   // - Día: hoy
@@ -828,7 +915,15 @@ const AnalyticaEgresos = () => {
       <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={12} opacity={0.75}>
         Total
       </text>
-      <text x={cx} y={typeof cy === "number" ? cy + 18 : cy} textAnchor="middle" dominantBaseline="middle" style={{ fill: "hsl(var(--foreground))" }} fontSize={16} fontWeight={800}>
+      <text
+        x={cx}
+        y={typeof cy === "number" ? cy + 18 : cy}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        style={{ fill: "hsl(var(--foreground))" }}
+        fontSize={16}
+        fontWeight={800}
+      >
         {formatMoneyScaled(total, false)}
       </text>
     </>
@@ -903,11 +998,7 @@ const AnalyticaEgresos = () => {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Formato:</span>
-            <RadioGroup
-              value={highlightsScaleFormat}
-              onValueChange={(v) => setHighlightsScaleFormat(v as any)}
-              className="flex items-center gap-4"
-            >
+            <RadioGroup value={highlightsScaleFormat} onValueChange={(v) => setHighlightsScaleFormat(v as any)} className="flex items-center gap-4">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="normal" id="eg-high-general" />
                 <Label htmlFor="eg-high-general" className="cursor-pointer text-sm">
@@ -993,7 +1084,7 @@ const AnalyticaEgresos = () => {
       {/* ✅ Separador */}
       <div className="my-8 border-t-2 border-primary/20" />
 
-      {/* ✅ ANALÍTICA DE EGRESOS (antes “Controles de análisis”) */}
+      {/* ✅ ANALÍTICA DE EGRESOS */}
       <div>
         <h3 className="text-xl font-bold text-foreground mb-6">Analítica de egresos</h3>
 
@@ -1093,7 +1184,7 @@ const AnalyticaEgresos = () => {
                 </div>
               )}
 
-              {/* ✅ Mensual = selector Mes + Año (como Ingresos) */}
+              {/* ✅ Mensual = selector Mes + Año */}
               {periodFilter === "mensual" && (
                 <div className="pt-4">
                   <Label className="text-xs text-muted-foreground mb-2 block">Mes específico</Label>
@@ -1159,7 +1250,7 @@ const AnalyticaEgresos = () => {
                 </div>
               )}
 
-              {/* ✅ Anual = selector de Año (como Ingresos) */}
+              {/* ✅ Anual = selector de Año */}
               {periodFilter === "anual" && (
                 <div className="pt-4">
                   <Label className="text-xs text-muted-foreground mb-2 block">Año específico</Label>
@@ -1179,7 +1270,6 @@ const AnalyticaEgresos = () => {
                           value={String(fechaAnalisisMensual.getFullYear())}
                           onValueChange={(v) => {
                             const year = Number(v);
-                            // Para anual usamos el año, el mes queda fijo en enero
                             setFechaAnalisisMensual(new Date(year, 0, 1));
                           }}
                         >
@@ -1235,188 +1325,89 @@ const AnalyticaEgresos = () => {
       </div>
 
       {/* ✅ GRÁFICAS */}
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-  {/* Evolución */}
-  <Card className="lg:col-span-2">
-    <CardHeader className="pb-2">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <CardTitle className="text-base">
-            Evolución — {getTipoLabel(tipoEgreso)}
-            {getSufijoFormato(formatoMontos)}
-          </CardTitle>
-          <CardDescription>Tendencia en el tiempo (útil para detectar picos)</CardDescription>
-        </div>
-        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-          {datosGraficaFormateados?.length ? `${datosGraficaFormateados.length} puntos` : "Sin datos"}
-        </Badge>
-      </div>
-    </CardHeader>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Evolución */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg md:text-xl font-semibold">
+                  {evolucionTitle}
+                  {getSufijoFormato(formatoMontos)}
+                </CardTitle>
+                <CardDescription>{evolucionSubtitle}</CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {evolucion?.length ? `${evolucion.length} puntos` : "Sin datos"}
+              </Badge>
+            </div>
+          </CardHeader>
 
-    <CardContent className="h-[26rem]">
-      {datosGraficaFormateados.length === 0 ? (
-        <ChartCardEmpty
-          title="Sin evolución para mostrar"
-          hint="Ajusta el período o registra egresos para ver la tendencia."
-        />
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={datosGraficaFormateados}
-            margin={{ top: 12, right: 18, left: 0, bottom: 26 }} // bottom extra para el Brush (scroll)
-          >
-            <defs>
-              <linearGradient id="egresosArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={CHART.primary} stopOpacity={0.35} />
-                <stop offset="95%" stopColor={CHART.primary} stopOpacity={0.03} />
-              </linearGradient>
-            </defs>
+          <CardContent className="h-[26rem]">
+            {!evolucionHasData ? (
+              <ChartCardEmpty title="Sin evolución para mostrar" hint="Ajusta el período, el tipo de egreso o registra egresos para ver la tendencia." />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={evolucion} margin={{ top: 12, right: 18, left: 0, bottom: 26 }}>
+                  <defs>
+                    <linearGradient id="egresosArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={CHART.primary} stopOpacity={0.35} />
+                      <stop offset="95%" stopColor={CHART.primary} stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
 
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
 
-            <XAxis
-              dataKey="periodo"
-              tick={{ fontSize: 12 }}
-              minTickGap={18}
-              height={30}
-            />
+                  <XAxis dataKey="periodo" tick={{ fontSize: 12 }} minTickGap={18} height={30} />
 
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickFormatter={(v: any) =>
-                scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", {
-                  maximumFractionDigits: decimales,
-                })
-              }
-              domain={[0, (dataMax: number) => Math.ceil((Number(dataMax) || 0) * 1.15)]}
-              padding={{ top: 10, bottom: 0 }}
-            />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(v: any) =>
+                      scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", {
+                        maximumFractionDigits: decimales,
+                      })
+                    }
+                    domain={[0, (dataMax: number) => Math.ceil((Number(dataMax) || 0) * 1.15)]}
+                    padding={{ top: 10, bottom: 0 }}
+                  />
 
-            <Tooltip
-              formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
-              contentStyle={tooltipCardStyle}
-              labelStyle={tooltipLabelStyle}
-              cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
-            />
+                  <Tooltip
+                    formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
+                    contentStyle={tooltipCardStyle}
+                    labelStyle={tooltipLabelStyle}
+                    cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
+                  />
 
-            {/* Área suave (como Ingresos) */}
-            <Area
-              type="monotone"
-              dataKey="monto"
-              name="Monto"
-              stroke={CHART.primary}
-              strokeWidth={2.6}
-              fill="url(#egresosArea)"
-              fillOpacity={1}
-              dot={false}
-              activeDot={{
-                r: 5,
-                stroke: CHART.primary,
-                strokeWidth: 2,
-                fill: "hsl(var(--background))",
-              }}
-            />
+                  <Area
+                    type="monotone"
+                    dataKey="monto"
+                    name="Monto"
+                    stroke={CHART.primary}
+                    strokeWidth={2.6}
+                    fill="url(#egresosArea)"
+                    fillOpacity={1}
+                    dot={false}
+                    activeDot={{
+                      r: 5,
+                      stroke: CHART.primary,
+                      strokeWidth: 2,
+                      fill: "hsl(var(--background))",
+                    }}
+                  />
 
-            {/* ✅ Scroll/Zoom dinámico abajo (igual feel que Ingresos) */}
-            <Brush
-              dataKey="periodo"
-              height={26}
-              travellerWidth={12}
-              stroke={CHART.primary}
-              fill="hsl(var(--muted))"
-              tickFormatter={(v: any) => String(v)}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
-    </CardContent>
-  </Card>
-
-  {/* Donas (por tipo) */}
-  <Card>
-    <CardHeader className="pb-2">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <CardTitle className="text-base">Distribución por tipo</CardTitle>
-          <CardDescription>¿En qué se va el dinero?</CardDescription>
-        </div>
-        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-          {formatMoneyScaled(totalEgresosPorTipo, true)}
-        </Badge>
-      </div>
-    </CardHeader>
-
-    <CardContent className="h-80">
-      {datosEgresosPorTipo.length === 0 ? (
-        <ChartCardEmpty title="Sin egresos" hint="Registra costos o gastos para que aparezca la distribución." />
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={datosEgresosPorTipo} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
-              {datosEgresosPorTipo.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
-              ))}
-            </Pie>
-
-            <DonutCenterLabel total={totalEgresosPorTipo} />
-
-            <Tooltip
-              formatter={(value: any, _name: any, props: any) => {
-                const label = props?.payload?.tipo || "Monto";
-                return [formatMoneyScaled(toNum(value), true), label];
-              }}
-              contentStyle={tooltipCardStyle}
-              labelStyle={tooltipLabelStyle}
-            />
-            <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
-          </PieChart>
-        </ResponsiveContainer>
-      )}
-    </CardContent>
-  </Card>
-
-  {/* Donas (por método pago) */}
-  <Card>
-    <CardHeader className="pb-2">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <CardTitle className="text-base">Métodos de pago</CardTitle>
-          <CardDescription>Solo pagos realizados (sin impuestos)</CardDescription>
-        </div>
-        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-          {formatMoneyScaled(totalMetodosPago, true)}
-        </Badge>
-      </div>
-    </CardHeader>
-
-    <CardContent className="h-80">
-      {datosEstadoPagos.length === 0 ? (
-        <ChartCardEmpty title="Sin pagos registrados" hint="Si todo está en crédito, aquí no se mostrará monto pagado." />
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={datosEstadoPagos} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
-              {datosEstadoPagos.map((_, idx) => (
-                <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
-              ))}
-            </Pie>
-
-            <DonutCenterLabel total={totalMetodosPago} />
-
-            <Tooltip
-              formatter={(value: any, _name: any, props: any) => {
-                const label = props?.payload?.estado || "Monto";
-                return [formatMoneyScaled(toNum(value), true), label];
-              }}
-              contentStyle={tooltipCardStyle}
-              labelStyle={tooltipLabelStyle}
-            />
-            <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
-          </PieChart>
-        </ResponsiveContainer>
-      )}
-    </CardContent>
-  </Card>
+                  <Brush
+                    dataKey="periodo"
+                    height={26}
+                    travellerWidth={12}
+                    stroke={CHART.primary}
+                    fill="hsl(var(--muted))"
+                    tickFormatter={(v: any) => String(v)}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Donas (por tipo) */}
         <Card>
@@ -1554,11 +1545,7 @@ const AnalyticaEgresos = () => {
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                     />
                     <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
-                      contentStyle={tooltipCardStyle}
-                      labelStyle={tooltipLabelStyle}
-                    />
+                    <Tooltip formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]} contentStyle={tooltipCardStyle} labelStyle={tooltipLabelStyle} />
                     <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill={CHART.accent} />
                   </BarChart>
                 </ResponsiveContainer>
