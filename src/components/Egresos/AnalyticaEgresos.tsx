@@ -71,12 +71,6 @@ const ChartCardEmpty = ({
   </div>
 );
 
-const Chip = ({ children }: { children: React.ReactNode }) => (
-  <span className="inline-flex items-center rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
-    {children}
-  </span>
-);
-
 // Tooltip “pro” y consistente
 const tooltipCardStyle: React.CSSProperties = {
   borderRadius: 12,
@@ -147,6 +141,10 @@ const AnalyticaEgresos = () => {
   const [periodFilter, setPeriodFilter] = useState<"diario" | "mensual" | "anual">("mensual");
   const [formatoMontos, setFormatoMontos] = useState<"normal" | "miles" | "millones">("normal");
   const [decimales, setDecimales] = useState<0 | 1 | 2>(2);
+
+  // ✅ Como Ventas: formato SOLO para highlights (independiente)
+  const [highlightsScaleFormat, setHighlightsScaleFormat] = useState<"normal" | "miles" | "millones">("normal");
+
   const [tipoEgreso, setTipoEgreso] = useState<
     "total" | "costo" | "gasto" | "costo_inventario" | "otros_gastos" | "combinada"
   >("total");
@@ -155,7 +153,7 @@ const AnalyticaEgresos = () => {
   const [fechaAnalisisMensual, setFechaAnalisisMensual] = useState<Date>(new Date());
   const [vistaAgrupacion, setVistaAgrupacion] = useState<"cuenta" | "subcuenta">("subcuenta");
 
-  // Queries (cast a any para evitar "never" si los hooks no están tipados)
+  // Queries
   const transQuery = useTransaccionesEgresos(1000, periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
   const costosInvQuery = useCostosVentaInventario(periodFilter, fechaAnalisisDiario, fechaAnalisisMensual) as any;
   const resumenQuery = useResumenEgresosPorPeriodo() as any;
@@ -185,27 +183,29 @@ const AnalyticaEgresos = () => {
     !!transQuery?.isLoading || !!costosInvQuery?.isLoading || !!resumenQuery?.isLoading || !!graficaQuery?.isLoading;
 
   // ---- Formato/escala SOLO PARA VISUAL ----
-  const getSufijoFormato = () => {
-    if (formatoMontos === "miles") return " (Miles)";
-    if (formatoMontos === "millones") return " (Millones)";
+  const getSufijoFormato = (fmt: "normal" | "miles" | "millones") => {
+    if (fmt === "miles") return " (Miles)";
+    if (fmt === "millones") return " (Millones)";
     return "";
   };
 
-  const scale = (n: number) => {
+  const scaleWith = (fmt: "normal" | "miles" | "millones", n: number) => {
     const v = toNum(n);
-    if (formatoMontos === "miles") return v / 1000;
-    if (formatoMontos === "millones") return v / 1_000_000;
+    if (fmt === "miles") return v / 1000;
+    if (fmt === "millones") return v / 1_000_000;
     return v;
   };
 
-  const formatMoneyScaled = (raw: number, incluirSufijo = false) => {
-    const v = scale(raw);
-    const sufijo = incluirSufijo ? getSufijoFormato() : "";
+  const formatMoneyScaledWith = (fmt: "normal" | "miles" | "millones", raw: number, incluirSufijo = false) => {
+    const v = scaleWith(fmt, raw);
+    const sufijo = incluirSufijo ? getSufijoFormato(fmt) : "";
     return `$${v.toLocaleString("es-MX", {
       minimumFractionDigits: decimales,
       maximumFractionDigits: decimales,
     })}${sufijo}`;
   };
+
+  const formatMoneyScaled = (raw: number, incluirSufijo = false) => formatMoneyScaledWith(formatoMontos, raw, incluirSufijo);
 
   const calcularPorcentaje = (monto: number, total: number): string => {
     const t = toNum(total);
@@ -694,39 +694,10 @@ const AnalyticaEgresos = () => {
     total: toNum(resumenes?.anio?.total),
   };
 
-  // ---- UI: resumen mini bars (pro) ----
-  const SummaryRow = ({ label, value, total }: { label: string; value: number; total: number }) => {
-    const pct = total > 0 ? (toNum(value) / toNum(total)) * 100 : 0;
-    return (
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{label}</span>
-          <span className="text-sm font-semibold text-foreground">{formatMoneyScaled(value, false)}</span>
-        </div>
-        <div className="h-2 w-full rounded-full bg-muted/40 overflow-hidden">
-          <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-        </div>
-      </div>
-    );
-  };
-
-  const periodChip = useMemo(() => {
-    if (periodFilter === "diario") return `Diario · ${format(fechaAnalisisDiario, "PPP", { locale: es })}`;
-    if (periodFilter === "mensual") return `Mensual · ${format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}`;
-    return "Anual";
-  }, [periodFilter, fechaAnalisisDiario, fechaAnalisisMensual]);
-
-  const tipoChip = useMemo(() => {
-    const map: Record<string, string> = {
-      total: "Total",
-      costo: "Costo de venta",
-      costo_inventario: "Inventario",
-      gasto: "Gastos",
-      otros_gastos: "Otros",
-      combinada: "Combinada",
-    };
-    return map[tipoEgreso] ?? "Total";
-  }, [tipoEgreso]);
+  // ✅ Labels como en Ventas (visuales, no afectan lógica)
+  const labelHoy = useMemo(() => format(new Date(), "dd/MM/yyyy", { locale: es }), []);
+  const labelMes = useMemo(() => format(fechaAnalisisMensual, "MMMM/yyyy", { locale: es }), [fechaAnalisisMensual]);
+  const labelAno = useMemo(() => format(new Date(), "yyyy", { locale: es }), []);
 
   if (loading || !resumenes) {
     return (
@@ -775,229 +746,321 @@ const AnalyticaEgresos = () => {
     </>
   );
 
+  // ✅ helper para highlights (usa formato propio como Ventas)
+  const HighlightRow = ({ label, value }: { label: string; value: number }) => (
+    <div className="flex justify-between items-center">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="font-semibold text-foreground">${formatMoneyScaledWith(highlightsScaleFormat, value, false)}</span>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Header compacto */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-primary">Analítica de Egresos</h2>
-            <p className="text-sm text-muted-foreground">
-              Visualiza en un vistazo qué te está costando más: costos, gastos, inventario y otros.
-            </p>
-          </div>
+      {/* ✅ Título + descripción (como Ventas: simple y consistente) */}
+      <div>
+        <h3 className="text-xl font-bold text-foreground mb-1">Analítica de Egresos</h3>
+        <p className="text-sm text-muted-foreground">
+          Visualiza en un vistazo qué te está costando más: costos, gastos, inventario y otros.
+        </p>
+      </div>
 
-          <div className="hidden md:flex items-center gap-2">
-            <Chip>{periodChip}</Chip>
-            <Chip>Tipo: {tipoChip}</Chip>
-            <Chip>
-              Escala: {formatoMontos === "normal" ? "Normal" : formatoMontos === "miles" ? "Miles" : "Millones"} · {decimales} dec.
-            </Chip>
+      {/* ✅ HIGHLIGHTS (igual que Ventas) */}
+      <div className="mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <p className="text-sm text-muted-foreground">Ajusta el formato numérico de los highlights</p>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Formato:</span>
+            <RadioGroup
+              value={highlightsScaleFormat}
+              onValueChange={(v) => setHighlightsScaleFormat(v as any)}
+              className="flex items-center gap-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="normal" id="eg-high-general" />
+                <Label htmlFor="eg-high-general" className="cursor-pointer text-sm">
+                  General
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="miles" id="eg-high-miles" />
+                <Label htmlFor="eg-high-miles" className="cursor-pointer text-sm">
+                  Miles (K)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="millones" id="eg-high-millones" />
+                <Label htmlFor="eg-high-millones" className="cursor-pointer text-sm">
+                  Millones (M)
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold text-primary">Resumen del Día ({labelHoy})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <HighlightRow label="Costo de venta:" value={resDia.costosVenta5001} />
+              <HighlightRow label="Inventario:" value={resDia.costosVenta5002} />
+              <HighlightRow label="Gastos:" value={resDia.gastos} />
+              <HighlightRow label="Otros:" value={resDia.otrosGastos} />
+
+              <div className="h-px bg-border" />
+
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-primary">Total:</span>
+                <span className="text-xl font-bold text-destructive">${formatMoneyScaledWith(highlightsScaleFormat, resDia.total, false)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold text-primary">Resumen del Mes ({labelMes})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <HighlightRow label="Costo de venta:" value={resMes.costosVenta5001} />
+              <HighlightRow label="Inventario:" value={resMes.costosVenta5002} />
+              <HighlightRow label="Gastos:" value={resMes.gastos} />
+              <HighlightRow label="Otros:" value={resMes.otrosGastos} />
+
+              <div className="h-px bg-border" />
+
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-primary">Total:</span>
+                <span className="text-xl font-bold text-destructive">${formatMoneyScaledWith(highlightsScaleFormat, resMes.total, false)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold text-primary">Resumen del Año ({labelAno})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <HighlightRow label="Costo de venta:" value={resAnio.costosVenta5001} />
+              <HighlightRow label="Inventario:" value={resAnio.costosVenta5002} />
+              <HighlightRow label="Gastos:" value={resAnio.gastos} />
+              <HighlightRow label="Otros:" value={resAnio.otrosGastos} />
+
+              <div className="h-px bg-border" />
+
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-primary">Total:</span>
+                <span className="text-xl font-bold text-destructive">${formatMoneyScaledWith(highlightsScaleFormat, resAnio.total, false)}</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      {/* Resúmenes por período */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Hoy</CardTitle>
-            <CardDescription>Distribución del total diario</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <SummaryRow label="Costo de venta" value={resDia.costosVenta5001} total={resDia.total} />
-            <SummaryRow label="Inventario" value={resDia.costosVenta5002} total={resDia.total} />
-            <SummaryRow label="Gastos" value={resDia.gastos} total={resDia.total} />
-            <SummaryRow label="Otros" value={resDia.otrosGastos} total={resDia.total} />
+      {/* ✅ Separador como Ventas */}
+      <div className="my-8 border-t-2 border-primary/20" />
 
-            <div className="pt-2 border-t flex items-center justify-between">
-              <span className="text-sm font-semibold text-primary">Total</span>
-              <span className="text-lg font-bold text-destructive">{formatMoneyScaled(resDia.total, true)}</span>
-            </div>
-          </CardContent>
-        </Card>
+      {/* ✅ CONTROLES (4 cards como Ventas) */}
+      <div>
+        <h3 className="text-xl font-bold text-foreground mb-6">Controles de análisis</h3>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Este mes</CardTitle>
-            <CardDescription>Distribución del total mensual</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <SummaryRow label="Costo de venta" value={resMes.costosVenta5001} total={resMes.total} />
-            <SummaryRow label="Inventario" value={resMes.costosVenta5002} total={resMes.total} />
-            <SummaryRow label="Gastos" value={resMes.gastos} total={resMes.total} />
-            <SummaryRow label="Otros" value={resMes.otrosGastos} total={resMes.total} />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+          {/* 1) Período */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Período</CardTitle>
+              <CardDescription>Selecciona el período</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup
+                value={periodFilter}
+                onValueChange={(v) => setPeriodFilter(v as any)}
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="diario" id="eg-period-diario" />
+                  <Label htmlFor="eg-period-diario" className="cursor-pointer">
+                    Diario
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="mensual" id="eg-period-mensual" />
+                  <Label htmlFor="eg-period-mensual" className="cursor-pointer">
+                    Mensual
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="anual" id="eg-period-anual" />
+                  <Label htmlFor="eg-period-anual" className="cursor-pointer">
+                    Anual
+                  </Label>
+                </div>
+              </RadioGroup>
 
-            <div className="pt-2 border-t flex items-center justify-between">
-              <span className="text-sm font-semibold text-primary">Total</span>
-              <span className="text-lg font-bold text-destructive">{formatMoneyScaled(resMes.total, true)}</span>
-            </div>
-          </CardContent>
-        </Card>
+              {(periodFilter === "diario" || periodFilter === "mensual") && (
+                <div className="pt-4">
+                  <Label className="text-xs text-muted-foreground mb-2 block">
+                    {periodFilter === "diario" ? "Fecha" : "Mes"}
+                  </Label>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Este año</CardTitle>
-            <CardDescription>Distribución del total anual</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <SummaryRow label="Costo de venta" value={resAnio.costosVenta5001} total={resAnio.total} />
-            <SummaryRow label="Inventario" value={resAnio.costosVenta5002} total={resAnio.total} />
-            <SummaryRow label="Gastos" value={resAnio.gastos} total={resAnio.total} />
-            <SummaryRow label="Otros" value={resAnio.otrosGastos} total={resAnio.total} />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal" size="sm">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {periodFilter === "diario"
+                          ? format(fechaAnalisisDiario, "PPP", { locale: es })
+                          : format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={periodFilter === "diario" ? fechaAnalisisDiario : fechaAnalisisMensual}
+                        onSelect={(date) => {
+                          if (!date) return;
+                          if (periodFilter === "diario") setFechaAnalisisDiario(date);
+                          else setFechaAnalisisMensual(date);
+                        }}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            <div className="pt-2 border-t flex items-center justify-between">
-              <span className="text-sm font-semibold text-primary">Total</span>
-              <span className="text-lg font-bold text-destructive">{formatMoneyScaled(resAnio.total, true)}</span>
-            </div>
-          </CardContent>
-        </Card>
+          {/* 2) Tipo */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tipo de egreso</CardTitle>
+              <CardDescription>Qué quieres visualizar</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="flex flex-col gap-3">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="total" id="eg-tipo-total" />
+                  <Label htmlFor="eg-tipo-total" className="cursor-pointer">
+                    Total
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="costo" id="eg-tipo-costo" />
+                  <Label htmlFor="eg-tipo-costo" className="cursor-pointer">
+                    Costo de venta
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="costo_inventario" id="eg-tipo-inv" />
+                  <Label htmlFor="eg-tipo-inv" className="cursor-pointer">
+                    Inventario
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="gasto" id="eg-tipo-gasto" />
+                  <Label htmlFor="eg-tipo-gasto" className="cursor-pointer">
+                    Gastos
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="otros_gastos" id="eg-tipo-otros" />
+                  <Label htmlFor="eg-tipo-otros" className="cursor-pointer">
+                    Otros
+                  </Label>
+                </div>
+              </RadioGroup>
+
+              {tipoEgreso === "total" && (
+                <div className="pt-4">
+                  <Label className="text-xs text-muted-foreground mb-2 block">Vista (solo Total)</Label>
+                  <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
+                    <TabsList className="w-full">
+                      <TabsTrigger value="unica" className="flex-1">
+                        Línea única
+                      </TabsTrigger>
+                      <TabsTrigger value="desglosada" className="flex-1">
+                        Desglosada
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 3) Formato de cifras */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Formato de cifras</CardTitle>
+              <CardDescription>Visualización de montos</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)} className="flex flex-col gap-3">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="normal" id="eg-scale-normal" />
+                  <Label htmlFor="eg-scale-normal" className="cursor-pointer">
+                    Normal
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="miles" id="eg-scale-miles" />
+                  <Label htmlFor="eg-scale-miles" className="cursor-pointer">
+                    Miles (K)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="millones" id="eg-scale-millones" />
+                  <Label htmlFor="eg-scale-millones" className="cursor-pointer">
+                    Millones (M)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </CardContent>
+          </Card>
+
+          {/* 4) Decimales */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Precisión</CardTitle>
+              <CardDescription>Decimales / precisión</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={String(decimales)} onValueChange={(v) => setDecimales(Number(v) as 0 | 1 | 2)} className="flex flex-col gap-3">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="0" id="eg-dec-0" />
+                  <Label htmlFor="eg-dec-0" className="cursor-pointer">
+                    0 decimales
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="1" id="eg-dec-1" />
+                  <Label htmlFor="eg-dec-1" className="cursor-pointer">
+                    1 decimal
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="2" id="eg-dec-2" />
+                  <Label htmlFor="eg-dec-2" className="cursor-pointer">
+                    2 decimales
+                  </Label>
+                </div>
+              </RadioGroup>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Controles */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Controles</CardTitle>
-          <CardDescription>Personaliza el análisis sin complicarte</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Período */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Período</Label>
-            <RadioGroup
-              value={periodFilter}
-              onValueChange={(v) => setPeriodFilter(v as "diario" | "mensual" | "anual")}
-              className="grid grid-cols-3 gap-2"
-            >
-              <Label className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
-                <RadioGroupItem value="diario" id="period-daily" />
-                <span className="text-sm">Diario</span>
-              </Label>
-              <Label className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
-                <RadioGroupItem value="mensual" id="period-monthly" />
-                <span className="text-sm">Mensual</span>
-              </Label>
-              <Label className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
-                <RadioGroupItem value="anual" id="period-annual" />
-                <span className="text-sm">Anual</span>
-              </Label>
-            </RadioGroup>
-
-            {(periodFilter === "diario" || periodFilter === "mensual") && (
-              <div className="pt-2">
-                <Label className="text-xs text-muted-foreground mb-2 block">{periodFilter === "diario" ? "Fecha" : "Mes"}</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal" size="sm">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {periodFilter === "diario"
-                        ? format(fechaAnalisisDiario, "PPP", { locale: es })
-                        : format(fechaAnalisisMensual, "MMMM yyyy", { locale: es })}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={periodFilter === "diario" ? fechaAnalisisDiario : fechaAnalisisMensual}
-                      onSelect={(date) => {
-                        if (!date) return;
-                        if (periodFilter === "diario") setFechaAnalisisDiario(date);
-                        else setFechaAnalisisMensual(date);
-                      }}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
-          </div>
-
-          {/* Tipo */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Tipo de egreso</Label>
-            <RadioGroup value={tipoEgreso} onValueChange={(v) => setTipoEgreso(v as any)} className="space-y-2">
-              {[
-                { v: "total", label: "Total" },
-                { v: "costo", label: "Costo de venta" },
-                { v: "costo_inventario", label: "Inventario" },
-                { v: "gasto", label: "Gastos" },
-                { v: "otros_gastos", label: "Otros" },
-              ].map((o) => (
-                <Label key={o.v} className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer">
-                  <RadioGroupItem value={o.v} />
-                  <span className="text-sm">{o.label}</span>
-                </Label>
-              ))}
-            </RadioGroup>
-
-            {tipoEgreso === "total" && (
-              <div className="pt-2">
-                <Label className="text-xs text-muted-foreground mb-2 block">Vista</Label>
-                <Tabs value={vistaTotal} onValueChange={(v) => setVistaTotal(v as any)}>
-                  <TabsList className="w-full">
-                    <TabsTrigger value="unica" className="flex-1">
-                      Línea única
-                    </TabsTrigger>
-                    <TabsTrigger value="desglosada" className="flex-1">
-                      Desglosada
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-            )}
-          </div>
-
-          {/* Formato */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Formato</Label>
-
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Escala</Label>
-              <Tabs value={formatoMontos} onValueChange={(v) => setFormatoMontos(v as any)}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="normal" className="flex-1">
-                    Normal
-                  </TabsTrigger>
-                  <TabsTrigger value="miles" className="flex-1">
-                    Miles
-                  </TabsTrigger>
-                  <TabsTrigger value="millones" className="flex-1">
-                    Millones
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Decimales</Label>
-              <Tabs value={String(decimales)} onValueChange={(v) => setDecimales(Number(v) as 0 | 1 | 2)}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="0" className="flex-1">
-                    0
-                  </TabsTrigger>
-                  <TabsTrigger value="1" className="flex-1">
-                    1
-                  </TabsTrigger>
-                  <TabsTrigger value="2" className="flex-1">
-                    2
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Gráficas */}
+      {/* ✅ GRÁFICAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Evolución */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-base">Evolución{getSufijoFormato()}</CardTitle>
-                <CardDescription>Tendencia en el tiempo (más útil para detectar picos)</CardDescription>
+                <CardTitle className="text-base">Evolución{getSufijoFormato(formatoMontos)}</CardTitle>
+                <CardDescription>Tendencia en el tiempo (útil para detectar picos)</CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                 {datosGraficaFormateados?.length ? `${datosGraficaFormateados.length} puntos` : "Sin datos"}
@@ -1015,7 +1078,7 @@ const AnalyticaEgresos = () => {
                   <XAxis dataKey="periodo" tick={{ fontSize: 12 }} />
                   <YAxis
                     tick={{ fontSize: 12 }}
-                    tickFormatter={(v: any) => scale(toNum(v)).toLocaleString("es-MX", { maximumFractionDigits: decimales })}
+                    tickFormatter={(v: any) => scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", { maximumFractionDigits: decimales })}
                     domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
                     padding={{ top: 12, bottom: 0 }}
                   />
@@ -1184,7 +1247,7 @@ const AnalyticaEgresos = () => {
                       type="number"
                       tick={{ fontSize: 12 }}
                       tickFormatter={(v: any) => {
-                        const s = scale(toNum(v));
+                        const s = scaleWith(formatoMontos, toNum(v));
                         return `$${s.toLocaleString("es-MX", { maximumFractionDigits: decimales })}`;
                       }}
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
@@ -1226,12 +1289,7 @@ const AnalyticaEgresos = () => {
                   data={datosEgresosPorMetodoPago}
                   dataKey="value"
                   aspectRatio={16 / 9}
-                  content={
-                    <TreemapTile
-                      dataTotal={totalEgresosPorMetodoPagoTreemap}
-                      formatMoneyScaled={formatMoneyScaled}
-                    />
-                  }
+                  content={<TreemapTile dataTotal={totalEgresosPorMetodoPagoTreemap} formatMoneyScaled={formatMoneyScaled} />}
                 >
                   <Tooltip
                     formatter={(value: any, _name: any, props: any) => {
