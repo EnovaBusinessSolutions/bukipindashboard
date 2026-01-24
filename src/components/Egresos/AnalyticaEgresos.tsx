@@ -173,7 +173,10 @@ const AnalyticaEgresos = () => {
     []
   );
 
-  const MONTHS_SHORT = useMemo(() => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"], []);
+  const MONTHS_SHORT = useMemo(
+    () => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
+    []
+  );
 
   const YEARS = useMemo(() => {
     const base = new Date().getFullYear();
@@ -645,10 +648,122 @@ const AnalyticaEgresos = () => {
     if (rest > 0) slices.push({ key: "rest", label: "Demás egresos", value: rest });
 
     // rows para el listado (aquí sí mostramos ambas aunque selected=0, si hay total)
-    const rows = total > 0 ? [{ key: "selected" as const, label: labelSel, value: selected }, { key: "rest" as const, label: "Demás egresos", value: rest }] : [];
+    const rows =
+      total > 0
+        ? [
+            { key: "selected" as const, label: labelSel, value: selected },
+            { key: "rest" as const, label: "Demás egresos", value: rest },
+          ]
+        : [];
 
     return { total, selected, rest, slices, rows, labelSel };
   }, [totalesEgresosEnRango, tipoEgreso]);
+
+  // -----------------------------
+  // ✅✅✅ ESTADO DE PAGO (E2E)
+  // Replicar lógica estilo “Ventas Netas”:
+  // - Se distribuye por estado usando MONTO TOTAL del movimiento
+  // - Estados: Pagado Total / Pago Parcial / Crédito
+  // - Respeta el rango actual (diario/mensual/anual)
+  // - Para costo_inventario NO aplica (mensaje)
+  // -----------------------------
+  const datosEstadoPagoEgresos = useMemo(() => {
+    if (tipoEgreso === "costo_inventario") {
+      return {
+        applicable: false,
+        total: 0,
+        slices: [] as { estado: string; monto: number; key: "pagado" | "parcial" | "credito" }[],
+        rows: [] as { estado: string; monto: number; key: "pagado" | "parcial" | "credito" }[],
+      };
+    }
+
+    const { start, end } = rangoAnalisis;
+
+    const fuente =
+      tipoEgreso === "costo"
+        ? transaccionesPorTipo.sinImpuestosCostoVenta
+        : tipoEgreso === "gasto"
+        ? transaccionesPorTipo.sinImpuestosGastos
+        : transaccionesPorTipo.sinImpuestosOtrosGastos;
+
+    const EPS = 0.01;
+
+    const getMontoTotal = (t: any) => toNum(t?.monto_total ?? t?.total ?? t?.monto ?? 0);
+    const getMontoPagado = (t: any) =>
+      toNum(
+        t?.monto_pagado ??
+          t?.pagado ??
+          t?.montoPagado ??
+          t?.total_pagado ??
+          t?.totalPagado ??
+          0
+      );
+
+    const norm = (s: any) =>
+      String(s ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const deriveEstado = (t: any): "pagado" | "parcial" | "credito" => {
+      // si backend manda estado explícito, lo respetamos
+      const rawEstado = norm(t?.estado_pago ?? t?.estadoPago ?? t?.estatus_pago ?? t?.estatusPago ?? "");
+      if (rawEstado) {
+        if (rawEstado.includes("parcial")) return "parcial";
+        if (rawEstado.includes("credito") || rawEstado.includes("pendiente")) return "credito";
+        if (rawEstado.includes("pagado")) return "pagado";
+      }
+
+      const total = getMontoTotal(t);
+      const pagado = getMontoPagado(t);
+
+      if (total <= EPS) return "credito"; // fallback seguro
+      if (pagado >= total - EPS) return "pagado";
+      if (pagado > EPS && pagado < total - EPS) return "parcial";
+
+      // si metodo_pago indica crédito, lo marcamos como crédito
+      const mp = norm(t?.metodo_pago ?? t?.metodoPago ?? "");
+      if (mp.includes("credito")) return "credito";
+
+      // default
+      return "credito";
+    };
+
+    const acc = {
+      pagado: 0,
+      parcial: 0,
+      credito: 0,
+    };
+
+    for (const t of fuente || []) {
+      const d = getDateAny(t);
+      if (!inRange(d, start, end)) continue;
+
+      const total = getMontoTotal(t);
+      if (total <= 0) continue;
+
+      const estado = deriveEstado(t);
+      acc[estado] += total;
+    }
+
+    const totalGeneral = acc.pagado + acc.parcial + acc.credito;
+
+    const rows = [
+      { key: "pagado" as const, estado: "Pagado Total", monto: acc.pagado },
+      { key: "parcial" as const, estado: "Pago Parcial", monto: acc.parcial },
+      { key: "credito" as const, estado: "Crédito", monto: acc.credito },
+    ];
+
+    const slices = rows.filter((r) => toNum(r.monto) > 0);
+
+    return {
+      applicable: true,
+      total: totalGeneral,
+      rows,
+      slices,
+    };
+  }, [tipoEgreso, transaccionesPorTipo, rangoAnalisis]);
 
   // Métodos de pago utilizados (sin impuestos) + inventario como adquisición (RAW)
   const datosEstadoPagos = useMemo(() => {
@@ -1073,6 +1188,13 @@ const AnalyticaEgresos = () => {
         </div>
       </div>
     );
+  };
+
+  // ✅ Paleta estados de pago (similar al panel de ingresos)
+  const PAY_STATUS_COLORS: Record<"pagado" | "parcial" | "credito", string> = {
+    pagado: CHART.primary,
+    parcial: CHART.ring,
+    credito: "hsl(var(--muted))",
   };
 
   return (
@@ -1537,10 +1659,7 @@ const AnalyticaEgresos = () => {
                         strokeWidth={3}
                       >
                         {donutRubroVsDemas.slices.map((s, idx) => {
-                          const fill =
-                            s.key === "selected"
-                              ? CHART.primary
-                              : "hsl(var(--muted))"; // visual “resto” igual estilo ingresos
+                          const fill = s.key === "selected" ? CHART.primary : "hsl(var(--muted))";
                           return <Cell key={`${s.key}-${idx}`} fill={fill} />;
                         })}
                       </Pie>
@@ -1573,6 +1692,85 @@ const AnalyticaEgresos = () => {
                     total={toNum(donutRubroVsDemas.total)}
                     color={"hsl(var(--muted))"}
                   />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ✅✅✅ Estado de Pagos (replica analítica de ingresos) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Estado de Pagos — {getTipoLabel(tipoEgreso)}</CardTitle>
+                <CardDescription>Distribución por estado de pago</CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                {formatMoneyScaled(toNum(datosEstadoPagoEgresos.total), true)}
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="h-80">
+            {!datosEstadoPagoEgresos.applicable ? (
+              <ChartCardEmpty
+                title="No aplica para Costo de Ventas Inventario"
+                hint="El desglose de estatus de pago para costo de venta inventario no aplica, ya que este rubro se adquirió desde la plantilla inventario."
+              />
+            ) : toNum(datosEstadoPagoEgresos.total) <= 0 ? (
+              <ChartCardEmpty
+                title="Sin datos de estado de pago"
+                hint="Registra egresos dentro del período seleccionado para visualizar el desglose."
+              />
+            ) : (
+              <div className="h-full flex flex-col">
+                <div className="flex-1 min-h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={datosEstadoPagoEgresos.slices.map((s) => ({ estado: s.estado, monto: s.monto, key: s.key }))}
+                        cx="50%"
+                        cy="44%"
+                        innerRadius={78}
+                        outerRadius={104}
+                        paddingAngle={2}
+                        dataKey="monto"
+                        startAngle={90}
+                        endAngle={-270}
+                        cornerRadius={12}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={3}
+                      >
+                        {datosEstadoPagoEgresos.slices.map((s, idx) => (
+                          <Cell key={`${s.key}-${idx}`} fill={PAY_STATUS_COLORS[s.key]} />
+                        ))}
+                      </Pie>
+
+                      <DonutCenterLabel total={toNum(datosEstadoPagoEgresos.total)} />
+
+                      <Tooltip
+                        formatter={(value: any, _name: any, props: any) => {
+                          const label = props?.payload?.estado || "Monto";
+                          return [formatMoneyScaled(toNum(value), true), label];
+                        }}
+                        contentStyle={tooltipCardStyle}
+                        labelStyle={tooltipLabelStyle}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="pt-3 space-y-2">
+                  {datosEstadoPagoEgresos.rows.map((r) => (
+                    <DonutBreakdownRow
+                      key={r.key}
+                      label={r.estado}
+                      value={toNum(r.monto)}
+                      total={toNum(datosEstadoPagoEgresos.total)}
+                      color={PAY_STATUS_COLORS[r.key]}
+                    />
+                  ))}
                 </div>
               </div>
             )}
@@ -1672,7 +1870,11 @@ const AnalyticaEgresos = () => {
                       domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                     />
                     <YAxis dataKey="subcuenta" type="category" width={vistaAgrupacion === "cuenta" ? 210 : 160} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]} contentStyle={tooltipCardStyle} labelStyle={tooltipLabelStyle} />
+                    <Tooltip
+                      formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
+                      contentStyle={tooltipCardStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
                     <Bar dataKey="monto" radius={[10, 10, 10, 10]} fill={CHART.accent} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1760,7 +1962,12 @@ const AnalyticaEgresos = () => {
                             !producto.tieneAsignacion ? "bg-amber-100 dark:bg-amber-900/30" : "bg-muted"
                           )}
                         >
-                          <Package className={cn("w-5 h-5", !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+                          <Package
+                            className={cn(
+                              "w-5 h-5",
+                              !producto.tieneAsignacion ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                            )}
+                          />
                         </div>
                       )}
 
