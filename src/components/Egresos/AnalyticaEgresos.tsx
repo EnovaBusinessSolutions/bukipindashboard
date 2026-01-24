@@ -15,6 +15,9 @@ import {
   LineChart,
   Line,
   Treemap,
+  AreaChart,   
+  Area,        
+  Brush,   
 } from "recharts";
 import { AlertCircle, CalendarIcon, Package, TrendingDown } from "lucide-react";
 
@@ -1232,49 +1235,188 @@ const AnalyticaEgresos = () => {
       </div>
 
       {/* ✅ GRÁFICAS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Evolución */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">
-                  Evolución — {getTipoLabel(tipoEgreso)}
-                  {getSufijoFormato(formatoMontos)}
-                </CardTitle>
-                <CardDescription>Tendencia en el tiempo (útil para detectar picos)</CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {datosGraficaFormateados?.length ? `${datosGraficaFormateados.length} puntos` : "Sin datos"}
-              </Badge>
-            </div>
-          </CardHeader>
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  {/* Evolución */}
+  <Card className="lg:col-span-2">
+    <CardHeader className="pb-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <CardTitle className="text-base">
+            Evolución — {getTipoLabel(tipoEgreso)}
+            {getSufijoFormato(formatoMontos)}
+          </CardTitle>
+          <CardDescription>Tendencia en el tiempo (útil para detectar picos)</CardDescription>
+        </div>
+        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+          {datosGraficaFormateados?.length ? `${datosGraficaFormateados.length} puntos` : "Sin datos"}
+        </Badge>
+      </div>
+    </CardHeader>
 
-          <CardContent className="h-80">
-            {datosGraficaFormateados.length === 0 ? (
-              <ChartCardEmpty title="Sin evolución para mostrar" hint="Ajusta el período o registra egresos para ver la tendencia." />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={datosGraficaFormateados} margin={{ top: 10, right: 18, left: 0, bottom: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="periodo" tick={{ fontSize: 12 }} />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(v: any) => scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", { maximumFractionDigits: decimales })}
-                    domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
-                    padding={{ top: 12, bottom: 0 }}
-                  />
-                  <Tooltip
-                    formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
-                    contentStyle={tooltipCardStyle}
-                    labelStyle={tooltipLabelStyle}
-                  />
-                  <Line type="monotone" dataKey="monto" name="Monto" stroke={CHART.primary} strokeWidth={2.8} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+    <CardContent className="h-[26rem]">
+      {datosGraficaFormateados.length === 0 ? (
+        <ChartCardEmpty
+          title="Sin evolución para mostrar"
+          hint="Ajusta el período o registra egresos para ver la tendencia."
+        />
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={datosGraficaFormateados}
+            margin={{ top: 12, right: 18, left: 0, bottom: 26 }} // bottom extra para el Brush (scroll)
+          >
+            <defs>
+              <linearGradient id="egresosArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={CHART.primary} stopOpacity={0.35} />
+                <stop offset="95%" stopColor={CHART.primary} stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+
+            <XAxis
+              dataKey="periodo"
+              tick={{ fontSize: 12 }}
+              minTickGap={18}
+              height={30}
+            />
+
+            <YAxis
+              tick={{ fontSize: 12 }}
+              tickFormatter={(v: any) =>
+                scaleWith(formatoMontos, toNum(v)).toLocaleString("es-MX", {
+                  maximumFractionDigits: decimales,
+                })
+              }
+              domain={[0, (dataMax: number) => Math.ceil((Number(dataMax) || 0) * 1.15)]}
+              padding={{ top: 10, bottom: 0 }}
+            />
+
+            <Tooltip
+              formatter={(value: any) => [formatMoneyScaled(toNum(value), true), "Monto"]}
+              contentStyle={tooltipCardStyle}
+              labelStyle={tooltipLabelStyle}
+              cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
+            />
+
+            {/* Área suave (como Ingresos) */}
+            <Area
+              type="monotone"
+              dataKey="monto"
+              name="Monto"
+              stroke={CHART.primary}
+              strokeWidth={2.6}
+              fill="url(#egresosArea)"
+              fillOpacity={1}
+              dot={false}
+              activeDot={{
+                r: 5,
+                stroke: CHART.primary,
+                strokeWidth: 2,
+                fill: "hsl(var(--background))",
+              }}
+            />
+
+            {/* ✅ Scroll/Zoom dinámico abajo (igual feel que Ingresos) */}
+            <Brush
+              dataKey="periodo"
+              height={26}
+              travellerWidth={12}
+              stroke={CHART.primary}
+              fill="hsl(var(--muted))"
+              tickFormatter={(v: any) => String(v)}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </CardContent>
+  </Card>
+
+  {/* Donas (por tipo) */}
+  <Card>
+    <CardHeader className="pb-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <CardTitle className="text-base">Distribución por tipo</CardTitle>
+          <CardDescription>¿En qué se va el dinero?</CardDescription>
+        </div>
+        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+          {formatMoneyScaled(totalEgresosPorTipo, true)}
+        </Badge>
+      </div>
+    </CardHeader>
+
+    <CardContent className="h-80">
+      {datosEgresosPorTipo.length === 0 ? (
+        <ChartCardEmpty title="Sin egresos" hint="Registra costos o gastos para que aparezca la distribución." />
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={datosEgresosPorTipo} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
+              {datosEgresosPorTipo.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+              ))}
+            </Pie>
+
+            <DonutCenterLabel total={totalEgresosPorTipo} />
+
+            <Tooltip
+              formatter={(value: any, _name: any, props: any) => {
+                const label = props?.payload?.tipo || "Monto";
+                return [formatMoneyScaled(toNum(value), true), label];
+              }}
+              contentStyle={tooltipCardStyle}
+              labelStyle={tooltipLabelStyle}
+            />
+            <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
+          </PieChart>
+        </ResponsiveContainer>
+      )}
+    </CardContent>
+  </Card>
+
+  {/* Donas (por método pago) */}
+  <Card>
+    <CardHeader className="pb-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <CardTitle className="text-base">Métodos de pago</CardTitle>
+          <CardDescription>Solo pagos realizados (sin impuestos)</CardDescription>
+        </div>
+        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+          {formatMoneyScaled(totalMetodosPago, true)}
+        </Badge>
+      </div>
+    </CardHeader>
+
+    <CardContent className="h-80">
+      {datosEstadoPagos.length === 0 ? (
+        <ChartCardEmpty title="Sin pagos registrados" hint="Si todo está en crédito, aquí no se mostrará monto pagado." />
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={datosEstadoPagos} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
+              {datosEstadoPagos.map((_, idx) => (
+                <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
+              ))}
+            </Pie>
+
+            <DonutCenterLabel total={totalMetodosPago} />
+
+            <Tooltip
+              formatter={(value: any, _name: any, props: any) => {
+                const label = props?.payload?.estado || "Monto";
+                return [formatMoneyScaled(toNum(value), true), label];
+              }}
+              contentStyle={tooltipCardStyle}
+              labelStyle={tooltipLabelStyle}
+            />
+            <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
+          </PieChart>
+        </ResponsiveContainer>
+      )}
+    </CardContent>
+  </Card>
 
         {/* Donas (por tipo) */}
         <Card>
