@@ -7,7 +7,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -80,9 +79,6 @@ const tooltipCardStyle: React.CSSProperties = {
 };
 
 const tooltipLabelStyle: React.CSSProperties = { color: "hsl(var(--foreground))", fontWeight: 600 };
-
-// Leyenda simple (sin saturar)
-const LegendText = (value: any) => <span className="text-xs text-muted-foreground">{value}</span>;
 
 // Colores “theme-friendly”
 const CHART = {
@@ -765,32 +761,6 @@ const AnalyticaEgresos = () => {
     };
   }, [tipoEgreso, transaccionesPorTipo, rangoAnalisis]);
 
-  // Métodos de pago utilizados (sin impuestos) + inventario como adquisición (RAW)
-  const datosEstadoPagos = useMemo(() => {
-    const grouped: Record<string, number> = {};
-
-    const todasTransacciones = [
-      ...transaccionesPorTipo.sinImpuestosCostoVenta,
-      ...transaccionesPorTipo.sinImpuestosGastos,
-      ...transaccionesPorTipo.sinImpuestosOtrosGastos,
-    ];
-
-    todasTransacciones
-      .filter((t: any) => toNum(t?.monto_pagado) > 0)
-      .forEach((t: any) => {
-        const metodo = String(t?.metodo_pago ?? "Sin método");
-        const metodoCap = metodo.charAt(0).toUpperCase() + metodo.slice(1);
-        grouped[metodoCap] = (grouped[metodoCap] ?? 0) + toNum(t?.monto_pagado);
-      });
-
-    const totalCostosInventario = transaccionesPorTipo.costosInventario.reduce((sum: number, c: any) => sum + toNum(c?.monto), 0);
-    if (totalCostosInventario > 0) grouped["Inventario"] = (grouped["Inventario"] ?? 0) + totalCostosInventario;
-
-    return Object.entries(grouped)
-      .map(([estado, monto]) => ({ estado, monto }))
-      .sort((a, b) => b.monto - a.monto);
-  }, [transaccionesPorTipo]);
-
   // Egresos por Subcuenta (Top 10) RAW
   const datosEgresosPorSubcuenta = useMemo(() => {
     const grouped: Record<string, number> = {};
@@ -1030,8 +1000,6 @@ const AnalyticaEgresos = () => {
   }, [transaccionesPorTipo]);
 
   // Totales RAW
-  const totalMetodosPago = useMemo(() => datosEstadoPagos.reduce((sum, item) => sum + toNum(item.monto), 0), [datosEstadoPagos]);
-
   const totalEgresosPorCuentaSubcuenta = useMemo(() => {
     const datos = vistaAgrupacion === "cuenta" ? datosEgresosPorCuenta : datosEgresosPorSubcuenta;
     return datos.reduce((sum, item) => sum + toNum(item.monto), 0);
@@ -1068,9 +1036,6 @@ const AnalyticaEgresos = () => {
       </div>
     );
   }
-
-  // Donas palette (theme-friendly)
-  const pieColors = [CHART.primary, CHART.ring, CHART.destructive, CHART.accent];
 
   const DonutCenterLabel = ({
     cx = "50%",
@@ -1622,7 +1587,7 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* ✅✅✅ Donut (por tipo) — NUEVA LÓGICA: Rubro seleccionado vs Demás egresos (captura 3) */}
+        {/* ✅✅✅ Donut (por tipo) — Rubro seleccionado vs Demás egresos */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
@@ -1777,48 +1742,7 @@ const AnalyticaEgresos = () => {
           </CardContent>
         </Card>
 
-        {/* Donas (por método pago) */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Métodos de pago</CardTitle>
-                <CardDescription>Solo pagos realizados (sin impuestos)</CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                {formatMoneyScaled(totalMetodosPago, true)}
-              </Badge>
-            </div>
-          </CardHeader>
-
-          <CardContent className="h-80">
-            {datosEstadoPagos.length === 0 ? (
-              <ChartCardEmpty title="Sin pagos registrados" hint="Si todo está en crédito, aquí no se mostrará monto pagado." />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={datosEstadoPagos} cx="50%" cy="46%" innerRadius={72} outerRadius={98} paddingAngle={3} dataKey="monto">
-                    {datosEstadoPagos.map((_, idx) => (
-                      <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
-                    ))}
-                  </Pie>
-
-                  <DonutCenterLabel total={totalMetodosPago} />
-
-                  <Tooltip
-                    formatter={(value: any, _name: any, props: any) => {
-                      const label = props?.payload?.estado || "Monto";
-                      return [formatMoneyScaled(toNum(value), true), label];
-                    }}
-                    contentStyle={tooltipCardStyle}
-                    labelStyle={tooltipLabelStyle}
-                  />
-                  <Legend verticalAlign="bottom" height={32} formatter={LegendText as any} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+        {/* ✅✅✅ (ELIMINADO) Donut de “Métodos de pago” */}
       </div>
 
       {/* Más gráficas */}
