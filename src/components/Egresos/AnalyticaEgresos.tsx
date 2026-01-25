@@ -406,8 +406,22 @@ const [pageProveedores, setPageProveedores] = useState(1);
       null;
 
     if (!raw) return null;
-    const d = raw instanceof Date ? raw : new Date(raw);
-    return Number.isNaN(d.getTime()) ? null : d;
+    // ✅ Parse robusto (evita desfase por timezone con "YYYY-MM-DD")
+if (raw instanceof Date) {
+  return Number.isNaN(raw.getTime()) ? null : raw;
+}
+
+const s = String(raw).trim();
+
+// Si viene "2026-01-25" (date-only), construimos fecha LOCAL
+if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+  const [yy, mm, dd] = s.split("-").map(Number);
+  const dLocal = new Date(yy, (mm || 1) - 1, dd || 1, 12, 0, 0, 0); // 12:00 para evitar edge DST
+  return Number.isNaN(dLocal.getTime()) ? null : dLocal;
+}
+
+const d = new Date(s);
+return Number.isNaN(d.getTime()) ? null : d;
   };
 
   const inRange = (d: Date | null, start: Date, end: Date) => {
@@ -726,9 +740,11 @@ const [pageProveedores, setPageProveedores] = useState(1);
 
   // ✅✅✅ HIGHLIGHTS E2E (misma base que la tabla de Resumen: transacciones)
   const highlights = useMemo(() => {
-    const hoy = new Date();
-    const startDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0, 0);
-    const endDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1, 0, 0, 0, 0);
+  // ✅ El "día" debe respetar la fecha seleccionada (no el reloj del sistema)
+  const baseDia = new Date(fechaAnalisisDiario);
+  const startDia = new Date(baseDia.getFullYear(), baseDia.getMonth(), baseDia.getDate(), 0, 0, 0, 0);
+  const endDia = new Date(baseDia.getFullYear(), baseDia.getMonth(), baseDia.getDate() + 1, 0, 0, 0, 0);
+
 
     const startMes = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth(), 1, 0, 0, 0, 0);
     const endMes = new Date(fechaAnalisisMensual.getFullYear(), fechaAnalisisMensual.getMonth() + 1, 1, 0, 0, 0, 0);
@@ -792,7 +808,8 @@ const [pageProveedores, setPageProveedores] = useState(1);
       mes: { ...mesTx, costosVentaInventario: mesInv, total: mesTotal },
       anio: { ...anioTx, costosVentaInventario: anioInv, total: anioTotal },
     };
-  }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual]);
+  }, [filteredTransactions, costosVentaInventario, fechaAnalisisMensual, fechaAnalisisDiario]);
+
 
   // ✅ NUEVA LÓGICA DONUT: Rubro elegido vs Demás egresos (en el período actual)
   const donutRubroVsDemas = useMemo(() => {
@@ -1335,7 +1352,7 @@ useEffect(() => setPageProveedores(1), [qProveedores, ordenProveedores]);
   }, [vistaAgrupacion, datosEgresosPorCuenta, datosEgresosPorSubcuenta]);
 
   // ✅ Labels como en Ventas (visuales, no afectan lógica)
-  const labelHoy = useMemo(() => format(new Date(), "dd/MM/yyyy", { locale: es }), []);
+  const labelHoy = useMemo(() => format(fechaAnalisisDiario, "dd/MM/yyyy", { locale: es }), [fechaAnalisisDiario]);
   const labelMes = useMemo(() => format(fechaAnalisisMensual, "MMMM/yyyy", { locale: es }), [fechaAnalisisMensual]);
   const labelAno = useMemo(() => format(new Date(fechaAnalisisMensual.getFullYear(), 0, 1), "yyyy", { locale: es }), [fechaAnalisisMensual]);
 
