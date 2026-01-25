@@ -305,17 +305,23 @@ const costosVentaInventarioArr = useMemo(() => {
   const { data: productosEgresos = [] }: any = useProductosEgresos();
   const { toast } = useToast();
 
-  const transacciones = useMemo(() => {
-    return (transaccionesRaw || []).map(normalizeEgresoTx);
-  }, [transaccionesRaw]);
+  const transaccionesArr = useMemo(() => toArray(transaccionesRaw), [transaccionesRaw]);
+const productosArr = useMemo(() => toArray(productosEgresos), [productosEgresos]);
 
-  const mapaImagenesProductos = useMemo(() => {
-    const mapa = new Map<string, string>();
-    (productosEgresos || []).forEach((p: any) => {
-      if (p.imagen_url) mapa.set(String(p.nombre || "").toLowerCase().trim(), p.imagen_url);
-    });
-    return mapa;
-  }, [productosEgresos]);
+const transacciones = useMemo(() => {
+  return transaccionesArr.map(normalizeEgresoTx);
+}, [transaccionesArr]);
+
+const mapaImagenesProductos = useMemo(() => {
+  const mapa = new Map<string, string>();
+  productosArr.forEach((p: any) => {
+    const nombre = String(p?.nombre ?? p?.name ?? "").toLowerCase().trim();
+    const img = p?.imagen_url ?? p?.imagenUrl ?? null;
+    if (nombre && img) mapa.set(nombre, img);
+  });
+  return mapa;
+}, [productosArr]);
+
 
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -404,28 +410,54 @@ const costosVentaInventarioArr = useMemo(() => {
 
 
   const transaccionesEgresosUnificadas = useMemo(() => {
-   const costosConDetalle: any[] = costosVentaInventarioArr.map((c: any) => ({
-  id: c?.id ?? c?._id,
-  created_at: c.fecha,
-  fecha: c.fecha,
-  tipo_egreso: "costo",
-  descripcion: c.producto_nombre,
-  cuenta_codigo:
-    c.detalles_asiento?.find((d: any) => String(d.cuenta_codigo).startsWith("50"))?.cuenta_codigo || "5002",
-  monto_total: safeNum(c.monto),
-  proveedor_nombre: null,
-  imagen_url: c.producto_imagen,
-  cantidad: safeNum(c.cantidad),
-  costo_unitario: safeNum(c.costo_unitario),
-  numero_asiento: c.numero_asiento,
-  detalles_asiento: c.detalles_asiento || [],
-  tipo_pago: null,
-  metodo_pago: null,
-  monto_pagado: safeNum(c.monto),
-  monto_pendiente: 0,
-  estado: "activo",
-  imagen_comprobante: null,
-}));
+   const costosConDetalle: any[] = costosVentaInventarioArr.map((c: any) => {
+  const fecha =
+    c?.fecha ?? c?.created_at ?? c?.createdAt ?? c?.date ?? null;
+
+  const descripcion =
+    c?.producto_nombre ?? c?.productoNombre ?? c?.nombre ?? c?.name ?? "Costo de venta (inventario)";
+
+  const monto =
+    safeNum(c?.monto) || safeNum(c?.monto_total) || safeNum(c?.total) || safeNum(c?.importe);
+
+  const cantidad =
+    safeNum(c?.cantidad) || safeNum(c?.qty) || safeNum(c?.quantity);
+
+  const costo_unitario =
+    safeNum(c?.costo_unitario) || safeNum(c?.costoUnitario) || safeNum(c?.unit_cost) || safeNum(c?.unitCost);
+
+  const numero_asiento =
+    c?.numero_asiento ?? c?.numeroAsiento ?? c?.asiento_numero ?? c?.asientoNumero ?? null;
+
+  const asiento_id =
+    c?.asiento_id ?? c?.asientoId ?? c?.asientoID ?? null;
+
+  const detalles_asiento = Array.isArray(c?.detalles_asiento) ? c.detalles_asiento : (Array.isArray(c?.detalles) ? c.detalles : []);
+
+  return {
+    id: c?.id ?? c?._id ?? `${numero_asiento ?? "5002"}-${fecha ?? "na"}`,
+    created_at: fecha,
+    fecha,
+    tipo_egreso: "costo",
+    descripcion,
+    cuenta_codigo: "5002",
+    monto_total: monto,
+    proveedor_nombre: null,
+    imagen_url: c?.producto_imagen ?? c?.productoImagen ?? null,
+    cantidad,
+    costo_unitario,
+    numero_asiento,
+    asiento_id,
+    detalles_asiento,
+    tipo_pago: null,
+    metodo_pago: null,
+    monto_pagado: monto,
+    monto_pendiente: 0,
+    estado: "activo",
+    imagen_comprobante: null,
+  };
+});
+
 
 
     const costosVentaDirectos = transaccionesCostosVenta.map((cv: any) => {
@@ -519,20 +551,55 @@ const costosVentaInventarioArr = useMemo(() => {
     });
   }, [costosVentaInventarioArr, transaccionesCostosVenta, transaccionesGastos, transaccionesOtrosGastos, mapaImagenesProductos]);
 
+  const unificadasFiltradas = useMemo(() => {
+  return (transaccionesEgresosUnificadas || []).filter((t: any) => {
+    const iso = pickISODate(t);
+    const fecha = iso ? new Date(iso) : null;
+
+    // Buscar
+    if (
+      searchTerm &&
+      !String(t.descripcion || "").toLowerCase().includes(searchTerm.toLowerCase()) &&
+      !String(t.proveedor_nombre || "").toLowerCase().includes(searchTerm.toLowerCase())
+    ) return false;
+
+    // Proveedor
+    if (filterProveedor !== "todos" && String(t.proveedor_nombre || "") !== String(filterProveedor)) return false;
+
+    // Tipo de pago
+    if (filterPago !== "todos" && String(t.tipo_pago || "") !== String(filterPago)) return false;
+
+    // Estado de pago
+    if (filterEstadoPago === "pagado" && safeNum(t.monto_pendiente) > 0) return false;
+    if (filterEstadoPago === "pendiente" && safeNum(t.monto_pendiente) === 0) return false;
+
+    // Rango fechas
+    const hasRange = Boolean(dateRange?.from || dateRange?.to);
+    if (hasRange && !fecha) return false;
+
+    if (fecha) {
+      if (dateRange?.from && fecha < startOfDay(dateRange.from)) return false;
+      if (dateRange?.to && fecha > endOfDay(dateRange.to)) return false;
+    }
+    return true;
+  });
+}, [transaccionesEgresosUnificadas, searchTerm, filterProveedor, filterPago, filterEstadoPago, dateRange]);
+
   const transaccionesFiltradasPorCategoria = useMemo(() => {
-  if (filterCategoriaContable === "todos") return transaccionesEgresosUnificadas;
+  if (filterCategoriaContable === "todos") return unificadasFiltradas;
 
   if (filterCategoriaContable === "costos")
-    return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
+    return unificadasFiltradas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("50"));
 
   if (filterCategoriaContable === "gastos")
-    return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
+    return unificadasFiltradas.filter((t: any) => String(t.cuenta_codigo || "").startsWith("51"));
 
   if (filterCategoriaContable === "otros_gastos")
-    return transaccionesEgresosUnificadas.filter((t: any) => String(t.cuenta_codigo || "") === "5204");
+    return unificadasFiltradas.filter((t: any) => String(t.cuenta_codigo || "") === "5204");
 
-  return transaccionesEgresosUnificadas;
-}, [transaccionesEgresosUnificadas, filterCategoriaContable]);
+  return unificadasFiltradas;
+}, [unificadasFiltradas, filterCategoriaContable]);
+
 
 
   const resumenFiltrado = useMemo(() => {
@@ -632,6 +699,15 @@ const costosVentaInventarioArr = useMemo(() => {
       if (asientoId) {
         asiento = await tryFetchAsiento(`/api/asientos/${encodeURIComponent(String(asientoId))}`);
       }
+const cuentaCodigo = String(transaccion?.cuenta_codigo || "");
+
+if (!asiento && cuentaCodigo === "5002") {
+  // 1) si viene asientoId, ya lo intentamos arriba
+  // 2) si viene número de asiento, intenta por número
+  if (!asiento && numeroAsiento) {
+    asiento = await tryFetchAsiento(`/api/asientos/by-numero?numero_asiento=${encodeURIComponent(numeroAsiento)}`);
+  }
+}
 
       if (!asiento && id) {
         asiento = await tryFetchAsiento(`/api/asientos/by-transaccion?source=egreso&id=${encodeURIComponent(id)}`);
@@ -915,7 +991,7 @@ const costosVentaInventarioArr = useMemo(() => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="costos">Costos de Venta (5001-5004)</SelectItem>
+                    <SelectItem value="costos">Costos de Venta (5001–5004) + Costo Inventario (5002)</SelectItem>
                     <SelectItem value="gastos">Gastos Operativos (5101-5108)</SelectItem>
                     <SelectItem value="otros_gastos">Otros Gastos (5204)</SelectItem>
                   </SelectContent>
