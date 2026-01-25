@@ -69,12 +69,36 @@ const safeNum = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const pickISODate = (t: any) => {
-  const v = t?.fecha ?? t?.created_at ?? t?.createdAt ?? null;
+// ✅ Fecha estable en formato YYYY-MM-DD (evita bugs por zona horaria / toISOString)
+const pickYMD = (t: any): string | null => {
+  const v = t?.fecha ?? t?.created_at ?? t?.createdAt ?? t?.date ?? null;
   if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+
+  const s = String(v).trim();
+
+  // si ya viene YYYY-MM-DD úsalo tal cual
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // si viene ISO u otro con prefijo YYYY-MM-DD, recorta esa parte
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
 };
+
+// ✅ Crea Date estable (mediodía) para que no “brinque” por TZ
+const ymdToStableDate = (ymd: string): Date => new Date(`${ymd}T12:00:00`);
+
+// ✅ Helper: date estable o null
+const pickStableDate = (t: any): Date | null => {
+  const ymd = pickYMD(t);
+  return ymd ? ymdToStableDate(ymd) : null;
+};
+
+// ✅ Helper: timestamp (para sort)
+const pickStableTime = (t: any): number => {
+  const d = pickStableDate(t);
+  return d ? d.getTime() : 0;
+};
+
 
 // ✅ Asegura arrays aunque el hook devuelva { ok:true, data:[...] } o shapes similares
 const toArray = (v: any): any[] => {
@@ -348,52 +372,15 @@ const mapaImagenesProductos = useMemo(() => {
     return Array.from(proveedores).sort();
   }, [transacciones]);
 
-  const transaccionesFiltradas = useMemo(() => {
-    return (transacciones || []).filter((t: any) => {
-      if (t.tipo_egreso !== "costo" && t.tipo_egreso !== "gasto" && t.tipo_egreso !== "otro") return false;
-
-      const iso = pickISODate(t);
-      const fecha = iso ? new Date(iso) : null;
-
-      // Buscar
-      if (
-        searchTerm &&
-        !String(t.descripcion || "").toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !String(t.proveedor_nombre || "").toLowerCase().includes(searchTerm.toLowerCase())
-      ) {
-        return false;
-      }
-
-      // Proveedor
-      if (filterProveedor !== "todos" && String(t.proveedor_nombre || "") !== String(filterProveedor)) return false;
-
-      // Tipo de pago
-      if (filterPago !== "todos" && String(t.tipo_pago || "") !== String(filterPago)) return false;
-
-      // Estado de pago (saldo)
-      if (filterEstadoPago === "pagado" && safeNum(t.monto_pendiente) > 0) return false;
-      if (filterEstadoPago === "pendiente" && safeNum(t.monto_pendiente) === 0) return false;
-
-      // ✅ Rango fechas
-      const hasRange = Boolean(dateRange?.from || dateRange?.to);
-      if (hasRange && !fecha) return false;
-
-      if (fecha) {
-        if (dateRange?.from && fecha < startOfDay(dateRange.from)) return false;
-        if (dateRange?.to && fecha > endOfDay(dateRange.to)) return false;
-      }
-
-      return true;
-    });
-  }, [transacciones, searchTerm, filterProveedor, filterPago, filterEstadoPago, dateRange]);
 
   const transaccionesCostosVenta = useMemo(() => {
   return (transacciones || []).filter((t: any) => {
     const code = String(t?.cuenta_codigo ?? "");
-    // ✅ Incluye también 5002 (costo venta inventario) por si viene como egreso normal
-    return code === "5001" || code === "5002" || code === "5003" || code === "5004";
+    // ✅ 5002 solo debe venir del endpoint /api/egresos/costos-venta-inventario (para no duplicar)
+    return code === "5001" || code === "5003" || code === "5004";
   });
 }, [transacciones]);
+
 
 
   const transaccionesGastos = useMemo(() => {
@@ -547,17 +534,15 @@ const mapaImagenesProductos = useMemo(() => {
       };
     });
 
-    return [...costosConDetalle, ...costosVentaDirectos, ...gastosConDetalle, ...otrosGastosConDetalle].sort((a, b) => {
-      const da = pickISODate(a);
-      const db = pickISODate(b);
-      return new Date(db || 0).getTime() - new Date(da || 0).getTime();
-    });
+    return [...costosConDetalle, ...costosVentaDirectos, ...gastosConDetalle, ...otrosGastosConDetalle].sort(
+  (a, b) => pickStableTime(b) - pickStableTime(a)
+);
   }, [costosVentaInventarioArr, transaccionesCostosVenta, transaccionesGastos, transaccionesOtrosGastos, mapaImagenesProductos]);
 
   const unificadasFiltradas = useMemo(() => {
   return (transaccionesEgresosUnificadas || []).filter((t: any) => {
-    const iso = pickISODate(t);
-    const fecha = iso ? new Date(iso) : null;
+    const fecha = pickStableDate(t);
+
 
     // Buscar
     if (
@@ -685,11 +670,14 @@ const mapaImagenesProductos = useMemo(() => {
         const detalles = transaccion.detalles_asiento.map(normalizeAsientoDetalle);
 
         setCurrentAsientos({
-          numero_asiento: transaccion.numero_asiento || transaccion.numeroAsiento || "N/A",
-          fecha: pickISODate(transaccion) || undefined,
-          descripcion: transaccion.descripcion,
-          detalles,
-        });
+  numero_asiento: transaccion.numero_asiento || transaccion.numeroAsiento || "N/A",
+  fecha: (() => {
+    const ymd = pickYMD(transaccion);
+    return ymd ? `${ymd}T12:00:00` : undefined;
+  })(),
+  descripcion: transaccion.descripcion,
+  detalles,
+});
         return;
       }
 
@@ -1101,12 +1089,15 @@ if (!asiento && cuentaCodigo === "5002") {
 
                     <TableBody>
                       {pagedRows.map((transaccion: any, idx: number) => {
-                        const iso = pickISODate(transaccion);
-                        const rowKey = String(
-                          transaccion?.id ??
-                            transaccion?._id ??
-                            `${transaccion?.numero_asiento ?? "row"}-${iso ?? ""}`
-                        );
+                        const ymd = pickYMD(transaccion);
+const fechaStable = ymd ? ymdToStableDate(ymd) : null;
+
+const rowKey = String(
+  transaccion?.id ??
+    transaccion?._id ??
+    `${transaccion?.numero_asiento ?? "row"}-${ymd ?? "na"}`
+);
+
 
                         const tipoInfo = getTipoEgresoDisplay(transaccion);
                         const cuentaCodigo = String(transaccion.cuenta_codigo || "");
@@ -1140,13 +1131,9 @@ if (!asiento && cuentaCodigo === "5002") {
                             </TableCell>
 
                             <TableCell className="whitespace-nowrap">
-                              {iso
-                                ? new Date(iso).toLocaleDateString("es-MX", {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                  })
-                                : "—"}
+                              {fechaStable
+  ? fechaStable.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" })
+  : "—"}
                             </TableCell>
 
                             <TableCell>
@@ -1203,11 +1190,20 @@ if (!asiento && cuentaCodigo === "5002") {
                             </TableCell>
 
                             <TableCell className="text-right hidden lg:table-cell">
-                              {transaccion.costo_unitario ? (
-                                <span className="font-medium">${formatMonto(safeNum(transaccion.costo_unitario))}</span>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">-</span>
-                              )}
+                              {(() => {
+  const q = safeNum(transaccion.cantidad) || 0;
+  const total = safeNum(transaccion.monto_total);
+  const cu = safeNum(transaccion.costo_unitario);
+
+  // Si no viene costo unitario, intenta derivarlo: total / cantidad
+  const finalCU = cu > 0 ? cu : (q > 0 ? total / q : 0);
+
+  return finalCU > 0 ? (
+    <span className="font-medium">${formatMonto(finalCU)}</span>
+  ) : (
+    <span className="text-muted-foreground text-xs">-</span>
+  );
+})()}
                             </TableCell>
 
                             <TableCell className="text-right">
@@ -1287,9 +1283,11 @@ if (!asiento && cuentaCodigo === "5002") {
                                                 <p><span className="font-medium">Tipo de Pago:</span> {selectedTransaction.tipo_pago || "N/A"}</p>
                                                 <p>
                                                   <span className="font-medium">Fecha:</span>{" "}
-                                                  {pickISODate(selectedTransaction)
-                                                    ? new Date(pickISODate(selectedTransaction)!).toLocaleDateString("es-MX")
-                                                    : "—"}
+                                                  {(() => {
+  const ymd = pickYMD(selectedTransaction);
+  const d = ymd ? ymdToStableDate(ymd) : null;
+  return d ? d.toLocaleDateString("es-MX") : "—";
+})()}
                                                 </p>
                                               </div>
                                             </div>
@@ -1508,7 +1506,7 @@ if (!asiento && cuentaCodigo === "5002") {
               {/* Totales por categoría (cards) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
                 <div className="rounded-2xl border bg-muted/5 p-4">
-                  <div className="text-xs text-muted-foreground">Costos de Venta (5001–5004)</div>
+                  <div className="text-xs text-muted-foreground">Costos de Venta (5001–5004) + Inventario (5002)</div>
                   <div className="text-2xl font-bold text-purple-700 mt-1">
                     ${formatMonto(resumenFiltrado.totalCostos)}
                   </div>
