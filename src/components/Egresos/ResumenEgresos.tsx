@@ -388,10 +388,13 @@ const mapaImagenesProductos = useMemo(() => {
   }, [transacciones, searchTerm, filterProveedor, filterPago, filterEstadoPago, dateRange]);
 
   const transaccionesCostosVenta = useMemo(() => {
-  return (transacciones || []).filter(
-    (t: any) => t.cuenta_codigo === "5001" || t.cuenta_codigo === "5003" || t.cuenta_codigo === "5004"
-  );
+  return (transacciones || []).filter((t: any) => {
+    const code = String(t?.cuenta_codigo ?? "");
+    // ✅ Incluye también 5002 (costo venta inventario) por si viene como egreso normal
+    return code === "5001" || code === "5002" || code === "5003" || code === "5004";
+  });
 }, [transacciones]);
+
 
   const transaccionesGastos = useMemo(() => {
   return (transacciones || []).filter(
