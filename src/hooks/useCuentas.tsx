@@ -1,3 +1,4 @@
+// bukipin-dashboard/src/hooks/useCuentas.ts
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
@@ -22,6 +23,42 @@ type UseCuentasResponse = {
   cuentasFlat: Cuenta[];
 };
 
+// ---------- helpers ----------
+const normStr = (v: any) => String(v ?? "").trim();
+
+const normalizeCuenta = (raw: any): Cuenta => {
+  const codigo = normStr(
+    raw?.codigo ??
+      raw?.cuenta_codigo ??
+      raw?.accountCodigo ??
+      raw?.account_code ??
+      raw?.code
+  );
+
+  const nombre = normStr(
+    raw?.nombre ??
+      raw?.cuenta_nombre ??
+      raw?.accountNombre ??
+      raw?.account_name ??
+      raw?.name
+  );
+
+  const estado_financiero = normStr(
+    raw?.estado_financiero ?? raw?.estadoFinanciero ?? raw?.estado ?? raw?.financial_state
+  );
+
+  const grupo = normStr(raw?.grupo ?? raw?.group);
+  const subgrupo = normStr(raw?.subgrupo ?? raw?.subgroup);
+
+  return {
+    codigo,
+    nombre,
+    estado_financiero: estado_financiero || "Sin estado",
+    grupo: grupo || "Sin grupo",
+    subgrupo: subgrupo || "Sin subgrupo",
+  };
+};
+
 const buildEstadosFinancieros = (cuentas: Cuenta[]): EstadosFinancieros => {
   const estadosFinancieros: EstadosFinancieros = {};
 
@@ -30,17 +67,9 @@ const buildEstadosFinancieros = (cuentas: Cuenta[]): EstadosFinancieros => {
     const grupo = cuenta.grupo || "Sin grupo";
     const subgrupo = cuenta.subgrupo || "Sin subgrupo";
 
-    if (!estadosFinancieros[estado_financiero]) {
-      estadosFinancieros[estado_financiero] = {};
-    }
-
-    if (!estadosFinancieros[estado_financiero][grupo]) {
-      estadosFinancieros[estado_financiero][grupo] = {};
-    }
-
-    if (!estadosFinancieros[estado_financiero][grupo][subgrupo]) {
-      estadosFinancieros[estado_financiero][grupo][subgrupo] = [];
-    }
+    if (!estadosFinancieros[estado_financiero]) estadosFinancieros[estado_financiero] = {};
+    if (!estadosFinancieros[estado_financiero][grupo]) estadosFinancieros[estado_financiero][grupo] = {};
+    if (!estadosFinancieros[estado_financiero][grupo][subgrupo]) estadosFinancieros[estado_financiero][grupo][subgrupo] = [];
 
     estadosFinancieros[estado_financiero][grupo][subgrupo].push(cuenta);
   }
@@ -48,24 +77,52 @@ const buildEstadosFinancieros = (cuentas: Cuenta[]): EstadosFinancieros => {
   return estadosFinancieros;
 };
 
+function extractCuentasArray(payload: any): any[] {
+  // payload ya viene normalizado a (json.data ?? json)
+  if (Array.isArray(payload)) return payload;
+
+  // casos típicos
+  if (Array.isArray(payload?.cuentas)) return payload.cuentas;
+  if (Array.isArray(payload?.items)) return payload.items;
+
+  // si por alguna razón viene anidado
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.cuentas)) return payload.data.cuentas;
+  if (Array.isArray(payload?.data?.items)) return payload.data.items;
+
+  return [];
+}
+
+// ---------- hook ----------
 export const useCuentas = () => {
   return useQuery<UseCuentasResponse>({
     queryKey: ["cuentas"],
     queryFn: async () => {
       /**
-       * Endpoint esperado:
+       * Endpoint real:
        * GET /api/cuentas
-       * Respuesta puede ser:
-       *  - [{...}, {...}]
-       *  - { ok: true, data: [{...}] }
+       *
+       * Shapes posibles:
+       * - [{...}]
+       * - { ok:true, data:[...] }
+       * - { ok:true, data:{ cuentas:[...] } }
+       * - { cuentas:[...] }
        */
       const json = await apiFetch("/api/cuentas", { method: "GET" });
-      const cuentasFlat: Cuenta[] = (json as any)?.data ?? (json as any) ?? [];
 
-      // Orden defensivo (por si backend no ordena)
+      const payload = (json as any)?.data ?? json; // normalización estándar Bukipin
+      const cuentasRaw = extractCuentasArray(payload);
+
+      const cuentasFlat = cuentasRaw.map(normalizeCuenta);
+
+      // Orden defensivo
       cuentasFlat.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
 
-      const estadosFinancieros = buildEstadosFinancieros(cuentasFlat);
+      // Si backend ya manda estadosFinancieros, úsalo; si no, constrúyelo
+      const estadosFinancieros: EstadosFinancieros =
+        (payload?.estadosFinancieros && typeof payload.estadosFinancieros === "object")
+          ? payload.estadosFinancieros
+          : buildEstadosFinancieros(cuentasFlat);
 
       return { estadosFinancieros, cuentasFlat };
     },
