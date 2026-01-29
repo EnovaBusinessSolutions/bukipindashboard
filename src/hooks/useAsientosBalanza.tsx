@@ -3,14 +3,14 @@ import { format } from "date-fns";
 import { apiFetch } from "@/lib/api";
 
 interface BalanzaEntry {
-  fecha: string;
+  fecha: string; // dd/MM/yyyy
   tipo: string;
   descripcion: string;
   cuenta_codigo: string;
   cuenta_nombre: string;
   debe: number;
   haber: number;
-  referencia: string;
+  referencia: string; // numero_asiento
 }
 
 interface SaldoCuenta {
@@ -20,93 +20,132 @@ interface SaldoCuenta {
   saldo: number;
 }
 
-type DetalleAsientoRow = {
-  cuenta_codigo: string;
-  debe: number | string | null;
-  haber: number | string | null;
-  descripcion?: string | null;
-  asiento?: {
-    fecha?: string | null; // "YYYY-MM-DD"
-    descripcion?: string | null;
-    numero_asiento?: string | null;
-  } | null;
+type AsientoUI = {
+  id?: string;
+  _id?: any;
+
+  numero_asiento?: string;
+  asiento_fecha?: string; // "YYYY-MM-DD"
+  concepto?: string;
+
+  detalle_asientos?: Array<{
+    cuenta_codigo?: string | null;
+    cuenta_nombre?: string | null;
+    debe?: number | string | null;
+    haber?: number | string | null;
+    memo?: string | null;
+  }>;
 };
+
+function num(v: any, def = 0) {
+  if (v == null) return def;
+  const n = Number(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : def;
+}
+
+function toYMDLocal(d: Date) {
+  // IMPORTANT: evita toISOString (UTC shift)
+  return format(d, "yyyy-MM-dd");
+}
+
+function formatDMYFromYMD(ymd?: string) {
+  if (!ymd) return "";
+  const parts = String(ymd).split("-");
+  if (parts.length !== 3) return "";
+  const yyyy = parseInt(parts[0], 10);
+  const mm = parseInt(parts[1], 10) - 1;
+  const dd = parseInt(parts[2], 10);
+  const dt = new Date(yyyy, mm, dd);
+  return format(dt, "dd/MM/yyyy");
+}
+
+function tipoPorNumeroAsiento(numeroAsiento: string) {
+  const n = numeroAsiento || "";
+  if (n.startsWith("ING-")) return "Ingreso";
+  if (n.startsWith("EGR-")) return "Egreso";
+  if (n.startsWith("INV-")) return "Inversión";
+  if (n.startsWith("CAP-")) return "Capital";
+  if (n.startsWith("FIN-")) return "Financiamiento";
+  if (n.startsWith("IMP-") || n.startsWith("ISR-")) return "Impuesto";
+  if (n.startsWith("COB-")) return "Cobro";
+  if (n.startsWith("PAG-CXP-")) return "Pago CxP";
+  if (n.startsWith("PAG-")) return "Pago";
+  if (n.startsWith("DEP-")) return "Depreciación";
+  return "Otro";
+}
 
 export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
   return useQuery({
-    queryKey: ["asientos-balanza", startDate, endDate],
+    queryKey: ["asientos-balanza", toYMDLocal(startDate), toYMDLocal(endDate)],
     queryFn: async () => {
-      // Usar endDate tal cual; la balanza debe mostrar TODOS los asientos en rango
-      const start = startDate.toISOString().split("T")[0];
-      const end = endDate.toISOString().split("T")[0];
+      const start = toYMDLocal(startDate);
+      const end = toYMDLocal(endDate);
 
-      // 1) Traer movimientos (detalle_asientos + asiento)
-      const detallesJson = await apiFetch(
-        `/api/contabilidad/asientos/detalle?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+      // 1) Traer asientos completos (esto SÍ existe en tu backend)
+      const asientosJson = await apiFetch(
+        `/api/contabilidad/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
         { method: "GET" }
       );
-      const detalles: DetalleAsientoRow[] = (detallesJson as any)?.data ?? detallesJson ?? [];
 
-      // 2) Traer catálogo de cuentas (codigo, nombre)
-      const cuentasJson = await apiFetch(`/api/catalogos/cuentas?fields=codigo,nombre`, { method: "GET" });
-      const cuentasData: Array<{ codigo: string; nombre: string }> =
-        (cuentasJson as any)?.data ?? cuentasJson ?? [];
+      // Normalización Bukipin: json.data ?? json
+      const asientosPayload = (asientosJson as any)?.data ?? asientosJson;
 
-      const cuentasMap = new Map(cuentasData.map((c) => [c.codigo, c.nombre]));
+      const asientos: AsientoUI[] =
+        (asientosPayload as any)?.asientos ??
+        (asientosPayload as any)?.items ??
+        (asientosJson as any)?.asientos ??
+        (asientosJson as any)?.items ??
+        (Array.isArray(asientosPayload) ? asientosPayload : []);
 
-      // 3) Transformar a BalanzaEntry
-      const movimientos: BalanzaEntry[] = (detalles || []).map((detalle) => {
-        const asiento = detalle.asiento || null;
-        const numeroAsiento = asiento?.numero_asiento || "";
+      // 2) Traer cuentas (para mapear nombre si viene null)
+      const cuentasJson = await apiFetch("/api/cuentas", { method: "GET" });
+      const cuentasPayload = (cuentasJson as any)?.data ?? cuentasJson;
 
-        // Tipo por prefijo
-        let tipo = "Otro";
-        if (numeroAsiento.startsWith("ING-")) tipo = "Ingreso";
-        else if (numeroAsiento.startsWith("EGR-")) tipo = "Egreso";
-        else if (numeroAsiento.startsWith("INV-")) tipo = "Inversión";
-        else if (numeroAsiento.startsWith("CAP-")) tipo = "Capital";
-        else if (numeroAsiento.startsWith("FIN-")) tipo = "Financiamiento";
-        else if (numeroAsiento.startsWith("IMP-") || numeroAsiento.startsWith("ISR-")) tipo = "Impuesto";
-        else if (numeroAsiento.startsWith("COB-")) tipo = "Cobro";
-        else if (numeroAsiento.startsWith("PAG-CXP-")) tipo = "Pago CxP";
-        else if (numeroAsiento.startsWith("PAG-")) tipo = "Pago";
-        else if (numeroAsiento.startsWith("DEP-")) tipo = "Depreciación";
+      const cuentasArr: Array<{ codigo: string; nombre: string }> =
+        (cuentasPayload as any)?.cuentas ??
+        (cuentasPayload as any)?.items ??
+        (Array.isArray(cuentasPayload) ? cuentasPayload : []);
 
-        // Descripción final: preferir asiento.descripcion (más confiable)
-        const descripcionFinal = asiento?.descripcion || detalle.descripcion || "";
+      const cuentasMap = new Map<string, string>(
+        (cuentasArr || [])
+          .filter((c) => c && c.codigo)
+          .map((c) => [String(c.codigo), String(c.nombre ?? "")])
+      );
 
-        // Formatear fecha (evitar offset TZ): parse manual YYYY-MM-DD
-        let fechaFormateada = "";
-        const rawFecha = asiento?.fecha;
-        if (rawFecha) {
-          const parts = rawFecha.split("-");
-          if (parts.length === 3) {
-            const yyyy = parseInt(parts[0], 10);
-            const mm = parseInt(parts[1], 10) - 1;
-            const dd = parseInt(parts[2], 10);
-            const d = new Date(yyyy, mm, dd);
-            fechaFormateada = format(d, "dd/MM/yyyy");
-          }
+      // 3) Flatten asientos -> movimientos
+      const movimientos: BalanzaEntry[] = [];
+
+      for (const a of asientos || []) {
+        const referencia = String(a?.numero_asiento ?? "");
+        const tipo = tipoPorNumeroAsiento(referencia);
+        const descripcionFinal = String(a?.concepto ?? "");
+        const fechaFormateada = formatDMYFromYMD(a?.asiento_fecha);
+
+        const lines = Array.isArray(a?.detalle_asientos) ? a.detalle_asientos : [];
+        for (const l of lines) {
+          const cuentaCodigo = String(l?.cuenta_codigo ?? "").trim();
+          if (!cuentaCodigo) continue;
+
+          const nombreLinea = String(l?.cuenta_nombre ?? "").trim();
+          const cuentaNombre = nombreLinea || cuentasMap.get(cuentaCodigo) || cuentaCodigo;
+
+          movimientos.push({
+            fecha: fechaFormateada,
+            tipo,
+            descripcion: descripcionFinal,
+            cuenta_codigo: cuentaCodigo,
+            cuenta_nombre: cuentaNombre,
+            debe: num(l?.debe, 0),
+            haber: num(l?.haber, 0),
+            referencia,
+          });
         }
-
-        const cuentaCodigo = detalle.cuenta_codigo;
-
-        return {
-          fecha: fechaFormateada,
-          tipo,
-          descripcion: descripcionFinal,
-          cuenta_codigo: cuentaCodigo,
-          cuenta_nombre: cuentasMap.get(cuentaCodigo) || cuentaCodigo,
-          debe: Number(detalle.debe) || 0,
-          haber: Number(detalle.haber) || 0,
-          referencia: numeroAsiento,
-        };
-      });
+      }
 
       // 4) Saldos por cuenta
       const saldosPorCuenta: Record<string, SaldoCuenta> = {};
 
-      movimientos.forEach((mov) => {
+      for (const mov of movimientos) {
         const codigo = mov.cuenta_codigo;
         if (!saldosPorCuenta[codigo]) {
           saldosPorCuenta[codigo] = {
@@ -118,12 +157,11 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         }
         saldosPorCuenta[codigo].debe_total += mov.debe;
         saldosPorCuenta[codigo].haber_total += mov.haber;
-      });
+      }
 
-      // 5) Naturaleza (deudora/acreedor)
+      // 5) Naturaleza contable para saldo
       Object.values(saldosPorCuenta).forEach((cuenta) => {
         const primerDigito = cuenta.cuenta_codigo.charAt(0);
-
         // Deudora: Activos(1), Costos(5), Gastos(6)
         if (["1", "5", "6"].includes(primerDigito)) {
           cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
@@ -132,7 +170,6 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         else if (["2", "3", "4"].includes(primerDigito)) {
           cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
         } else {
-          // Fallback: deudora por defecto
           cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
         }
       });
@@ -140,5 +177,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       return { movimientos, saldosPorCuenta };
     },
     enabled: !!startDate && !!endDate,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };
