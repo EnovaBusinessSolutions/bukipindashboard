@@ -74,6 +74,11 @@ function tipoPorNumeroAsiento(numeroAsiento: string) {
   return "Otro";
 }
 
+// Normalizador para endpoints estilo Bukipin: {ok:true,data} o payload plano
+function unwrap(json: any) {
+  return json?.data ?? json;
+}
+
 export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
   return useQuery({
     queryKey: ["asientos-balanza", toYMDLocal(startDate), toYMDLocal(endDate)],
@@ -81,42 +86,46 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const start = toYMDLocal(startDate);
       const end = toYMDLocal(endDate);
 
-      // 1) Traer asientos completos (esto SÍ existe en tu backend)
+      // 1) Traer asientos completos (backend: /api/contabilidad/asientos)
       const asientosJson = await apiFetch(
         `/api/contabilidad/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
         { method: "GET" }
       );
+      const asientosPayload = unwrap(asientosJson);
 
-      // Normalización Bukipin: json.data ?? json
-      const asientosPayload = (asientosJson as any)?.data ?? asientosJson;
-
+      // Soportar: {asientos}, {items}, array plano
       const asientos: AsientoUI[] =
-        (asientosPayload as any)?.asientos ??
-        (asientosPayload as any)?.items ??
-        (asientosJson as any)?.asientos ??
-        (asientosJson as any)?.items ??
+        asientosPayload?.asientos ??
+        asientosPayload?.items ??
+        asientosJson?.asientos ??
+        asientosJson?.items ??
         (Array.isArray(asientosPayload) ? asientosPayload : []);
 
       // 2) Traer cuentas (para mapear nombre si viene null)
+      // Tu endpoint real es /api/cuentas y suele responder:
+      //  - [{...}]
+      //  - { ok:true, data:[{...}] }
       const cuentasJson = await apiFetch("/api/cuentas", { method: "GET" });
-      const cuentasPayload = (cuentasJson as any)?.data ?? cuentasJson;
+      const cuentasPayload = unwrap(cuentasJson);
 
-      const cuentasArr: Array<{ codigo: string; nombre: string }> =
-        (cuentasPayload as any)?.cuentas ??
-        (cuentasPayload as any)?.items ??
-        (Array.isArray(cuentasPayload) ? cuentasPayload : []);
+      // ✅ Esto es lo correcto para tu caso:
+      const cuentasArr: Array<{ codigo: string; nombre: string }> = Array.isArray(cuentasPayload)
+        ? cuentasPayload
+        : Array.isArray(cuentasJson)
+        ? cuentasJson
+        : [];
 
       const cuentasMap = new Map<string, string>(
         (cuentasArr || [])
-          .filter((c) => c && c.codigo)
-          .map((c) => [String(c.codigo), String(c.nombre ?? "")])
+          .filter((c) => c && (c as any).codigo)
+          .map((c: any) => [String(c.codigo), String(c.nombre ?? "")])
       );
 
       // 3) Flatten asientos -> movimientos
       const movimientos: BalanzaEntry[] = [];
 
       for (const a of asientos || []) {
-        const referencia = String(a?.numero_asiento ?? "");
+        const referencia = String(a?.numero_asiento ?? "").trim();
         const tipo = tipoPorNumeroAsiento(referencia);
         const descripcionFinal = String(a?.concepto ?? "");
         const fechaFormateada = formatDMYFromYMD(a?.asiento_fecha);
@@ -144,7 +153,6 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
 
       // 4) Saldos por cuenta
       const saldosPorCuenta: Record<string, SaldoCuenta> = {};
-
       for (const mov of movimientos) {
         const codigo = mov.cuenta_codigo;
         if (!saldosPorCuenta[codigo]) {

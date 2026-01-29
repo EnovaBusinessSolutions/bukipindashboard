@@ -1,4 +1,4 @@
-// bukipin-dashboard/src/hooks/useCuentas.ts
+// bukipin-dashboard/src/hooks/useCuentas.tsx
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
