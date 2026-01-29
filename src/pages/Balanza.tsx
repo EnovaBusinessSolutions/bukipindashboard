@@ -28,7 +28,7 @@ import { useCuentas } from "@/hooks/useCuentas";
 import { Badge } from "@/components/ui/badge";
 
 interface BalanzaEntry {
-  fecha: string;
+  fecha: string; // normalmente "dd/MM/yyyy" (pero lo hacemos robusto)
   tipo: string;
   descripcion: string;
   cuenta_codigo: string;
@@ -57,7 +57,50 @@ interface AsientoAgrupado {
   };
 }
 
+type CuentaFlat = {
+  codigo: string;
+  nombre: string;
+  estado_financiero?: string | null;
+};
+
+type CuentaInfo = {
+  nombre: string;
+  estado_financiero?: string | null;
+};
+
 const PAGE_SIZE = 25;
+
+// Parser robusto: intenta dd/MM/yyyy, yyyy-MM-dd y Date nativo
+function parseFechaFlexible(fecha: string): Date | null {
+  if (!fecha) return null;
+
+  // dd/MM/yyyy
+  if (fecha.includes("/")) {
+    const parts = fecha.split("/");
+    if (parts.length === 3) {
+      const [dd, mm, yyyy] = parts;
+      const d = Number(dd);
+      const m = Number(mm);
+      const y = Number(yyyy);
+      if (Number.isFinite(d) && Number.isFinite(m) && Number.isFinite(y)) {
+        const dt = new Date(y, m - 1, d);
+        if (!Number.isNaN(dt.getTime())) return dt;
+      }
+    }
+  }
+
+  // yyyy-MM-dd
+  if (fecha.includes("-")) {
+    const dt = new Date(fecha);
+    if (!Number.isNaN(dt.getTime())) return dt;
+  }
+
+  // fallback
+  const dt = new Date(fecha);
+  if (!Number.isNaN(dt.getTime())) return dt;
+
+  return null;
+}
 
 const Balanza = () => {
   const [pestanaActiva, setPestanaActiva] = useState<string>("todos");
@@ -81,14 +124,17 @@ const Balanza = () => {
 
   // Para Balanza de Comprobación y Balance General, ajustar startDate a 10 años atrás para acumular todo
   const startDateAjustado = useMemo(() => {
-  return (pestanaActiva === "balance" || pestanaActiva === "todos")
-    ? new Date(endDate.getFullYear() - 10, 0, 1)
-    : startDate;
-}, [pestanaActiva, startDate, endDate]);
+    return pestanaActiva === "balance" || pestanaActiva === "todos"
+      ? new Date(endDate.getFullYear() - 10, 0, 1)
+      : startDate;
+  }, [pestanaActiva, startDate, endDate]);
 
   // Hook principal
   const { data: balanzaData, isLoading } = useAsientosBalanza(startDateAjustado, endDate);
   const { data: cuentasData } = useCuentas();
+
+  // ✅ IMPORTANTE: NO PONER hooks después de returns tempranos.
+  // Por eso todos los useMemo/useEffect van antes de cualquier return.
 
   // Reset de filtros jerárquicos al cambiar pestaña
   useEffect(() => {
@@ -100,19 +146,18 @@ const Balanza = () => {
 
   // Reset de página cuando cambian filtros
   useEffect(() => {
-  setPage(1);
-}, [
-  filtroTipo,
-  filtroEstado,
-  filtroEstadoFinanciero,
-  filtroBusqueda,
-  grupoSeleccionado,
-  subgrupoSeleccionado,
-  cuentaSeleccionada,
-  startDateAjustado?.getTime(), // ✅ clave
-  endDate?.getTime(),           // ✅ también
-]);
-
+    setPage(1);
+  }, [
+    filtroTipo,
+    filtroEstado,
+    filtroEstadoFinanciero,
+    filtroBusqueda,
+    grupoSeleccionado,
+    subgrupoSeleccionado,
+    cuentaSeleccionada,
+    startDateAjustado.getTime(),
+    endDate.getTime(),
+  ]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
@@ -121,138 +166,98 @@ const Balanza = () => {
   const getNaturaleza = (codigoCuenta?: string) => {
     const d = (codigoCuenta || "").charAt(0);
     if (!d) return "—";
-    // simplificado: 1,5,6 suelen ser deudoras; 2,3,4 acreedoras (depende plan, pero funciona para orientación)
+    // simplificado: 1,5,6 suelen ser deudoras; 2,3,4 acreedoras
     return ["1", "5", "6"].includes(d) ? "Deudora" : ["2", "3", "4"].includes(d) ? "Acreedora" : "—";
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Cargando balanza…</p>
-        </div>
-      </div>
-    );
-  }
+  // Data safe (para que no reviente antes de cargar)
+  const movimientos: BalanzaEntry[] = (balanzaData?.movimientos as BalanzaEntry[]) || [];
+  const saldosPorCuenta: Record<string, any> = (balanzaData?.saldosPorCuenta as Record<string, any>) || {};
 
-  if (!balanzaData) {
-    return (
-      <div className="container mx-auto p-6">
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground">No se pudieron cargar los datos de la balanza</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const cuentasFlat: CuentaFlat[] = (cuentasData?.cuentasFlat as CuentaFlat[]) || [];
+  const estadosFinancieros: any = cuentasData?.estadosFinancieros;
 
-  const { movimientos, saldosPorCuenta } = balanzaData;
-
-  // Crear Map con info de cuentas
-  const cuentasInfoMap = useMemo(
-    () =>
-      new Map(
-        cuentasData?.cuentasFlat?.map((cuenta) => [
-          cuenta.codigo,
-          { nombre: cuenta.nombre, estado_financiero: cuenta.estado_financiero },
-        ]) || []
-      ),
-    [cuentasData]
-  );
+  // ✅ Map tipado (se van rojos de nombre/estado_financiero + error new Map)
+  const cuentasInfoMap = useMemo(() => {
+    const entries: Array<[string, CuentaInfo]> = (cuentasFlat || []).map((cuenta) => [
+      cuenta.codigo,
+      { nombre: cuenta.nombre, estado_financiero: cuenta.estado_financiero ?? null },
+    ]);
+    return new Map<string, CuentaInfo>(entries);
+  }, [cuentasFlat]);
 
   // Grupos según pestaña activa
   const gruposDisponibles = useMemo(() => {
-    if (!cuentasData?.estadosFinancieros) return [];
+    if (!estadosFinancieros) return [];
 
     const estadoKey =
-      pestanaActiva === "balance"
-        ? "Balance General"
-        : pestanaActiva === "resultados"
-        ? "Estado de Resultados"
-        : null;
+      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
     if (!estadoKey) {
-      return [
-        ...Object.keys(cuentasData.estadosFinancieros["Balance General"] || {}),
-        ...Object.keys(cuentasData.estadosFinancieros["Estado de Resultados"] || {}),
-      ].filter((v, i, a) => a.indexOf(v) === i);
+      const bg = Object.keys(estadosFinancieros["Balance General"] || {});
+      const er = Object.keys(estadosFinancieros["Estado de Resultados"] || {});
+      return [...bg, ...er].filter((v, i, a) => a.indexOf(v) === i);
     }
 
-    return Object.keys(cuentasData.estadosFinancieros[estadoKey] || {});
-  }, [cuentasData, pestanaActiva]);
+    return Object.keys(estadosFinancieros[estadoKey] || {});
+  }, [estadosFinancieros, pestanaActiva]);
 
   const subgruposDisponibles = useMemo(() => {
-    if (grupoSeleccionado === "todos" || !cuentasData?.estadosFinancieros) return [];
+    if (grupoSeleccionado === "todos" || !estadosFinancieros) return [];
 
     const estadoKey =
-      pestanaActiva === "balance"
-        ? "Balance General"
-        : pestanaActiva === "resultados"
-        ? "Estado de Resultados"
-        : null;
+      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
     if (!estadoKey) {
-      const subgruposBG = Object.keys(cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {});
-      const subgruposER = Object.keys(cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {});
+      const subgruposBG = Object.keys(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {});
+      const subgruposER = Object.keys(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {});
       return [...subgruposBG, ...subgruposER].filter((v, i, a) => a.indexOf(v) === i);
     }
 
-    return Object.keys(cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {});
-  }, [cuentasData, grupoSeleccionado, pestanaActiva]);
+    return Object.keys(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {});
+  }, [estadosFinancieros, grupoSeleccionado, pestanaActiva]);
 
   const cuentasDisponibles = useMemo(() => {
-    if (subgrupoSeleccionado === "todos" || !cuentasData?.estadosFinancieros) return [];
+    if (subgrupoSeleccionado === "todos" || !estadosFinancieros) return [];
 
     const estadoKey =
-      pestanaActiva === "balance"
-        ? "Balance General"
-        : pestanaActiva === "resultados"
-        ? "Estado de Resultados"
-        : null;
+      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
     if (!estadoKey) {
-      const cuentasBG =
-        cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
-      const cuentasER =
-        cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
+      const cuentasBG = estadosFinancieros["Balance General"]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
+      const cuentasER = estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
       return [...cuentasBG, ...cuentasER];
     }
 
-    return cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
-  }, [cuentasData, grupoSeleccionado, subgrupoSeleccionado, pestanaActiva]);
+    return estadosFinancieros[estadoKey]?.[grupoSeleccionado]?.[subgrupoSeleccionado] || [];
+  }, [estadosFinancieros, grupoSeleccionado, subgrupoSeleccionado, pestanaActiva]);
 
   // Filtrar movimientos por pestaña
-  let movimientosFiltrados = movimientos;
+  let movimientosFiltrados: BalanzaEntry[] = movimientos;
 
   if (pestanaActiva === "resultados") {
-    movimientosFiltrados = movimientos.filter((mov) => ["4", "5", "6"].includes(mov.cuenta_codigo.charAt(0)));
+    movimientosFiltrados = movimientos.filter((mov) => ["4", "5", "6"].includes((mov.cuenta_codigo || "").charAt(0)));
   } else if (pestanaActiva === "balance") {
-    movimientosFiltrados = movimientos.filter((mov) => ["1", "2", "3"].includes(mov.cuenta_codigo.charAt(0)));
+    movimientosFiltrados = movimientos.filter((mov) => ["1", "2", "3"].includes((mov.cuenta_codigo || "").charAt(0)));
   }
 
-  // Aplicar filtros jerárquicos
+  // Aplicar filtros jerárquicos (movimientos)
   if (cuentaSeleccionada !== "todos") {
     movimientosFiltrados = movimientosFiltrados.filter((mov) => mov.cuenta_codigo === cuentaSeleccionada);
   } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
-    const codigosCuentas = cuentasDisponibles.map((c) => c.codigo);
+    const codigosCuentas = (cuentasDisponibles as any[]).map((c: any) => c.codigo);
     movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
-  } else if (grupoSeleccionado !== "todos" && cuentasData?.estadosFinancieros) {
+  } else if (grupoSeleccionado !== "todos" && estadosFinancieros) {
     const estadoKey =
-      pestanaActiva === "balance"
-        ? "Balance General"
-        : pestanaActiva === "resultados"
-        ? "Estado de Resultados"
-        : null;
+      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
     if (estadoKey) {
-      const todasCuentasGrupo = Object.values(cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
+      const todasCuentasGrupo = Object.values(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
       const codigosCuentas = (todasCuentasGrupo as any[]).map((c: any) => c.codigo);
       movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
     } else {
-      const todasCuentasBG = Object.values(cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
-      const todasCuentasER = Object.values(cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
+      const todasCuentasBG = Object.values(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
+      const todasCuentasER = Object.values(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
       const codigosCuentas = [...(todasCuentasBG as any[]), ...(todasCuentasER as any[])].map((c: any) => c.codigo);
       movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
     }
@@ -274,65 +279,48 @@ const Balanza = () => {
     const codigo = cuentaSeleccionada;
     saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[codigo] ? { [codigo]: saldosPorCuentaFiltrados[codigo] } : {};
   } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
-    const codigosCuentas = cuentasDisponibles.map((c) => c.codigo);
+    const codigosCuentas = (cuentasDisponibles as any[]).map((c: any) => c.codigo);
     saldosPorCuentaFiltrados = Object.fromEntries(
       Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
     );
-  } else if (grupoSeleccionado !== "todos" && cuentasData?.estadosFinancieros) {
+  } else if (grupoSeleccionado !== "todos" && estadosFinancieros) {
     const estadoKey =
-      pestanaActiva === "balance"
-        ? "Balance General"
-        : pestanaActiva === "resultados"
-        ? "Estado de Resultados"
-        : null;
+      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
     if (estadoKey) {
-      const todasCuentasGrupo = Object.values(cuentasData.estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
+      const todasCuentasGrupo = Object.values(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
       const codigosCuentas = (todasCuentasGrupo as any[]).map((c: any) => c.codigo);
-      saldosPorCuentaFiltrados = Object.fromEntries(Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo)));
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
+      );
     } else {
-      const todasCuentasBG = Object.values(cuentasData.estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
-      const todasCuentasER = Object.values(cuentasData.estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
+      const todasCuentasBG = Object.values(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
+      const todasCuentasER = Object.values(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
       const codigosCuentas = [...(todasCuentasBG as any[]), ...(todasCuentasER as any[])].map((c: any) => c.codigo);
-      saldosPorCuentaFiltrados = Object.fromEntries(Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo)));
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
+      );
     }
   }
 
   // Fechas futuras
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
   const tieneFechasFuturas = movimientosFiltrados.some((mov) => {
-    const [dia, mes, ano] = mov.fecha.split("/");
-    const fechaMov = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
-    return fechaMov > today;
+    const fechaMov = parseFechaFlexible(mov.fecha);
+    if (!fechaMov) return false;
+    const dt = new Date(fechaMov);
+    dt.setHours(0, 0, 0, 0);
+    return dt > today;
   });
 
-  // Si no hay movimientos
-  if (!movimientosFiltrados || movimientosFiltrados.length === 0) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="space-y-1 mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Balanza de Comprobación</h1>
-          <p className="text-muted-foreground">Vista detallada de todos los movimientos contables del periodo.</p>
-        </div>
-
-        <Card>
-          <CardContent className="p-12">
-            <div className="text-center space-y-2">
-              <p className="text-xl font-medium text-muted-foreground">No hay movimientos contables registrados</p>
-              <p className="text-sm text-muted-foreground">Comienza registrando transacciones para ver la balanza.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Agrupar por asiento
+  // Agrupar por asiento (siempre calculado, aunque luego mostremos vacío)
   const asientosAgrupados: Record<string, AsientoAgrupado> = {};
 
   if (pestanaActiva === "todos") {
     movimientosFiltrados.forEach((mov) => {
+      if (!mov.referencia) return;
       if (!asientosAgrupados[mov.referencia]) {
         asientosAgrupados[mov.referencia] = {
           referencia: mov.referencia,
@@ -345,14 +333,17 @@ const Balanza = () => {
         };
       }
       asientosAgrupados[mov.referencia].movimientos.push(mov);
-      asientosAgrupados[mov.referencia].totalDebe += mov.debe;
-      asientosAgrupados[mov.referencia].totalHaber += mov.haber;
+      asientosAgrupados[mov.referencia].totalDebe += mov.debe || 0;
+      asientosAgrupados[mov.referencia].totalHaber += mov.haber || 0;
     });
   } else {
-    const referenciasRelevantes = new Set(movimientosFiltrados.map((m) => m.referencia));
+    const referenciasRelevantes = new Set(movimientosFiltrados.map((m) => m.referencia).filter(Boolean));
 
     referenciasRelevantes.forEach((referencia) => {
       const movimientosCompletos = movimientos.filter((m) => m.referencia === referencia);
+
+      // guard: por si algo llega raro
+      if (!movimientosCompletos.length) return;
 
       const codigosFiltrados = new Set(
         movimientosFiltrados.filter((m) => m.referencia === referencia).map((m) => m.cuenta_codigo)
@@ -360,12 +351,13 @@ const Balanza = () => {
 
       const movimientosFiltradosAsiento = movimientosCompletos.filter((m) => codigosFiltrados.has(m.cuenta_codigo));
 
-      let efectoNetoCuentaFiltrada = undefined;
-      if (movimientosFiltradosAsiento.length > 0) {
-        const debeFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + m.debe, 0);
-        const haberFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + m.haber, 0);
+      let efectoNetoCuentaFiltrada: AsientoAgrupado["efectoNetoCuentaFiltrada"] = undefined;
 
-        const primerDigito = movimientosFiltradosAsiento[0].cuenta_codigo.charAt(0);
+      if (movimientosFiltradosAsiento.length > 0) {
+        const debeFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + (m.debe || 0), 0);
+        const haberFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + (m.haber || 0), 0);
+
+        const primerDigito = (movimientosFiltradosAsiento[0].cuenta_codigo || "").charAt(0);
         const esDeudora = ["1", "5", "6"].includes(primerDigito);
 
         const efectoNeto = esDeudora ? debeFiltrado - haberFiltrado : haberFiltrado - debeFiltrado;
@@ -385,8 +377,8 @@ const Balanza = () => {
         tipo: movimientosCompletos[0].tipo,
         descripcion: movimientosCompletos[0].descripcion,
         movimientos: movimientosCompletos.map((mov) => ({ ...mov, esCuentaFiltrada: codigosFiltrados.has(mov.cuenta_codigo) })),
-        totalDebe: movimientosCompletos.reduce((sum, m) => sum + m.debe, 0),
-        totalHaber: movimientosCompletos.reduce((sum, m) => sum + m.haber, 0),
+        totalDebe: movimientosCompletos.reduce((sum, m) => sum + (m.debe || 0), 0),
+        totalHaber: movimientosCompletos.reduce((sum, m) => sum + (m.haber || 0), 0),
         efectoNetoCuentaFiltrada,
       };
     });
@@ -397,7 +389,7 @@ const Balanza = () => {
   // Detectar reversión/cancelación
   const asientosConReversion = asientosArray
     .map((asiento) => {
-      const descripcionLower = asiento.descripcion.toLowerCase();
+      const descripcionLower = (asiento.descripcion || "").toLowerCase();
       const esReversion =
         descripcionLower.includes("reversión:") ||
         descripcionLower.includes("reversion:") ||
@@ -407,7 +399,7 @@ const Balanza = () => {
       if (esReversion) return null;
 
       const asientoReversion = asientosArray.find((a) => {
-        const aDescLower = a.descripcion.toLowerCase();
+        const aDescLower = (a.descripcion || "").toLowerCase();
         const esRev =
           aDescLower.includes("reversión:") ||
           aDescLower.includes("reversion:") ||
@@ -415,10 +407,10 @@ const Balanza = () => {
           aDescLower.includes("cancelacion de egreso:");
         if (!esRev) return false;
 
-        const matchOriginal = asiento.referencia.match(/^([A-Z]+)-(.+)$/);
+        const matchOriginal = (asiento.referencia || "").match(/^([A-Z]+)-(.+)$/);
         if (!matchOriginal) return false;
         const idOriginal = matchOriginal[2];
-        return a.referencia.includes(idOriginal);
+        return (a.referencia || "").includes(idOriginal);
       });
 
       return {
@@ -436,7 +428,7 @@ const Balanza = () => {
 
   if (filtroEstado !== "todos") {
     asientosFiltrados = asientosFiltrados.filter((a) => {
-      const diferencia = Math.abs(a.totalDebe - a.totalHaber);
+      const diferencia = Math.abs((a.totalDebe || 0) - (a.totalHaber || 0));
       if (filtroEstado === "cuadrado") return diferencia < 0.01;
       if (filtroEstado === "descuadrado") return diferencia >= 0.01;
       return true;
@@ -446,7 +438,7 @@ const Balanza = () => {
   if (filtroEstadoFinanciero !== "todos") {
     asientosFiltrados = asientosFiltrados.filter((a) =>
       a.movimientos.some((mov) => {
-        const primerDigito = mov.cuenta_codigo.charAt(0);
+        const primerDigito = (mov.cuenta_codigo || "").charAt(0);
         if (filtroEstadoFinanciero === "balance") return ["1", "2", "3"].includes(primerDigito);
         if (filtroEstadoFinanciero === "resultados") return ["4", "5", "6"].includes(primerDigito);
         return true;
@@ -458,19 +450,29 @@ const Balanza = () => {
     const busquedaLower = filtroBusqueda.toLowerCase();
     asientosFiltrados = asientosFiltrados.filter(
       (a) =>
-        a.descripcion.toLowerCase().includes(busquedaLower) ||
-        a.referencia.toLowerCase().includes(busquedaLower) ||
+        (a.descripcion || "").toLowerCase().includes(busquedaLower) ||
+        (a.referencia || "").toLowerCase().includes(busquedaLower) ||
         a.movimientos.some(
-          (m) => m.cuenta_nombre.toLowerCase().includes(busquedaLower) || m.cuenta_codigo.toLowerCase().includes(busquedaLower)
+          (m) =>
+            (m.cuenta_nombre || "").toLowerCase().includes(busquedaLower) ||
+            (m.cuenta_codigo || "").toLowerCase().includes(busquedaLower)
         )
     );
   }
 
-  const tiposUnicos = Array.from(new Set(asientosConReversion.map((a) => a.tipo))).sort();
+  const tiposUnicos = useMemo(() => {
+    return Array.from(new Set(asientosConReversion.map((a) => a.tipo).filter(Boolean))).sort();
+  }, [asientosConReversion]);
 
   // Totales (basados en saldos filtrados)
-  const totalDebe = Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + cuenta.debe_total, 0);
-  const totalHaber = Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + cuenta.haber_total, 0);
+  const totalDebe = useMemo(() => {
+    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + (cuenta?.debe_total || 0), 0);
+  }, [saldosPorCuentaFiltrados]);
+
+  const totalHaber = useMemo(() => {
+    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + (cuenta?.haber_total || 0), 0);
+  }, [saldosPorCuentaFiltrados]);
+
   const diferencia = Math.abs(totalDebe - totalHaber);
   const cuadra = diferencia < 0.01;
 
@@ -482,7 +484,6 @@ const Balanza = () => {
   const asientosPaginados = asientosFiltrados.slice(startIdx, endIdx);
 
   const pageNumbers = useMemo(() => {
-    // layout pro: 1 … p-1 p p+1 … last
     const pages = new Set<number>();
     pages.add(1);
     pages.add(totalPages);
@@ -543,8 +544,52 @@ const Balanza = () => {
           "Tip: revisa Bancos (1002), Caja (1001), CxC (1003) e Inventario (1005) y confirma que reflejen la realidad.",
         ];
 
-  const infoFiltroActivo =
-    grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos";
+  const infoFiltroActivo = grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos";
+
+  // ✅ AHORA SÍ: returns condicionales DESPUÉS de todos los hooks/memos
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Cargando balanza…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!balanzaData) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">No se pudieron cargar los datos de la balanza</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Si no hay movimientos (después de filtros base)
+  if (!movimientosFiltrados || movimientosFiltrados.length === 0) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="space-y-1 mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Balanza de Comprobación</h1>
+          <p className="text-muted-foreground">Vista detallada de todos los movimientos contables del periodo.</p>
+        </div>
+
+        <Card>
+          <CardContent className="p-12">
+            <div className="text-center space-y-2">
+              <p className="text-xl font-medium text-muted-foreground">No hay movimientos contables registrados</p>
+              <p className="text-sm text-muted-foreground">Comienza registrando transacciones para ver la balanza.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -582,9 +627,7 @@ const Balanza = () => {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-medium text-yellow-900 dark:text-yellow-200">
-                    Asientos con fechas futuras detectados
-                  </h3>
+                  <h3 className="font-medium text-yellow-900 dark:text-yellow-200">Asientos con fechas futuras detectados</h3>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
                     Esto puede ser normal para depreciaciones, provisiones o cierres mensuales programados.
                   </p>
@@ -621,10 +664,7 @@ const Balanza = () => {
                 <CardContent className="pt-0">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {tipsBody.map((t, i) => (
-                      <div
-                        key={i}
-                        className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground leading-relaxed"
-                      >
+                      <div key={i} className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground leading-relaxed">
                         <span className="font-medium text-foreground">Tip {i + 1}:</span> {t}
                       </div>
                     ))}
@@ -633,9 +673,9 @@ const Balanza = () => {
                   <div className="mt-4 rounded-xl border bg-muted/10 p-4">
                     <p className="text-sm">
                       <span className="font-semibold">Pro-tip BUKIPIN:</span>{" "}
-                      Si algo “cuadra” pero se ve raro (por ejemplo, una venta moviendo una cuenta equivocada),
-                      revisa la <span className="font-semibold">referencia del asiento</span> y confirma la lógica:
-                      <span className="font-semibold"> qué aumentó y qué disminuyó</span>.
+                      Si algo “cuadra” pero se ve raro (por ejemplo, una venta moviendo una cuenta equivocada), revisa la{" "}
+                      <span className="font-semibold">referencia del asiento</span> y confirma la lógica:{" "}
+                      <span className="font-semibold">qué aumentó y qué disminuyó</span>.
                     </p>
                   </div>
                 </CardContent>
@@ -651,9 +691,7 @@ const Balanza = () => {
                 {pestanaActiva === "todos" ? "Fecha de Corte" : "Filtros de Análisis"}
               </CardTitle>
               {pestanaActiva !== "todos" && (
-                <CardDescription>
-                  Filtra por grupo → subgrupo → cuenta para un análisis más limpio y rápido.
-                </CardDescription>
+                <CardDescription>Filtra por grupo → subgrupo → cuenta para un análisis más limpio y rápido.</CardDescription>
               )}
             </CardHeader>
 
@@ -844,13 +882,17 @@ const Balanza = () => {
 
                     <div className="space-y-2">
                       <Label>Cuenta</Label>
-                      <Select value={cuentaSeleccionada} onValueChange={setCuentaSeleccionada} disabled={subgrupoSeleccionado === "todos"}>
+                      <Select
+                        value={cuentaSeleccionada}
+                        onValueChange={setCuentaSeleccionada}
+                        disabled={subgrupoSeleccionado === "todos"}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Todas las Cuentas" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todos">Todas las Cuentas</SelectItem>
-                          {cuentasDisponibles.map((cuenta) => (
+                          {(cuentasDisponibles as any[]).map((cuenta: any) => (
                             <SelectItem key={cuenta.codigo} value={cuenta.codigo}>
                               {cuenta.codigo} - {cuenta.nombre}
                             </SelectItem>
@@ -991,7 +1033,7 @@ const Balanza = () => {
             <CardContent>
               <div className="space-y-3">
                 {asientosPaginados.map((asiento) => {
-                  const diff = Math.abs(asiento.totalDebe - asiento.totalHaber);
+                  const diff = Math.abs((asiento.totalDebe || 0) - (asiento.totalHaber || 0));
                   const cuadrado = diff < 0.01;
                   const asientoItem = asiento as any;
 
@@ -1020,26 +1062,39 @@ const Balanza = () => {
                                       )}
 
                                       {!asientoItem.esCancelado && pestanaActiva === "todos" && (
-                                        <Badge variant="outline" className={cn(cuadrado ? "border-green-400/60" : "border-red-400/60")}>
+                                        <Badge
+                                          variant="outline"
+                                          className={cn(cuadrado ? "border-green-400/60" : "border-red-400/60")}
+                                        >
                                           {cuadrado ? "Cuadrado" : "Descuadrado"}
                                         </Badge>
                                       )}
 
                                       {/* Futuro */}
                                       {(() => {
-                                        const [dia, mes, ano] = asiento.fecha.split("/");
-                                        const fechaAsiento = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+                                        const fechaAsiento = parseFechaFlexible(asiento.fecha);
+                                        if (!fechaAsiento) return null;
                                         const hoy = new Date();
                                         hoy.setHours(0, 0, 0, 0);
-                                        return fechaAsiento > hoy ? (
-                                          <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700">
+                                        const fa = new Date(fechaAsiento);
+                                        fa.setHours(0, 0, 0, 0);
+                                        return fa > hoy ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
+                                          >
                                             Futuro
                                           </Badge>
                                         ) : null;
                                       })()}
                                     </div>
 
-                                    <p className={cn("text-sm mt-1 truncate", asientoItem.esCancelado ? "line-through text-muted-foreground" : "")}>
+                                    <p
+                                      className={cn(
+                                        "text-sm mt-1 truncate",
+                                        asientoItem.esCancelado ? "line-through text-muted-foreground" : ""
+                                      )}
+                                    >
                                       {asiento.descripcion}
                                     </p>
 
@@ -1070,9 +1125,7 @@ const Balanza = () => {
                                         )}
                                       >
                                         {asiento.efectoNetoCuentaFiltrada.esAumento ? "↑" : "↓"}
-                                        <span>
-                                          {formatCurrency(Math.abs(asiento.efectoNetoCuentaFiltrada.neto))}
-                                        </span>
+                                        <span>{formatCurrency(Math.abs(asiento.efectoNetoCuentaFiltrada.neto))}</span>
                                       </div>
                                       <p className="text-xs text-muted-foreground">Efecto Neto</p>
                                     </div>
@@ -1249,11 +1302,21 @@ const Balanza = () => {
                     <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={pageSafe === 1}>
                       <ChevronsLeft className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={pageSafe === 1}
+                    >
                       <ChevronLeft className="h-4 w-4" />
                       Anterior
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageSafe === totalPages}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={pageSafe === totalPages}
+                    >
                       Siguiente
                       <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -1289,34 +1352,38 @@ const Balanza = () => {
                       <TableHead className="text-right">Saldo</TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody>
                     {Object.values(saldosPorCuentaFiltrados)
-                      .sort((a: any, b: any) => a.cuenta_codigo.localeCompare(b.cuenta_codigo))
+                      .sort((a: any, b: any) => String(a?.cuenta_codigo || "").localeCompare(String(b?.cuenta_codigo || "")))
                       .map((cuenta: any) => {
-                        const infoCompleta = cuentasInfoMap.get(cuenta.cuenta_codigo);
-                        const naturaleza = getNaturaleza(cuenta.cuenta_codigo);
+                        const codigo = String(cuenta?.cuenta_codigo || "");
+                        const infoCompleta = cuentasInfoMap.get(codigo);
+                        const naturaleza = getNaturaleza(codigo);
 
                         return (
-                          <TableRow key={cuenta.cuenta_codigo} className="hover:bg-muted/30">
-                            <TableCell className="font-mono text-xs">{cuenta.cuenta_codigo}</TableCell>
+                          <TableRow key={codigo} className="hover:bg-muted/30">
+                            <TableCell className="font-mono text-xs">{codigo}</TableCell>
+
                             <TableCell className="text-sm">
                               {infoCompleta?.nombre || "N/A"}
                               <div className="text-xs text-muted-foreground mt-0.5">
-                                {cuenta.cuenta_codigo.startsWith("1")
+                                {codigo.startsWith("1")
                                   ? "Activo"
-                                  : cuenta.cuenta_codigo.startsWith("2")
+                                  : codigo.startsWith("2")
                                   ? "Pasivo"
-                                  : cuenta.cuenta_codigo.startsWith("3")
+                                  : codigo.startsWith("3")
                                   ? "Capital"
-                                  : cuenta.cuenta_codigo.startsWith("4")
+                                  : codigo.startsWith("4")
                                   ? "Ingreso"
-                                  : cuenta.cuenta_codigo.startsWith("5")
+                                  : codigo.startsWith("5")
                                   ? "Costo"
-                                  : cuenta.cuenta_codigo.startsWith("6")
+                                  : codigo.startsWith("6")
                                   ? "Gasto"
                                   : "—"}
                               </div>
                             </TableCell>
+
                             <TableCell className="text-xs text-muted-foreground">
                               {infoCompleta?.estado_financiero ? (
                                 <Badge variant="outline" className="px-2 py-1">
@@ -1326,14 +1393,16 @@ const Balanza = () => {
                                 "N/A"
                               )}
                             </TableCell>
+
                             <TableCell className="text-xs">
                               <Badge variant="secondary" className="px-2 py-1">
                                 {naturaleza}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right text-green-600">{formatCurrency(cuenta.debe_total)}</TableCell>
-                            <TableCell className="text-right text-red-600">{formatCurrency(cuenta.haber_total)}</TableCell>
-                            <TableCell className="text-right font-semibold">{formatCurrency(cuenta.saldo)}</TableCell>
+
+                            <TableCell className="text-right text-green-600">{formatCurrency(cuenta?.debe_total || 0)}</TableCell>
+                            <TableCell className="text-right text-red-600">{formatCurrency(cuenta?.haber_total || 0)}</TableCell>
+                            <TableCell className="text-right font-semibold">{formatCurrency(cuenta?.saldo || 0)}</TableCell>
                           </TableRow>
                         );
                       })}
