@@ -80,10 +80,11 @@ const Balanza = () => {
   const [page, setPage] = useState<number>(1);
 
   // Para Balanza de Comprobación y Balance General, ajustar startDate a 10 años atrás para acumular todo
-  const startDateAjustado =
-    pestanaActiva === "balance" || pestanaActiva === "todos"
-      ? new Date(endDate.getFullYear() - 10, 0, 1)
-      : startDate;
+  const startDateAjustado = useMemo(() => {
+  return (pestanaActiva === "balance" || pestanaActiva === "todos")
+    ? new Date(endDate.getFullYear() - 10, 0, 1)
+    : startDate;
+}, [pestanaActiva, startDate, endDate]);
 
   // Hook principal
   const { data: balanzaData, isLoading } = useAsientosBalanza(startDateAjustado, endDate);
@@ -99,18 +100,19 @@ const Balanza = () => {
 
   // Reset de página cuando cambian filtros
   useEffect(() => {
-    setPage(1);
-  }, [
-    filtroTipo,
-    filtroEstado,
-    filtroEstadoFinanciero,
-    filtroBusqueda,
-    grupoSeleccionado,
-    subgrupoSeleccionado,
-    cuentaSeleccionada,
-    startDateAjustado,
-    endDate,
-  ]);
+  setPage(1);
+}, [
+  filtroTipo,
+  filtroEstado,
+  filtroEstadoFinanciero,
+  filtroBusqueda,
+  grupoSeleccionado,
+  subgrupoSeleccionado,
+  cuentaSeleccionada,
+  startDateAjustado?.getTime(), // ✅ clave
+  endDate?.getTime(),           // ✅ también
+]);
+
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
