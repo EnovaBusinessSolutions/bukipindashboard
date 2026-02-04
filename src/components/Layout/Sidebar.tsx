@@ -118,7 +118,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       active: location.pathname === "/estados-financieros/flujo-efectivo",
     },
     {
-      name: "Balanza",
+      name: "Balanza de Comprobación",
       path: "/estados-financieros/balanza",
       active: location.pathname === "/estados-financieros/balanza",
     },
