@@ -1,3 +1,4 @@
+// bukipin-dashboard/src/pages/Balanza.tsx
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -121,7 +122,6 @@ const Balanza = () => {
 
   // Dropdown Asientos
   const [asientosOpen, setAsientosOpen] = useState<boolean>(false); // inicia colapsado
-
 
   // Paginación
   const [page, setPage] = useState<number>(1);
@@ -479,6 +479,198 @@ const Balanza = () => {
 
   const diferencia = Math.abs(totalDebe - totalHaber);
   const cuadra = diferencia < 0.01;
+
+  /* =========================
+     ✅ NUEVO: Saldos por Cuenta estilo Plan de Cuentas (desplegable)
+     ========================= */
+
+  type SaldosCuentaRow = {
+    codigo: string;
+    nombre: string;
+    estado_financiero: "Balance General" | "Estado de Resultados" | "—";
+    naturaleza: string;
+    debe: number;
+    haber: number;
+    saldo: number;
+  };
+
+  type SaldosNode = {
+    key: string;
+    label: string;
+    level: "estado" | "grupo" | "subgrupo";
+    totals: { debe: number; haber: number; saldo: number };
+    cuentas: SaldosCuentaRow[];
+    children: SaldosNode[];
+  };
+
+  const saldosUI = useMemo(() => {
+    // 1) Normalizar saldosPorCuentaFiltrados a un map por codigo
+    const saldoMap = new Map<string, any>();
+
+    // Caso A: viene como Record<codigo, data>
+    for (const [k, v] of Object.entries(saldosPorCuentaFiltrados || {})) {
+      const codigo = String((v as any)?.cuenta_codigo ?? k ?? "");
+      if (!codigo) continue;
+      saldoMap.set(codigo, v);
+    }
+
+    // Caso B: viene como "valores" con cuenta_codigo
+    for (const v of Object.values(saldosPorCuentaFiltrados || {})) {
+      const codigo = String((v as any)?.cuenta_codigo ?? "");
+      if (!codigo) continue;
+      if (!saldoMap.has(codigo)) saldoMap.set(codigo, v);
+    }
+
+    const estadoKeys: Array<"Balance General" | "Estado de Resultados"> =
+      pestanaActiva === "balance"
+        ? ["Balance General"]
+        : pestanaActiva === "resultados"
+        ? ["Estado de Resultados"]
+        : ["Balance General", "Estado de Resultados"];
+
+    const sumRows = (rows: SaldosCuentaRow[]) => {
+      return rows.reduce(
+        (acc, r) => {
+          acc.debe += r.debe || 0;
+          acc.haber += r.haber || 0;
+          acc.saldo += r.saldo || 0;
+          return acc;
+        },
+        { debe: 0, haber: 0, saldo: 0 }
+      );
+    };
+
+    const buildCuentaRow = (
+      codigo: string,
+      estado_financiero: "Balance General" | "Estado de Resultados" | "—"
+    ): SaldosCuentaRow | null => {
+      const raw = saldoMap.get(codigo);
+      if (!raw) return null;
+
+      const info = cuentasInfoMap.get(codigo);
+      const debe = Number(raw?.debe_total || 0);
+      const haber = Number(raw?.haber_total || 0);
+      const saldo = Number(raw?.saldo || 0);
+
+      return {
+        codigo,
+        nombre: info?.nombre || "N/A",
+        estado_financiero,
+        naturaleza: getNaturaleza(codigo),
+        debe,
+        haber,
+        saldo,
+      };
+    };
+
+    // Fallback si no hay estadosFinancieros (mostrar plano)
+    const fallbackFlat: SaldosNode[] = (() => {
+      const rows: SaldosCuentaRow[] = Array.from(saldoMap.keys())
+        .sort((a, b) => a.localeCompare(b))
+        .map((codigo) => {
+          const info = cuentasInfoMap.get(codigo);
+          const raw = saldoMap.get(codigo);
+          const estado = ((info?.estado_financiero as any) || "—") as any;
+          return {
+            codigo,
+            nombre: info?.nombre || "N/A",
+            estado_financiero: estado,
+            naturaleza: getNaturaleza(codigo),
+            debe: Number(raw?.debe_total || 0),
+            haber: Number(raw?.haber_total || 0),
+            saldo: Number(raw?.saldo || 0),
+          } as SaldosCuentaRow;
+        });
+
+      const totals = sumRows(rows);
+      return [
+        {
+          key: "flat",
+          label: "Saldos por cuenta",
+          level: "estado",
+          totals,
+          cuentas: rows,
+          children: [],
+        },
+      ];
+    })();
+
+    if (!estadosFinancieros) return fallbackFlat;
+
+    // 2) Construir estructura ESTADO -> GRUPO -> SUBGRUPO -> CUENTAS
+    const nodes: SaldosNode[] = [];
+
+    for (const estadoKey of estadoKeys) {
+      const grupos = Object.keys(estadosFinancieros?.[estadoKey] || {});
+      const estadoNode: SaldosNode = {
+        key: `estado:${estadoKey}`,
+        label: estadoKey,
+        level: "estado",
+        totals: { debe: 0, haber: 0, saldo: 0 },
+        cuentas: [],
+        children: [],
+      };
+
+      for (const grupo of grupos) {
+        const subgruposObj = estadosFinancieros?.[estadoKey]?.[grupo] || {};
+        const subgrupos = Object.keys(subgruposObj);
+
+        const grupoNode: SaldosNode = {
+          key: `grupo:${estadoKey}:${grupo}`,
+          label: grupo,
+          level: "grupo",
+          totals: { debe: 0, haber: 0, saldo: 0 },
+          cuentas: [],
+          children: [],
+        };
+
+        for (const subgrupo of subgrupos) {
+          const cuentasArr = (subgruposObj?.[subgrupo] || []) as any[];
+          const codigos = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
+
+          const rows: SaldosCuentaRow[] = codigos
+            .map((codigo) => buildCuentaRow(codigo, estadoKey))
+            .filter(Boolean) as SaldosCuentaRow[];
+
+          // Respetar filtro actual: solo mostrar subgrupo si tiene al menos 1 cuenta en saldos filtrados
+          if (!rows.length) continue;
+
+          const subTotals = sumRows(rows);
+
+          const subNode: SaldosNode = {
+            key: `subgrupo:${estadoKey}:${grupo}:${subgrupo}`,
+            label: subgrupo,
+            level: "subgrupo",
+            totals: subTotals,
+            cuentas: rows.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+            children: [],
+          };
+
+          grupoNode.children.push(subNode);
+          grupoNode.totals.debe += subTotals.debe;
+          grupoNode.totals.haber += subTotals.haber;
+          grupoNode.totals.saldo += subTotals.saldo;
+        }
+
+        // Respetar filtro: solo mostrar grupo si tiene hijos
+        if (!grupoNode.children.length) continue;
+
+        estadoNode.children.push(grupoNode);
+        estadoNode.totals.debe += grupoNode.totals.debe;
+        estadoNode.totals.haber += grupoNode.totals.haber;
+        estadoNode.totals.saldo += grupoNode.totals.saldo;
+      }
+
+      // Respetar filtro: solo mostrar estado si tiene hijos
+      if (!estadoNode.children.length) continue;
+
+      nodes.push(estadoNode);
+    }
+
+    if (!nodes.length) return fallbackFlat;
+
+    return nodes;
+  }, [saldosPorCuentaFiltrados, estadosFinancieros, pestanaActiva, cuentasInfoMap]);
 
   // Paginación
   const totalPages = Math.max(1, Math.ceil(asientosFiltrados.length / PAGE_SIZE));
@@ -978,519 +1170,637 @@ const Balanza = () => {
           )}
 
           {/* Asientos Contables (Dropdown colapsable) */}
-<Collapsible open={asientosOpen} onOpenChange={setAsientosOpen}>
-  <Card className="border-muted-foreground/15">
-    {/* Header clickable */}
-    <CollapsibleTrigger asChild>
-      <div className="cursor-pointer select-none">
-        <CardHeader className="space-y-2 hover:bg-muted/30 transition-colors">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <ChevronRight
-                  className={cn("h-4 w-4 transition-transform", asientosOpen ? "rotate-90" : "rotate-0")}
-                />
-                Asientos Contables
-              </CardTitle>
+          <Collapsible open={asientosOpen} onOpenChange={setAsientosOpen}>
+            <Card className="border-muted-foreground/15">
+              {/* Header clickable */}
+              <CollapsibleTrigger asChild>
+                <div className="cursor-pointer select-none">
+                  <CardHeader className="space-y-2 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="space-y-1">
+                        <CardTitle className="flex items-center gap-2">
+                          <ChevronRight className={cn("h-4 w-4 transition-transform", asientosOpen ? "rotate-90" : "rotate-0")} />
+                          Asientos Contables
+                        </CardTitle>
 
-              <CardDescription>
-                {asientosOpen ? (
-                  <>
-                    Mostrando <span className="font-semibold">{asientosFiltrados.length ? startIdx + 1 : 0}</span>–
-                    <span className="font-semibold">{endIdx}</span> de{" "}
-                    <span className="font-semibold">{asientosFiltrados.length}</span> (25 por página)
-                  </>
-                ) : (
-                  <>
-                    Click para ver la lista ·{" "}
-                    <span className="font-semibold">{asientosFiltrados.length}</span> asientos encontrados (25 por página)
-                  </>
-                )}
-              </CardDescription>
-            </div>
-
-            {/* Paginación arriba SOLO cuando está abierto */}
-            {asientosOpen && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setPage(1);
-                  }}
-                  disabled={pageSafe === 1}
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setPage((p) => Math.max(1, p - 1));
-                  }}
-                  disabled={pageSafe === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <div className="flex items-center gap-1">
-                  {pageNumbers.map((n, idx) =>
-                    n === "…" ? (
-                      <span key={`dots-${idx}`} className="px-2 text-muted-foreground">
-                        …
-                      </span>
-                    ) : (
-                      <Button
-                        key={n}
-                        variant={n === pageSafe ? "default" : "outline"}
-                        size="sm"
-                        className="h-8 px-3"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setPage(n);
-                        }}
-                      >
-                        {n}
-                      </Button>
-                    )
-                  )}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setPage((p) => Math.min(totalPages, p + 1));
-                  }}
-                  disabled={pageSafe === totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setPage(totalPages);
-                  }}
-                  disabled={pageSafe === totalPages}
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-      </div>
-    </CollapsibleTrigger>
-
-    {/* Content */}
-    <CollapsibleContent>
-      <CardContent>
-        <div className="space-y-3">
-          {asientosPaginados.map((asiento) => {
-            const diff = Math.abs((asiento.totalDebe || 0) - (asiento.totalHaber || 0));
-            const cuadrado = diff < 0.01;
-            const asientoItem = asiento as any;
-
-            return (
-              <Collapsible key={asiento.referencia}>
-                <Card
-                  className={cn(
-                    "border-muted-foreground/15 overflow-hidden",
-                    asientoItem.esCancelado ? "border-red-300 bg-red-50 dark:bg-red-950/20" : "",
-                    !cuadrado && !asientoItem.esCancelado && pestanaActiva === "todos" ? "border-red-300" : ""
-                  )}
-                >
-                  <CollapsibleTrigger asChild>
-                    <div className="cursor-pointer group">
-                      <CardHeader className="hover:bg-muted/40 transition-colors">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-semibold">{asiento.referencia}</p>
-
-                                {asientoItem.esCancelado && (
-                                  <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
-                                )}
-
-                                {!asientoItem.esCancelado && pestanaActiva === "todos" && (
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(cuadrado ? "border-green-400/60" : "border-red-400/60")}
-                                  >
-                                    {cuadrado ? "Cuadrado" : "Descuadrado"}
-                                  </Badge>
-                                )}
-
-                                {/* Futuro */}
-                                {(() => {
-                                  const fechaAsiento = parseFechaFlexible(asiento.fecha);
-                                  if (!fechaAsiento) return null;
-                                  const hoy = new Date();
-                                  hoy.setHours(0, 0, 0, 0);
-                                  const fa = new Date(fechaAsiento);
-                                  fa.setHours(0, 0, 0, 0);
-                                  return fa > hoy ? (
-                                    <Badge
-                                      variant="outline"
-                                      className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
-                                    >
-                                      Futuro
-                                    </Badge>
-                                  ) : null;
-                                })()}
-                              </div>
-
-                              <p
-                                className={cn(
-                                  "text-sm mt-1 truncate",
-                                  asientoItem.esCancelado ? "line-through text-muted-foreground" : ""
-                                )}
-                              >
-                                {asiento.descripcion}
-                              </p>
-
-                              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{asiento.fecha}</span>
-                                <span className="opacity-50">•</span>
-                                <span>{asiento.tipo}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="hidden md:flex items-center gap-6 shrink-0">
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-green-600">{formatCurrency(asiento.totalDebe)}</p>
-                              <p className="text-xs text-muted-foreground">Debe</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-red-600">{formatCurrency(asiento.totalHaber)}</p>
-                              <p className="text-xs text-muted-foreground">Haber</p>
-                            </div>
-
-                            {pestanaActiva !== "todos" && asiento.efectoNetoCuentaFiltrada && (
-                              <div className="text-right">
-                                <div
-                                  className={cn(
-                                    "flex items-center justify-end gap-1 text-sm font-bold",
-                                    asiento.efectoNetoCuentaFiltrada.esAumento ? "text-green-600" : "text-red-600"
-                                  )}
-                                >
-                                  {asiento.efectoNetoCuentaFiltrada.esAumento ? "↑" : "↓"}
-                                  <span>{formatCurrency(Math.abs(asiento.efectoNetoCuentaFiltrada.neto))}</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">Efecto Neto</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Totales en móvil */}
-                        <div className="md:hidden mt-3 grid grid-cols-2 gap-3">
-                          <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Debe</p>
-                            <p className="text-sm font-semibold text-green-600">{formatCurrency(asiento.totalDebe)}</p>
-                          </div>
-                          <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Haber</p>
-                            <p className="text-sm font-semibold text-red-600">{formatCurrency(asiento.totalHaber)}</p>
-                          </div>
-                        </div>
-                      </CardHeader>
-                    </div>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <CardContent className="pt-0">
-                      <div className="rounded-xl border overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/30">
-                              <TableHead>Cuenta</TableHead>
-                              <TableHead>Descripción</TableHead>
-                              <TableHead className="text-right">Debe</TableHead>
-                              <TableHead className="text-right">Haber</TableHead>
-                            </TableRow>
-                          </TableHeader>
-
-                          <TableBody>
-                            {asiento.movimientos.map((mov, idx) => (
-                              <TableRow
-                                key={idx}
-                                className={cn("hover:bg-muted/30", mov.esCuentaFiltrada ? "bg-blue-50 dark:bg-blue-950/30" : "")}
-                              >
-                                <TableCell>
-                                  <div className="flex items-start gap-2">
-                                    {mov.esCuentaFiltrada && (
-                                      <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
-                                      <p className="text-xs text-muted-foreground truncate">{mov.cuenta_nombre}</p>
-                                    </div>
-                                  </div>
-                                </TableCell>
-
-                                <TableCell className="text-sm">{mov.descripcion}</TableCell>
-
-                                <TableCell className="text-right">
-                                  {mov.debe > 0 ? (
-                                    <span className="text-green-600 font-medium">{formatCurrency(mov.debe)}</span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                </TableCell>
-
-                                <TableCell className="text-right">
-                                  {mov.haber > 0 ? (
-                                    <span className="text-red-600 font-medium">{formatCurrency(mov.haber)}</span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-
-                            <TableRow className="font-bold bg-muted/40">
-                              <TableCell colSpan={2}>Total</TableCell>
-                              <TableCell className="text-right text-green-600">{formatCurrency(asiento.totalDebe)}</TableCell>
-                              <TableCell className="text-right text-red-600">{formatCurrency(asiento.totalHaber)}</TableCell>
-                            </TableRow>
-                          </TableBody>
-                        </Table>
+                        <CardDescription>
+                          {asientosOpen ? (
+                            <>
+                              Mostrando <span className="font-semibold">{asientosFiltrados.length ? startIdx + 1 : 0}</span>–
+                              <span className="font-semibold">{endIdx}</span> de{" "}
+                              <span className="font-semibold">{asientosFiltrados.length}</span> (25 por página)
+                            </>
+                          ) : (
+                            <>
+                              Click para ver la lista ·{" "}
+                              <span className="font-semibold">{asientosFiltrados.length}</span> asientos encontrados (25 por página)
+                            </>
+                          )}
+                        </CardDescription>
                       </div>
 
-                      {/* Leyenda */}
-                      {pestanaActiva !== "todos" && asiento.movimientos.some((m) => m.esCuentaFiltrada) && (
-                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
-                          <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                            <span className="text-blue-600 dark:text-blue-400 font-bold">●</span>
-                            Filas resaltadas = cuentas que coinciden con tu filtro actual.
-                          </p>
-                        </div>
-                      )}
+                      {/* Paginación arriba SOLO cuando está abierto */}
+                      {asientosOpen && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPage(1);
+                            }}
+                            disabled={pageSafe === 1}
+                          >
+                            <ChevronsLeft className="h-4 w-4" />
+                          </Button>
 
-                      {/* Reversión */}
-                      {asientoItem.asientoReversion && (
-                        <div className="mt-4 p-4 bg-orange-100 dark:bg-orange-950/40 rounded-xl border border-orange-300 dark:border-orange-800">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                              ↩️ Asiento de Reversión: {asientoItem.asientoReversion.referencia}
-                            </span>
-                            <span className="text-xs text-orange-600 dark:text-orange-400">
-                              ({asientoItem.asientoReversion.fecha})
-                            </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPage((p) => Math.max(1, p - 1));
+                            }}
+                            disabled={pageSafe === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+
+                          <div className="flex items-center gap-1">
+                            {pageNumbers.map((n, idx) =>
+                              n === "…" ? (
+                                <span key={`dots-${idx}`} className="px-2 text-muted-foreground">
+                                  …
+                                </span>
+                              ) : (
+                                <Button
+                                  key={n}
+                                  variant={n === pageSafe ? "default" : "outline"}
+                                  size="sm"
+                                  className="h-8 px-3"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setPage(n);
+                                  }}
+                                >
+                                  {n}
+                                </Button>
+                              )
+                            )}
                           </div>
 
-                          <div className="rounded-xl border overflow-hidden bg-background/40">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/30">
-                                  <TableHead>Cuenta</TableHead>
-                                  <TableHead>Descripción</TableHead>
-                                  <TableHead className="text-right">Debe</TableHead>
-                                  <TableHead className="text-right">Haber</TableHead>
-                                </TableRow>
-                              </TableHeader>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPage((p) => Math.min(totalPages, p + 1));
+                            }}
+                            disabled={pageSafe === totalPages}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
 
-                              <TableBody>
-                                {asientoItem.asientoReversion.movimientos.map((mov: any, idx: number) => (
-                                  <TableRow key={idx} className="hover:bg-muted/30">
-                                    <TableCell>
-                                      <p className="font-mono text-xs">{mov.cuenta_codigo}</p>
-                                      <p className="text-xs text-muted-foreground">{mov.cuenta_nombre}</p>
-                                    </TableCell>
-                                    <TableCell className="text-xs">{mov.descripcion}</TableCell>
-                                    <TableCell className="text-right">
-                                      {mov.debe > 0 ? (
-                                        <span className="text-green-600 font-medium text-xs">{formatCurrency(mov.debe)}</span>
-                                      ) : (
-                                        <span className="text-muted-foreground">—</span>
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {mov.haber > 0 ? (
-                                        <span className="text-red-600 font-medium text-xs">{formatCurrency(mov.haber)}</span>
-                                      ) : (
-                                        <span className="text-muted-foreground">—</span>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-
-                                <TableRow className="font-bold bg-muted/40">
-                                  <TableCell colSpan={2}>Total Reversión</TableCell>
-                                  <TableCell className="text-right text-green-600 text-xs">
-                                    {formatCurrency(asientoItem.asientoReversion.totalDebe)}
-                                  </TableCell>
-                                  <TableCell className="text-right text-red-600 text-xs">
-                                    {formatCurrency(asientoItem.asientoReversion.totalHaber)}
-                                  </TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPage(totalPages);
+                            }}
+                            disabled={pageSafe === totalPages}
+                          >
+                            <ChevronsRight className="h-4 w-4" />
+                          </Button>
                         </div>
                       )}
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            );
-          })}
-        </div>
+                    </div>
+                  </CardHeader>
+                </div>
+              </CollapsibleTrigger>
 
-        {/* Paginación (footer) */}
-        {asientosFiltrados.length > PAGE_SIZE && (
-          <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-sm text-muted-foreground">
-              Página <span className="font-semibold">{pageSafe}</span> de{" "}
-              <span className="font-semibold">{totalPages}</span>
-            </p>
+              {/* Content */}
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="space-y-3">
+                    {asientosPaginados.map((asiento) => {
+                      const diff = Math.abs((asiento.totalDebe || 0) - (asiento.totalHaber || 0));
+                      const cuadrado = diff < 0.01;
+                      const asientoItem = asiento as any;
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={pageSafe === 1}>
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
+                      return (
+                        <Collapsible key={asiento.referencia}>
+                          <Card
+                            className={cn(
+                              "border-muted-foreground/15 overflow-hidden",
+                              asientoItem.esCancelado ? "border-red-300 bg-red-50 dark:bg-red-950/20" : "",
+                              !cuadrado && !asientoItem.esCancelado && pestanaActiva === "todos" ? "border-red-300" : ""
+                            )}
+                          >
+                            <CollapsibleTrigger asChild>
+                              <div className="cursor-pointer group">
+                                <CardHeader className="hover:bg-muted/40 transition-colors">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={pageSafe === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </Button>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-sm font-semibold">{asiento.referencia}</p>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={pageSafe === totalPages}
-              >
-                Siguiente
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                                          {asientoItem.esCancelado && (
+                                            <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
+                                          )}
 
-              <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={pageSafe === totalPages}>
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </CollapsibleContent>
-  </Card>
-</Collapsible>
+                                          {!asientoItem.esCancelado && pestanaActiva === "todos" && (
+                                            <Badge
+                                              variant="outline"
+                                              className={cn(cuadrado ? "border-green-400/60" : "border-red-400/60")}
+                                            >
+                                              {cuadrado ? "Cuadrado" : "Descuadrado"}
+                                            </Badge>
+                                          )}
 
-          {/* Saldos por Cuenta */}
+                                          {/* Futuro */}
+                                          {(() => {
+                                            const fechaAsiento = parseFechaFlexible(asiento.fecha);
+                                            if (!fechaAsiento) return null;
+                                            const hoy = new Date();
+                                            hoy.setHours(0, 0, 0, 0);
+                                            const fa = new Date(fechaAsiento);
+                                            fa.setHours(0, 0, 0, 0);
+                                            return fa > hoy ? (
+                                              <Badge
+                                                variant="outline"
+                                                className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
+                                              >
+                                                Futuro
+                                              </Badge>
+                                            ) : null;
+                                          })()}
+                                        </div>
+
+                                        <p
+                                          className={cn(
+                                            "text-sm mt-1 truncate",
+                                            asientoItem.esCancelado ? "line-through text-muted-foreground" : ""
+                                          )}
+                                        >
+                                          {asiento.descripcion}
+                                        </p>
+
+                                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                          <span>{asiento.fecha}</span>
+                                          <span className="opacity-50">•</span>
+                                          <span>{asiento.tipo}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="hidden md:flex items-center gap-6 shrink-0">
+                                      <div className="text-right">
+                                        <p className="text-sm font-semibold text-green-600">{formatCurrency(asiento.totalDebe)}</p>
+                                        <p className="text-xs text-muted-foreground">Debe</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-sm font-semibold text-red-600">{formatCurrency(asiento.totalHaber)}</p>
+                                        <p className="text-xs text-muted-foreground">Haber</p>
+                                      </div>
+
+                                      {pestanaActiva !== "todos" && asiento.efectoNetoCuentaFiltrada && (
+                                        <div className="text-right">
+                                          <div
+                                            className={cn(
+                                              "flex items-center justify-end gap-1 text-sm font-bold",
+                                              asiento.efectoNetoCuentaFiltrada.esAumento ? "text-green-600" : "text-red-600"
+                                            )}
+                                          >
+                                            {asiento.efectoNetoCuentaFiltrada.esAumento ? "↑" : "↓"}
+                                            <span>{formatCurrency(Math.abs(asiento.efectoNetoCuentaFiltrada.neto))}</span>
+                                          </div>
+                                          <p className="text-xs text-muted-foreground">Efecto Neto</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Totales en móvil */}
+                                  <div className="md:hidden mt-3 grid grid-cols-2 gap-3">
+                                    <div className="rounded-lg border bg-muted/20 p-3">
+                                      <p className="text-xs text-muted-foreground">Debe</p>
+                                      <p className="text-sm font-semibold text-green-600">{formatCurrency(asiento.totalDebe)}</p>
+                                    </div>
+                                    <div className="rounded-lg border bg-muted/20 p-3">
+                                      <p className="text-xs text-muted-foreground">Haber</p>
+                                      <p className="text-sm font-semibold text-red-600">{formatCurrency(asiento.totalHaber)}</p>
+                                    </div>
+                                  </div>
+                                </CardHeader>
+                              </div>
+                            </CollapsibleTrigger>
+
+                            <CollapsibleContent>
+                              <CardContent className="pt-0">
+                                <div className="rounded-xl border overflow-hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="bg-muted/30">
+                                        <TableHead>Cuenta</TableHead>
+                                        <TableHead>Descripción</TableHead>
+                                        <TableHead className="text-right">Debe</TableHead>
+                                        <TableHead className="text-right">Haber</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+
+                                    <TableBody>
+                                      {asiento.movimientos.map((mov, idx) => (
+                                        <TableRow
+                                          key={idx}
+                                          className={cn("hover:bg-muted/30", mov.esCuentaFiltrada ? "bg-blue-50 dark:bg-blue-950/30" : "")}
+                                        >
+                                          <TableCell>
+                                            <div className="flex items-start gap-2">
+                                              {mov.esCuentaFiltrada && (
+                                                <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>
+                                              )}
+                                              <div className="min-w-0">
+                                                <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
+                                                <p className="text-xs text-muted-foreground truncate">{mov.cuenta_nombre}</p>
+                                              </div>
+                                            </div>
+                                          </TableCell>
+
+                                          <TableCell className="text-sm">{mov.descripcion}</TableCell>
+
+                                          <TableCell className="text-right">
+                                            {mov.debe > 0 ? (
+                                              <span className="text-green-600 font-medium">{formatCurrency(mov.debe)}</span>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
+                                          </TableCell>
+
+                                          <TableCell className="text-right">
+                                            {mov.haber > 0 ? (
+                                              <span className="text-red-600 font-medium">{formatCurrency(mov.haber)}</span>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+
+                                      <TableRow className="font-bold bg-muted/40">
+                                        <TableCell colSpan={2}>Total</TableCell>
+                                        <TableCell className="text-right text-green-600">{formatCurrency(asiento.totalDebe)}</TableCell>
+                                        <TableCell className="text-right text-red-600">{formatCurrency(asiento.totalHaber)}</TableCell>
+                                      </TableRow>
+                                    </TableBody>
+                                  </Table>
+                                </div>
+
+                                {/* Leyenda */}
+                                {pestanaActiva !== "todos" && asiento.movimientos.some((m) => m.esCuentaFiltrada) && (
+                                  <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                                    <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                                      <span className="text-blue-600 dark:text-blue-400 font-bold">●</span>
+                                      Filas resaltadas = cuentas que coinciden con tu filtro actual.
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Reversión */}
+                                {asientoItem.asientoReversion && (
+                                  <div className="mt-4 p-4 bg-orange-100 dark:bg-orange-950/40 rounded-xl border border-orange-300 dark:border-orange-800">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                        ↩️ Asiento de Reversión: {asientoItem.asientoReversion.referencia}
+                                      </span>
+                                      <span className="text-xs text-orange-600 dark:text-orange-400">
+                                        ({asientoItem.asientoReversion.fecha})
+                                      </span>
+                                    </div>
+
+                                    <div className="rounded-xl border overflow-hidden bg-background/40">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow className="bg-muted/30">
+                                            <TableHead>Cuenta</TableHead>
+                                            <TableHead>Descripción</TableHead>
+                                            <TableHead className="text-right">Debe</TableHead>
+                                            <TableHead className="text-right">Haber</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+
+                                        <TableBody>
+                                          {asientoItem.asientoReversion.movimientos.map((mov: any, idx: number) => (
+                                            <TableRow key={idx} className="hover:bg-muted/30">
+                                              <TableCell>
+                                                <p className="font-mono text-xs">{mov.cuenta_codigo}</p>
+                                                <p className="text-xs text-muted-foreground">{mov.cuenta_nombre}</p>
+                                              </TableCell>
+                                              <TableCell className="text-xs">{mov.descripcion}</TableCell>
+                                              <TableCell className="text-right">
+                                                {mov.debe > 0 ? (
+                                                  <span className="text-green-600 font-medium text-xs">{formatCurrency(mov.debe)}</span>
+                                                ) : (
+                                                  <span className="text-muted-foreground">—</span>
+                                                )}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {mov.haber > 0 ? (
+                                                  <span className="text-red-600 font-medium text-xs">{formatCurrency(mov.haber)}</span>
+                                                ) : (
+                                                  <span className="text-muted-foreground">—</span>
+                                                )}
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+
+                                          <TableRow className="font-bold bg-muted/40">
+                                            <TableCell colSpan={2}>Total Reversión</TableCell>
+                                            <TableCell className="text-right text-green-600 text-xs">
+                                              {formatCurrency(asientoItem.asientoReversion.totalDebe)}
+                                            </TableCell>
+                                            <TableCell className="text-right text-red-600 text-xs">
+                                              {formatCurrency(asientoItem.asientoReversion.totalHaber)}
+                                            </TableCell>
+                                          </TableRow>
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </CollapsibleContent>
+                          </Card>
+                        </Collapsible>
+                      );
+                    })}
+                  </div>
+
+                  {/* Paginación (footer) */}
+                  {asientosFiltrados.length > PAGE_SIZE && (
+                    <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-sm text-muted-foreground">
+                        Página <span className="font-semibold">{pageSafe}</span> de{" "}
+                        <span className="font-semibold">{totalPages}</span>
+                      </p>
+
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={pageSafe === 1}>
+                          <ChevronsLeft className="h-4 w-4" />
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          disabled={pageSafe === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Anterior
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={pageSafe === totalPages}
+                        >
+                          Siguiente
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+
+                        <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={pageSafe === totalPages}>
+                          <ChevronsRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* ✅ Saldos por Cuenta (Estilo Plan de Cuentas / Desplegable) */}
           <Card>
             <CardHeader className="space-y-1">
               <CardTitle>Saldos por Cuenta</CardTitle>
               <CardDescription>
-                Resumen por cuenta con Debe/Haber acumulado y saldo neto. Útil para verificar alineación contable.
+                Vista desplegable por Estado Financiero → Grupo → Subgrupo → Cuenta, con Debe/Haber acumulado y saldo neto.
+                Útil para verificar alineación contable con trazabilidad (igual que Plan de Cuentas).
               </CardDescription>
             </CardHeader>
 
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Encabezado tipo tabla */}
               <div className="rounded-xl border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead>Código</TableHead>
-                      <TableHead>Nombre de Cuenta</TableHead>
-                      <TableHead>Estado Financiero</TableHead>
-                      <TableHead>Naturaleza</TableHead>
-                      <TableHead className="text-right">Total Debe</TableHead>
-                      <TableHead className="text-right">Total Haber</TableHead>
-                      <TableHead className="text-right">Saldo</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                <div className="bg-muted/30 px-4 py-3">
+                  <div className="grid grid-cols-12 gap-3 text-xs font-medium text-muted-foreground">
+                    <div className="col-span-5">Cuenta</div>
+                    <div className="col-span-2">Naturaleza</div>
+                    <div className="col-span-2 text-right">Total Debe</div>
+                    <div className="col-span-2 text-right">Total Haber</div>
+                    <div className="col-span-1 text-right">Saldo</div>
+                  </div>
+                </div>
 
-                  <TableBody>
-                    {Object.values(saldosPorCuentaFiltrados)
-                      .sort((a: any, b: any) => String(a?.cuenta_codigo || "").localeCompare(String(b?.cuenta_codigo || "")))
-                      .map((cuenta: any) => {
-                        const codigo = String(cuenta?.cuenta_codigo || "");
-                        const infoCompleta = cuentasInfoMap.get(codigo);
-                        const naturaleza = getNaturaleza(codigo);
-
-                        return (
-                          <TableRow key={codigo} className="hover:bg-muted/30">
-                            <TableCell className="font-mono text-xs">{codigo}</TableCell>
-
-                            <TableCell className="text-sm">
-                              {infoCompleta?.nombre || "N/A"}
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                {codigo.startsWith("1")
-                                  ? "Activo"
-                                  : codigo.startsWith("2")
-                                  ? "Pasivo"
-                                  : codigo.startsWith("3")
-                                  ? "Capital"
-                                  : codigo.startsWith("4")
-                                  ? "Ingreso"
-                                  : codigo.startsWith("5")
-                                  ? "Costo"
-                                  : codigo.startsWith("6")
-                                  ? "Gasto"
-                                  : "—"}
-                              </div>
-                            </TableCell>
-
-                            <TableCell className="text-xs text-muted-foreground">
-                              {infoCompleta?.estado_financiero ? (
-                                <Badge variant="outline" className="px-2 py-1">
-                                  {infoCompleta.estado_financiero}
-                                </Badge>
-                              ) : (
-                                "N/A"
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-xs">
-                              <Badge variant="secondary" className="px-2 py-1">
-                                {naturaleza}
+                <div className="divide-y">
+                  {saldosUI.map((estadoNode) => (
+                    <Collapsible key={estadoNode.key} defaultOpen>
+                      {/* ESTADO */}
+                      <CollapsibleTrigger asChild>
+                        <button className="w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors group">
+                          <div className="grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-5 flex items-center gap-2 min-w-0">
+                              <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+                              <span className="font-semibold truncate">{estadoNode.label}</span>
+                              <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
+                                {estadoNode.label === "Balance General" ? "Balance" : "Resultados"}
                               </Badge>
-                            </TableCell>
+                            </div>
 
-                            <TableCell className="text-right text-green-600">{formatCurrency(cuenta?.debe_total || 0)}</TableCell>
-                            <TableCell className="text-right text-red-600">{formatCurrency(cuenta?.haber_total || 0)}</TableCell>
-                            <TableCell className="text-right font-semibold">{formatCurrency(cuenta?.saldo || 0)}</TableCell>
-                          </TableRow>
-                        );
-                      })}
+                            <div className="col-span-2">
+                              <Badge variant="secondary" className="px-2 py-1">
+                                —
+                              </Badge>
+                            </div>
 
-                    <TableRow className="font-bold bg-muted/40">
-                      <TableCell colSpan={4}>TOTALES</TableCell>
-                      <TableCell className="text-right text-green-600">{formatCurrency(totalDebe)}</TableCell>
-                      <TableCell className="text-right text-red-600">{formatCurrency(totalHaber)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(Math.abs(totalDebe - totalHaber))}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                            <div className="col-span-2 text-right font-semibold text-green-600">
+                              {formatCurrency(estadoNode.totals.debe)}
+                            </div>
+                            <div className="col-span-2 text-right font-semibold text-red-600">
+                              {formatCurrency(estadoNode.totals.haber)}
+                            </div>
+                            <div className="col-span-1 text-right font-semibold">{formatCurrency(estadoNode.totals.saldo)}</div>
+                          </div>
+                        </button>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent>
+                        <div className="bg-background">
+                          {estadoNode.children.map((grupoNode) => (
+                            <Collapsible key={grupoNode.key}>
+                              {/* GRUPO */}
+                              <CollapsibleTrigger asChild>
+                                <button className="w-full text-left px-4 py-3 pl-8 hover:bg-muted/20 transition-colors group">
+                                  <div className="grid grid-cols-12 gap-3 items-center">
+                                    <div className="col-span-5 flex items-center gap-2 min-w-0">
+                                      <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+                                      <span className="font-medium truncate">{grupoNode.label}</span>
+                                    </div>
+
+                                    <div className="col-span-2">
+                                      <Badge variant="secondary" className="px-2 py-1">
+                                        —
+                                      </Badge>
+                                    </div>
+
+                                    <div className="col-span-2 text-right text-green-600 font-medium">
+                                      {formatCurrency(grupoNode.totals.debe)}
+                                    </div>
+                                    <div className="col-span-2 text-right text-red-600 font-medium">
+                                      {formatCurrency(grupoNode.totals.haber)}
+                                    </div>
+                                    <div className="col-span-1 text-right font-medium">{formatCurrency(grupoNode.totals.saldo)}</div>
+                                  </div>
+                                </button>
+                              </CollapsibleTrigger>
+
+                              <CollapsibleContent>
+                                <div className="bg-background">
+                                  {grupoNode.children.map((subNode) => (
+                                    <Collapsible key={subNode.key}>
+                                      {/* SUBGRUPO */}
+                                      <CollapsibleTrigger asChild>
+                                        <button className="w-full text-left px-4 py-3 pl-12 hover:bg-muted/10 transition-colors group">
+                                          <div className="grid grid-cols-12 gap-3 items-center">
+                                            <div className="col-span-5 flex items-center gap-2 min-w-0">
+                                              <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+                                              <span className="truncate text-sm">{subNode.label}</span>
+                                              <Badge variant="outline" className="ml-2 hidden md:inline-flex">
+                                                {subNode.cuentas.length} cuentas
+                                              </Badge>
+                                            </div>
+
+                                            <div className="col-span-2">
+                                              <Badge variant="secondary" className="px-2 py-1">
+                                                —
+                                              </Badge>
+                                            </div>
+
+                                            <div className="col-span-2 text-right text-green-600 text-sm font-medium">
+                                              {formatCurrency(subNode.totals.debe)}
+                                            </div>
+                                            <div className="col-span-2 text-right text-red-600 text-sm font-medium">
+                                              {formatCurrency(subNode.totals.haber)}
+                                            </div>
+                                            <div className="col-span-1 text-right text-sm font-medium">
+                                              {formatCurrency(subNode.totals.saldo)}
+                                            </div>
+                                          </div>
+                                        </button>
+                                      </CollapsibleTrigger>
+
+                                      <CollapsibleContent>
+                                        <div className="px-4 pb-4 pl-16">
+                                          <div className="rounded-xl border overflow-hidden">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow className="bg-muted/30">
+                                                  <TableHead>Código</TableHead>
+                                                  <TableHead>Nombre</TableHead>
+                                                  <TableHead>Naturaleza</TableHead>
+                                                  <TableHead className="text-right">Debe</TableHead>
+                                                  <TableHead className="text-right">Haber</TableHead>
+                                                  <TableHead className="text-right">Saldo</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+
+                                              <TableBody>
+                                                {subNode.cuentas.map((c) => (
+                                                  <TableRow key={c.codigo} className="hover:bg-muted/20">
+                                                    <TableCell className="font-mono text-xs">{c.codigo}</TableCell>
+                                                    <TableCell className="text-sm">
+                                                      {c.nombre}
+                                                      <div className="text-xs text-muted-foreground mt-0.5">
+                                                        {c.codigo.startsWith("1")
+                                                          ? "Activo"
+                                                          : c.codigo.startsWith("2")
+                                                          ? "Pasivo"
+                                                          : c.codigo.startsWith("3")
+                                                          ? "Capital"
+                                                          : c.codigo.startsWith("4")
+                                                          ? "Ingreso"
+                                                          : c.codigo.startsWith("5")
+                                                          ? "Costo"
+                                                          : c.codigo.startsWith("6")
+                                                          ? "Gasto"
+                                                          : "—"}
+                                                      </div>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-xs">
+                                                      <Badge variant="secondary" className="px-2 py-1">
+                                                        {c.naturaleza}
+                                                      </Badge>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-right text-green-600">{formatCurrency(c.debe)}</TableCell>
+                                                    <TableCell className="text-right text-red-600">{formatCurrency(c.haber)}</TableCell>
+                                                    <TableCell className="text-right font-semibold">{formatCurrency(c.saldo)}</TableCell>
+                                                  </TableRow>
+                                                ))}
+
+                                                <TableRow className="font-bold bg-muted/40">
+                                                  <TableCell colSpan={3}>Subtotal</TableCell>
+                                                  <TableCell className="text-right text-green-600">
+                                                    {formatCurrency(subNode.totals.debe)}
+                                                  </TableCell>
+                                                  <TableCell className="text-right text-red-600">
+                                                    {formatCurrency(subNode.totals.haber)}
+                                                  </TableCell>
+                                                  <TableCell className="text-right">{formatCurrency(subNode.totals.saldo)}</TableCell>
+                                                </TableRow>
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        </div>
+                                      </CollapsibleContent>
+                                    </Collapsible>
+                                  ))}
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ))}
+                </div>
+
+                {/* Totales globales del panel (respetando filtros) */}
+                <div className="bg-muted/40 px-4 py-3">
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    <div className="col-span-7 font-bold">TOTALES</div>
+                    <div className="col-span-2 text-right font-bold text-green-600">{formatCurrency(totalDebe)}</div>
+                    <div className="col-span-2 text-right font-bold text-red-600">{formatCurrency(totalHaber)}</div>
+                    <div className="col-span-1 text-right font-bold">{formatCurrency(Math.abs(totalDebe - totalHaber))}</div>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-4 rounded-xl border bg-muted/10 p-4">
+              <div className="rounded-xl border bg-muted/10 p-4">
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">Checklist rápido:</span>{" "}
-                  1) Total Debe = Total Haber, 2) Asientos “Cuadrados”, 3) Saldos de Bancos/Caja/CxC/Inventario coherentes.
-                  Si algo no se ve lógico, abre el asiento y valida las cuentas.
+                  <span className="font-semibold text-foreground">Checklist rápido:</span> 1) Total Debe = Total Haber, 2) Asientos
+                  “Cuadrados”, 3) Saldos de Bancos/Caja/CxC/Inventario coherentes. Si algo no se ve lógico, abre el asiento y valida
+                  las cuentas.
                 </p>
               </div>
             </CardContent>
