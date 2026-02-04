@@ -107,9 +107,6 @@ const Balanza = () => {
   const [pestanaActiva, setPestanaActiva] = useState<string>("todos");
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()));
-  const [filtroTipo, setFiltroTipo] = useState<string>("todos");
-  const [filtroEstado, setFiltroEstado] = useState<string>("todos");
-  const [filtroEstadoFinanciero, setFiltroEstadoFinanciero] = useState<string>("todos");
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
   // Filtros jerárquicos
@@ -152,9 +149,6 @@ const Balanza = () => {
   useEffect(() => {
     setPage(1);
   }, [
-    filtroTipo,
-    filtroEstado,
-    filtroEstadoFinanciero,
     filtroBusqueda,
     grupoSeleccionado,
     subgrupoSeleccionado,
@@ -245,25 +239,27 @@ const Balanza = () => {
     movimientosFiltrados = movimientos.filter((mov) => ["1", "2", "3"].includes((mov.cuenta_codigo || "").charAt(0)));
   }
 
-  // Aplicar filtros jerárquicos (movimientos)
-  if (cuentaSeleccionada !== "todos") {
-    movimientosFiltrados = movimientosFiltrados.filter((mov) => mov.cuenta_codigo === cuentaSeleccionada);
-  } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
-    const codigosCuentas = (cuentasDisponibles as any[]).map((c: any) => c.codigo);
-    movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
-  } else if (grupoSeleccionado !== "todos" && estadosFinancieros) {
-    const estadoKey =
-      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+  // Aplicar filtros jerárquicos (movimientos) SOLO para pestañas de análisis
+  if (pestanaActiva !== "todos") {
+    if (cuentaSeleccionada !== "todos") {
+      movimientosFiltrados = movimientosFiltrados.filter((mov) => mov.cuenta_codigo === cuentaSeleccionada);
+    } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
+      const codigosCuentas = (cuentasDisponibles as any[]).map((c: any) => c.codigo);
+      movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
+    } else if (grupoSeleccionado !== "todos" && estadosFinancieros) {
+      const estadoKey =
+        pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
-    if (estadoKey) {
-      const todasCuentasGrupo = Object.values(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
-      const codigosCuentas = (todasCuentasGrupo as any[]).map((c: any) => c.codigo);
-      movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
-    } else {
-      const todasCuentasBG = Object.values(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
-      const todasCuentasER = Object.values(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
-      const codigosCuentas = [...(todasCuentasBG as any[]), ...(todasCuentasER as any[])].map((c: any) => c.codigo);
-      movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
+      if (estadoKey) {
+        const todasCuentasGrupo = Object.values(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
+        const codigosCuentas = (todasCuentasGrupo as any[]).map((c: any) => c.codigo);
+        movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
+      } else {
+        const todasCuentasBG = Object.values(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
+        const todasCuentasER = Object.values(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
+        const codigosCuentas = [...(todasCuentasBG as any[]), ...(todasCuentasER as any[])].map((c: any) => c.codigo);
+        movimientosFiltrados = movimientosFiltrados.filter((mov) => codigosCuentas.includes(mov.cuenta_codigo));
+      }
     }
   }
 
@@ -278,32 +274,34 @@ const Balanza = () => {
     saldosPorCuentaFiltrados = Object.fromEntries(codigosBalance.map((codigo) => [codigo, saldosPorCuenta[codigo]]));
   }
 
-  // Aplicar filtros jerárquicos a saldos
-  if (cuentaSeleccionada !== "todos") {
-    const codigo = cuentaSeleccionada;
-    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[codigo] ? { [codigo]: saldosPorCuentaFiltrados[codigo] } : {};
-  } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
-    const codigosCuentas = (cuentasDisponibles as any[]).map((c: any) => c.codigo);
-    saldosPorCuentaFiltrados = Object.fromEntries(
-      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
-    );
-  } else if (grupoSeleccionado !== "todos" && estadosFinancieros) {
-    const estadoKey =
-      pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
+  // Aplicar filtros jerárquicos a saldos SOLO para pestañas de análisis
+  if (pestanaActiva !== "todos") {
+    if (cuentaSeleccionada !== "todos") {
+      const codigo = cuentaSeleccionada;
+      saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[codigo] ? { [codigo]: saldosPorCuentaFiltrados[codigo] } : {};
+    } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
+      const codigosCuentas = (cuentasDisponibles as any[]).map((c: any) => c.codigo);
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
+      );
+    } else if (grupoSeleccionado !== "todos" && estadosFinancieros) {
+      const estadoKey =
+        pestanaActiva === "balance" ? "Balance General" : pestanaActiva === "resultados" ? "Estado de Resultados" : null;
 
-    if (estadoKey) {
-      const todasCuentasGrupo = Object.values(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
-      const codigosCuentas = (todasCuentasGrupo as any[]).map((c: any) => c.codigo);
-      saldosPorCuentaFiltrados = Object.fromEntries(
-        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
-      );
-    } else {
-      const todasCuentasBG = Object.values(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
-      const todasCuentasER = Object.values(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
-      const codigosCuentas = [...(todasCuentasBG as any[]), ...(todasCuentasER as any[])].map((c: any) => c.codigo);
-      saldosPorCuentaFiltrados = Object.fromEntries(
-        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
-      );
+      if (estadoKey) {
+        const todasCuentasGrupo = Object.values(estadosFinancieros[estadoKey]?.[grupoSeleccionado] || {}).flat();
+        const codigosCuentas = (todasCuentasGrupo as any[]).map((c: any) => c.codigo);
+        saldosPorCuentaFiltrados = Object.fromEntries(
+          Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
+        );
+      } else {
+        const todasCuentasBG = Object.values(estadosFinancieros["Balance General"]?.[grupoSeleccionado] || {}).flat();
+        const todasCuentasER = Object.values(estadosFinancieros["Estado de Resultados"]?.[grupoSeleccionado] || {}).flat();
+        const codigosCuentas = [...(todasCuentasBG as any[]), ...(todasCuentasER as any[])].map((c: any) => c.codigo);
+        saldosPorCuentaFiltrados = Object.fromEntries(
+          Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigosCuentas.includes(codigo))
+        );
+      }
     }
   }
 
@@ -425,30 +423,8 @@ const Balanza = () => {
     })
     .filter(Boolean) as (AsientoAgrupado & { esCancelado: boolean; asientoReversion: AsientoAgrupado | null })[];
 
-  // Filtros globales
+  // Filtros globales (✅ ahora en "todos" solo aplica BÚSQUEDA; se eliminaron Tipo/Estado/Estado Financiero)
   let asientosFiltrados = asientosConReversion;
-
-  if (filtroTipo !== "todos") asientosFiltrados = asientosFiltrados.filter((a) => a.tipo === filtroTipo);
-
-  if (filtroEstado !== "todos") {
-    asientosFiltrados = asientosFiltrados.filter((a) => {
-      const diferencia = Math.abs((a.totalDebe || 0) - (a.totalHaber || 0));
-      if (filtroEstado === "cuadrado") return diferencia < 0.01;
-      if (filtroEstado === "descuadrado") return diferencia >= 0.01;
-      return true;
-    });
-  }
-
-  if (filtroEstadoFinanciero !== "todos") {
-    asientosFiltrados = asientosFiltrados.filter((a) =>
-      a.movimientos.some((mov) => {
-        const primerDigito = (mov.cuenta_codigo || "").charAt(0);
-        if (filtroEstadoFinanciero === "balance") return ["1", "2", "3"].includes(primerDigito);
-        if (filtroEstadoFinanciero === "resultados") return ["4", "5", "6"].includes(primerDigito);
-        return true;
-      })
-    );
-  }
 
   if (filtroBusqueda) {
     const busquedaLower = filtroBusqueda.toLowerCase();
@@ -463,10 +439,6 @@ const Balanza = () => {
         )
     );
   }
-
-  const tiposUnicos = useMemo(() => {
-    return Array.from(new Set(asientosConReversion.map((a) => a.tipo).filter(Boolean))).sort();
-  }, [asientosConReversion]);
 
   // Totales (basados en saldos filtrados)
   const totalDebe = useMemo(() => {
@@ -894,6 +866,7 @@ const Balanza = () => {
             <CardContent className="space-y-4">
               {pestanaActiva === "todos" ? (
                 <>
+                  {/* ✅ SOLO: Fecha de corte + Búsqueda */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Fecha de Corte</label>
@@ -918,57 +891,14 @@ const Balanza = () => {
                         </PopoverContent>
                       </Popover>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Tipo de Transacción</label>
-                      <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos</SelectItem>
-                          {tiposUnicos.map((tipo) => (
-                            <SelectItem key={tipo} value={tipo}>
-                              {tipo}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Estado del Asiento</label>
-                      <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos</SelectItem>
-                          <SelectItem value="cuadrado">Cuadrado</SelectItem>
-                          <SelectItem value="descuadrado">Descuadrado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Estado Financiero</label>
-                      <Select value={filtroEstadoFinanciero} onValueChange={setFiltroEstadoFinanciero}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos</SelectItem>
-                          <SelectItem value="balance">Balance General</SelectItem>
-                          <SelectItem value="resultados">Estado de Resultados</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Búsqueda</label>
-                      <Input placeholder="Buscar…" value={filtroBusqueda} onChange={(e) => setFiltroBusqueda(e.target.value)} />
+                      <Input
+                        placeholder="Buscar…"
+                        value={filtroBusqueda}
+                        onChange={(e) => setFiltroBusqueda(e.target.value)}
+                      />
                     </div>
                   </div>
                 </>
