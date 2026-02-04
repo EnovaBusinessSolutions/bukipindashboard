@@ -18,8 +18,18 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+  addMonths,
+  subDays,
+  differenceInCalendarDays,
+} from "date-fns";
 import { es } from "date-fns/locale";
+import type { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,10 +119,40 @@ const Balanza = () => {
   const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()));
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
-  // Filtros jerárquicos
+  // Filtros jerárquicos (se mantienen para "balance" y "todos" como están hoy)
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<string>("todos");
   const [subgrupoSeleccionado, setSubgrupoSeleccionado] = useState<string>("todos");
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState<string>("todos");
+
+  // ✅ NUEVO (SOLO RESULTADOS): filtros según spec (capturas)
+  type DateMode = "day" | "month" | "year" | "range";
+  type MonthMode = "isolated" | "accumulated";
+  type AgrupadorER = "ingresos" | "egresos";
+
+  const [dateModeER, setDateModeER] = useState<DateMode>("month");
+  const [monthModeER, setMonthModeER] = useState<MonthMode>("isolated");
+  const [dayER, setDayER] = useState<Date | undefined>(new Date());
+
+  // Mes aislado
+  const [monthER, setMonthER] = useState<Date>(() => startOfMonth(new Date()));
+
+  // Mes acumulado (from/to)
+  const [monthFromER, setMonthFromER] = useState<Date>(() => startOfMonth(new Date()));
+  const [monthToER, setMonthToER] = useState<Date>(() => startOfMonth(new Date()));
+
+  // Año
+  const [yearER, setYearER] = useState<number>(new Date().getFullYear());
+
+  // Rango específico
+  const [rangeER, setRangeER] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
+
+  // Agrupador / Sub-agrupador / Cuentas
+  const [agrupadorER, setAgrupadorER] = useState<AgrupadorER>("ingresos");
+  const [subAgrupadorER, setSubAgrupadorER] = useState<string>("todos"); // equivale a "grupo" dentro de Estado de Resultados
+  const [cuentaER, setCuentaER] = useState<string>("todos");
 
   // Educación / Tips
   const [showTips, setShowTips] = useState<boolean>(true);
@@ -137,11 +177,27 @@ const Balanza = () => {
   // ✅ IMPORTANTE: NO PONER hooks después de returns tempranos.
   // Por eso todos los useMemo/useEffect van antes de cualquier return.
 
-  // Reset de filtros jerárquicos al cambiar pestaña
+  // Reset de filtros al cambiar pestaña
   useEffect(() => {
     setGrupoSeleccionado("todos");
     setSubgrupoSeleccionado("todos");
     setCuentaSeleccionada("todos");
+
+    // ✅ SOLO para Resultados, reseteos pro UX
+    setSubAgrupadorER("todos");
+    setCuentaER("todos");
+    setAgrupadorER("ingresos");
+    setDateModeER("month");
+    setMonthModeER("isolated");
+
+    const now = new Date();
+    setDayER(now);
+    setMonthER(startOfMonth(now));
+    setMonthFromER(startOfMonth(now));
+    setMonthToER(startOfMonth(now));
+    setYearER(now.getFullYear());
+    setRangeER({ from: startOfMonth(now), to: endOfMonth(now) });
+
     setPage(1);
   }, [pestanaActiva]);
 
@@ -153,6 +209,11 @@ const Balanza = () => {
     grupoSeleccionado,
     subgrupoSeleccionado,
     cuentaSeleccionada,
+    subAgrupadorER,
+    cuentaER,
+    agrupadorER,
+    dateModeER,
+    monthModeER,
     startDateAjustado.getTime(),
     endDate.getTime(),
   ]);
@@ -166,6 +227,13 @@ const Balanza = () => {
     if (!d) return "—";
     // simplificado: 1,5,6 suelen ser deudoras; 2,3,4 acreedoras
     return ["1", "5", "6"].includes(d) ? "Deudora" : ["2", "3", "4"].includes(d) ? "Acreedora" : "—";
+  };
+
+  const getTipoERByCodigo = (codigo?: string): AgrupadorER | null => {
+    const d = String(codigo || "").charAt(0);
+    if (d === "4") return "ingresos";
+    if (d === "5" || d === "6") return "egresos";
+    return null;
   };
 
   // Data safe (para que no reviente antes de cargar)
@@ -184,7 +252,163 @@ const Balanza = () => {
     return new Map<string, CuentaInfo>(entries);
   }, [cuentasFlat]);
 
-  // Grupos según pestaña activa
+  // ✅ NUEVO: Aplicar lógica de FECHAS SOLO cuando es "resultados"
+  // (para que el dropdown Día/Mes/Año/Rango maneje startDate/endDate sin romper otros paneles)
+  useEffect(() => {
+    if (pestanaActiva !== "resultados") return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const clampRangeToOneYear = (from: Date, to: Date) => {
+      const diff = Math.abs(differenceInCalendarDays(to, from));
+      if (diff <= 366) return { from, to };
+      // clamp: to = from + 1 año - 1 día
+      const toClamped = subDays(addMonths(from, 12), 1);
+      return { from, to: toClamped };
+    };
+
+    if (dateModeER === "day") {
+      const d = dayER ? new Date(dayER) : new Date();
+      d.setHours(0, 0, 0, 0);
+      setStartDate(d);
+      setEndDate(d);
+      return;
+    }
+
+    if (dateModeER === "month") {
+      if (monthModeER === "isolated") {
+        const m = monthER ? startOfMonth(monthER) : startOfMonth(new Date());
+        const e = endOfMonth(m);
+        setStartDate(m);
+        setEndDate(e);
+        return;
+      }
+
+      // acumulado
+      const fromM = monthFromER ? startOfMonth(monthFromER) : startOfMonth(new Date());
+      const toM = monthToER ? endOfMonth(monthToER) : endOfMonth(new Date());
+      const fixed = clampRangeToOneYear(fromM, toM);
+      setStartDate(startOfMonth(fixed.from));
+      setEndDate(endOfMonth(fixed.to));
+      return;
+    }
+
+    if (dateModeER === "year") {
+      const y = Number(yearER || new Date().getFullYear());
+      const s = startOfYear(new Date(y, 0, 1));
+      const eRaw = endOfYear(new Date(y, 0, 1));
+      const e = y === today.getFullYear() ? today : eRaw;
+      setStartDate(s);
+      setEndDate(e);
+      return;
+    }
+
+    // range
+    if (dateModeER === "range") {
+      const from = rangeER?.from ? new Date(rangeER.from) : startOfMonth(new Date());
+      const to = rangeER?.to ? new Date(rangeER.to) : endOfMonth(new Date());
+      const fixed = clampRangeToOneYear(from, to);
+      setStartDate(fixed.from);
+      setEndDate(fixed.to);
+
+      // si clamp aplicado, también reflejarlo en el UI state
+      if (fixed.to.getTime() !== to.getTime() || fixed.from.getTime() !== from.getTime()) {
+        setRangeER({ from: fixed.from, to: fixed.to });
+      }
+      return;
+    }
+  }, [
+    pestanaActiva,
+    dateModeER,
+    monthModeER,
+    dayER,
+    monthER,
+    monthFromER,
+    monthToER,
+    yearER,
+    rangeER,
+  ]);
+
+  // ✅ Helpers de opciones de fecha
+  const monthOptions = useMemo(() => {
+    const base = new Date(2020, 0, 1);
+    const list: { label: string; value: string; date: Date }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(base.getFullYear(), i, 1);
+      list.push({
+        label: format(d, "LLLL", { locale: es }).replace(/^\w/, (c) => c.toUpperCase()),
+        value: String(i + 1).padStart(2, "0"),
+        date: d,
+      });
+    }
+    return list;
+  }, []);
+
+  const yearOptions = useMemo(() => {
+    const now = new Date().getFullYear();
+    const years: number[] = [];
+    for (let y = now; y >= now - 10; y--) years.push(y);
+    return years;
+  }, []);
+
+  const setMonthKeepingYear = (current: Date, monthIndex: number) => {
+    const y = current.getFullYear();
+    return new Date(y, monthIndex, 1);
+  };
+
+  // ✅ Opciones ER (Sub-agrupador y cuentas) según estadosFinancieros y agrupador
+  const erGrupoOptions = useMemo(() => {
+    const er = estadosFinancieros?.["Estado de Resultados"];
+    if (!er) return [];
+
+    const grupos = Object.keys(er || {});
+    const matchesAgrupador = (grupo: string) => {
+      const subObj = er?.[grupo] || {};
+      const cuentasAll: any[] = Object.values(subObj).flat() as any[];
+      const codigos = cuentasAll.map((c) => String(c?.codigo || "")).filter(Boolean);
+
+      // si el grupo no tiene cuentas, no aparece
+      if (!codigos.length) return false;
+
+      // debe tener al menos 1 cuenta que pertenezca al agrupador seleccionado
+      return codigos.some((codigo) => getTipoERByCodigo(codigo) === agrupadorER);
+    };
+
+    return grupos.filter(matchesAgrupador);
+  }, [estadosFinancieros, agrupadorER]);
+
+  const erCuentaOptions = useMemo(() => {
+    const er = estadosFinancieros?.["Estado de Resultados"];
+    if (!er) return [];
+
+    if (subAgrupadorER === "todos") return [];
+
+    const subObj = er?.[subAgrupadorER] || {};
+    const cuentasAll: any[] = Object.values(subObj).flat() as any[];
+
+    // Filtrar por agrupador (ingresos/egresos)
+    const rows = cuentasAll
+      .map((c) => ({
+        codigo: String(c?.codigo || ""),
+        nombre: String(c?.nombre || "N/A"),
+      }))
+      .filter((x) => !!x.codigo)
+      .filter((x) => getTipoERByCodigo(x.codigo) === agrupadorER)
+      .sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+    // Dedupe por codigo
+    const seen = new Set<string>();
+    const deduped = rows.filter((r) => {
+      if (seen.has(r.codigo)) return false;
+      seen.add(r.codigo);
+      return true;
+    });
+
+    return deduped;
+  }, [estadosFinancieros, subAgrupadorER, agrupadorER]);
+
+  // Grupos (legacy) según pestaña activa (se mantienen para balance/todos)
   const gruposDisponibles = useMemo(() => {
     if (!estadosFinancieros) return [];
 
@@ -239,8 +463,34 @@ const Balanza = () => {
     movimientosFiltrados = movimientos.filter((mov) => ["1", "2", "3"].includes((mov.cuenta_codigo || "").charAt(0)));
   }
 
-  // Aplicar filtros jerárquicos (movimientos) SOLO para pestañas de análisis
-  if (pestanaActiva !== "todos") {
+  // ✅ Aplicar filtros ESPECIALES SOLO en Resultados (Agrupador/Sub-agrupador/Cuentas)
+  if (pestanaActiva === "resultados") {
+    // Agrupador (ingresos vs egresos)
+    movimientosFiltrados = movimientosFiltrados.filter((mov) => getTipoERByCodigo(mov.cuenta_codigo) === agrupadorER);
+
+    // Sub-agrupador (grupo ER)
+    if (subAgrupadorER !== "todos" && estadosFinancieros?.["Estado de Resultados"]?.[subAgrupadorER]) {
+      const obj = estadosFinancieros["Estado de Resultados"][subAgrupadorER] || {};
+      const cuentasAll: any[] = Object.values(obj).flat() as any[];
+      const codigos = new Set(
+        cuentasAll
+          .map((c) => String(c?.codigo || ""))
+          .filter(Boolean)
+          .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
+      );
+
+      movimientosFiltrados = movimientosFiltrados.filter((mov) => codigos.has(String(mov.cuenta_codigo || "")));
+    }
+
+    // Cuenta específica
+    if (cuentaER !== "todos") {
+      movimientosFiltrados = movimientosFiltrados.filter((mov) => mov.cuenta_codigo === cuentaER);
+    }
+  }
+
+  // ✅ Aplicar filtros jerárquicos (legacy) SOLO para pestañas distintas a "todos" y distintas a "resultados"
+  // (para no interferir con la UX nueva de Resultados)
+  if (pestanaActiva !== "todos" && pestanaActiva !== "resultados") {
     if (cuentaSeleccionada !== "todos") {
       movimientosFiltrados = movimientosFiltrados.filter((mov) => mov.cuenta_codigo === cuentaSeleccionada);
     } else if (subgrupoSeleccionado !== "todos" && cuentasDisponibles.length > 0) {
@@ -274,8 +524,37 @@ const Balanza = () => {
     saldosPorCuentaFiltrados = Object.fromEntries(codigosBalance.map((codigo) => [codigo, saldosPorCuenta[codigo]]));
   }
 
-  // Aplicar filtros jerárquicos a saldos SOLO para pestañas de análisis
-  if (pestanaActiva !== "todos") {
+  // ✅ Aplicar filtros ESPECIALES SOLO en Resultados también a saldosPorCuenta
+  if (pestanaActiva === "resultados") {
+    // Agrupador
+    saldosPorCuentaFiltrados = Object.fromEntries(
+      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => getTipoERByCodigo(codigo) === agrupadorER)
+    );
+
+    // Sub-agrupador
+    if (subAgrupadorER !== "todos" && estadosFinancieros?.["Estado de Resultados"]?.[subAgrupadorER]) {
+      const obj = estadosFinancieros["Estado de Resultados"][subAgrupadorER] || {};
+      const cuentasAll: any[] = Object.values(obj).flat() as any[];
+      const codigos = new Set(
+        cuentasAll
+          .map((c) => String(c?.codigo || ""))
+          .filter(Boolean)
+          .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
+      );
+
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigos.has(String(codigo || "")))
+      );
+    }
+
+    // Cuenta
+    if (cuentaER !== "todos") {
+      saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[cuentaER] ? { [cuentaER]: saldosPorCuentaFiltrados[cuentaER] } : {};
+    }
+  }
+
+  // ✅ Aplicar filtros jerárquicos (legacy) a saldos SOLO para "balance" (no tocar Resultados)
+  if (pestanaActiva !== "todos" && pestanaActiva !== "resultados") {
     if (cuentaSeleccionada !== "todos") {
       const codigo = cuentaSeleccionada;
       saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[codigo] ? { [codigo]: saldosPorCuentaFiltrados[codigo] } : {};
@@ -423,7 +702,7 @@ const Balanza = () => {
     })
     .filter(Boolean) as (AsientoAgrupado & { esCancelado: boolean; asientoReversion: AsientoAgrupado | null })[];
 
-  // Filtros globales (✅ ahora en "todos" solo aplica BÚSQUEDA; se eliminaron Tipo/Estado/Estado Financiero)
+  // Filtros globales (búsqueda)
   let asientosFiltrados = asientosConReversion;
 
   if (filtroBusqueda) {
@@ -704,7 +983,7 @@ const Balanza = () => {
       ? [
           "Ingresos (4xxx) normalmente aumentan en Haber.",
           "Costos y gastos (5xxx/6xxx) normalmente aumentan en Debe.",
-          "Tip: usa los filtros jerárquicos para revisar por grupo → subgrupo → cuenta y detectar fugas de gasto.",
+          "Tip: usa los filtros (Ingresos/Egresos → Sub-agrupador → Cuenta) para detectar fugas y entender tu utilidad.",
         ]
       : [
           "Activos (1xxx) normalmente aumentan en Debe.",
@@ -712,7 +991,10 @@ const Balanza = () => {
           "Tip: revisa Bancos (1002), Caja (1001), CxC (1003) e Inventario (1005) y confirma que reflejen la realidad.",
         ];
 
-  const infoFiltroActivo = grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos";
+  const infoFiltroActivoLegacy =
+    grupoSeleccionado !== "todos" || subgrupoSeleccionado !== "todos" || cuentaSeleccionada !== "todos";
+
+  const infoFiltroActivoER = subAgrupadorER !== "todos" || cuentaER !== "todos" || !!agrupadorER;
 
   // ✅ AHORA SÍ: returns condicionales DESPUÉS de todos los hooks/memos
   if (isLoading) {
@@ -856,10 +1138,18 @@ const Balanza = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Filter className="h-5 w-5" />
-                {pestanaActiva === "todos" ? "Fecha de Corte" : "Filtros de Análisis"}
+                {pestanaActiva === "todos"
+                  ? "Fecha de Corte"
+                  : pestanaActiva === "resultados"
+                  ? "Filtros de Resultados"
+                  : "Filtros de Análisis"}
               </CardTitle>
               {pestanaActiva !== "todos" && (
-                <CardDescription>Filtra por grupo → subgrupo → cuenta para un análisis más limpio y rápido.</CardDescription>
+                <CardDescription>
+                  {pestanaActiva === "resultados"
+                    ? "Filtra por Fecha (Día/Mes/Año/Rango) + Agrupador (Ingresos/Egresos) + Sub-agrupador + Cuenta."
+                    : "Filtra por grupo → subgrupo → cuenta para un análisis más limpio y rápido."}
+                </CardDescription>
               )}
             </CardHeader>
 
@@ -902,8 +1192,331 @@ const Balanza = () => {
                     </div>
                   </div>
                 </>
+              ) : pestanaActiva === "resultados" ? (
+                <>
+                  {/* ✅ NUEVO BLOQUE (SOLO RESULTADOS) - según capturas */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* Fecha: modo */}
+                    <div className="lg:col-span-3 space-y-2">
+                      <Label>Filtro de fecha</Label>
+                      <Select value={dateModeER} onValueChange={(v) => setDateModeER(v as any)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="day">Día</SelectItem>
+                          <SelectItem value="month">Mes</SelectItem>
+                          <SelectItem value="year">Año</SelectItem>
+                          <SelectItem value="range">Rango específico</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Fecha: UI dependiente */}
+                    <div className="lg:col-span-5 space-y-2">
+                      <Label>Selección</Label>
+
+                      {/* Día */}
+                      {dateModeER === "day" && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {dayER ? format(dayER, "PPP", { locale: es }) : "Elegir día"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={dayER}
+                              onSelect={(d) => setDayER(d ?? new Date())}
+                              initialFocus
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
+
+                      {/* Mes */}
+                      {dateModeER === "month" && (
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                          <div className="md:col-span-5">
+                            <Select
+                              value={String(monthModeER)}
+                              onValueChange={(v) => setMonthModeER(v as MonthMode)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Modo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="isolated">Aislado</SelectItem>
+                                <SelectItem value="accumulated">Acumulado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {monthModeER === "isolated" ? (
+                            <>
+                              <div className="md:col-span-4">
+                                <Select
+                                  value={String(monthER.getMonth() + 1).padStart(2, "0")}
+                                  onValueChange={(v) => {
+                                    const mi = Number(v) - 1;
+                                    setMonthER((cur) => setMonthKeepingYear(cur, mi));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Mes" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {monthOptions.map((m) => (
+                                      <SelectItem key={m.value} value={m.value}>
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="md:col-span-3">
+                                <Select
+                                  value={String(monthER.getFullYear())}
+                                  onValueChange={(v) => {
+                                    const y = Number(v);
+                                    setMonthER((cur) => new Date(y, cur.getMonth(), 1));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Año" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {yearOptions.map((y) => (
+                                      <SelectItem key={y} value={String(y)}>
+                                        {y}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="md:col-span-3">
+                                <Select
+                                  value={String(monthFromER.getMonth() + 1).padStart(2, "0")}
+                                  onValueChange={(v) => {
+                                    const mi = Number(v) - 1;
+                                    setMonthFromER((cur) => setMonthKeepingYear(cur, mi));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Mes inicial" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {monthOptions.map((m) => (
+                                      <SelectItem key={`from-${m.value}`} value={m.value}>
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="md:col-span-3">
+                                <Select
+                                  value={String(monthToER.getMonth() + 1).padStart(2, "0")}
+                                  onValueChange={(v) => {
+                                    const mi = Number(v) - 1;
+                                    setMonthToER((cur) => setMonthKeepingYear(cur, mi));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Mes final" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {monthOptions.map((m) => (
+                                      <SelectItem key={`to-${m.value}`} value={m.value}>
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="md:col-span-3">
+                                <Select
+                                  value={String(monthFromER.getFullYear())}
+                                  onValueChange={(v) => {
+                                    const y = Number(v);
+                                    setMonthFromER((cur) => new Date(y, cur.getMonth(), 1));
+                                    setMonthToER((cur) => new Date(y, cur.getMonth(), 1));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Año" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {yearOptions.map((y) => (
+                                      <SelectItem key={`y-${y}`} value={String(y)}>
+                                        {y}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="md:col-span-3 flex items-center">
+                                <Badge variant="outline" className="w-full justify-center py-2">
+                                  Máx. 1 año
+                                </Badge>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Año */}
+                      {dateModeER === "year" && (
+                        <Select value={String(yearER)} onValueChange={(v) => setYearER(Number(v))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar año" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {yearOptions.map((y) => (
+                              <SelectItem key={y} value={String(y)}>
+                                {y}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+
+                      {/* Rango específico */}
+                      {dateModeER === "range" && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {rangeER?.from && rangeER?.to
+                                ? `${format(rangeER.from, "dd/MM/yyyy")} - ${format(rangeER.to, "dd/MM/yyyy")}`
+                                : "Elegir rango"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="range"
+                              selected={rangeER}
+                              onSelect={(r) => setRangeER(r)}
+                              numberOfMonths={2}
+                              initialFocus
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </div>
+
+                    {/* Agrupador */}
+                    <div className="lg:col-span-2 space-y-2">
+                      <Label>Filtro por Agrupador</Label>
+                      <Select
+                        value={agrupadorER}
+                        onValueChange={(v) => {
+                          const next = v as AgrupadorER;
+                          setAgrupadorER(next);
+                          setSubAgrupadorER("todos");
+                          setCuentaER("todos");
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ingresos">Ingresos</SelectItem>
+                          <SelectItem value="egresos">Egresos</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Sub-agrupador */}
+                    <div className="lg:col-span-2 space-y-2">
+                      <Label>Filtro sub agrupador</Label>
+                      <Select
+                        value={subAgrupadorER}
+                        onValueChange={(v) => {
+                          setSubAgrupadorER(v);
+                          setCuentaER("todos");
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          {erGrupoOptions.map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Cuenta */}
+                    <div className="lg:col-span-3 space-y-2">
+                      <Label>Filtro cuentas</Label>
+                      <Select value={cuentaER} onValueChange={setCuentaER} disabled={subAgrupadorER === "todos"}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={subAgrupadorER === "todos" ? "Primero elige sub-agrupador" : "Todas"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todas</SelectItem>
+                          {erCuentaOptions.map((c) => (
+                            <SelectItem key={c.codigo} value={c.codigo}>
+                              {c.codigo} - {c.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Búsqueda */}
+                    <div className="lg:col-span-12 space-y-2">
+                      <Label>Búsqueda</Label>
+                      <Input placeholder="Buscar por referencia, descripción o cuenta…" value={filtroBusqueda} onChange={(e) => setFiltroBusqueda(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* Indicador filtros activos */}
+                  {infoFiltroActivoER && (
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl">
+                      <Filter className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-sm text-blue-700 dark:text-blue-300 flex-1">
+                        Filtros activos:{" "}
+                        <span className="font-semibold">
+                          {agrupadorER === "ingresos" ? "Ingresos" : "Egresos"}
+                          {subAgrupadorER !== "todos" ? ` > ${subAgrupadorER}` : ""}
+                          {cuentaER !== "todos" ? ` > ${cuentaER}` : ""}
+                        </span>
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setAgrupadorER("ingresos");
+                          setSubAgrupadorER("todos");
+                          setCuentaER("todos");
+                        }}
+                        className="h-7 text-xs"
+                      >
+                        Limpiar
+                      </Button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
+                  {/* ✅ LEGACY (Balance) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     {/* Fecha Inicio (no aplica en balance) */}
                     {pestanaActiva !== "balance" && (
@@ -1029,7 +1642,7 @@ const Balanza = () => {
                   </div>
 
                   {/* Indicador filtros */}
-                  {infoFiltroActivo && (
+                  {infoFiltroActivoLegacy && (
                     <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl">
                       <Filter className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       <span className="text-sm text-blue-700 dark:text-blue-300 flex-1">
