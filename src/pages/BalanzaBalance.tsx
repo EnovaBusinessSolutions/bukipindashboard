@@ -212,6 +212,10 @@ export default function BalanzaBalance() {
   const cuentasFlat: CuentaFlat[] = (cuentasData?.cuentasFlat as CuentaFlat[]) || [];
   const estadosFinancieros: any = cuentasData?.estadosFinancieros;
 
+  // ✅ NUEVO: saldos totales de arrastre (si el hook ya los retorna)
+  const saldoInicialTotal = Number((balanzaData as any)?.saldoInicialTotal || 0);
+  const saldoFinalTotal = Number((balanzaData as any)?.saldoFinalTotal || 0);
+
   const cuentasInfoMap = useMemo(() => {
     const entries: Array<[string, CuentaInfo]> = (cuentasFlat || []).map((cuenta) => [
       cuenta.codigo,
@@ -580,16 +584,17 @@ export default function BalanzaBalance() {
     nombre: string;
     estado_financiero: "Balance General" | "Estado de Resultados" | "—";
     naturaleza: string;
+    saldoInicial: number;
     debe: number;
     haber: number;
-    saldo: number;
+    saldoFinal: number;
   };
 
   type SaldosNode = {
     key: string;
     label: string;
     level: "estado" | "grupo" | "subgrupo";
-    totals: { debe: number; haber: number; saldo: number };
+    totals: { saldoInicial: number; debe: number; haber: number; saldoFinal: number };
     cuentas: SaldosCuentaRow[];
     children: SaldosNode[];
   };
@@ -612,12 +617,13 @@ export default function BalanzaBalance() {
     const sumRows = (rows: SaldosCuentaRow[]) =>
       rows.reduce(
         (acc, r) => {
+          acc.saldoInicial += r.saldoInicial || 0;
           acc.debe += r.debe || 0;
           acc.haber += r.haber || 0;
-          acc.saldo += r.saldo || 0;
+          acc.saldoFinal += r.saldoFinal || 0;
           return acc;
         },
-        { debe: 0, haber: 0, saldo: 0 }
+        { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 }
       );
 
     const buildCuentaRow = (
@@ -628,18 +634,21 @@ export default function BalanzaBalance() {
       if (!raw) return null;
 
       const info = cuentasInfoMap.get(codigo);
+
+      const saldoInicial = Number(raw?.saldo_inicial || 0);
       const debe = Number(raw?.debe_total || 0);
       const haber = Number(raw?.haber_total || 0);
-      const saldo = Number(raw?.saldo || 0);
+      const saldoFinal = Number(raw?.saldo_final || 0);
 
       return {
         codigo,
         nombre: info?.nombre || "N/A",
         estado_financiero,
         naturaleza: getNaturaleza(codigo),
+        saldoInicial,
         debe,
         haber,
-        saldo,
+        saldoFinal,
       };
     };
 
@@ -655,9 +664,10 @@ export default function BalanzaBalance() {
             nombre: info?.nombre || "N/A",
             estado_financiero: estado,
             naturaleza: getNaturaleza(codigo),
+            saldoInicial: Number(raw?.saldo_inicial || 0),
             debe: Number(raw?.debe_total || 0),
             haber: Number(raw?.haber_total || 0),
-            saldo: Number(raw?.saldo || 0),
+            saldoFinal: Number(raw?.saldo_final || 0),
           } as SaldosCuentaRow;
         });
 
@@ -683,7 +693,7 @@ export default function BalanzaBalance() {
       key: `estado:${estadoKey}`,
       label: estadoKey,
       level: "estado",
-      totals: { debe: 0, haber: 0, saldo: 0 },
+      totals: { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 },
       cuentas: [],
       children: [],
     };
@@ -697,7 +707,7 @@ export default function BalanzaBalance() {
         key: `grupo:${estadoKey}:${grupo}`,
         label: grupo,
         level: "grupo",
-        totals: { debe: 0, haber: 0, saldo: 0 },
+        totals: { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 },
         cuentas: [],
         children: [],
       };
@@ -723,17 +733,19 @@ export default function BalanzaBalance() {
           children: [],
         });
 
+        grupoNode.totals.saldoInicial += subTotals.saldoInicial;
         grupoNode.totals.debe += subTotals.debe;
         grupoNode.totals.haber += subTotals.haber;
-        grupoNode.totals.saldo += subTotals.saldo;
+        grupoNode.totals.saldoFinal += subTotals.saldoFinal;
       }
 
       if (!grupoNode.children.length) continue;
 
       estadoNode.children.push(grupoNode);
+      estadoNode.totals.saldoInicial += grupoNode.totals.saldoInicial;
       estadoNode.totals.debe += grupoNode.totals.debe;
       estadoNode.totals.haber += grupoNode.totals.haber;
-      estadoNode.totals.saldo += grupoNode.totals.saldo;
+      estadoNode.totals.saldoFinal += grupoNode.totals.saldoFinal;
     }
 
     if (!estadoNode.children.length) return fallbackFlat;
@@ -817,7 +829,7 @@ export default function BalanzaBalance() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight">Balanza de Balance</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Balanza de Balance General</h2>
           <p className="text-muted-foreground">
             Activos, Pasivos y Capital del período (1xxx, 2xxx, 3xxx). Ideal para validar posición financiera.
           </p>
@@ -1338,6 +1350,23 @@ export default function BalanzaBalance() {
 
           <CollapsibleContent>
             <CardContent>
+              {/* ✅ Saldo inicial (arrastre real) */}
+              <div className="mb-4 rounded-xl border bg-muted/10 p-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm font-semibold">Saldo inicial</p>
+                    <p className="text-xs text-muted-foreground">
+                      Saldo acumulado hasta {format(subDays(startDate, 1), "dd/MM/yyyy")}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-lg font-bold">{formatCurrency(saldoInicialTotal)}</p>
+                    <p className="text-xs text-muted-foreground">Según filtros activos</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="rounded-xl border overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -1423,6 +1452,21 @@ export default function BalanzaBalance() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* ✅ Saldo final */}
+              <div className="mt-4 rounded-xl border bg-muted/10 p-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm font-semibold">Saldo final</p>
+                    <p className="text-xs text-muted-foreground">Saldo acumulado al {format(endDate, "dd/MM/yyyy")}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-lg font-bold">{formatCurrency(saldoFinalTotal)}</p>
+                    <p className="text-xs text-muted-foreground">Saldo inicial + movimientos del periodo</p>
+                  </div>
+                </div>
               </div>
 
               {/* Footer paginación */}
@@ -1561,7 +1605,7 @@ export default function BalanzaBalance() {
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>
           <CardDescription>
-            Vista desplegable por Grupo → Subgrupo → Cuenta, con Debe/Haber acumulado y saldo neto.
+            Vista desplegable por Grupo → Subgrupo → Cuenta, con Saldo inicial/final y Debe/Haber del período.
           </CardDescription>
         </CardHeader>
 
@@ -1571,9 +1615,10 @@ export default function BalanzaBalance() {
               <div className="grid grid-cols-12 gap-3 text-xs font-medium text-muted-foreground">
                 <div className="col-span-5">Cuenta</div>
                 <div className="col-span-2">Naturaleza</div>
-                <div className="col-span-2 text-right">Total Debe</div>
-                <div className="col-span-2 text-right">Total Haber</div>
-                <div className="col-span-1 text-right">Saldo</div>
+                <div className="col-span-2 text-right">Saldo inicial</div>
+                <div className="col-span-1 text-right">Debe</div>
+                <div className="col-span-1 text-right">Haber</div>
+                <div className="col-span-1 text-right">Saldo final</div>
               </div>
             </div>
 
@@ -1597,9 +1642,10 @@ export default function BalanzaBalance() {
                           </Badge>
                         </div>
 
-                        <div className="col-span-2 text-right font-semibold text-green-600">{formatCurrency(estadoNode.totals.debe)}</div>
-                        <div className="col-span-2 text-right font-semibold text-red-600">{formatCurrency(estadoNode.totals.haber)}</div>
-                        <div className="col-span-1 text-right font-semibold">{formatCurrency(estadoNode.totals.saldo)}</div>
+                        <div className="col-span-2 text-right font-semibold">{formatCurrency(estadoNode.totals.saldoInicial)}</div>
+                        <div className="col-span-1 text-right font-semibold text-green-600">{formatCurrency(estadoNode.totals.debe)}</div>
+                        <div className="col-span-1 text-right font-semibold text-red-600">{formatCurrency(estadoNode.totals.haber)}</div>
+                        <div className="col-span-1 text-right font-semibold">{formatCurrency(estadoNode.totals.saldoFinal)}</div>
                       </div>
                     </button>
                   </CollapsibleTrigger>
@@ -1622,9 +1668,10 @@ export default function BalanzaBalance() {
                                   </Badge>
                                 </div>
 
-                                <div className="col-span-2 text-right text-green-600 font-medium">{formatCurrency(grupoNode.totals.debe)}</div>
-                                <div className="col-span-2 text-right text-red-600 font-medium">{formatCurrency(grupoNode.totals.haber)}</div>
-                                <div className="col-span-1 text-right font-medium">{formatCurrency(grupoNode.totals.saldo)}</div>
+                                <div className="col-span-2 text-right font-medium">{formatCurrency(grupoNode.totals.saldoInicial)}</div>
+                                <div className="col-span-1 text-right text-green-600 font-medium">{formatCurrency(grupoNode.totals.debe)}</div>
+                                <div className="col-span-1 text-right text-red-600 font-medium">{formatCurrency(grupoNode.totals.haber)}</div>
+                                <div className="col-span-1 text-right font-medium">{formatCurrency(grupoNode.totals.saldoFinal)}</div>
                               </div>
                             </button>
                           </CollapsibleTrigger>
@@ -1650,9 +1697,10 @@ export default function BalanzaBalance() {
                                           </Badge>
                                         </div>
 
-                                        <div className="col-span-2 text-right text-green-600 text-sm font-medium">{formatCurrency(subNode.totals.debe)}</div>
-                                        <div className="col-span-2 text-right text-red-600 text-sm font-medium">{formatCurrency(subNode.totals.haber)}</div>
-                                        <div className="col-span-1 text-right text-sm font-medium">{formatCurrency(subNode.totals.saldo)}</div>
+                                        <div className="col-span-2 text-right text-sm font-medium">{formatCurrency(subNode.totals.saldoInicial)}</div>
+                                        <div className="col-span-1 text-right text-green-600 text-sm font-medium">{formatCurrency(subNode.totals.debe)}</div>
+                                        <div className="col-span-1 text-right text-red-600 text-sm font-medium">{formatCurrency(subNode.totals.haber)}</div>
+                                        <div className="col-span-1 text-right text-sm font-medium">{formatCurrency(subNode.totals.saldoFinal)}</div>
                                       </div>
                                     </button>
                                   </CollapsibleTrigger>
@@ -1666,9 +1714,10 @@ export default function BalanzaBalance() {
                                               <TableHead>Código</TableHead>
                                               <TableHead>Nombre</TableHead>
                                               <TableHead>Naturaleza</TableHead>
+                                              <TableHead className="text-right">Saldo inicial</TableHead>
                                               <TableHead className="text-right">Debe</TableHead>
                                               <TableHead className="text-right">Haber</TableHead>
-                                              <TableHead className="text-right">Saldo</TableHead>
+                                              <TableHead className="text-right">Saldo final</TableHead>
                                             </TableRow>
                                           </TableHeader>
 
@@ -1695,17 +1744,19 @@ export default function BalanzaBalance() {
                                                   </Badge>
                                                 </TableCell>
 
+                                                <TableCell className="text-right">{formatCurrency(c.saldoInicial)}</TableCell>
                                                 <TableCell className="text-right text-green-600">{formatCurrency(c.debe)}</TableCell>
                                                 <TableCell className="text-right text-red-600">{formatCurrency(c.haber)}</TableCell>
-                                                <TableCell className="text-right font-semibold">{formatCurrency(c.saldo)}</TableCell>
+                                                <TableCell className="text-right font-semibold">{formatCurrency(c.saldoFinal)}</TableCell>
                                               </TableRow>
                                             ))}
 
                                             <TableRow className="font-bold bg-muted/40">
                                               <TableCell colSpan={3}>Subtotal</TableCell>
+                                              <TableCell className="text-right">{formatCurrency(subNode.totals.saldoInicial)}</TableCell>
                                               <TableCell className="text-right text-green-600">{formatCurrency(subNode.totals.debe)}</TableCell>
                                               <TableCell className="text-right text-red-600">{formatCurrency(subNode.totals.haber)}</TableCell>
-                                              <TableCell className="text-right">{formatCurrency(subNode.totals.saldo)}</TableCell>
+                                              <TableCell className="text-right">{formatCurrency(subNode.totals.saldoFinal)}</TableCell>
                                             </TableRow>
                                           </TableBody>
                                         </Table>
@@ -1727,9 +1778,10 @@ export default function BalanzaBalance() {
             <div className="bg-muted/40 px-4 py-3">
               <div className="grid grid-cols-12 gap-3 items-center">
                 <div className="col-span-7 font-bold">TOTALES</div>
-                <div className="col-span-2 text-right font-bold text-green-600">{formatCurrency(totalDebe)}</div>
-                <div className="col-span-2 text-right font-bold text-red-600">{formatCurrency(totalHaber)}</div>
-                <div className="col-span-1 text-right font-bold">{formatCurrency(Math.abs(totalDebe - totalHaber))}</div>
+                <div className="col-span-2 text-right font-bold">{formatCurrency(saldoInicialTotal)}</div>
+                <div className="col-span-1 text-right font-bold text-green-600">{formatCurrency(totalDebe)}</div>
+                <div className="col-span-1 text-right font-bold text-red-600">{formatCurrency(totalHaber)}</div>
+                <div className="col-span-1 text-right font-bold">{formatCurrency(saldoFinalTotal)}</div>
               </div>
             </div>
           </div>

@@ -15,9 +15,13 @@ interface BalanzaEntry {
 
 interface SaldoCuenta {
   cuenta_codigo: string;
+  // ✅ NUEVO (E2E real)
+  saldo_inicial: number;
+  // ✅ Periodo
   debe_total: number;
   haber_total: number;
-  saldo: number;
+  // ✅ NUEVO (E2E real)
+  saldo_final: number;
 }
 
 type AsientoUI = {
@@ -88,7 +92,9 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
 
       // 1) Traer asientos completos (backend: /api/contabilidad/asientos)
       const asientosJson = await apiFetch(
-        `/api/contabilidad/asientos?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+        `/api/contabilidad/asientos?start=${encodeURIComponent(
+          start
+        )}&end=${encodeURIComponent(end)}`,
         { method: "GET" }
       );
       const asientosPayload = unwrap(asientosJson);
@@ -108,12 +114,12 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const cuentasJson = await apiFetch("/api/cuentas", { method: "GET" });
       const cuentasPayload = unwrap(cuentasJson);
 
-      // ✅ Esto es lo correcto para tu caso:
-      const cuentasArr: Array<{ codigo: string; nombre: string }> = Array.isArray(cuentasPayload)
-        ? cuentasPayload
-        : Array.isArray(cuentasJson)
-        ? cuentasJson
-        : [];
+      const cuentasArr: Array<{ codigo: string; nombre: string }> =
+        Array.isArray(cuentasPayload)
+          ? cuentasPayload
+          : Array.isArray(cuentasJson)
+          ? (cuentasJson as any)
+          : [];
 
       const cuentasMap = new Map<string, string>(
         (cuentasArr || [])
@@ -121,7 +127,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           .map((c: any) => [String(c.codigo), String(c.nombre ?? "")])
       );
 
-      // 3) Flatten asientos -> movimientos
+      // 3) Flatten asientos -> movimientos (para "filas afectadas" + modal)
       const movimientos: BalanzaEntry[] = [];
 
       for (const a of asientos || []) {
@@ -130,13 +136,17 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         const descripcionFinal = String(a?.concepto ?? "");
         const fechaFormateada = formatDMYFromYMD(a?.asiento_fecha);
 
-        const lines = Array.isArray(a?.detalle_asientos) ? a.detalle_asientos : [];
+        const lines = Array.isArray(a?.detalle_asientos)
+          ? a.detalle_asientos
+          : [];
+
         for (const l of lines) {
           const cuentaCodigo = String(l?.cuenta_codigo ?? "").trim();
           if (!cuentaCodigo) continue;
 
           const nombreLinea = String(l?.cuenta_nombre ?? "").trim();
-          const cuentaNombre = nombreLinea || cuentasMap.get(cuentaCodigo) || cuentaCodigo;
+          const cuentaNombre =
+            nombreLinea || cuentasMap.get(cuentaCodigo) || cuentaCodigo;
 
           movimientos.push({
             fecha: fechaFormateada,
@@ -151,38 +161,27 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         }
       }
 
-      // 4) Saldos por cuenta
-      const saldosPorCuenta: Record<string, SaldoCuenta> = {};
-      for (const mov of movimientos) {
-        const codigo = mov.cuenta_codigo;
-        if (!saldosPorCuenta[codigo]) {
-          saldosPorCuenta[codigo] = {
-            cuenta_codigo: codigo,
-            debe_total: 0,
-            haber_total: 0,
-            saldo: 0,
-          };
-        }
-        saldosPorCuenta[codigo].debe_total += mov.debe;
-        saldosPorCuenta[codigo].haber_total += mov.haber;
-      }
+      // 4) ✅ Saldos por cuenta (AHORA VIENEN DEL BACKEND)
+      // Backend nuevo entrega:
+      // - data.saldosPorCuenta
+      // - data.saldoInicialTotal
+      // - data.saldoFinalTotal
+      const saldosPorCuenta: Record<string, SaldoCuenta> =
+        (asientosPayload?.saldosPorCuenta as any) ??
+        (asientosJson?.saldosPorCuenta as any) ??
+        {};
 
-      // 5) Naturaleza contable para saldo
-      Object.values(saldosPorCuenta).forEach((cuenta) => {
-        const primerDigito = cuenta.cuenta_codigo.charAt(0);
-        // Deudora: Activos(1), Costos(5), Gastos(6)
-        if (["1", "5", "6"].includes(primerDigito)) {
-          cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
-        }
-        // Acreedora: Pasivos(2), Capital(3), Ingresos(4)
-        else if (["2", "3", "4"].includes(primerDigito)) {
-          cuenta.saldo = cuenta.haber_total - cuenta.debe_total;
-        } else {
-          cuenta.saldo = cuenta.debe_total - cuenta.haber_total;
-        }
-      });
+      const saldoInicialTotal = num(
+        asientosPayload?.saldoInicialTotal ?? asientosJson?.saldoInicialTotal,
+        0
+      );
 
-      return { movimientos, saldosPorCuenta };
+      const saldoFinalTotal = num(
+        asientosPayload?.saldoFinalTotal ?? asientosJson?.saldoFinalTotal,
+        0
+      );
+
+      return { movimientos, saldosPorCuenta, saldoInicialTotal, saldoFinalTotal };
     },
     enabled: !!startDate && !!endDate,
     retry: 1,
