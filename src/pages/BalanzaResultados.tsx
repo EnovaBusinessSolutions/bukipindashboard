@@ -148,7 +148,8 @@ export default function BalanzaResultados() {
   const [cuentaER, setCuentaER] = useState<string>("todos");
 
   // Educación
-  const [showTips, setShowTips] = useState<boolean>(true);
+  // ✅ Tips colapsado por default (igual que Comprobación)
+  const [showTips, setShowTips] = useState<boolean>(false);
 
   // Lista / tabla
   const [asientosOpen, setAsientosOpen] = useState<boolean>(false); // colapsado por default
@@ -388,8 +389,6 @@ export default function BalanzaResultados() {
 
   // =========================
   // ✅ AGRUPAR ASIENTOS (para: cancelación, modal, etc.)
-  //    Nota: en Resultados usamos referencias relevantes,
-  //    y “marcamos” esCuentaFiltrada solo para los movimientos que coinciden con el filtro actual.
   // =========================
   const asientosAgrupados: Record<string, AsientoAgrupado> = {};
 
@@ -495,7 +494,6 @@ export default function BalanzaResultados() {
 
   // =========================
   // ✅ F.2 DEFINITIVO: filas por “movimiento afectado”
-  //    (si un asiento afecta 2+ cuentas del filtro, aparecen 2+ filas)
   // =========================
   const filasAsientosResultados = useMemo(() => {
     const rows: Array<{
@@ -628,7 +626,10 @@ export default function BalanzaResultados() {
         { debe: 0, haber: 0, saldo: 0 }
       );
 
-    const buildCuentaRow = (codigo: string, estado_financiero: "Balance General" | "Estado de Resultados" | "—"): SaldosCuentaRow | null => {
+    const buildCuentaRow = (
+      codigo: string,
+      estado_financiero: "Balance General" | "Estado de Resultados" | "—"
+    ): SaldosCuentaRow | null => {
       const raw = saldoMap.get(codigo);
       if (!raw) return null;
 
@@ -836,6 +837,9 @@ export default function BalanzaResultados() {
           </p>
         </div>
 
+        {/* ✅ ELIMINADO: bloque duplicado del header (cuadrado/rango).
+            Esto ya lo pinta el header padre del módulo (como en tu screenshot). */}
+        {/*
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={cn("px-3 py-1", cuadra ? "border-green-400/60" : "border-red-400/60")}>
             {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
@@ -844,6 +848,7 @@ export default function BalanzaResultados() {
             Rango: {format(startDate, "dd/MM/yyyy")} → {format(endDate, "dd/MM/yyyy")}
           </Badge>
         </div>
+        */}
       </div>
 
       {/* Alerta fechas futuras */}
@@ -1373,7 +1378,6 @@ export default function BalanzaResultados() {
                       </TableRow>
                     ) : (
                       filasPaginadasResultados.map((row, idx) => {
-                        const cuentaLabel = `${row.mov.cuenta_codigo} - ${row.mov.cuenta_nombre}`;
                         const debe = Number(row.mov.debe || 0);
                         const haber = Number(row.mov.haber || 0);
 
@@ -1389,9 +1393,7 @@ export default function BalanzaResultados() {
                                   <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground mt-1 truncate">
-                                {row.asientoDescripcion}
-                              </div>
+                              <div className="text-xs text-muted-foreground mt-1 truncate">{row.asientoDescripcion}</div>
                             </TableCell>
 
                             <TableCell className="text-sm">{row.fecha}</TableCell>
@@ -1594,11 +1596,15 @@ export default function BalanzaResultados() {
                         <div className="col-span-5 flex items-center gap-2 min-w-0">
                           <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
                           <span className="font-semibold truncate">{estadoNode.label}</span>
-                          <Badge variant="outline" className="ml-2 hidden sm:inline-flex">Resultados</Badge>
+                          <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
+                            Resultados
+                          </Badge>
                         </div>
 
                         <div className="col-span-2">
-                          <Badge variant="secondary" className="px-2 py-1">—</Badge>
+                          <Badge variant="secondary" className="px-2 py-1">
+                            —
+                          </Badge>
                         </div>
 
                         <div className="col-span-2 text-right font-semibold text-green-600">{formatCurrency(estadoNode.totals.debe)}</div>
@@ -1621,7 +1627,9 @@ export default function BalanzaResultados() {
                                 </div>
 
                                 <div className="col-span-2">
-                                  <Badge variant="secondary" className="px-2 py-1">—</Badge>
+                                  <Badge variant="secondary" className="px-2 py-1">
+                                    —
+                                  </Badge>
                                 </div>
 
                                 <div className="col-span-2 text-right text-green-600 font-medium">{formatCurrency(grupoNode.totals.debe)}</div>
@@ -1641,11 +1649,15 @@ export default function BalanzaResultados() {
                                         <div className="col-span-5 flex items-center gap-2 min-w-0">
                                           <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
                                           <span className="truncate text-sm">{subNode.label}</span>
-                                          <Badge variant="outline" className="ml-2 hidden md:inline-flex">{subNode.cuentas.length} cuentas</Badge>
+                                          <Badge variant="outline" className="ml-2 hidden md:inline-flex">
+                                            {subNode.cuentas.length} cuentas
+                                          </Badge>
                                         </div>
 
                                         <div className="col-span-2">
-                                          <Badge variant="secondary" className="px-2 py-1">—</Badge>
+                                          <Badge variant="secondary" className="px-2 py-1">
+                                            —
+                                          </Badge>
                                         </div>
 
                                         <div className="col-span-2 text-right text-green-600 text-sm font-medium">{formatCurrency(subNode.totals.debe)}</div>
@@ -1688,7 +1700,9 @@ export default function BalanzaResultados() {
                                                 </TableCell>
 
                                                 <TableCell className="text-xs">
-                                                  <Badge variant="secondary" className="px-2 py-1">{c.naturaleza}</Badge>
+                                                  <Badge variant="secondary" className="px-2 py-1">
+                                                    {c.naturaleza}
+                                                  </Badge>
                                                 </TableCell>
 
                                                 <TableCell className="text-right text-green-600">{formatCurrency(c.debe)}</TableCell>
