@@ -146,7 +146,8 @@ export default function BalanzaBalance() {
   const [subAgrupadorBG, setSubAgrupadorBG] = useState<string>("todos");
   const [cuentaBG, setCuentaBG] = useState<string>("todos");
 
-  const [showTips, setShowTips] = useState<boolean>(true);
+  // ✅ Tips colapsado por default
+  const [showTips, setShowTips] = useState<boolean>(false);
 
   const [asientosOpen, setAsientosOpen] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
@@ -212,7 +213,7 @@ export default function BalanzaBalance() {
   const cuentasFlat: CuentaFlat[] = (cuentasData?.cuentasFlat as CuentaFlat[]) || [];
   const estadosFinancieros: any = cuentasData?.estadosFinancieros;
 
-  // ✅ NUEVO: saldos totales de arrastre (si el hook ya los retorna)
+  // ✅ saldos totales de arrastre (si el hook ya los retorna)
   const saldoInicialTotal = Number((balanzaData as any)?.saldoInicialTotal || 0);
   const saldoFinalTotal = Number((balanzaData as any)?.saldoFinalTotal || 0);
 
@@ -835,14 +836,7 @@ export default function BalanzaBalance() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className={cn("px-3 py-1", cuadra ? "border-green-400/60" : "border-red-400/60")}>
-            {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
-          </Badge>
-          <Badge variant="outline" className="px-3 py-1">
-            Rango: {format(startDate, "dd/MM/yyyy")} → {format(endDate, "dd/MM/yyyy")}
-          </Badge>
-        </div>
+        {/* ✅ Eliminado: bloques "Descuadrado" y "Rango" (captura 2) */}
       </div>
 
       {/* Alerta fechas futuras */}
@@ -1405,9 +1399,7 @@ export default function BalanzaBalance() {
                                   <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground mt-1 truncate">
-                                {row.asientoDescripcion}
-                              </div>
+                              <div className="text-xs text-muted-foreground mt-1 truncate">{row.asientoDescripcion}</div>
                             </TableCell>
 
                             <TableCell className="text-sm">{row.fecha}</TableCell>
@@ -1502,7 +1494,12 @@ export default function BalanzaBalance() {
                       <ChevronRight className="h-4 w-4" />
                     </Button>
 
-                    <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={pageSafe === totalPages}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(totalPages)}
+                      disabled={pageSafe === totalPages}
+                    >
                       <ChevronsRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1518,7 +1515,9 @@ export default function BalanzaBalance() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Asiento {asientoModalData?.referencia || ""}</DialogTitle>
-            <DialogDescription>{asientoModalData?.descripcion || "Detalle completo del asiento contable."}</DialogDescription>
+            <DialogDescription>
+              {asientoModalData?.descripcion || "Detalle completo del asiento contable."}
+            </DialogDescription>
           </DialogHeader>
 
           {!asientoModalData ? (
@@ -1550,7 +1549,9 @@ export default function BalanzaBalance() {
                       >
                         <TableCell>
                           <div className="flex items-start gap-2">
-                            {mov.esCuentaFiltrada && <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>}
+                            {mov.esCuentaFiltrada && (
+                              <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>
+                            )}
                             <div className="min-w-0">
                               <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
                               <p className="text-xs text-muted-foreground truncate">{mov.cuenta_nombre}</p>
