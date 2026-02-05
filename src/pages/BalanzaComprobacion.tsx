@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CalendarIcon, ChevronRight, Filter, AlertTriangle, Info, BookOpen, ChevronLeft, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { format, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
+import { format, endOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -91,7 +91,8 @@ export default function BalanzaComprobacion() {
   const [filtroBusqueda, setFiltroBusqueda] = useState<string>("");
 
   // UI
-  const [showTips, setShowTips] = useState<boolean>(true);
+  // ✅ Tips colapsado por default (como tu captura 1)
+  const [showTips, setShowTips] = useState<boolean>(false);
   const [asientosOpen, setAsientosOpen] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
 
@@ -210,8 +211,14 @@ export default function BalanzaComprobacion() {
   // Totales por saldos (sin filtros especiales)
   const saldosPorCuentaFiltrados = saldosPorCuenta;
 
-  const totalDebe = useMemo(() => Object.values(saldosPorCuentaFiltrados).reduce((sum, c: any) => sum + (c?.debe_total || 0), 0), [saldosPorCuentaFiltrados]);
-  const totalHaber = useMemo(() => Object.values(saldosPorCuentaFiltrados).reduce((sum, c: any) => sum + (c?.haber_total || 0), 0), [saldosPorCuentaFiltrados]);
+  const totalDebe = useMemo(
+    () => Object.values(saldosPorCuentaFiltrados).reduce((sum, c: any) => sum + (c?.debe_total || 0), 0),
+    [saldosPorCuentaFiltrados]
+  );
+  const totalHaber = useMemo(
+    () => Object.values(saldosPorCuentaFiltrados).reduce((sum, c: any) => sum + (c?.haber_total || 0), 0),
+    [saldosPorCuentaFiltrados]
+  );
   const diferencia = Math.abs(totalDebe - totalHaber);
   const cuadra = diferencia < 0.01;
 
@@ -249,12 +256,15 @@ export default function BalanzaComprobacion() {
     }
 
     const sumRows = (rows: SaldosCuentaRow[]) =>
-      rows.reduce((acc, r) => {
-        acc.debe += r.debe || 0;
-        acc.haber += r.haber || 0;
-        acc.saldo += r.saldo || 0;
-        return acc;
-      }, { debe: 0, haber: 0, saldo: 0 });
+      rows.reduce(
+        (acc, r) => {
+          acc.debe += r.debe || 0;
+          acc.haber += r.haber || 0;
+          acc.saldo += r.saldo || 0;
+          return acc;
+        },
+        { debe: 0, haber: 0, saldo: 0 }
+      );
 
     const buildCuentaRow = (codigo: string, estado_financiero: "Balance General" | "Estado de Resultados" | "—"): SaldosCuentaRow | null => {
       const raw = saldoMap.get(codigo);
@@ -434,12 +444,15 @@ export default function BalanzaComprobacion() {
             </p>
           </div>
 
+          {/* ✅ ELIMINADO: bloque duplicado (captura 2) */}
+          {/* 
           <div className="flex items-center gap-2">
             <Badge variant="outline" className={cn("px-3 py-1", cuadra ? "border-green-400/60" : "border-red-400/60")}>
               {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
             </Badge>
             <Badge variant="outline" className="px-3 py-1">Corte: {format(endDate, "dd/MM/yyyy")}</Badge>
           </div>
+          */}
         </div>
       </div>
 
@@ -536,7 +549,9 @@ export default function BalanzaComprobacion() {
             <CardTitle className="text-sm font-medium">Total Debe</CardTitle>
             <CardDescription className="text-xs">Acumulado del periodo (según filtros)</CardDescription>
           </CardHeader>
-          <CardContent><p className="text-2xl font-bold text-green-600">{formatCurrency(totalDebe)}</p></CardContent>
+          <CardContent>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalDebe)}</p>
+          </CardContent>
         </Card>
 
         <Card className="border-muted-foreground/15">
@@ -544,7 +559,9 @@ export default function BalanzaComprobacion() {
             <CardTitle className="text-sm font-medium">Total Haber</CardTitle>
             <CardDescription className="text-xs">Acumulado del periodo (según filtros)</CardDescription>
           </CardHeader>
-          <CardContent><p className="text-2xl font-bold text-red-600">{formatCurrency(totalHaber)}</p></CardContent>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalHaber)}</p>
+          </CardContent>
         </Card>
 
         <Card className={cn("border-muted-foreground/15", cuadra ? "border-green-500/40" : "border-red-500/40")}>
@@ -575,8 +592,7 @@ export default function BalanzaComprobacion() {
                       {asientosOpen ? (
                         <>
                           Mostrando <span className="font-semibold">{asientosFiltrados.length ? startIdx + 1 : 0}</span>–
-                          <span className="font-semibold">{endIdx}</span> de{" "}
-                          <span className="font-semibold">{totalItems}</span> (25 por página)
+                          <span className="font-semibold">{endIdx}</span> de <span className="font-semibold">{totalItems}</span> (25 por página)
                         </>
                       ) : (
                         <>
@@ -588,25 +604,49 @@ export default function BalanzaComprobacion() {
 
                   {asientosOpen && (
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage(1); }} disabled={pageSafe === 1}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPage(1);
+                        }}
+                        disabled={pageSafe === 1}
+                      >
                         <ChevronsLeft className="h-4 w-4" />
                       </Button>
 
-                      <Button variant="outline" size="sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage((p) => Math.max(1, p - 1)); }} disabled={pageSafe === 1}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPage((p) => Math.max(1, p - 1));
+                        }}
+                        disabled={pageSafe === 1}
+                      >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
 
                       <div className="flex items-center gap-1">
                         {pageNumbers.map((n, idx) =>
                           n === "…" ? (
-                            <span key={`dots-${idx}`} className="px-2 text-muted-foreground">…</span>
+                            <span key={`dots-${idx}`} className="px-2 text-muted-foreground">
+                              …
+                            </span>
                           ) : (
                             <Button
                               key={n}
                               variant={n === pageSafe ? "default" : "outline"}
                               size="sm"
                               className="h-8 px-3"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage(n); }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setPage(n);
+                              }}
                             >
                               {n}
                             </Button>
@@ -614,11 +654,29 @@ export default function BalanzaComprobacion() {
                         )}
                       </div>
 
-                      <Button variant="outline" size="sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage((p) => Math.min(totalPages, p + 1)); }} disabled={pageSafe === totalPages}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPage((p) => Math.min(totalPages, p + 1));
+                        }}
+                        disabled={pageSafe === totalPages}
+                      >
                         <ChevronRight className="h-4 w-4" />
                       </Button>
 
-                      <Button variant="outline" size="sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage(totalPages); }} disabled={pageSafe === totalPages}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPage(totalPages);
+                        }}
+                        disabled={pageSafe === totalPages}
+                      >
                         <ChevronsRight className="h-4 w-4" />
                       </Button>
                     </div>
@@ -638,7 +696,13 @@ export default function BalanzaComprobacion() {
 
                   return (
                     <Collapsible key={asiento.referencia}>
-                      <Card className={cn("border-muted-foreground/15 overflow-hidden", asientoItem.esCancelado ? "border-red-300 bg-red-50 dark:bg-red-950/20" : "", !cuadrado && !asientoItem.esCancelado ? "border-red-300" : "")}>
+                      <Card
+                        className={cn(
+                          "border-muted-foreground/15 overflow-hidden",
+                          asientoItem.esCancelado ? "border-red-300 bg-red-50 dark:bg-red-950/20" : "",
+                          !cuadrado && !asientoItem.esCancelado ? "border-red-300" : ""
+                        )}
+                      >
                         <CollapsibleTrigger asChild>
                           <div className="cursor-pointer group">
                             <CardHeader className="hover:bg-muted/40 transition-colors">
@@ -709,10 +773,18 @@ export default function BalanzaComprobacion() {
                                       </TableCell>
                                       <TableCell className="text-sm">{mov.descripcion}</TableCell>
                                       <TableCell className="text-right">
-                                        {mov.debe > 0 ? <span className="text-green-600 font-medium">{formatCurrency(mov.debe)}</span> : <span className="text-muted-foreground">—</span>}
+                                        {mov.debe > 0 ? (
+                                          <span className="text-green-600 font-medium">{formatCurrency(mov.debe)}</span>
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
+                                        )}
                                       </TableCell>
                                       <TableCell className="text-right">
-                                        {mov.haber > 0 ? <span className="text-red-600 font-medium">{formatCurrency(mov.haber)}</span> : <span className="text-muted-foreground">—</span>}
+                                        {mov.haber > 0 ? (
+                                          <span className="text-red-600 font-medium">{formatCurrency(mov.haber)}</span>
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
+                                        )}
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -741,9 +813,7 @@ export default function BalanzaComprobacion() {
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>
-          <CardDescription>
-            Vista desplegable por Estado Financiero → Grupo → Subgrupo → Cuenta, con Debe/Haber acumulado y saldo neto.
-          </CardDescription>
+          <CardDescription>Vista desplegable por Estado Financiero → Grupo → Subgrupo → Cuenta, con Debe/Haber acumulado y saldo neto.</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
@@ -770,7 +840,9 @@ export default function BalanzaComprobacion() {
                         </div>
 
                         <div className="col-span-2">
-                          <Badge variant="secondary" className="px-2 py-1">—</Badge>
+                          <Badge variant="secondary" className="px-2 py-1">
+                            —
+                          </Badge>
                         </div>
 
                         <div className="col-span-2 text-right font-semibold text-green-600">{formatCurrency(estadoNode.totals.debe)}</div>
@@ -792,7 +864,11 @@ export default function BalanzaComprobacion() {
                                   <span className="font-medium truncate">{grupoNode.label}</span>
                                 </div>
 
-                                <div className="col-span-2"><Badge variant="secondary" className="px-2 py-1">—</Badge></div>
+                                <div className="col-span-2">
+                                  <Badge variant="secondary" className="px-2 py-1">
+                                    —
+                                  </Badge>
+                                </div>
                                 <div className="col-span-2 text-right text-green-600 font-medium">{formatCurrency(grupoNode.totals.debe)}</div>
                                 <div className="col-span-2 text-right text-red-600 font-medium">{formatCurrency(grupoNode.totals.haber)}</div>
                                 <div className="col-span-1 text-right font-medium">{formatCurrency(grupoNode.totals.saldo)}</div>
@@ -810,9 +886,15 @@ export default function BalanzaComprobacion() {
                                         <div className="col-span-5 flex items-center gap-2 min-w-0">
                                           <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
                                           <span className="truncate text-sm">{subNode.label}</span>
-                                          <Badge variant="outline" className="ml-2 hidden md:inline-flex">{subNode.cuentas.length} cuentas</Badge>
+                                          <Badge variant="outline" className="ml-2 hidden md:inline-flex">
+                                            {subNode.cuentas.length} cuentas
+                                          </Badge>
                                         </div>
-                                        <div className="col-span-2"><Badge variant="secondary" className="px-2 py-1">—</Badge></div>
+                                        <div className="col-span-2">
+                                          <Badge variant="secondary" className="px-2 py-1">
+                                            —
+                                          </Badge>
+                                        </div>
                                         <div className="col-span-2 text-right text-green-600 text-sm font-medium">{formatCurrency(subNode.totals.debe)}</div>
                                         <div className="col-span-2 text-right text-red-600 text-sm font-medium">{formatCurrency(subNode.totals.haber)}</div>
                                         <div className="col-span-1 text-right text-sm font-medium">{formatCurrency(subNode.totals.saldo)}</div>
@@ -841,7 +923,9 @@ export default function BalanzaComprobacion() {
                                                 <TableCell className="font-mono text-xs">{c.codigo}</TableCell>
                                                 <TableCell className="text-sm">{c.nombre}</TableCell>
                                                 <TableCell className="text-xs">
-                                                  <Badge variant="secondary" className="px-2 py-1">{c.naturaleza}</Badge>
+                                                  <Badge variant="secondary" className="px-2 py-1">
+                                                    {c.naturaleza}
+                                                  </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right text-green-600">{formatCurrency(c.debe)}</TableCell>
                                                 <TableCell className="text-right text-red-600">{formatCurrency(c.haber)}</TableCell>
