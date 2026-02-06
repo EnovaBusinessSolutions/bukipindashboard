@@ -21,13 +21,16 @@ interface ResultadoMensual {
   margenNeto: number;
 }
 
-type DetalleAsientoAPI = {
-  cuenta_codigo: string;
-  debe: number | null;
-  haber: number | null;
-  asientos_contables: {
-    fecha: string; // YYYY-MM-DD
-  };
+type ContabilidadAsientoAPI = {
+  id?: string;
+  _id?: string;
+  asiento_fecha?: string; // YYYY-MM-DD
+  fecha?: string; // compat
+  detalle_asientos?: Array<{
+    cuenta_codigo?: string | null;
+    debe?: number | null;
+    haber?: number | null;
+  }>;
 };
 
 const parseYYYYMMDDLocal = (yyyyMmDd: string): Date | null => {
@@ -40,6 +43,13 @@ const parseYYYYMMDDLocal = (yyyyMmDd: string): Date | null => {
   return new Date(y, m, d);
 };
 
+const num = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const unwrap = (json: any) => json?.data ?? json;
+
 export const useEstadoResultadosMensual = (año?: number) => {
   const añoActual = año || new Date().getFullYear();
 
@@ -47,50 +57,55 @@ export const useEstadoResultadosMensual = (año?: number) => {
     queryKey: ["estado-resultados-mensual", añoActual],
     queryFn: async (): Promise<ResultadoMensual[]> => {
       const meses = [
-        "Enero",
-        "Febrero",
-        "Marzo",
-        "Abril",
-        "Mayo",
-        "Junio",
-        "Julio",
-        "Agosto",
-        "Septiembre",
-        "Octubre",
-        "Noviembre",
-        "Diciembre",
+        "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+        "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
       ];
 
-      // ✅ UNA SOLA CONSULTA PARA TODO EL AÑO
       const fechaInicioAño = `${añoActual}-01-01`;
       const fechaFinAño = `${añoActual}-12-31`;
 
       /**
-       * Endpoint esperado:
-       * GET /api/contabilidad/detalle-asientos?start=YYYY-MM-DD&end=YYYY-MM-DD
-       * Devuelve { ok:true, data:[...] } o payload plano [...]
+       * ✅ Fuente correcta para mensual:
+       * /api/contabilidad/asientos trae asiento_fecha + detalle_asientos (líneas).
+       * Así sí podemos agrupar por mes.
        */
       const json = await apiFetch(
-        `/api/contabilidad/detalle-asientos?start=${encodeURIComponent(fechaInicioAño)}&end=${encodeURIComponent(
-          fechaFinAño
-        )}`,
+        `/api/contabilidad/asientos?start=${encodeURIComponent(fechaInicioAño)}&end=${encodeURIComponent(fechaFinAño)}`,
         { method: "GET" }
       );
 
-      const detallesAño = (json?.data ?? json ?? []) as DetalleAsientoAPI[];
+      const payload = unwrap(json);
 
-      // Agrupar por mes en frontend usando Map
-      const detallesPorMes = new Map<number, DetalleAsientoAPI[]>();
+      // Soportar {asientos}, {items}, array plano
+      const asientos: ContabilidadAsientoAPI[] =
+        payload?.asientos ??
+        payload?.items ??
+        (Array.isArray(payload) ? payload : []);
 
-      detallesAño.forEach((detalle) => {
-        const fecha = parseYYYYMMDDLocal(detalle.asientos_contables?.fecha || "");
-        if (!fecha) return;
+      // Agrupar líneas por mes (0-11)
+      const detallesPorMes = new Map<number, Array<{ cuenta_codigo: string; debe: number; haber: number }>>();
+
+      for (const a of asientos || []) {
+        const ymd = String(a.asiento_fecha ?? a.fecha ?? "");
+        const fecha = parseYYYYMMDDLocal(ymd);
+        if (!fecha) continue;
+
         const mes = fecha.getMonth();
-        if (!detallesPorMes.has(mes)) detallesPorMes.set(mes, []);
-        detallesPorMes.get(mes)!.push(detalle);
-      });
+        const lines = Array.isArray(a.detalle_asientos) ? a.detalle_asientos : [];
 
-      // Procesar cada mes (sin más consultas)
+        for (const ln of lines) {
+          const codigo = String(ln?.cuenta_codigo ?? "").trim();
+          if (!codigo) continue;
+
+          const debe = num(ln?.debe);
+          const haber = num(ln?.haber);
+
+          if (!detallesPorMes.has(mes)) detallesPorMes.set(mes, []);
+          detallesPorMes.get(mes)!.push({ cuenta_codigo: codigo, debe, haber });
+        }
+      }
+
+      // Procesar cada mes
       const resultados: ResultadoMensual[] = [];
 
       for (let mes = 0; mes < 12; mes++) {
@@ -102,58 +117,40 @@ export const useEstadoResultadosMensual = (año?: number) => {
         let depreciacion = 0;
         let intereses = 0;
 
-        detallesMes.forEach((detalle) => {
+        for (const detalle of detallesMes) {
           const codigo = String(detalle.cuenta_codigo || "");
-          const debe = Number(detalle.debe) || 0;
-          const haber = Number(detalle.haber) || 0;
+          const debe = num(detalle.debe);
+          const haber = num(detalle.haber);
 
-          // === INGRESOS (Cuentas 4XXX) ===
-          // Ventas (4001, 4004) - naturaleza acreedora
+          // === INGRESOS (4XXX) ===
           if (codigo === "4001" || codigo === "4004") {
             ingresos += haber - debe;
-          }
-          // Devoluciones/Descuentos sobre Ventas (4002, 4003) - RESTAN
-          else if (codigo === "4002" || codigo === "4003") {
+          } else if (codigo === "4002" || codigo === "4003") {
             ingresos -= debe - haber;
-          }
-          // Otros Ingresos (41XX) - naturaleza acreedora
-          else if (codigo.startsWith("41")) {
+          } else if (codigo.startsWith("41")) {
             ingresos += haber - debe;
           }
 
-          // === COSTOS (Cuentas 50XX) ===
-          // Costo de Ventas (5001, 5002) - naturaleza deudora
+          // === COSTOS (50XX) ===
           else if (codigo === "5001" || codigo === "5002") {
             costos += debe - haber;
-          }
-          // Devoluciones/Descuentos sobre Compras (5003, 5004) - RESTAN
-          else if (codigo === "5003" || codigo === "5004") {
+          } else if (codigo === "5003" || codigo === "5004") {
             costos -= debe - haber;
           }
 
-          // === GASTOS (Cuentas 51XX) ===
-          // Depreciación (5109, 5110) - separada para EBITDA
+          // === GASTOS (51XX) ===
           else if (codigo === "5109" || codigo === "5110") {
             depreciacion += debe - haber;
-          }
-          // Gastos operativos (51XX excepto depreciaciones)
-          else if (codigo.startsWith("51") && codigo !== "5109" && codigo !== "5110") {
+          } else if (codigo.startsWith("51") && codigo !== "5109" && codigo !== "5110") {
             gastos += debe - haber;
           }
 
-          // === INTERESES ===
-          // ✅ Regla segura: solo 5201 (Intereses)
+          // === INTERESES (5201) ===
           else if (codigo === "5201") {
             intereses += debe - haber;
           }
+        }
 
-          // ⚠️ Si quieres mantener tu regla original (NO recomendado), descomenta:
-          // else if (codigo === "5201" || (codigo.startsWith("51") && parseInt(codigo, 10) >= 5111)) {
-          //   intereses += debe - haber;
-          // }
-        });
-
-        // Calcular utilidades y márgenes
         const utilidadBruta = ingresos - costos;
         const ebitda = utilidadBruta - gastos;
         const ebit = ebitda - depreciacion;
