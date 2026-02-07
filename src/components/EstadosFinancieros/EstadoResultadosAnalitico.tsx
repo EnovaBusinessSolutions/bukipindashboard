@@ -63,12 +63,22 @@ type CuentaFlat = {
   parent_id?: string | null;
 };
 
+/**
+ * ✅ Shape robusto (porque useAsientosBalanza puede variar por versión):
+ * - preferimos debe_total/haber_total
+ * - fallback a debe/haber
+ * - saldo/saldo_final opcionales
+ */
 type SaldoCuentaHook = {
-  cuenta_codigo: string;
-  saldo_inicial: number;
-  debe_total: number;
-  haber_total: number;
-  saldo_final: number;
+  cuenta_codigo?: string;
+  saldo?: number;
+  saldo_inicial?: number;
+  saldo_final?: number;
+  debe_total?: number;
+  haber_total?: number;
+  // compat
+  debe?: number;
+  haber?: number;
 };
 
 interface WaterfallData {
@@ -117,13 +127,15 @@ function clampNum(v: any): number {
  *   => lo mostramos como positivo: (debe - haber)
  */
 function montoPeriodoER(codigo: string, row?: SaldoCuentaHook | null) {
-  const debe = clampNum(row?.debe_total);
-  const haber = clampNum(row?.haber_total);
+  const debe = clampNum(row?.debe_total ?? row?.debe);
+  const haber = clampNum(row?.haber_total ?? row?.haber);
   const neto = debe - haber; // neto contable
   const code = String(codigo || "");
+
   if (code.startsWith("4")) return haber - debe; // ingresos positivos
   if (code.startsWith("5")) return neto; // egresos positivos
   if (code.startsWith("6")) return neto; // egresos positivos
+
   // fallback: magnitud (evita signos “raros” por catálogo)
   return Math.abs(neto);
 }
@@ -265,8 +277,17 @@ const EstadoResultadosAnalitico = ({
     [cuentasER]
   );
 
+  /**
+   * ✅ FIX CRÍTICO: NO duplicar depreciaciones.
+   * Gastos de Operación debe excluir 5109/5110, porque van en Depreciaciones.
+   */
   const cuentasGastosOperativos = useMemo(
-    () => cuentasER.filter((c) => (c.subgrupo ?? "").trim() === "Gastos de Operación"),
+    () =>
+      cuentasER.filter((c) => {
+        if ((c.subgrupo ?? "").trim() !== "Gastos de Operación") return false;
+        const n = parseInt(getCodigo(c), 10);
+        return n !== 5109 && n !== 5110;
+      }),
     [cuentasER]
   );
 
@@ -365,9 +386,15 @@ const EstadoResultadosAnalitico = ({
     saldosPorCuenta,
   ]);
 
-  // Default rubro (sin setState en render)
+  /**
+   * ✅ FIX UX: si el rubro seleccionado ya no existe (cambias rango),
+   * reseteamos al primer rubro disponible.
+   */
   useEffect(() => {
-    if (!rubroSeleccionado && rubros.length > 0) {
+    if (!rubros.length) return;
+
+    const existe = rubros.some((r) => r.id === rubroSeleccionado);
+    if (!rubroSeleccionado || !existe) {
       setRubroSeleccionado(rubros[0].id);
       setCuentaSeleccionada("__all__");
     }
@@ -622,7 +649,9 @@ const EstadoResultadosAnalitico = ({
       <Card className="border-2 border-primary/20 overflow-hidden">
         <CardHeader className="bg-primary/5">
           <div className="space-y-2">
-            <CardTitle className="text-2xl text-center">Estado de Resultados — Formato Analítico</CardTitle>
+            <CardTitle className="text-2xl text-center">
+              Estado de Resultados — Formato Analítico
+            </CardTitle>
             <p className="text-sm text-muted-foreground text-center font-medium">
               {formatearPeriodo(startDate, endDate)}
             </p>
@@ -641,7 +670,9 @@ const EstadoResultadosAnalitico = ({
 
               <div className="p-3 rounded-lg bg-muted/30">
                 <p className="text-xs text-muted-foreground">Gastos Operativos</p>
-                <p className="text-lg font-bold text-red-600">{formatCurrencyMX(gastosOperativos + otrosGastos)}</p>
+                <p className="text-lg font-bold text-red-600">
+                  {formatCurrencyMX(gastosOperativos + otrosGastos)}
+                </p>
               </div>
 
               <div className="p-3 rounded-lg bg-muted/30">
@@ -699,9 +730,14 @@ const EstadoResultadosAnalitico = ({
                       {cuentasConSaldoCount}
                     </div>
                     <div>
-                      <span className="font-semibold text-foreground">Rubro:</span>{" "}
-                      {rubroActual?.nombre ?? "-"}{" "}
+                      <span className="font-semibold text-foreground">Rubro:</span> {rubroActual?.nombre ?? "-"}{" "}
                       <span className="text-muted-foreground">(periodType: {String(periodType)})</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-foreground">Márgenes:</span>{" "}
+                      Bruto {margenBruto.toFixed(1)}% • EBITDA {margenEBITDA.toFixed(1)}% • EBIT{" "}
+                      {margenEBIT.toFixed(1)}% • Antes Imp {margenAntesImpuestos.toFixed(1)}% • Neto{" "}
+                      {margenNeto.toFixed(1)}%
                     </div>
                   </div>
                 </CollapsibleContent>

@@ -24,21 +24,34 @@ interface ResultadoMensual {
 type ContabilidadAsientoAPI = {
   id?: string;
   _id?: string;
+
   asiento_fecha?: string; // YYYY-MM-DD
   fecha?: string; // compat
-  detalle_asientos?: Array<{
-    cuenta_codigo?: string | null;
-    debe?: number | null;
-    haber?: number | null;
-  }>;
+  asientos_fecha?: string; // compat común
+  fecha_asiento?: string; // compat común
+  createdAt?: string; // ISO
+
+  // Posibles variantes
+  detalle_asientos?: Array<any>;
+  detalles?: Array<any>;
+  lines?: Array<any>;
+  asientos_contables?: Array<any>;
 };
 
-const parseYYYYMMDDLocal = (yyyyMmDd: string): Date | null => {
-  const parts = (yyyyMmDd || "").split("-");
+const parseYYYYMMDDLocal = (input: string): Date | null => {
+  const s = String(input || "").trim();
+  if (!s) return null;
+
+  // Soportar ISO: "2026-01-23T..." -> "2026-01-23"
+  const ymd = s.includes("T") ? s.split("T")[0] : s;
+
+  const parts = ymd.split("-");
   if (parts.length !== 3) return null;
+
   const y = Number(parts[0]);
   const m = Number(parts[1]) - 1;
   const d = Number(parts[2]);
+
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
   return new Date(y, m, d);
 };
@@ -50,7 +63,48 @@ const num = (v: any) => {
 
 const unwrap = (json: any) => json?.data ?? json;
 
-export const useEstadoResultadosMensual = (año?: number) => {
+const pickFecha = (a: any): string => {
+  return (
+    a?.asiento_fecha ||
+    a?.fecha ||
+    a?.asientos_fecha ||
+    a?.fecha_asiento ||
+    a?.date ||
+    a?.createdAt ||
+    ""
+  );
+};
+
+const pickLines = (a: any): any[] => {
+  const lines =
+    a?.detalle_asientos ??
+    a?.detalles ??
+    a?.lines ??
+    a?.asientos_contables ??
+    [];
+
+  return Array.isArray(lines) ? lines : [];
+};
+
+const pickCuentaCodigo = (ln: any): string => {
+  const codigo =
+    ln?.cuenta_codigo ??
+    ln?.cuentaCodigo ??
+    ln?.accountCodigo ??
+    ln?.codigo ??
+    "";
+
+  return String(codigo || "").trim();
+};
+
+const pickDebeHaber = (ln: any) => {
+  // Compat: debe/haber o debit/credit
+  const debe = num(ln?.debe ?? ln?.debit ?? 0);
+  const haber = num(ln?.haber ?? ln?.credit ?? 0);
+  return { debe, haber };
+};
+
+export const useEstadoResultadosMensual = (año?: number, opts?: { debug?: boolean }) => {
   const añoActual = año || new Date().getFullYear();
 
   return useQuery({
@@ -64,11 +118,6 @@ export const useEstadoResultadosMensual = (año?: number) => {
       const fechaInicioAño = `${añoActual}-01-01`;
       const fechaFinAño = `${añoActual}-12-31`;
 
-      /**
-       * ✅ Fuente correcta para mensual:
-       * /api/contabilidad/asientos trae asiento_fecha + detalle_asientos (líneas).
-       * Así sí podemos agrupar por mes.
-       */
       const json = await apiFetch(
         `/api/contabilidad/asientos?start=${encodeURIComponent(fechaInicioAño)}&end=${encodeURIComponent(fechaFinAño)}`,
         { method: "GET" }
@@ -76,33 +125,60 @@ export const useEstadoResultadosMensual = (año?: number) => {
 
       const payload = unwrap(json);
 
-      // Soportar {asientos}, {items}, array plano
       const asientos: ContabilidadAsientoAPI[] =
         payload?.asientos ??
         payload?.items ??
+        payload?.data?.asientos ??
+        payload?.data?.items ??
         (Array.isArray(payload) ? payload : []);
 
       // Agrupar líneas por mes (0-11)
       const detallesPorMes = new Map<number, Array<{ cuenta_codigo: string; debe: number; haber: number }>>();
 
+      let debugCounters = {
+        totalAsientos: 0,
+        asientosSinFecha: 0,
+        asientosSinLines: 0,
+        lineasSinCodigo: 0,
+        lineasProcesadas: 0,
+      };
+
       for (const a of asientos || []) {
-        const ymd = String(a.asiento_fecha ?? a.fecha ?? "");
+        debugCounters.totalAsientos++;
+
+        const ymd = String(pickFecha(a));
         const fecha = parseYYYYMMDDLocal(ymd);
-        if (!fecha) continue;
+        if (!fecha) {
+          debugCounters.asientosSinFecha++;
+          continue;
+        }
 
         const mes = fecha.getMonth();
-        const lines = Array.isArray(a.detalle_asientos) ? a.detalle_asientos : [];
+        const lines = pickLines(a);
+
+        if (!lines.length) {
+          debugCounters.asientosSinLines++;
+          continue;
+        }
 
         for (const ln of lines) {
-          const codigo = String(ln?.cuenta_codigo ?? "").trim();
-          if (!codigo) continue;
+          const codigo = pickCuentaCodigo(ln);
+          if (!codigo) {
+            debugCounters.lineasSinCodigo++;
+            continue;
+          }
 
-          const debe = num(ln?.debe);
-          const haber = num(ln?.haber);
+          const { debe, haber } = pickDebeHaber(ln);
 
           if (!detallesPorMes.has(mes)) detallesPorMes.set(mes, []);
           detallesPorMes.get(mes)!.push({ cuenta_codigo: codigo, debe, haber });
+          debugCounters.lineasProcesadas++;
         }
+      }
+
+      if (opts?.debug) {
+        // eslint-disable-next-line no-console
+        console.log("[ER Mensual] debugCounters:", debugCounters);
       }
 
       // Procesar cada mes
@@ -122,7 +198,7 @@ export const useEstadoResultadosMensual = (año?: number) => {
           const debe = num(detalle.debe);
           const haber = num(detalle.haber);
 
-          // === INGRESOS (4XXX) ===
+          // === INGRESOS ===
           if (codigo === "4001" || codigo === "4004") {
             ingresos += haber - debe;
           } else if (codigo === "4002" || codigo === "4003") {
@@ -131,21 +207,21 @@ export const useEstadoResultadosMensual = (año?: number) => {
             ingresos += haber - debe;
           }
 
-          // === COSTOS (50XX) ===
+          // === COSTOS ===
           else if (codigo === "5001" || codigo === "5002") {
             costos += debe - haber;
           } else if (codigo === "5003" || codigo === "5004") {
             costos -= debe - haber;
           }
 
-          // === GASTOS (51XX) ===
+          // === GASTOS ===
           else if (codigo === "5109" || codigo === "5110") {
             depreciacion += debe - haber;
           } else if (codigo.startsWith("51") && codigo !== "5109" && codigo !== "5110") {
             gastos += debe - haber;
           }
 
-          // === INTERESES (5201) ===
+          // === INTERESES ===
           else if (codigo === "5201") {
             intereses += debe - haber;
           }
@@ -156,7 +232,6 @@ export const useEstadoResultadosMensual = (año?: number) => {
         const ebit = ebitda - depreciacion;
         const utilidadAntesImpuestos = ebit - intereses;
 
-        // Impuestos estimados (30% si hay utilidad positiva)
         const impuestos = utilidadAntesImpuestos > 0 ? utilidadAntesImpuestos * 0.3 : 0;
         const utilidadNeta = utilidadAntesImpuestos - impuestos;
 

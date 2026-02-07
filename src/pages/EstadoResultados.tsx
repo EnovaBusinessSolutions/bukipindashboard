@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,44 +14,51 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
 export type PeriodType = "diario" | "mensual" | "anual";
+type TabKey = "ejecutivo" | "operativo" | "analitico";
 
 const EstadoResultados = () => {
   const [periodType, setPeriodType] = useState<PeriodType>("mensual");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [tab, setTab] = useState<TabKey>("ejecutivo");
   const queryClient = useQueryClient();
 
   const handleRefresh = () => {
+    // ✅ Refrescar TODO lo relacionado a ER y contabilidad sin depender de keys exactas
+    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "estado-resultados-mensual" });
+    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && String(q.queryKey[0] || "").startsWith("estado-resultados") });
+    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && String(q.queryKey[0] || "").startsWith("contabilidad") });
+
+    // Mantener los que ya tenías por si algún panel los usa
     queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
     queryClient.invalidateQueries({ queryKey: ["cuentas"] });
   };
 
-  // Calcular fechas de inicio y fin según el tipo de período
-  const getDateRange = () => {
+  const dateRange = useMemo(() => {
+    const base = selectedDate || new Date();
+
     switch (periodType) {
       case "diario":
         return {
-          startDate: startOfDay(selectedDate),
-          endDate: endOfDay(selectedDate)
+          startDate: startOfDay(base),
+          endDate: endOfDay(base),
         };
       case "mensual":
         return {
-          startDate: startOfMonth(selectedDate),
-          endDate: endOfMonth(selectedDate)
+          startDate: startOfMonth(base),
+          endDate: endOfMonth(base),
         };
       case "anual":
         return {
-          startDate: startOfYear(selectedDate),
-          endDate: endOfYear(selectedDate)
+          startDate: startOfYear(base),
+          endDate: endOfYear(base),
         };
       default:
         return {
-          startDate: startOfMonth(selectedDate),
-          endDate: endOfMonth(selectedDate)
+          startDate: startOfMonth(base),
+          endDate: endOfMonth(base),
         };
     }
-  };
-
-  const dateRange = getDateRange();
+  }, [periodType, selectedDate]);
 
   return (
     <div className="container mx-auto p-6">
@@ -60,6 +67,7 @@ const EstadoResultados = () => {
           <h1 className="text-3xl font-bold text-foreground">Estado de Resultados</h1>
           <p className="text-muted-foreground">Análisis de ingresos y gastos del período</p>
         </div>
+
         <Button variant="outline" size="sm" onClick={handleRefresh}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refrescar
@@ -88,10 +96,7 @@ const EstadoResultados = () => {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
-                )}
+                className={cn("w-full justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
@@ -113,40 +118,29 @@ const EstadoResultados = () => {
         <div className="flex-1 min-w-[200px]">
           <label className="text-sm font-medium mb-2 block">Rango de Consulta</label>
           <div className="text-sm text-muted-foreground bg-background p-3 rounded-md border">
-            {format(dateRange.startDate, "dd/MM/yyyy", { locale: es })} - {format(dateRange.endDate, "dd/MM/yyyy", { locale: es })}
+            {format(dateRange.startDate, "dd/MM/yyyy", { locale: es })} -{" "}
+            {format(dateRange.endDate, "dd/MM/yyyy", { locale: es })}
           </div>
         </div>
       </div>
 
-      <Tabs defaultValue="ejecutivo" className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-2xl">
           <TabsTrigger value="ejecutivo">Formato Ejecutivo</TabsTrigger>
           <TabsTrigger value="operativo">Formato Operativo</TabsTrigger>
           <TabsTrigger value="analitico">Formato Analítico</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="ejecutivo" className="mt-6">
-          <EstadoResultadosEjecutivo 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
-            periodType={periodType}
-          />
+          <EstadoResultadosEjecutivo startDate={dateRange.startDate} endDate={dateRange.endDate} periodType={periodType} />
         </TabsContent>
-        
+
         <TabsContent value="operativo" className="mt-6">
-          <EstadoResultadosOperativo 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
-            periodType={periodType}
-          />
+          <EstadoResultadosOperativo startDate={dateRange.startDate} endDate={dateRange.endDate} periodType={periodType} />
         </TabsContent>
-        
+
         <TabsContent value="analitico" className="mt-6">
-          <EstadoResultadosAnalitico 
-            startDate={dateRange.startDate} 
-            endDate={dateRange.endDate}
-            periodType={periodType}
-          />
+          <EstadoResultadosAnalitico startDate={dateRange.startDate} endDate={dateRange.endDate} periodType={periodType} />
         </TabsContent>
       </Tabs>
     </div>

@@ -11,37 +11,28 @@ interface EstadoResultadosOperativoProps {
   periodType: PeriodType;
 }
 
-interface SaldoCuenta {
-  cuenta_codigo: string;
-  debe_total: number;
-  haber_total: number;
-  saldo: number;
-}
+type SaldoCuenta = {
+  cuenta_codigo?: string;
+  debe_total?: number;
+  haber_total?: number;
+  saldo?: number;
+};
 
-const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoResultadosOperativoProps) => {
+const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOperativoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
-
-  // Usar la misma lógica que la balanza
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
 
-  // Función para formatear el período
   const formatearPeriodo = (startDate: Date, endDate: Date): string => {
-    const formatoFecha = (fecha: Date) => {
-      return fecha.toLocaleDateString('es-ES', { 
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric' 
-      });
-    };
-    
+    const formatoFecha = (fecha: Date) =>
+      fecha.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+
     const fechaInicio = formatoFecha(startDate);
     const fechaFin = formatoFecha(endDate);
-    
-    // Si es el mismo día, mostrar solo una fecha
+
     if (startDate.toDateString() === endDate.toDateString()) {
       return `Estado de Resultados del ${fechaInicio}`;
     }
-    
+
     return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
   };
 
@@ -54,19 +45,20 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
   }
 
   const cuentasFlat = cuentasData?.cuentasFlat || [];
-  const saldosPorCuenta = asientosData?.saldosPorCuenta || {};
+  const saldosPorCuenta: Record<string, SaldoCuenta> = asientosData?.saldosPorCuenta || {};
 
-  // Verificar si hay datos
-  const hayDatos = asientosData?.movimientos && asientosData.movimientos.length > 0;
+
+
+  const hayDatos =
+    (Array.isArray(asientosData?.movimientos) && asientosData!.movimientos.length > 0) ||
+    (saldosPorCuenta && Object.keys(saldosPorCuenta).length > 0);
 
   if (!hayDatos) {
     return (
       <Card>
         <CardContent className="p-12">
           <div className="text-center space-y-2">
-            <p className="text-xl font-medium text-muted-foreground">
-              No hay datos financieros registrados
-            </p>
+            <p className="text-xl font-medium text-muted-foreground">No hay datos financieros registrados</p>
             <p className="text-sm text-muted-foreground">
               Comienza registrando transacciones para ver el estado de resultados
             </p>
@@ -76,169 +68,123 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
     );
   }
 
-  // Función para obtener el saldo de una cuenta desde los asientos de balanza
+  const normalizeCodigo = (codigo: string) => String(codigo || "").trim();
+
+  // ✅ Saldo con naturaleza (y contra-cuenta 4003)
   const obtenerSaldo = (codigoCuenta: string): number => {
-    return saldosPorCuenta[codigoCuenta]?.saldo || 0;
-  };
-  
-  // Filtrar cuentas de ventas (Ingresos por Ventas)
-  const cuentasVentas = cuentasFlat.filter(cuenta => 
-    cuenta.subgrupo === "Ingresos por Ventas" && cuenta.estado_financiero === "Estado de Resultados"
-  );
-  
-  // Filtrar cuentas de otros ingresos
-  const cuentasOtrosIngresos = cuentasFlat.filter(cuenta => 
-    cuenta.subgrupo === "Otros Ingresos" && cuenta.estado_financiero === "Estado de Resultados"
-  );
-  
-  // Filtrar cuentas de costos (5001-5099)
-  const cuentasCostos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return codigo >= 5001 && codigo <= 5099 && cuenta.estado_financiero === "Estado de Resultados";
-  });
-  
-  // Filtrar cuentas de gastos operativos (dinámico por subgrupo)
-  const cuentasGastosOperativos = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return cuenta.subgrupo === "Gastos de Operación" && 
-           cuenta.estado_financiero === "Estado de Resultados" &&
-           codigo !== 5109 && codigo !== 5110; // Excluir depreciaciones
-  });
-  
-  // Filtrar cuentas de otros gastos (nuevo)
-  const cuentasOtrosGastos = cuentasFlat.filter(cuenta => 
-    cuenta.subgrupo === "Otros Gastos" && cuenta.estado_financiero === "Estado de Resultados"
-  );
-  
-  // Filtrar cuentas de depreciaciones y amortizaciones (5109, 5110)
-  const cuentasDepreciaciones = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return (codigo === 5109 || codigo === 5110) && cuenta.estado_financiero === "Estado de Resultados";
-  });
-  
-  // Filtrar cuentas de costo financiero (5111-5199, 5201)
-  const cuentasCostoFinanciero = cuentasFlat.filter(cuenta => {
-    const codigo = parseInt(cuenta.codigo);
-    return ((codigo >= 5111 && codigo <= 5199) || codigo === 5201) && cuenta.estado_financiero === "Estado de Resultados";
-  });
-  
-  // Filtrar cuentas de impuestos (6xxx)
-  const cuentasImpuestos = cuentasFlat.filter(cuenta => {
-    return cuenta.codigo.startsWith("6") && cuenta.estado_financiero === "Estado de Resultados";
-  });
+    const codigo = normalizeCodigo(codigoCuenta);
 
-  const calcularTotalVentas = () => {
-    return cuentasVentas.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
+    const direct = saldosPorCuenta[codigo]?.saldo;
+    const alt = saldosPorCuenta[codigo.replace(/\s+/g, "")]?.saldo;
+    const saldo = Number(direct ?? alt ?? 0) || 0;
+
+    const primerDigito = codigo.charAt(0);
+
+    // 4003: Descuentos sobre ventas (contra cuenta)
+    if (codigo === "4003") return -Math.abs(saldo);
+
+    // 2,3,4 suelen ser acreedoras (si saldo viene negativo, lo hacemos positivo)
+    if (["2", "3", "4"].includes(primerDigito)) return Math.abs(saldo);
+
+    // activos/costos/gastos se dejan como vengan
+    return saldo;
   };
 
-  const calcularTotalOtrosIngresos = () => {
-    return cuentasOtrosIngresos.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
+  const codigosCatalogo = cuentasFlat
+    .map((c: any) => String(c?.codigo ?? "").trim())
+    .filter(Boolean);
+
+  const codigosSaldos = Object.keys(saldosPorCuenta || {}).map((k) => String(k).trim()).filter(Boolean);
+
+  const allCodigos = Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
+
+  const cuentasPorRango = (predicate: (codigoNum: number) => boolean) => {
+    const res: Array<{ codigo: string; nombre: string }> = [];
+
+    for (const codigoStr of allCodigos) {
+      const codigo = normalizeCodigo(codigoStr);
+      const n = Number(codigo);
+      if (!Number.isFinite(n)) continue;
+      if (!predicate(n)) continue;
+
+      const cuenta = cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === codigo);
+      res.push({
+        codigo,
+        nombre: cuenta?.nombre ?? "Cuenta",
+      });
+    }
+
+    // ordenar por código
+    res.sort((a, b) => Number(a.codigo) - Number(b.codigo));
+    return res;
   };
 
-  const calcularTotalCostos = () => {
-    return cuentasCostos.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
-  };
+  const sumCuentas = (lista: Array<{ codigo: string }>) =>
+    lista.reduce((acc, c) => acc + obtenerSaldo(c.codigo), 0);
 
-  const calcularTotalGastosOperativos = () => {
-    return cuentasGastosOperativos.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
-  };
+  // ✅ Definiciones por rangos
+  const cuentasIngresos = cuentasPorRango((n) => n >= 4000 && n <= 4999);
+  const cuentasCostos = cuentasPorRango((n) => n >= 5000 && n <= 5099);
+  const cuentasDepreciaciones = cuentasPorRango((n) => n === 5109 || n === 5110);
+  const cuentasGastosOperativos = cuentasPorRango((n) => n >= 5100 && n <= 5199 && n !== 5109 && n !== 5110);
+  const cuentasOtrosGastos = cuentasPorRango((n) => n >= 5200 && n <= 5299 && n !== 5201);
+  const cuentasCostoFinanciero = cuentasPorRango((n) => n === 5201 || (n >= 5111 && n <= 5199));
+  const cuentasImpuestos = cuentasPorRango((n) => n >= 6000 && n <= 6999);
 
-  const calcularTotalOtrosGastos = () => {
-    return cuentasOtrosGastos.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
-  };
+  const totalIngresos = sumCuentas(cuentasIngresos);
+  const totalCostos = sumCuentas(cuentasCostos);
+  const totalGastosOperativos = sumCuentas(cuentasGastosOperativos);
+  const totalOtrosGastos = sumCuentas(cuentasOtrosGastos);
+  const totalDepreciaciones = sumCuentas(cuentasDepreciaciones);
+  const totalCostoFinanciero = sumCuentas(cuentasCostoFinanciero);
+  const totalImpuestos = sumCuentas(cuentasImpuestos);
 
-  const calcularTotalDepreciaciones = () => {
-    return cuentasDepreciaciones.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      console.log(`[DEBUG] Depreciación ${cuenta.codigo}: ${saldo}`);
-      return total + saldo;
-    }, 0);
-  };
-
-  // Debug logs para depreciaciones
-  console.log('[DEBUG Estado Resultados]', {
-    cuentasDepreciacionesEncontradas: cuentasDepreciaciones.length,
-    codigosCuentas: cuentasDepreciaciones.map(c => c.codigo),
-    totalDepreciaciones: calcularTotalDepreciaciones(),
-    saldosPorCuentaKeys: Object.keys(saldosPorCuenta),
-    saldo5109: saldosPorCuenta['5109'],
-    startDate: startDate.toISOString(),
-    endDate: endDate.toISOString()
-  });
-
-  const calcularTotalCostoFinanciero = () => {
-    return cuentasCostoFinanciero.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
-  };
-
-  const calcularTotalImpuestos = () => {
-    return cuentasImpuestos.reduce((total, cuenta) => {
-      const saldo = obtenerSaldo(cuenta.codigo);
-      return total + saldo;
-    }, 0);
-  };
-
-  const totalVentas = calcularTotalVentas();
-  const totalOtrosIngresos = calcularTotalOtrosIngresos();
-  const totalIngresos = totalVentas + totalOtrosIngresos;
-  const totalCostos = calcularTotalCostos();
-  const totalGastosOperativos = calcularTotalGastosOperativos();
-  const totalOtrosGastos = calcularTotalOtrosGastos();
-  const totalDepreciaciones = calcularTotalDepreciaciones();
-  const totalCostoFinanciero = calcularTotalCostoFinanciero();
-  const totalImpuestos = calcularTotalImpuestos();
-  
   const utilidadBruta = totalIngresos - totalCostos;
   const ebitda = utilidadBruta - totalGastosOperativos - totalOtrosGastos;
   const ebit = ebitda - totalDepreciaciones;
   const utilidadAntesImpuestos = ebit - totalCostoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - totalImpuestos;
 
+  const money = (n: number) => `$${Number(n || 0).toLocaleString("es-CO", { minimumFractionDigits: 2 })}`;
+  const pct = (n: number) => (totalIngresos !== 0 ? `${((n / totalIngresos) * 100).toFixed(2)}%` : "0.00%");
+
+  const Row = ({ codigo, nombre }: { codigo: string; nombre: string }) => {
+    const saldo = obtenerSaldo(codigo);
+    return (
+      <div className="grid grid-cols-3 gap-4 items-center">
+        <span className="text-sm">
+          {codigo} - {nombre}
+        </span>
+        <span className="font-medium text-right">{money(saldo)}</span>
+        <span className="text-right">{pct(saldo)}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
-      {/* Encabezado con período */}
       <Card className="border-2 border-primary/20">
         <CardHeader className="bg-primary/5">
-          <CardTitle className="text-2xl text-center">
-            Estado de Resultados - Formato Operativo
-          </CardTitle>
+          <CardTitle className="text-2xl text-center">Estado de Resultados - Formato Operativo</CardTitle>
           <p className="text-sm text-muted-foreground text-center font-medium mt-2">
             {formatearPeriodo(startDate, endDate)}
           </p>
         </CardHeader>
       </Card>
 
-      {/* Alerta informativa */}
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Este Estado de Resultados refleja automáticamente todas las transacciones registradas: ventas, 
-          costos de ventas, gastos operativos y otros gastos.
+          Este Estado de Resultados refleja automáticamente todas las transacciones registradas: ingresos, costos, gastos,
+          depreciaciones, costo financiero e impuestos.
         </AlertDescription>
       </Alert>
 
       <div className="grid gap-6">
-        {/* Ventas */}
+        {/* Ingresos */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-green-600">Ventas</CardTitle>
+            <CardTitle className="text-green-600">Ingresos (4xxx)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -247,37 +193,26 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasVentas.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+
+              {cuentasIngresos.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-green-600">
-                  <span>Total Ventas</span>
-                  <span className="text-right">${totalVentas.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalVentas / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span>Total Ingresos</span>
+                  <span className="text-right">{money(totalIngresos)}</span>
+                  <span className="text-right">{pct(totalIngresos)}</span>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Otros Ingresos */}
+        {/* Costos */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-emerald-600">Otros Ingresos</CardTitle>
+            <CardTitle className="text-orange-600">Costos de Ventas (50xx)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -286,69 +221,16 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasOtrosIngresos.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
-              {cuentasOtrosIngresos.length === 0 && (
-                <div className="text-sm text-muted-foreground col-span-3">No hay otros ingresos registrados</div>
-              )}
-              <div className="border-t pt-2 mt-4">
-                <div className="grid grid-cols-3 gap-4 items-center font-bold text-emerald-600">
-                  <span>Total Otros Ingresos</span>
-                  <span className="text-right">${totalOtrosIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalOtrosIngresos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Costos de Ventas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-orange-600">Costos de Ventas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
-                <span>Cuenta</span>
-                <span className="text-right">Monto</span>
-                <span className="text-right">% Ingresos</span>
-              </div>
-              {cuentasCostos.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+              {cuentasCostos.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-orange-600">
                   <span>Total Costos</span>
-                  <span className="text-right">${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalCostos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(totalCostos)}</span>
+                  <span className="text-right">{pct(totalCostos)}</span>
                 </div>
               </div>
             </div>
@@ -358,9 +240,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
         {/* Utilidad Bruta */}
         <Card>
           <CardHeader>
-            <CardTitle className={utilidadBruta >= 0 ? "text-blue-600" : "text-red-600"}>
-              Utilidad Bruta
-            </CardTitle>
+            <CardTitle className={utilidadBruta >= 0 ? "text-blue-600" : "text-red-600"}>Utilidad Bruta</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -369,23 +249,24 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
+
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Ingresos</span>
-                <span className="text-right">${totalIngresos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span className="text-right">{money(totalIngresos)}</span>
                 <span className="text-right">100.00%</span>
               </div>
+
               <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Costos de Ventas</span>
-                <span className="text-right">(${totalCostos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span>(-) Costos</span>
+                <span className="text-right">({money(totalCostos)})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}</span>
               </div>
+
               <div className="border-t pt-2 mt-4">
-                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
-                  utilidadBruta >= 0 ? "text-blue-600" : "text-red-600"
-                }`}>
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${utilidadBruta >= 0 ? "text-blue-600" : "text-red-600"}`}>
                   <span>Utilidad Bruta</span>
-                  <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(utilidadBruta)}</span>
+                  <span className="text-right">{pct(utilidadBruta)}</span>
                 </div>
               </div>
             </div>
@@ -395,7 +276,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
         {/* Gastos Operativos */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-red-600">Gastos Operativos</CardTitle>
+            <CardTitle className="text-red-600">Gastos Operativos (51xx)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -404,27 +285,16 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasGastosOperativos.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+
+              {cuentasGastosOperativos.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-red-600">
                   <span>Total Gastos Operativos</span>
-                  <span className="text-right">${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(totalGastosOperativos)}</span>
+                  <span className="text-right">{pct(totalGastosOperativos)}</span>
                 </div>
               </div>
             </div>
@@ -434,7 +304,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
         {/* Otros Gastos */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-red-600">Otros Gastos</CardTitle>
+            <CardTitle className="text-red-600">Otros Gastos (52xx)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -443,30 +313,20 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasOtrosGastos.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+
+              {cuentasOtrosGastos.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               {cuentasOtrosGastos.length === 0 && (
                 <div className="text-sm text-muted-foreground col-span-3">No hay otros gastos registrados</div>
               )}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-red-600">
                   <span>Total Otros Gastos</span>
-                  <span className="text-right">${totalOtrosGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(totalOtrosGastos)}</span>
+                  <span className="text-right">{pct(totalOtrosGastos)}</span>
                 </div>
               </div>
             </div>
@@ -476,9 +336,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
         {/* EBITDA */}
         <Card>
           <CardHeader>
-            <CardTitle className={ebitda >= 0 ? "text-blue-600" : "text-red-600"}>
-              EBITDA
-            </CardTitle>
+            <CardTitle className={ebitda >= 0 ? "text-blue-600" : "text-red-600"}>EBITDA</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -487,38 +345,40 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
+
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Utilidad Bruta</span>
-                <span className="text-right">${utilidadBruta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadBruta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                <span className="text-right">{money(utilidadBruta)}</span>
+                <span className="text-right">{pct(utilidadBruta)}</span>
               </div>
+
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Gastos Operativos</span>
-                <span className="text-right">(${totalGastosOperativos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">({money(totalGastosOperativos)})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}</span>
               </div>
+
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Otros Gastos</span>
-                <span className="text-right">(${totalOtrosGastos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">({money(totalOtrosGastos)})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}</span>
               </div>
+
               <div className="border-t pt-2 mt-4">
-                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
-                  ebitda >= 0 ? "text-blue-600" : "text-red-600"
-                }`}>
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${ebitda >= 0 ? "text-blue-600" : "text-red-600"}`}>
                   <span>EBITDA</span>
-                  <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(ebitda)}</span>
+                  <span className="text-right">{pct(ebitda)}</span>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Depreciaciones y Amortizaciones */}
+        {/* Depreciaciones */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-purple-600">Depreciaciones y Amortizaciones</CardTitle>
+            <CardTitle className="text-purple-600">Depreciaciones y Amortizaciones (5109/5110)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -527,67 +387,20 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasDepreciaciones.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+
+              {cuentasDepreciaciones.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               {cuentasDepreciaciones.length === 0 && (
                 <div className="text-sm text-muted-foreground col-span-3">No hay depreciaciones registradas</div>
               )}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-purple-600">
                   <span>Total Depreciaciones</span>
-                  <span className="text-right">${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* EBIT */}
-        <Card>
-          <CardHeader>
-            <CardTitle className={ebit >= 0 ? "text-blue-600" : "text-red-600"}>
-              EBIT (Utilidad Operativa)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
-                <span>Concepto</span>
-                <span className="text-right">Monto</span>
-                <span className="text-right">% Ingresos</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>EBITDA</span>
-                <span className="text-right">${ebitda.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((ebitda / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Depreciaciones</span>
-                <span className="text-right">(${totalDepreciaciones.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalDepreciaciones / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
-              </div>
-              <div className="border-t pt-2 mt-4">
-                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
-                  ebit >= 0 ? "text-blue-600" : "text-red-600"
-                }`}>
-                  <span>EBIT</span>
-                  <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(totalDepreciaciones)}</span>
+                  <span className="text-right">{pct(totalDepreciaciones)}</span>
                 </div>
               </div>
             </div>
@@ -597,7 +410,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
         {/* Costo Financiero */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-amber-600">Costo Financiero</CardTitle>
+            <CardTitle className="text-amber-600">Costo Financiero (5201)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -606,67 +419,20 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasCostoFinanciero.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+
+              {cuentasCostoFinanciero.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               {cuentasCostoFinanciero.length === 0 && (
                 <div className="text-sm text-muted-foreground col-span-3">No hay costos financieros registrados</div>
               )}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-amber-600">
                   <span>Total Costo Financiero</span>
-                  <span className="text-right">${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Utilidad Antes de Impuestos */}
-        <Card>
-          <CardHeader>
-            <CardTitle className={utilidadAntesImpuestos >= 0 ? "text-blue-600" : "text-red-600"}>
-              Utilidad Antes de Impuestos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-4 pb-2 border-b font-semibold text-sm">
-                <span>Concepto</span>
-                <span className="text-right">Monto</span>
-                <span className="text-right">% Ingresos</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>EBIT</span>
-                <span className="text-right">${ebit.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((ebit / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <span>(-) Costo Financiero</span>
-                <span className="text-right">(${totalCostoFinanciero.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalCostoFinanciero / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
-              </div>
-              <div className="border-t pt-2 mt-4">
-                <div className={`grid grid-cols-3 gap-4 items-center font-bold ${
-                  utilidadAntesImpuestos >= 0 ? "text-blue-600" : "text-red-600"
-                }`}>
-                  <span>Utilidad Antes de Impuestos</span>
-                  <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(totalCostoFinanciero)}</span>
+                  <span className="text-right">{pct(totalCostoFinanciero)}</span>
                 </div>
               </div>
             </div>
@@ -676,7 +442,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
         {/* Impuestos */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-rose-600">Impuestos</CardTitle>
+            <CardTitle className="text-rose-600">Impuestos (6xxx)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -685,42 +451,30 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              {cuentasImpuestos.map((cuenta) => {
-                const saldo = obtenerSaldo(cuenta.codigo);
-                return (
-                  <div key={cuenta.codigo} className="grid grid-cols-3 gap-4 items-center">
-                    <span className="text-sm">
-                      {cuenta.codigo} - {cuenta.nombre}
-                    </span>
-                    <span className="font-medium text-right">
-                      ${saldo.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-right">
-                      {totalIngresos !== 0 ? `${((saldo / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}
-                    </span>
-                  </div>
-                );
-              })}
+
+              {cuentasImpuestos.map((c) => (
+                <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />
+              ))}
+
               {cuentasImpuestos.length === 0 && (
                 <div className="text-sm text-muted-foreground col-span-3">No hay impuestos registrados</div>
               )}
+
               <div className="border-t pt-2 mt-4">
                 <div className="grid grid-cols-3 gap-4 items-center font-bold text-rose-600">
                   <span>Total Impuestos</span>
-                  <span className="text-right">${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(totalImpuestos)}</span>
+                  <span className="text-right">{pct(totalImpuestos)}</span>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Utilidad Neta del Período */}
+        {/* Utilidad Neta */}
         <Card className="border-2 border-primary">
           <CardHeader>
-            <CardTitle className={utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}>
-              Utilidad Neta del Período
-            </CardTitle>
+            <CardTitle className={utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}>Utilidad Neta del Período</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -729,26 +483,24 @@ const EstadoResultadosOperativo = ({ startDate, endDate, periodType }: EstadoRes
                 <span className="text-right">Monto</span>
                 <span className="text-right">% Ingresos</span>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>Utilidad Antes de Impuestos</span>
-                <span className="text-right">${utilidadAntesImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                <span className="text-right">{totalIngresos !== 0 ? `${((utilidadAntesImpuestos / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                <span className="text-right">{money(utilidadAntesImpuestos)}</span>
+                <span className="text-right">{pct(utilidadAntesImpuestos)}</span>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4 items-center">
                 <span>(-) Impuestos</span>
-                <span className="text-right">(${totalImpuestos.toLocaleString('es-CO', { minimumFractionDigits: 2 })})</span>
-                <span className="text-right">{totalIngresos !== 0 ? `(${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%)` : '0.00%'}</span>
+                <span className="text-right">({money(totalImpuestos)})</span>
+                <span className="text-right">{totalIngresos !== 0 ? `(${((totalImpuestos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}</span>
               </div>
-              
+
               <div className="border-t-2 pt-3 mt-4">
-                <div className={`grid grid-cols-3 gap-4 items-center font-bold text-xl ${
-                  utilidadNeta >= 0 ? "text-green-600" : "text-red-600"
-                }`}>
+                <div className={`grid grid-cols-3 gap-4 items-center font-bold text-xl ${utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}`}>
                   <span>{utilidadNeta >= 0 ? "Utilidad Neta" : "Pérdida Neta"}</span>
-                  <span className="text-right">${utilidadNeta.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-right">{totalIngresos !== 0 ? `${((utilidadNeta / totalIngresos) * 100).toFixed(2)}%` : '0.00%'}</span>
+                  <span className="text-right">{money(utilidadNeta)}</span>
+                  <span className="text-right">{pct(utilidadNeta)}</span>
                 </div>
               </div>
             </div>

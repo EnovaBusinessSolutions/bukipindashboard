@@ -26,6 +26,10 @@ interface SaldoCuenta {
 
   // ✅ NUEVO (E2E real)
   saldo_final: number;
+
+  // ✅ ALIAS CANÓNICO (para UI legacy / Operativo/Ejecutivo)
+  // saldo = saldo_final (monto neto acumulado al cierre del periodo)
+  saldo: number;
 }
 
 type AsientoUI = {
@@ -112,14 +116,44 @@ function unwrap(json: any) {
   return json?.data ?? json;
 }
 
-type DetalleLine = {
-  cuenta_codigo?: string;
-  cuenta_nombre?: string;
-  debe?: number | string;
-  haber?: number | string;
-  neto?: number | string;
-  saldo?: number | string;
-};
+type DetalleLineAny = Record<string, any>;
+
+function normalizeDetalleLine(row: DetalleLineAny): {
+  code: string;
+  debe: number;
+  haber: number;
+  saldo: number | null; // puede venir ya calculado
+} | null {
+  if (!row || typeof row !== "object") return null;
+
+  const code = String(
+    row.cuenta_codigo ??
+      row.cuentaCodigo ??
+      row.accountCodigo ??
+      row.account_code ??
+      row.codigo ??
+      ""
+  ).trim();
+
+  if (!code) return null;
+
+  // debe/haber pueden venir como debe_total/haber_total o debe/haber
+  const debe = num(row.debe_total ?? row.debe ?? row.debit ?? 0, 0);
+  const haber = num(row.haber_total ?? row.haber ?? row.credit ?? 0, 0);
+
+  // saldo puede venir como saldo/saldo_final/neto/balance
+  const saldoRaw =
+    row.saldo ??
+    row.saldo_final ??
+    row.neto ??
+    row.balance ??
+    row.saldoFinal ??
+    null;
+
+  const saldo = saldoRaw == null ? null : num(saldoRaw, 0);
+
+  return { code, debe, haber, saldo };
+}
 
 async function fetchJsonSafe(url: string) {
   try {
@@ -133,10 +167,12 @@ async function fetchJsonSafe(url: string) {
 /**
  * Construye saldos por cuenta desde los ASIENTOS (detalle_asientos)
  * Esto es el fallback más confiable para que ER deje de salir en ceros.
+ *
+ * Nota: aquí el "saldo_inicial" real no existe (no sabemos acumulado previo),
+ * pero para ER (periodo) lo crítico es debe_total/haber_total.
  */
 function buildSaldosFromAsientos(
-  asientos: AsientoUI[],
-  cuentasMap: Map<string, string>
+  asientos: AsientoUI[]
 ): {
   saldosPorCuenta: Record<string, SaldoCuenta>;
   saldoInicialTotal: number;
@@ -165,21 +201,21 @@ function buildSaldosFromAsientos(
           debe_total: 0,
           haber_total: 0,
           saldo_final: 0,
+          saldo: 0,
         };
       }
 
       agg[code].debe_total += debe;
       agg[code].haber_total += haber;
-      agg[code].saldo_final += debe - haber; // neto del periodo
+
+      const netoPeriodo = debe - haber;
+      agg[code].saldo_final += netoPeriodo;
+      agg[code].saldo = agg[code].saldo_final; // alias
     }
   }
 
-  // Totales (en este fallback no tenemos inicial real)
   const saldoInicialTotal = 0;
   const saldoFinalTotal = Object.values(agg).reduce((t, x) => t + num(x.saldo_final, 0), 0);
-
-  // (Opcional) Si algún lado necesita nombres, aquí no los guardamos, pero al menos está el código.
-  // El ER usa el catálogo de cuentas para nombres, así que estamos bien.
 
   return { saldosPorCuenta: agg, saldoInicialTotal, saldoFinalTotal };
 }
@@ -188,13 +224,44 @@ function looksUsefulForER(saldos: Record<string, SaldoCuenta>) {
   const keys = Object.keys(saldos || {});
   if (!keys.length) return false;
 
-  // Si no hay ninguna 4xxx/5xxx/6xxx, normalmente ER seguirá en cero
-  const has4 = keys.some((k) => String(k).startsWith("4") && num((saldos as any)[k]?.saldo_final, 0) !== 0);
-  const has5 = keys.some((k) => String(k).startsWith("5") && num((saldos as any)[k]?.saldo_final, 0) !== 0);
-  const has6 = keys.some((k) => String(k).startsWith("6") && num((saldos as any)[k]?.saldo_final, 0) !== 0);
+  const getSaldo = (k: string) => num((saldos as any)[k]?.saldo ?? (saldos as any)[k]?.saldo_final, 0);
 
-  // Si al menos trae algo de ER, lo consideramos útil
+  const has4 = keys.some((k) => String(k).startsWith("4") && getSaldo(k) !== 0);
+  const has5 = keys.some((k) => String(k).startsWith("5") && getSaldo(k) !== 0);
+  const has6 = keys.some((k) => String(k).startsWith("6") && getSaldo(k) !== 0);
+
   return has4 || has5 || has6;
+}
+
+function normalizeSaldosFast(input: any): Record<string, SaldoCuenta> {
+  const obj = input && typeof input === "object" ? input : {};
+  const out: Record<string, SaldoCuenta> = {};
+
+  for (const k of Object.keys(obj)) {
+    const row = (obj as any)[k];
+    const code = String(row?.cuenta_codigo ?? k ?? "").trim();
+    if (!code) continue;
+
+    const saldo_inicial = num(row?.saldo_inicial ?? row?.saldoInicial ?? 0, 0);
+    const debe_total = num(row?.debe_total ?? row?.debe ?? 0, 0);
+    const haber_total = num(row?.haber_total ?? row?.haber ?? 0, 0);
+
+    const saldo_final = num(
+      row?.saldo_final ?? row?.saldo ?? saldo_inicial + (debe_total - haber_total),
+      0
+    );
+
+    out[code] = {
+      cuenta_codigo: code,
+      saldo_inicial,
+      debe_total,
+      haber_total,
+      saldo_final,
+      saldo: saldo_final,
+    };
+  }
+
+  return out;
 }
 
 export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
@@ -285,11 +352,13 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       // 4) ✅ Saldos por cuenta (E2E)
       // =========================
 
-      // Fast path si backend lo manda (raro, pero lo respetamos)
-      const saldosFast: Record<string, SaldoCuenta> =
-        (asientosPayload?.saldosPorCuenta as any) ??
-        (asientosJson?.saldosPorCuenta as any) ??
-        {};
+      // Fast path si backend lo manda
+      const saldosFastRaw =
+        asientosPayload?.saldosPorCuenta ??
+        asientosJson?.saldosPorCuenta ??
+        null;
+
+      const saldosFast = saldosFastRaw ? normalizeSaldosFast(saldosFastRaw) : {};
 
       const saldoInicialTotalFast = num(
         asientosPayload?.saldoInicialTotal ?? asientosJson?.saldoInicialTotal,
@@ -301,8 +370,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         0
       );
 
-      const fastHasAny =
-        saldosFast && typeof saldosFast === "object" && Object.keys(saldosFast).length > 0;
+      const fastHasAny = saldosFast && Object.keys(saldosFast).length > 0;
 
       if (fastHasAny) {
         return {
@@ -319,12 +387,11 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       );
 
       const detPeriodoPayload = detPeriodoRes.ok ? unwrap(detPeriodoRes.json) : null;
-      const detPeriodoArr: DetalleLine[] = Array.isArray(detPeriodoPayload)
+
+      const detPeriodoRows: DetalleLineAny[] = Array.isArray(detPeriodoPayload)
         ? detPeriodoPayload
         : Array.isArray(detPeriodoPayload?.data)
         ? detPeriodoPayload.data
-        : Array.isArray((detPeriodoRes as any)?.json?.data)
-        ? (detPeriodoRes as any).json.data
         : [];
 
       // ---- B) saldo inicial (acumulado previo) ----
@@ -335,29 +402,28 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       );
 
       const detInicialPayload = detInicialRes.ok ? unwrap(detInicialRes.json) : null;
-      const detInicialArr: DetalleLine[] = Array.isArray(detInicialPayload)
+
+      const detInicialRows: DetalleLineAny[] = Array.isArray(detInicialPayload)
         ? detInicialPayload
         : Array.isArray(detInicialPayload?.data)
         ? detInicialPayload.data
-        : Array.isArray((detInicialRes as any)?.json?.data)
-        ? (detInicialRes as any).json.data
         : [];
 
       const saldoInicialByCuenta = new Map<string, number>();
-      for (const row of detInicialArr || []) {
-        const code = String(row?.cuenta_codigo ?? "").trim();
-        if (!code) continue;
-        const saldo = row?.saldo != null ? num(row.saldo, 0) : num(row.debe, 0) - num(row.haber, 0);
-        saldoInicialByCuenta.set(code, saldo);
+      for (const r of detInicialRows || []) {
+        const n = normalizeDetalleLine(r);
+        if (!n) continue;
+
+        // si el endpoint ya trae "saldo", úsalo; si no, neto (debe-haber)
+        const saldo = n.saldo != null ? n.saldo : n.debe - n.haber;
+        saldoInicialByCuenta.set(n.code, saldo);
       }
 
       const periodoByCuenta = new Map<string, { debe: number; haber: number }>();
-      for (const row of detPeriodoArr || []) {
-        const code = String(row?.cuenta_codigo ?? "").trim();
-        if (!code) continue;
-        const debe = num(row?.debe, 0);
-        const haber = num(row?.haber, 0);
-        periodoByCuenta.set(code, { debe, haber });
+      for (const r of detPeriodoRows || []) {
+        const n = normalizeDetalleLine(r);
+        if (!n) continue;
+        periodoByCuenta.set(n.code, { debe: n.debe, haber: n.haber });
       }
 
       const saldosPorCuentaFromDetalle: Record<string, SaldoCuenta> = {};
@@ -382,16 +448,17 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           debe_total: debeTotal,
           haber_total: haberTotal,
           saldo_final: saldoFinal,
+          saldo: saldoFinal, // ✅ alias canónico
         };
 
         saldoInicialTotal += saldoInicial;
         saldoFinalTotal += saldoFinal;
       }
 
-      // ✅ Si /api/asientos/detalle NO trae 4/5/6, entonces ER seguirá en ceros.
+      // ✅ Si /api/asientos/detalle NO trae 4/5/6 útiles, ER seguirá en ceros.
       // En ese caso, usamos el fallback confiable desde detalle_asientos.
       if (!looksUsefulForER(saldosPorCuentaFromDetalle)) {
-        const fb = buildSaldosFromAsientos(asientos, cuentasMap);
+        const fb = buildSaldosFromAsientos(asientos);
         return {
           movimientos,
           saldosPorCuenta: fb.saldosPorCuenta,
