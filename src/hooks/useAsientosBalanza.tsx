@@ -49,7 +49,7 @@ type AsientoUI = {
     memo?: string | null;
   }>;
 
-  // compat vieja (por si algún endpoint manda lines en otra key)
+  // compat vieja
   lines?: Array<{
     cuenta_codigo?: string | null;
     cuenta_nombre?: string | null;
@@ -124,10 +124,77 @@ type DetalleLine = {
 async function fetchJsonSafe(url: string) {
   try {
     const json = await apiFetch(url, { method: "GET" });
-    return { ok: true, json };
+    return { ok: true as const, json };
   } catch (err: any) {
-    return { ok: false, err };
+    return { ok: false as const, err };
   }
+}
+
+/**
+ * Construye saldos por cuenta desde los ASIENTOS (detalle_asientos)
+ * Esto es el fallback más confiable para que ER deje de salir en ceros.
+ */
+function buildSaldosFromAsientos(
+  asientos: AsientoUI[],
+  cuentasMap: Map<string, string>
+): {
+  saldosPorCuenta: Record<string, SaldoCuenta>;
+  saldoInicialTotal: number;
+  saldoFinalTotal: number;
+} {
+  const agg: Record<string, SaldoCuenta> = {};
+
+  for (const a of asientos || []) {
+    const lines = Array.isArray(a?.detalle_asientos)
+      ? a.detalle_asientos
+      : Array.isArray(a?.lines)
+      ? a.lines
+      : [];
+
+    for (const l of lines) {
+      const code = String(l?.cuenta_codigo ?? "").trim();
+      if (!code) continue;
+
+      const debe = num(l?.debe, 0);
+      const haber = num(l?.haber, 0);
+
+      if (!agg[code]) {
+        agg[code] = {
+          cuenta_codigo: code,
+          saldo_inicial: 0,
+          debe_total: 0,
+          haber_total: 0,
+          saldo_final: 0,
+        };
+      }
+
+      agg[code].debe_total += debe;
+      agg[code].haber_total += haber;
+      agg[code].saldo_final += debe - haber; // neto del periodo
+    }
+  }
+
+  // Totales (en este fallback no tenemos inicial real)
+  const saldoInicialTotal = 0;
+  const saldoFinalTotal = Object.values(agg).reduce((t, x) => t + num(x.saldo_final, 0), 0);
+
+  // (Opcional) Si algún lado necesita nombres, aquí no los guardamos, pero al menos está el código.
+  // El ER usa el catálogo de cuentas para nombres, así que estamos bien.
+
+  return { saldosPorCuenta: agg, saldoInicialTotal, saldoFinalTotal };
+}
+
+function looksUsefulForER(saldos: Record<string, SaldoCuenta>) {
+  const keys = Object.keys(saldos || {});
+  if (!keys.length) return false;
+
+  // Si no hay ninguna 4xxx/5xxx/6xxx, normalmente ER seguirá en cero
+  const has4 = keys.some((k) => String(k).startsWith("4") && num((saldos as any)[k]?.saldo_final, 0) !== 0);
+  const has5 = keys.some((k) => String(k).startsWith("5") && num((saldos as any)[k]?.saldo_final, 0) !== 0);
+  const has6 = keys.some((k) => String(k).startsWith("6") && num((saldos as any)[k]?.saldo_final, 0) !== 0);
+
+  // Si al menos trae algo de ER, lo consideramos útil
+  return has4 || has5 || has6;
 }
 
 export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
@@ -159,7 +226,6 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const cuentasJson = await apiFetch("/api/cuentas", { method: "GET" });
       const cuentasPayload = unwrap(cuentasJson);
 
-      // Algunas rutas devuelven {ok:true, meta, data:[...]}
       const cuentasArr: Array<{ codigo: string; nombre: string }> =
         Array.isArray(cuentasPayload?.data)
           ? (cuentasPayload.data as any)
@@ -216,15 +282,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       }
 
       // =========================
-      // 4) ✅ Saldos por cuenta (E2E REAL)
-      //
-      // Estrategia:
-      //   A) Periodo: /api/asientos/detalle?start&end  -> debe/haber/neto/saldo por cuenta
-      //   B) Saldo inicial: /api/asientos/detalle?start=1970-01-01&end=diaAnterior(start)
-      //   C) Saldo final: saldo_inicial + (debe_total - haber_total)
-      //
-      // Si el backend ya mandara saldosPorCuenta, los usamos como fast-path.
+      // 4) ✅ Saldos por cuenta (E2E)
       // =========================
+
+      // Fast path si backend lo manda (raro, pero lo respetamos)
       const saldosFast: Record<string, SaldoCuenta> =
         (asientosPayload?.saldosPorCuenta as any) ??
         (asientosJson?.saldosPorCuenta as any) ??
@@ -240,7 +301,6 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         0
       );
 
-      // Si el backend ya manda saldos completos, no recalculamos
       const fastHasAny =
         saldosFast && typeof saldosFast === "object" && Object.keys(saldosFast).length > 0;
 
@@ -253,7 +313,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         };
       }
 
-      // ---- A) periodo ----
+      // ---- A) periodo (si existe endpoint y trae cosas útiles) ----
       const detPeriodoRes = await fetchJsonSafe(
         `/api/asientos/detalle?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
       );
@@ -270,8 +330,6 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       // ---- B) saldo inicial (acumulado previo) ----
       const endPrev = addDaysYMD(start, -1);
 
-      // Si el periodo inicia en el "día 1", endPrev podría ser válido igual.
-      // Si start es inválido, no llegamos aquí.
       const detInicialRes = await fetchJsonSafe(
         `/api/asientos/detalle?start=${encodeURIComponent("1970-01-01")}&end=${encodeURIComponent(endPrev)}`
       );
@@ -285,31 +343,24 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         ? (detInicialRes as any).json.data
         : [];
 
-      // Build maps
       const saldoInicialByCuenta = new Map<string, number>();
       for (const row of detInicialArr || []) {
         const code = String(row?.cuenta_codigo ?? "").trim();
         if (!code) continue;
-        // Si backend manda saldo, úsalo; si no, calcula desde debe/haber.
         const saldo = row?.saldo != null ? num(row.saldo, 0) : num(row.debe, 0) - num(row.haber, 0);
         saldoInicialByCuenta.set(code, saldo);
       }
 
-      const periodoByCuenta = new Map<
-        string,
-        { debe: number; haber: number; nombre?: string }
-      >();
+      const periodoByCuenta = new Map<string, { debe: number; haber: number }>();
       for (const row of detPeriodoArr || []) {
         const code = String(row?.cuenta_codigo ?? "").trim();
         if (!code) continue;
         const debe = num(row?.debe, 0);
         const haber = num(row?.haber, 0);
-        const nombre = String(row?.cuenta_nombre ?? "").trim() || cuentasMap.get(code) || "";
-        periodoByCuenta.set(code, { debe, haber, nombre });
+        periodoByCuenta.set(code, { debe, haber });
       }
 
-      // Merge
-      const saldosPorCuenta: Record<string, SaldoCuenta> = {};
+      const saldosPorCuentaFromDetalle: Record<string, SaldoCuenta> = {};
       const allCodes = new Set<string>([
         ...Array.from(saldoInicialByCuenta.keys()),
         ...Array.from(periodoByCuenta.keys()),
@@ -325,7 +376,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         const haberTotal = periodo?.haber ?? 0;
         const saldoFinal = saldoInicial + (debeTotal - haberTotal);
 
-        saldosPorCuenta[code] = {
+        saldosPorCuentaFromDetalle[code] = {
           cuenta_codigo: code,
           saldo_inicial: saldoInicial,
           debe_total: debeTotal,
@@ -337,9 +388,22 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         saldoFinalTotal += saldoFinal;
       }
 
+      // ✅ Si /api/asientos/detalle NO trae 4/5/6, entonces ER seguirá en ceros.
+      // En ese caso, usamos el fallback confiable desde detalle_asientos.
+      if (!looksUsefulForER(saldosPorCuentaFromDetalle)) {
+        const fb = buildSaldosFromAsientos(asientos, cuentasMap);
+        return {
+          movimientos,
+          saldosPorCuenta: fb.saldosPorCuenta,
+          saldoInicialTotal: fb.saldoInicialTotal,
+          saldoFinalTotal: fb.saldoFinalTotal,
+        };
+      }
+
+      // Si sí sirve, usamos esta (mantiene inicial real)
       return {
         movimientos,
-        saldosPorCuenta,
+        saldosPorCuenta: saldosPorCuentaFromDetalle,
         saldoInicialTotal,
         saldoFinalTotal,
       };
