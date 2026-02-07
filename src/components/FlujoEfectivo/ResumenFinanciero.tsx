@@ -67,39 +67,43 @@ const ResumenFinanciero = ({ startDate, endDate }: ResumenFinancieroProps) => {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["flujo-efectivo-resumen", startYMD, endYMD],
     queryFn: async () => {
-      // ✅ Nuevo endpoint canónico (el que creaste en backend)
-      const payload = await apiJson<FlujoEfectivoApiResponse>(
-        `/api/flujo-efectivo?start=${encodeURIComponent(startYMD)}&end=${encodeURIComponent(endYMD)}`,
-        { method: "GET" }
-      );
+  const raw = await apiJson<any>(
+    `/api/flujo-efectivo?start=${encodeURIComponent(startYMD)}&end=${encodeURIComponent(endYMD)}`,
+    { method: "GET" }
+  );
 
-      // El apiJson ya hace (res.data ?? res), pero por seguridad:
-      const root = (payload as any)?.data ? (payload as any) : { ok: true, data: payload };
-      const d = root?.data;
+  // raw puede ser {ok:true,data:{...}} o directamente {...}
+  const d = raw?.data ?? raw ?? {};
 
-      const efectivo = d?.efectivo ?? { saldoInicial: 0, entradas: 0, salidas: 0, saldoFinal: 0 };
-      const bancos = d?.bancos ?? { saldoInicial: 0, entradas: 0, salidas: 0, saldoFinal: 0 };
+  // ✅ Preferimos el shape nuevo si existe
+  const saldoFinalTotal =
+    Number(d?.saldoFinal?.total) ||
+    (Number(d?.efectivo?.saldoFinal) || 0) + (Number(d?.bancos?.saldoFinal) || 0);
 
-      const flujoCaja = (Number(efectivo.saldoFinal) || 0) - (Number(efectivo.saldoInicial) || 0);
-      const flujoBancos = (Number(bancos.saldoFinal) || 0) - (Number(bancos.saldoInicial) || 0);
-      const saldoFinalCaja = Number(efectivo.saldoFinal) || 0;
-      const saldoFinalBancos = Number(bancos.saldoFinal) || 0;
+  const saldoInicialCaja = Number(d?.saldoInicial?.efectivo ?? d?.efectivo?.saldoInicial ?? 0) || 0;
+  const saldoInicialBancos = Number(d?.saldoInicial?.bancos ?? d?.bancos?.saldoInicial ?? 0) || 0;
 
-      const saldoFlujo = saldoFinalCaja + saldoFinalBancos;
+  const saldoFinalCaja = Number(d?.saldoFinal?.efectivo ?? d?.efectivo?.saldoFinal ?? 0) || 0;
+  const saldoFinalBancos = Number(d?.saldoFinal?.bancos ?? d?.bancos?.saldoFinal ?? 0) || 0;
 
-      const verificado =
-        typeof d?.consolidado?.verificado === "boolean" ? d.consolidado.verificado : true;
+  const flujoCaja = saldoFinalCaja - saldoInicialCaja;
+  const flujoBancos = saldoFinalBancos - saldoInicialBancos;
 
-      return {
-        flujoCaja,
-        flujoBancos,
-        flujoNeto: flujoCaja + flujoBancos,
-        saldoFinalCaja,
-        saldoFinalBancos,
-        saldoFlujo,
-        verificado,
-      };
-    },
+  const verificado =
+    typeof d?.consolidado?.verificado === "boolean"
+      ? d.consolidado.verificado
+      : true;
+
+  return {
+    flujoCaja,
+    flujoBancos,
+    flujoNeto: flujoCaja + flujoBancos,
+    saldoFinalCaja,
+    saldoFinalBancos,
+    saldoFlujo: saldoFinalTotal,
+    verificado,
+  };
+},
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 1,

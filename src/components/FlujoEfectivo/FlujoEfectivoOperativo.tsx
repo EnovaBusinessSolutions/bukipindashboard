@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PeriodType } from "@/pages/EstadoResultados";
+import { apiFetch } from "@/lib/api";
 
 interface FlujoEfectivoOperativoProps {
   startDate: Date;
@@ -16,51 +17,84 @@ type Desglose = Record<string, MoneySplit>;
 
 type ApiResponse = {
   saldoInicial: MoneySplit;
-  operativo: MoneySplit & { desglose: Desglose };
-  inversion: MoneySplit & { desglose: Desglose };
-  financiamiento: MoneySplit & { desglose: Desglose };
+  operativo: MoneySplit & { desglose?: Desglose };
+  inversion: MoneySplit & { desglose?: Desglose };
+  financiamiento: MoneySplit & { desglose?: Desglose };
+  saldoFinal?: MoneySplit;
   sinDatos?: boolean;
 };
 
-function toYMD(d: Date) {
-  return d.toISOString().split("T")[0];
+type AnyJson = any;
+
+const apiJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
+  const res: AnyJson = await apiFetch(url, init);
+  return (res?.data ?? res) as T;
+};
+
+// ✅ YYYY-MM-DD local (sin timezone issues)
+function toYMDLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-async function fetchJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: "include" });
-  const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    // ignore
-  }
-  if (!res.ok) throw new Error(json?.error || json?.message || `Error HTTP ${res.status}`);
-  return (json?.data ?? json) as T;
+function safeMoneySplit(v: any): MoneySplit {
+  const efectivo = Number(v?.efectivo) || 0;
+  const bancos = Number(v?.bancos) || 0;
+  const total = Number(v?.total) || 0;
+  return { efectivo, bancos, total };
 }
 
 const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfectivoOperativoProps) => {
-  const startStr = toYMD(startDate);
-  const endStr = toYMD(endDate);
+  const startStr = toYMDLocal(startDate);
+  const endStr = toYMDLocal(endDate);
 
   const { data: flujoData, isLoading, error } = useQuery({
-    queryKey: ["flujo-efectivo-operativo", startStr, endStr],
+    queryKey: ["flujo-efectivo-operativo", startStr, endStr, vistaColumnas],
     queryFn: async () => {
-      const url =
-        `/api/flujo-efectivo/operativo?start=${encodeURIComponent(startStr)}` +
-        `&end=${encodeURIComponent(endStr)}`;
+      const payload = await apiJson<ApiResponse>(
+        `/api/flujo-efectivo/operativo?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`,
+        { method: "GET" }
+      );
 
-      return fetchJSON<ApiResponse>(url);
+      // Normalizar posible shape {ok:true,data:{...}}
+      const root = (payload as any)?.data ? (payload as any)?.data : payload;
+
+      const saldoInicial = safeMoneySplit(root?.saldoInicial);
+      const operativo = { ...safeMoneySplit(root?.operativo), desglose: root?.operativo?.desglose ?? {} };
+      const inversion = { ...safeMoneySplit(root?.inversion), desglose: root?.inversion?.desglose ?? {} };
+      const financiamiento = { ...safeMoneySplit(root?.financiamiento), desglose: root?.financiamiento?.desglose ?? {} };
+
+      // Si backend ya manda saldoFinal, lo usamos. Si no, lo calculamos.
+      const flujoNetoE = operativo.efectivo + inversion.efectivo + financiamiento.efectivo;
+      const flujoNetoB = operativo.bancos + inversion.bancos + financiamiento.bancos;
+      const flujoNetoT = operativo.total + inversion.total + financiamiento.total;
+
+      const saldoFinal = safeMoneySplit(
+        root?.saldoFinal ?? {
+          efectivo: saldoInicial.efectivo + flujoNetoE,
+          bancos: saldoInicial.bancos + flujoNetoB,
+          total: saldoInicial.total + flujoNetoT,
+        }
+      );
+
+      const sinDatos = Boolean(root?.sinDatos);
+
+      return { saldoInicial, operativo, inversion, financiamiento, saldoFinal, sinDatos };
     },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-MX", {
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
       minimumFractionDigits: 2,
-    }).format(value);
-  };
+    }).format(Number.isFinite(value) ? value : 0);
 
   if (isLoading) {
     return (
@@ -86,28 +120,13 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          No hay movimientos de efectivo registrados en el período seleccionado.
-          Comienza registrando transacciones para ver el flujo de efectivo.
+          No hay movimientos de efectivo registrados en el período seleccionado. Comienza registrando transacciones para ver el flujo de efectivo.
         </AlertDescription>
       </Alert>
     );
   }
 
   const isDetallada = vistaColumnas === "detallada";
-
-  // Calcular flujo neto total (sumatoria de categorías)
-  const flujoNetoEfectivo =
-    flujoData!.operativo.efectivo + flujoData!.inversion.efectivo + flujoData!.financiamiento.efectivo;
-  const flujoNetoBancos =
-    flujoData!.operativo.bancos + flujoData!.inversion.bancos + flujoData!.financiamiento.bancos;
-  const flujoNetoTotal =
-    flujoData!.operativo.total + flujoData!.inversion.total + flujoData!.financiamiento.total;
-
-  const saldoFinal = {
-    efectivo: flujoData!.saldoInicial.efectivo + flujoNetoEfectivo,
-    bancos: flujoData!.saldoInicial.bancos + flujoNetoBancos,
-    total: flujoData!.saldoInicial.total + flujoNetoTotal,
-  };
 
   const renderValue = (efectivo?: number, bancos?: number, total?: number) => {
     if (isDetallada && efectivo !== undefined && bancos !== undefined) {
@@ -122,12 +141,17 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
     return <span className="font-bold">{formatCurrency(total || 0)}</span>;
   };
 
-  const renderDesglose = (desglose: Desglose) => {
+  const renderDesglose = (desglose?: Desglose) => {
     const entries = Object.entries(desglose || {});
-    if (entries.length === 0) return null;
+    if (entries.length === 0) {
+      return (
+        <div className="text-sm text-muted-foreground text-center py-3">
+          Desglose no disponible para este período (o el backend aún no lo envía).
+        </div>
+      );
+    }
 
-    // Orden: entradas con mayor |total| primero
-    entries.sort((a, b) => Math.abs(b[1].total || 0) - Math.abs(a[1].total || 0));
+    entries.sort((a, b) => Math.abs((b[1]?.total || 0)) - Math.abs((a[1]?.total || 0)));
 
     return entries.map(([concepto, valores]) => (
       <div key={concepto} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
@@ -139,6 +163,8 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
       </div>
     ));
   };
+
+  const saldoFinal = flujoData!.saldoFinal!;
 
   return (
     <div className="space-y-6">
@@ -174,7 +200,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         </CardContent>
       </Card>
 
-      {/* Actividades Operativas */}
+      {/* Operativas */}
       <Card>
         <CardHeader className="bg-finance-success/10">
           <CardTitle className="text-finance-success flex items-center justify-between">
@@ -194,7 +220,6 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         <CardContent className="pt-6">
           <div className="space-y-3">
             {renderDesglose(flujoData!.operativo.desglose)}
-
             <div className="border-t-2 pt-3 mt-4">
               <div className="flex justify-between items-center">
                 <span className="text-xl font-bold">Flujo Neto Operativo</span>
@@ -205,7 +230,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         </CardContent>
       </Card>
 
-      {/* Actividades de Inversión */}
+      {/* Inversión */}
       <Card>
         <CardHeader className="bg-blue-500/10">
           <CardTitle className="text-blue-600 flex items-center justify-between">
@@ -229,7 +254,6 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
             ) : (
               <p className="text-muted-foreground text-center py-4">No hay inversiones en este período</p>
             )}
-
             <div className="border-t-2 pt-3 mt-4">
               <div className="flex justify-between items-center">
                 <span className="text-xl font-bold">Flujo Neto de Inversión</span>
@@ -240,7 +264,7 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
         </CardContent>
       </Card>
 
-      {/* Actividades de Financiamiento */}
+      {/* Financiamiento */}
       <Card>
         <CardHeader className="bg-purple-500/10">
           <CardTitle className="text-purple-600 flex items-center justify-between">
@@ -264,7 +288,6 @@ const FlujoEfectivoOperativo = ({ startDate, endDate, vistaColumnas }: FlujoEfec
             ) : (
               <p className="text-muted-foreground text-center py-4">No hay financiamientos en este período</p>
             )}
-
             <div className="border-t-2 pt-3 mt-4">
               <div className="flex justify-between items-center">
                 <span className="text-xl font-bold">Flujo Neto de Financiamiento</span>

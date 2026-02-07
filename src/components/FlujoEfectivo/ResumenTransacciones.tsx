@@ -5,10 +5,8 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiFetch } from "@/lib/api";
-
 
 interface ResumenTransaccionesProps {
   startDate: Date;
@@ -16,19 +14,21 @@ interface ResumenTransaccionesProps {
   filtroMetodoPago: "consolidado" | "efectivo" | "bancos";
 }
 
-type DetalleAsiento = {
-  cuenta_codigo: string;
-  debe: number;
-  haber: number;
-  descripcion?: string;
+type MovimientoDetalle = {
+  fecha: string | null; // YYYY-MM-DD (ISO)
+  tipo: "efectivo" | "bancos"; // método
+  monto: number; // con signo (positivo = entra, negativo = sale)
+  memo?: string;
+  asientoId?: string;
+  categoria?: "operativo" | "inversion" | "financiamiento";
 };
 
-type Asiento = {
-  id: string;
-  numero_asiento: string;
-  fecha: string; // ISO
-  descripcion: string;
-  detalle_asientos: DetalleAsiento[];
+type ApiResponse = {
+  ok?: boolean;
+  data?: {
+    movimientosDetalle?: MovimientoDetalle[];
+  };
+  movimientosDetalle?: MovimientoDetalle[]; // compat por si viene plano
 };
 
 function toISODateOnly(d: Date) {
@@ -38,6 +38,58 @@ function toISODateOnly(d: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+function formatDateSafe(dateStr?: string | null) {
+  if (!dateStr) return "-";
+  const dt = new Date(dateStr);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return format(dt, "dd MMM yyyy", { locale: es });
+}
+
+function categoriaLabel(cat: string) {
+  if (cat === "operativo") return "Operativo";
+  if (cat === "inversion") return "Inversión";
+  if (cat === "financiamiento") return "Financiamiento";
+  return "Otros";
+}
+
+function categoriaBadgeVariant(cat: string): any {
+  if (cat === "operativo") return "default";
+  if (cat === "inversion") return "secondary";
+  if (cat === "financiamiento") return "outline";
+  return "outline";
+}
+
+function metodoBadge(tipo: "efectivo" | "bancos") {
+  return tipo === "efectivo" ? "efectivo" : "bancos";
+}
+
+function groupByCategoria(list: MovimientoDetalle[]) {
+  const g: Record<string, MovimientoDetalle[]> = {
+    operativo: [],
+    inversion: [],
+    financiamiento: [],
+    otros: [],
+  };
+
+  for (const m of list) {
+    const cat = m?.categoria;
+    if (cat === "operativo") g.operativo.push(m);
+    else if (cat === "inversion") g.inversion.push(m);
+    else if (cat === "financiamiento") g.financiamiento.push(m);
+    else g.otros.push(m);
+  }
+
+  return g;
+}
+
 const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenTransaccionesProps) => {
   const start = toISODateOnly(startDate);
   const end = toISODateOnly(endDate);
@@ -45,258 +97,37 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["resumen-transacciones", start, end, filtroMetodoPago],
     queryFn: async () => {
-      
-      const json = await apiFetch(
-        `/api/flujo-efectivo/transacciones?start=${start}&end=${end}`
-      );
-      const payload = (json?.data ?? json) as { asientos?: Asiento[] } | Asiento[];
+      // ✅ Usamos el endpoint existente (analitico) y leemos movimientosDetalle
+      const json: any = await apiFetch(`/api/flujo-efectivo/analitico?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+      const root = (json?.data ?? json) as any;
 
-      const asientos: Asiento[] = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.asientos)
-          ? payload.asientos
-          : [];
+      const movimientosDetalle: MovimientoDetalle[] = Array.isArray(root?.movimientosDetalle)
+        ? root.movimientosDetalle
+        : Array.isArray(root?.data?.movimientosDetalle)
+        ? root.data.movimientosDetalle
+        : [];
 
-      const ingresos: any[] = [];
-      const egresos: any[] = [];
-      const inversiones: any[] = [];
-      const financiamientos: any[] = [];
-      const amortizaciones: any[] = [];
-
-      // Detectar transacciones canceladas PRIMERO
-      const transaccionesCanceladas: any[] = [];
-      const asientosReversiones = new Set<string>();
-
-      asientos.forEach((asiento: any) => {
-        // Detectar si es un asiento de reversión
-        if (String(asiento.descripcion || "").includes("REVERSIÓN:") || String(asiento.numero_asiento || "").startsWith("REV-")) {
-          // Extraer el nombre del producto de la descripción
-          const descripcionReversion = String(asiento.descripcion || "").replace("REVERSIÓN: Compra de inventario: ", "");
-
-          // Buscar asiento original con el mismo producto en fechas cercanas
-          const asientoOriginal = asientos.find((a: any) =>
-            String(a.descripcion || "").includes(`Compra de inventario: ${descripcionReversion}`) &&
-            !String(a.descripcion || "").includes("REVERSIÓN:") &&
-            String(a.numero_asiento || "").startsWith("COMP-INV-") &&
-            new Date(a.fecha) <= new Date(asiento.fecha)
-          );
-
-          if (asientoOriginal) {
-            // Marcar ambos como procesados para no duplicar
-            asientosReversiones.add(asiento.id);
-            asientosReversiones.add(asientoOriginal.id);
-
-            // Obtener detalles de ambos asientos
-            const detallesOriginal = asientoOriginal.detalle_asientos || [];
-            const detallesReversion = asiento.detalle_asientos || [];
-
-            // Calcular impacto en efectivo/bancos
-            let montoOriginal = 0;
-            let montoReversion = 0;
-            let metodoPago = "";
-
-            detallesOriginal.forEach((det: any) => {
-              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
-                montoOriginal = (det.debe || 0) - (det.haber || 0);
-                metodoPago = det.cuenta_codigo === "1001" ? "efectivo" : "bancos";
-              }
-            });
-
-            // Aplicar filtro de método de pago
-            const metodoCumpleFiltro =
-              filtroMetodoPago === "consolidado" ||
-              (filtroMetodoPago === "efectivo" && metodoPago === "efectivo") ||
-              (filtroMetodoPago === "bancos" && metodoPago === "bancos");
-
-            if (!metodoCumpleFiltro) return;
-
-            detallesReversion.forEach((det: any) => {
-              if (det.cuenta_codigo === "1001" || det.cuenta_codigo === "1002") {
-                montoReversion = (det.debe || 0) - (det.haber || 0);
-              }
-            });
-
-            // Extraer motivo de cancelación de la descripción
-            let motivoCancelacion = "No especificado";
-            if (String(asiento.descripcion || "").includes("Motivo: ")) {
-              motivoCancelacion = String(asiento.descripcion || "").split("Motivo: ")[1] || "No especificado";
-            }
-
-            transaccionesCanceladas.push({
-              id: `cancelacion-${asientoOriginal.numero_asiento}`,
-              movimiento_id: String(asientoOriginal.numero_asiento || "").replace("COMP-INV-", ""),
-              fecha_original: asientoOriginal.fecha,
-              fecha_cancelacion: asiento.fecha,
-              descripcion: descripcionReversion,
-              motivo_cancelacion: motivoCancelacion,
-              metodo_pago: metodoPago,
-              monto_original: Math.abs(montoOriginal),
-              monto_reversion: Math.abs(montoReversion),
-              monto_neto: 0,
-              asiento_original: asientoOriginal,
-              asiento_reversion: asiento,
-              detalles_original: detallesOriginal,
-              detalles_reversion: detallesReversion,
-            });
-          }
-        }
+      // Filtro por método (tipo)
+      const filtered = movimientosDetalle.filter((m) => {
+        if (!m) return false;
+        if (filtroMetodoPago === "consolidado") return true;
+        return m.tipo === filtroMetodoPago;
       });
 
-      // Procesar cada asiento
-      asientos.forEach((asiento: any) => {
-        const detalles = asiento.detalle_asientos || [];
-
-        // Ver si afecta efectivo/bancos según filtro
-        let impactoEfectivo = 0;
-        let impactoBancos = 0;
-        let afectaEfectivo = false;
-        let afectaBancos = false;
-        let metodoPago = "";
-
-        detalles.forEach((det: any) => {
-          if (det.cuenta_codigo === "1001") {
-            afectaEfectivo = true;
-            impactoEfectivo = (det.debe || 0) - (det.haber || 0);
-            metodoPago = "efectivo";
-          } else if (det.cuenta_codigo === "1002") {
-            afectaBancos = true;
-            impactoBancos = (det.debe || 0) - (det.haber || 0);
-            metodoPago = "bancos";
-          }
-        });
-
-        // Filtrar según método de pago
-        if (!afectaEfectivo && !afectaBancos) return;
-        if (filtroMetodoPago === "efectivo" && !afectaEfectivo) return;
-        if (filtroMetodoPago === "bancos" && !afectaBancos) return;
-
-        const montoTotal = impactoEfectivo + impactoBancos;
-
-        // Excluir asientos que son parte de reversiones detectadas
-        if (asientosReversiones.has(asiento.id)) return;
-
-        if (montoTotal === 0) return;
-
-        // Clasificar según contrapartidas
-        detalles.forEach((det: any) => {
-          const codigo = det.cuenta_codigo;
-          if (codigo === "1001" || codigo === "1002") return;
-
-          const transaccion = {
-            id: asiento.id,
-            created_at: asiento.fecha,
-            descripcion: asiento.descripcion,
-            metodo_pago: metodoPago,
-            monto_total: Math.abs(montoTotal),
-            monto_pagado: Math.abs(montoTotal),
-          };
-
-          // Ingresos (4XXX)
-          if (String(codigo).startsWith("4") && montoTotal > 0) {
-            ingresos.push({
-              ...transaccion,
-              tipo_ingreso: "venta",
-              cliente_nombre: "",
-            });
-          }
-          // Compras de Inventario (1005, 1006)
-          else if ((codigo === "1005" || codigo === "1006") && montoTotal < 0) {
-            egresos.push({
-              ...transaccion,
-              tipo_egreso: "compra_inventario",
-            });
-          }
-          // Egresos operativos (5XXX, 6XXX)
-          else if ((String(codigo).startsWith("5") || String(codigo).startsWith("6")) && montoTotal < 0) {
-            egresos.push({
-              ...transaccion,
-              tipo_egreso: String(codigo).startsWith("5") ? "costo" : "gasto",
-            });
-          }
-          // Pagos a proveedores y pasivos (2001-2006) - DETECTAR PRIMERO
-          else if (["2001", "2002", "2003", "2004", "2005", "2006"].includes(codigo) && montoTotal < 0) {
-            egresos.push({
-              ...transaccion,
-              tipo_egreso: "pago_proveedor",
-            });
-          }
-          // Inversiones (12XX, 13XX activos fijos y diferidos)
-          else if (((String(codigo).startsWith("12") && parseInt(String(codigo), 10) >= 1201) || String(codigo).startsWith("13")) && montoTotal < 0) {
-            inversiones.push({
-              ...transaccion,
-              producto_nombre: asiento.descripcion,
-              categoria_activo: String(codigo).startsWith("12") ? "activo_fijo" : "activo_diferido",
-              valor_total: Math.abs(montoTotal),
-            });
-          }
-          // Financiamientos (excluir CxP 2001-2006)
-          else if ((String(codigo).startsWith("20") || String(codigo).startsWith("21")) &&
-            !["2001", "2002", "2003", "2004", "2005", "2006"].includes(codigo)) {
-            if (montoTotal > 0) {
-              financiamientos.push({
-                ...transaccion,
-                nombre: asiento.descripcion,
-                institucion_financiera: "N/A",
-                tipo_credito: "credito",
-                saldo_inicial: montoTotal,
-              });
-            } else {
-              amortizaciones.push({
-                ...transaccion,
-                capital_pagado: Math.abs(montoTotal),
-                interes_pagado: 0,
-                financiamientos: { nombre: asiento.descripcion },
-              });
-            }
-          }
-          // Capital (3001, 3002)
-          else if (codigo === "3001" || codigo === "3002") {
-            if (montoTotal > 0) {
-              financiamientos.push({
-                ...transaccion,
-                nombre: "Aportación de Capital",
-                institucion_financiera: "N/A",
-                tipo_credito: "capital",
-                saldo_inicial: montoTotal,
-              });
-            }
-          }
-        });
+      // Orden por fecha desc (y si no hay fecha, al final)
+      filtered.sort((a, b) => {
+        const ta = a?.fecha ? new Date(a.fecha).getTime() : 0;
+        const tb = b?.fecha ? new Date(b.fecha).getTime() : 0;
+        return tb - ta;
       });
 
-      return {
-        ingresos,
-        egresos,
-        inversiones,
-        financiamientos,
-        amortizaciones,
-        intereses: [],
-        transaccionesCanceladas,
-      };
+      return filtered;
     },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
-
-  const safe = data ?? {
-    ingresos: [],
-    egresos: [],
-    inversiones: [],
-    financiamientos: [],
-    amortizaciones: [],
-    intereses: [],
-    transaccionesCanceladas: [],
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 2,
-    }).format(value);
-  };
-
-  const formatDate = (dateStr: string) => {
-    return format(new Date(dateStr), "dd MMM yyyy", { locale: es });
-  };
 
   if (isLoading) {
     return (
@@ -320,366 +151,83 @@ const ResumenTransacciones = ({ startDate, endDate, filtroMetodoPago }: ResumenT
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Ingresos */}
+  const movimientos = Array.isArray(data) ? data : [];
+  const grouped = groupByCategoria(movimientos);
+
+  const renderTable = (title: string, rows: MovimientoDetalle[], catKey: string) => {
+    const total = rows.reduce((acc, r) => acc + (Number(r?.monto) || 0), 0);
+
+    return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Ingresos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Método</TableHead>
-                <TableHead className="text-right">Monto de Transacción</TableHead>
-                <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {safe.ingresos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No hay ingresos registrados
-                  </TableCell>
-                </TableRow>
-              ) : (
-                safe.ingresos.map((ingreso: any) => (
-                  <TableRow key={ingreso.id}>
-                    <TableCell>{formatDate(ingreso.created_at)}</TableCell>
-                    <TableCell>{ingreso.descripcion}</TableCell>
-                    <TableCell>{ingreso.cliente_nombre || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{ingreso.metodo_pago}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(ingreso.monto_total)}</TableCell>
-                    <TableCell className="text-right text-finance-success font-medium">
-                      {formatCurrency(ingreso.monto_pagado)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Egresos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Egresos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Método</TableHead>
-                <TableHead className="text-right">Monto de Transacción</TableHead>
-                <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {safe.egresos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No hay egresos registrados
-                  </TableCell>
-                </TableRow>
-              ) : (
-                safe.egresos.map((egreso: any) => (
-                  <TableRow key={egreso.id}>
-                    <TableCell>{formatDate(egreso.created_at)}</TableCell>
-                    <TableCell>{egreso.descripcion}</TableCell>
-                    <TableCell>
-                      <Badge>{egreso.tipo_egreso}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{egreso.metodo_pago || "-"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(egreso.monto_total)}</TableCell>
-                    <TableCell className="text-right text-destructive font-medium">
-                      {formatCurrency(egreso.monto_pagado)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Transacciones Canceladas */}
-      {safe.transaccionesCanceladas && safe.transaccionesCanceladas.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              Compras de Inventario Canceladas
-              <Badge variant="outline" className="text-xs">
-                Neto: $0.00
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              {title}
+              <Badge variant={categoriaBadgeVariant(catKey)} className="text-xs">
+                {rows.length}
               </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              {safe.transaccionesCanceladas.map((cancelacion: any) => (
-                <AccordionItem key={cancelacion.id} value={cancelacion.id}>
-                  <AccordionTrigger className="hover:no-underline">
-                    <div className="flex justify-between items-center w-full pr-4">
-                      <div className="flex items-center gap-4">
-                        <Badge variant="secondary">Cancelada</Badge>
-                        <span className="font-medium">{cancelacion.descripcion}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {formatDate(cancelacion.fecha_original)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <Badge variant="outline">{cancelacion.metodo_pago}</Badge>
-                        <span className="font-mono text-muted-foreground">{formatCurrency(0)}</span>
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-4">
-                      {/* Asiento Original */}
-                      <div className="border rounded-lg p-4 bg-red-50/50 dark:bg-red-950/20">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-semibold text-sm">📥 Transacción Original (Salida)</h4>
-                          <span className="text-sm text-muted-foreground">
-                            {formatDate(cancelacion.fecha_original)}
-                          </span>
-                        </div>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Cuenta</TableHead>
-                              <TableHead className="text-right">Debe</TableHead>
-                              <TableHead className="text-right">Haber</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {cancelacion.detalles_original.map((det: any, idx: number) => (
-                              <TableRow key={idx}>
-                                <TableCell className="text-sm">
-                                  {det.cuenta_codigo} - {det.descripcion}
-                                </TableCell>
-                                <TableCell className="text-right text-sm">
-                                  {det.debe > 0 ? formatCurrency(det.debe) : "-"}
-                                </TableCell>
-                                <TableCell className="text-right text-sm">
-                                  {det.haber > 0 ? formatCurrency(det.haber) : "-"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            <TableRow className="font-medium bg-red-100/50 dark:bg-red-900/30">
-                              <TableCell>Impacto en Efectivo/Bancos</TableCell>
-                              <TableCell className="text-right">-</TableCell>
-                              <TableCell className="text-right text-destructive">
-                                -{formatCurrency(cancelacion.monto_original)}
-                              </TableCell>
-                            </TableRow>
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      {/* Asiento de Reversión */}
-                      <div className="border rounded-lg p-4 bg-green-50/50 dark:bg-green-950/20">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-semibold text-sm">📤 Reversión (Entrada)</h4>
-                          <span className="text-sm text-muted-foreground">
-                            {formatDate(cancelacion.fecha_cancelacion)}
-                          </span>
-                        </div>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Cuenta</TableHead>
-                              <TableHead className="text-right">Debe</TableHead>
-                              <TableHead className="text-right">Haber</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {cancelacion.detalles_reversion.map((det: any, idx: number) => (
-                              <TableRow key={idx}>
-                                <TableCell className="text-sm">
-                                  {det.cuenta_codigo} - {det.descripcion}
-                                </TableCell>
-                                <TableCell className="text-right text-sm">
-                                  {det.debe > 0 ? formatCurrency(det.debe) : "-"}
-                                </TableCell>
-                                <TableCell className="text-right text-sm">
-                                  {det.haber > 0 ? formatCurrency(det.haber) : "-"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            <TableRow className="font-medium bg-green-100/50 dark:bg-green-900/30">
-                              <TableCell>Impacto en Efectivo/Bancos</TableCell>
-                              <TableCell className="text-right text-finance-success">
-                                +{formatCurrency(cancelacion.monto_reversion)}
-                              </TableCell>
-                              <TableCell className="text-right">-</TableCell>
-                            </TableRow>
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      {/* Resultado Neto */}
-                      <div className="border-2 border-primary/30 rounded-lg p-4 bg-primary/5">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <h4 className="font-bold text-sm mb-1">💰 Impacto Neto</h4>
-                            <p className="text-xs text-muted-foreground">
-                              <strong>Motivo:</strong> {cancelacion.motivo_cancelacion}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-primary">{formatCurrency(0)}</div>
-                            <div className="text-xs text-muted-foreground">(Sin impacto en flujo de efectivo)</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Inversiones */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Inversiones</CardTitle>
+            </span>
+            <span className={`text-sm font-semibold ${total >= 0 ? "text-finance-success" : "text-destructive"}`}>
+              {formatCurrency(total)}
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha</TableHead>
-                <TableHead>Producto</TableHead>
+                <TableHead>Descripción</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Método</TableHead>
-                <TableHead className="text-right">Monto de Transacción</TableHead>
-                <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
+                <TableHead className="text-right">Monto (Neto)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {safe.inversiones.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No hay inversiones registradas
-                  </TableCell>
-                </TableRow>
-              ) : (
-                safe.inversiones.map((inversion: any) => (
-                  <TableRow key={inversion.id}>
-                    <TableCell>{formatDate(inversion.created_at)}</TableCell>
-                    <TableCell>{inversion.producto_nombre}</TableCell>
-                    <TableCell>
-                      <Badge>{inversion.categoria_activo}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{inversion.metodo_pago || "-"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(inversion.valor_total)}</TableCell>
-                    <TableCell className="text-right text-destructive font-medium">
-                      {formatCurrency(inversion.monto_pagado)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Financiamientos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Financiamientos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Institución</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {safe.financiamientos.length === 0 ? (
+              {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No hay financiamientos registrados
+                    No hay movimientos en esta sección
                   </TableCell>
                 </TableRow>
               ) : (
-                safe.financiamientos.map((financiamiento: any) => (
-                  <TableRow key={financiamiento.id}>
-                    <TableCell>{formatDate(financiamiento.created_at)}</TableCell>
-                    <TableCell>{financiamiento.nombre}</TableCell>
-                    <TableCell>{financiamiento.institucion_financiera}</TableCell>
-                    <TableCell>
-                      <Badge>{financiamiento.tipo_credito}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-finance-success font-medium">
-                      {formatCurrency(financiamiento.saldo_inicial)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                rows.map((m, idx) => {
+                  const cat = m?.categoria ?? "otros";
+                  const monto = Number(m?.monto) || 0;
+                  const memo = String(m?.memo ?? "").trim() || "(Sin descripción)";
+                  return (
+                    <TableRow key={`${m?.asientoId ?? "x"}-${idx}`}>
+                      <TableCell>{formatDateSafe(m?.fecha)}</TableCell>
+                      <TableCell className="max-w-[520px] truncate">{memo}</TableCell>
+                      <TableCell>
+                        <Badge variant={categoriaBadgeVariant(cat)}>{categoriaLabel(cat)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{metodoBadge(m?.tipo)}</Badge>
+                      </TableCell>
+                      <TableCell className={`text-right font-medium ${monto >= 0 ? "text-finance-success" : "text-destructive"}`}>
+                        {monto >= 0 ? "+" : "-"}
+                        {formatCurrency(Math.abs(monto))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+    );
+  };
 
-      {/* Amortizaciones */}
-      {safe.amortizaciones && safe.amortizaciones.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Amortizaciones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Financiamiento</TableHead>
-                  <TableHead>Método</TableHead>
-                  <TableHead className="text-right">Capital</TableHead>
-                  <TableHead className="text-right">Interés</TableHead>
-                  <TableHead className="text-right">Monto Cobrado/Pagado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {safe.amortizaciones.map((amort: any) => (
-                  <TableRow key={amort.id}>
-                    <TableCell>{formatDate(amort.created_at)}</TableCell>
-                    <TableCell>{amort.financiamientos?.nombre || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{amort.metodo_pago || "-"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(amort.capital_pagado || 0)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(amort.interes_pagado || 0)}</TableCell>
-                    <TableCell className="text-right text-destructive font-medium">
-                      {formatCurrency((amort.capital_pagado || 0) + (amort.interes_pagado || 0))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+  return (
+    <div className="space-y-6">
+      {renderTable("Operativo", grouped.operativo, "operativo")}
+      {renderTable("Inversión", grouped.inversion, "inversion")}
+      {renderTable("Financiamiento", grouped.financiamiento, "financiamiento")}
+
+      {/* Sección opcional */}
+      {grouped.otros.length > 0 && renderTable("Otros", grouped.otros, "otros")}
     </div>
   );
 };
