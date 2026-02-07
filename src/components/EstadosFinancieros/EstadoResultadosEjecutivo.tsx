@@ -10,27 +10,41 @@ interface EstadoResultadosEjecutivoProps {
   periodType: PeriodType;
 }
 
+type SaldoRow = {
+  // del hook nuevo (E2E)
+  debe_total?: number;
+  haber_total?: number;
+  saldo_final?: number;
+
+  // compat (por si algún endpoint antiguo lo manda)
+  saldo?: number;
+};
+
+function num(v: any, def = 0) {
+  if (v == null) return def;
+  const n = Number(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : def;
+}
+
 const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecutivoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
 
   // Función para formatear el período
-  const formatearPeriodo = (startDate: Date, endDate: Date): string => {
-    const formatoFecha = (fecha: Date) => {
-      return fecha.toLocaleDateString("es-ES", {
+  const formatearPeriodo = (start: Date, end: Date): string => {
+    const formatoFecha = (fecha: Date) =>
+      fecha.toLocaleDateString("es-ES", {
         day: "numeric",
         month: "long",
         year: "numeric",
       });
-    };
 
-    const fechaInicio = formatoFecha(startDate);
-    const fechaFin = formatoFecha(endDate);
+    const fechaInicio = formatoFecha(start);
+    const fechaFin = formatoFecha(end);
 
-    if (startDate.toDateString() === endDate.toDateString()) {
+    if (start.toDateString() === end.toDateString()) {
       return `Estado de Resultados del ${fechaInicio}`;
     }
-
     return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
   };
 
@@ -43,12 +57,11 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   }
 
   const cuentasFlat = cuentasData?.cuentasFlat || [];
-  const saldosPorCuenta: Record<string, { saldo?: number; debe_total?: number; haber_total?: number }> =
-    asientosData?.saldosPorCuenta || {};
+  const saldosPorCuenta = (asientosData?.saldosPorCuenta || {}) as Record<string, SaldoRow>;
 
   // ✅ Hay datos si hay movimientos o si hay saldos por cuenta
   const hayDatos =
-    (Array.isArray(asientosData?.movimientos) && asientosData!.movimientos.length > 0) ||
+    (Array.isArray(asientosData?.movimientos) && (asientosData?.movimientos?.length ?? 0) > 0) ||
     (saldosPorCuenta && Object.keys(saldosPorCuenta).length > 0);
 
   if (!hayDatos) {
@@ -68,45 +81,56 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
   const normalizeCodigo = (codigo: string) => String(codigo || "").trim();
 
-  // ✅ Obtener saldo robusto por código (por si viene con espacios o keys raras)
-  const obtenerSaldo = (codigoCuenta: string): number => {
+  /**
+   * ✅ Monto “del período” para ER
+   * - 4xxx (Ingresos): normalmente crédito => (haber - debe) positivo
+   * - 5xxx/6xxx (Costos/Gastos/Impuestos): normalmente débito => (debe - haber) positivo
+   * - fallback: usa saldo_final/saldo con reglas de signo “suaves”
+   */
+  const obtenerMontoPeriodoER = (codigoCuenta: string): number => {
     const codigo = normalizeCodigo(codigoCuenta);
+    const altKey = codigo.replace(/\s+/g, "");
+    const row = (saldosPorCuenta[codigo] ?? saldosPorCuenta[altKey]) as SaldoRow | undefined;
 
-    const direct = saldosPorCuenta[codigo]?.saldo;
-    const alt = saldosPorCuenta[codigo.replace(/\s+/g, "")]?.saldo;
-    const saldo = Number(direct ?? alt ?? 0) || 0;
+    // 1) Preferimos debe/haber del período si existen
+    const debe = num(row?.debe_total, NaN);
+    const haber = num(row?.haber_total, NaN);
 
-    const primerDigito = codigo.charAt(0);
+    if (Number.isFinite(debe) && Number.isFinite(haber)) {
+      if (codigo.startsWith("4")) {
+        // ingresos
+        // 4003 (Descuentos sobre ventas) debe verse negativo en ER
+        if (codigo === "4003") return -Math.abs(haber - debe);
+        return Math.abs(haber - debe);
+      }
+      if (codigo.startsWith("5") || codigo.startsWith("6")) {
+        return Math.abs(debe - haber);
+      }
+      // fallback por si llega otro código raro
+      return Math.abs(debe - haber);
+    }
+
+    // 2) fallback: saldo_final/saldo (compat)
+    const rawSaldo = num(row?.saldo_final ?? row?.saldo, 0);
 
     // 4003: Descuentos sobre ventas (contra cuenta)
-    if (codigo === "4003") {
-      return -Math.abs(saldo);
-    }
+    if (codigo === "4003") return -Math.abs(rawSaldo);
 
-    // 2,3,4 normalmente son acreedoras (en muchos motores el saldo puede venir negativo)
-    if (["2", "3", "4"].includes(primerDigito)) {
-      return Math.abs(saldo);
-    }
+    // 4xxx en muchos motores viene negativo (acreedor), lo hacemos positivo
+    if (codigo.startsWith("4")) return Math.abs(rawSaldo);
 
-    // activos/costos/gastos suelen ser deudoras
-    return saldo;
+    // 5/6 normalmente deudoras (gasto/costo) -> positivo
+    if (codigo.startsWith("5") || codigo.startsWith("6")) return Math.abs(rawSaldo);
+
+    return rawSaldo;
   };
 
-  // ✅ Clasificación E2E por rangos, NO por subgrupo
-  const getCodigoNum = (c: any): number => {
-    const raw = c?.codigo ?? c?.cuenta_codigo ?? c?.codigoCuenta ?? c?.accountCodigo ?? "";
-    const n = Number(String(raw).trim());
-    return Number.isFinite(n) ? n : NaN;
-  };
-
-  // Tomamos códigos del catálogo; si por algún motivo el catálogo falla,
-  // hacemos fallback a lo que venga en saldosPorCuenta.
+  // Tomamos códigos del catálogo; si el catálogo falla, fallback a saldos
   const codigosCatalogo = cuentasFlat
     .map((c: any) => String(c?.codigo ?? "").trim())
     .filter((x: string) => x);
 
   const codigosSaldos = Object.keys(saldosPorCuenta || {}).map((k) => String(k).trim()).filter(Boolean);
-
   const allCodigos = Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
 
   const sumBy = (predicate: (codigoNum: number, codigoStr: string) => boolean) => {
@@ -116,33 +140,21 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       const codigoNum = Number(codigo);
       if (!Number.isFinite(codigoNum)) continue;
       if (!predicate(codigoNum, codigo)) continue;
-      total += obtenerSaldo(codigo);
+      total += obtenerMontoPeriodoER(codigo);
     }
     return total;
   };
 
-  // Ingresos: 4xxx (incluye 41xx), con reglas especiales de 4002/4003/4004 si aplica
-  // Nota: tu hook mensual hace un tratamiento especial a 4002/4003; aquí respetamos 4003 y dejamos 4002 como ingreso si existe (puedes ajustar si lo usas como devoluciones).
+  // ✅ Clasificación por rangos (como pide el cliente en Ejecutivo)
   const totalIngresos = sumBy((n) => n >= 4000 && n <= 4999);
-
-  // Costos: 50xx
   const costoVentas = sumBy((n) => n >= 5000 && n <= 5099);
-
-  // Depreciaciones: 5109/5110
   const depreciaciones = sumBy((n) => n === 5109 || n === 5110);
-
-  // Gastos operativos: 51xx excluyendo 5109/5110
   const gastosOperativos = sumBy((n) => n >= 5100 && n <= 5199 && n !== 5109 && n !== 5110);
-
-  // Otros gastos: 52xx (excepto 5201 que lo dejamos en costo financiero)
   const otrosGastos = sumBy((n) => n >= 5200 && n <= 5299 && n !== 5201);
-
-  // Costo financiero: 5201 y/o 5111-5199 si lo usan así
   const costoFinanciero = sumBy((n) => n === 5201 || (n >= 5111 && n <= 5199));
-
-  // Impuestos: 6xxx
   const impuestos = sumBy((n) => n >= 6000 && n <= 6999);
 
+  // ✅ Subtotales (no son cuentas contables, son cálculos)
   const utilidadBruta = totalIngresos - costoVentas;
   const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
   const ebit = ebitda - depreciaciones;
@@ -151,55 +163,91 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
   const formatCurrency = (value: number) => {
     const absValue = Math.abs(value);
-    const formatted = absValue.toLocaleString("es-CO", { minimumFractionDigits: 2 });
+    const formatted = absValue.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return value < 0 ? `-$${formatted}` : `$${formatted}`;
+  };
+
+  const formatPct = (value: number) => {
+    if (!totalIngresos) return "0.00%";
+    return `${((value / totalIngresos) * 100).toFixed(2)}%`;
+  };
+
+  const Badge = ({ children, tone = "slate" }: { children: React.ReactNode; tone?: "slate" | "blue" | "emerald" }) => {
+    const cls =
+      tone === "emerald"
+        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+        : tone === "blue"
+        ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border-blue-200 dark:border-blue-900"
+        : "bg-slate-50 text-slate-700 dark:bg-slate-900/40 dark:text-slate-200 border-slate-200 dark:border-slate-800";
+
+    return (
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
+        {children}
+      </span>
+    );
   };
 
   const LineItem = ({
     label,
     value,
-    isHeader = false,
-    isSubtotal = false,
-    isTotal = false,
-    isNegative = false,
-    indent = 0,
+    kind = "normal",
+    hint,
   }: {
     label: string;
     value: number;
-    isHeader?: boolean;
-    isSubtotal?: boolean;
-    isTotal?: boolean;
-    isNegative?: boolean;
-    indent?: number;
+    kind?: "normal" | "negative" | "subtotal" | "total";
+    hint?: string;
   }) => {
-    const getColor = () => {
-      if (isTotal) return value >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400";
-      if (isSubtotal) return value >= 0 ? "text-blue-700 dark:text-blue-400" : "text-rose-700 dark:text-rose-400";
-      if (isNegative) return "text-slate-600 dark:text-slate-400";
-      return "text-slate-700 dark:text-slate-300";
-    };
+    const isTotal = kind === "total";
+    const isSubtotal = kind === "subtotal";
+    const isNegative = kind === "negative";
 
-    const getFontWeight = () => {
-      if (isTotal) return "font-bold text-xl";
-      if (isSubtotal) return "font-semibold text-lg";
-      if (isHeader) return "font-medium";
-      return "";
-    };
+    const color =
+      isTotal
+        ? value >= 0
+          ? "text-emerald-700 dark:text-emerald-300"
+          : "text-rose-700 dark:text-rose-300"
+        : isSubtotal
+        ? value >= 0
+          ? "text-blue-700 dark:text-blue-300"
+          : "text-rose-700 dark:text-rose-300"
+        : isNegative
+        ? "text-slate-600 dark:text-slate-400"
+        : "text-slate-800 dark:text-slate-200";
 
-    const percentage = totalIngresos !== 0 ? ((value / totalIngresos) * 100).toFixed(2) : "0.00";
+    const weight =
+      isTotal ? "font-black text-xl" : isSubtotal ? "font-bold text-lg" : "font-medium";
+
+    const rowBorder =
+      isSubtotal || isTotal ? "border-t-2 border-slate-200 dark:border-slate-700 pt-4 mt-2" : "";
+
+    const pct = formatPct(value);
 
     return (
-      <div
-        className={`grid grid-cols-3 gap-4 items-center py-3 ${
-          isSubtotal || isTotal ? "border-t-2 border-slate-300 dark:border-slate-600 pt-4" : ""
-        }`}
-        style={{ marginLeft: indent > 0 ? `${indent * 1}rem` : "0" }}
-      >
-        <span className={`${getFontWeight()} ${getColor()}`}>{label}</span>
-        <span className={`${getFontWeight()} ${getColor()} text-right`}>{formatCurrency(value)}</span>
-        <span className={`${getFontWeight()} ${getColor()} text-right`}>
-          {isNegative && value !== 0 ? `(${percentage}%)` : `${percentage}%`}
-        </span>
+      <div className={`grid grid-cols-3 gap-4 items-center py-2 ${rowBorder}`}>
+        <div className="space-y-1">
+          <div className={`flex items-center gap-2 ${weight} ${color}`}>
+            <span>{label}</span>
+
+            {isSubtotal && <Badge tone="blue">Subtotal</Badge>}
+            {isTotal && <Badge tone="emerald">Resultado</Badge>}
+            {isNegative && <Badge>Salida</Badge>}
+          </div>
+
+          {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
+
+          {isSubtotal ? (
+            <div className="text-xs text-muted-foreground">
+              Margen: <span className="font-semibold text-foreground">{pct}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className={`text-right ${weight} ${color}`}>{formatCurrency(value)}</div>
+
+        <div className={`text-right ${weight} ${color}`}>
+          {isNegative && value !== 0 ? `(${pct})` : pct}
+        </div>
       </div>
     );
   };
@@ -208,47 +256,82 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         {utilidadNeta >= 0 ? (
-          <TrendingUp className="h-8 w-8 text-green-600" />
+          <TrendingUp className="h-8 w-8 text-emerald-600" />
         ) : (
-          <TrendingDown className="h-8 w-8 text-red-600" />
+          <TrendingDown className="h-8 w-8 text-rose-600" />
         )}
-        <p className="text-muted-foreground">Vista ejecutiva consolidada del período</p>
+        <div>
+          <p className="text-sm font-semibold text-foreground">Vista ejecutiva consolidada</p>
+          <p className="text-xs text-muted-foreground">
+            Subtotales calculados + márgenes sobre ingresos (como pide el formato ejecutivo)
+          </p>
+        </div>
       </div>
 
-      <Card className="border-2">
-        <CardHeader className="bg-muted/50">
+      <Card className="border-2 border-primary/20 overflow-hidden">
+        <CardHeader className="bg-primary/5">
           <CardTitle className="text-2xl">Resumen Financiero</CardTitle>
           <p className="text-sm text-muted-foreground mt-2 font-medium">{formatearPeriodo(startDate, endDate)}</p>
         </CardHeader>
 
         <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+            <div className="rounded-lg border bg-background p-3">
+              <div className="text-xs text-muted-foreground">Total Ingresos</div>
+              <div className="text-lg font-extrabold text-blue-700 dark:text-blue-300">
+                {formatCurrency(totalIngresos)}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-background p-3">
+              <div className="text-xs text-muted-foreground">EBITDA</div>
+              <div className={`text-lg font-extrabold ${ebitda >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"}`}>
+                {formatCurrency(ebitda)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Margen: <span className="font-semibold text-foreground">{formatPct(ebitda)}</span>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-background p-3">
+              <div className="text-xs text-muted-foreground">Utilidad Neta</div>
+              <div className={`text-lg font-extrabold ${utilidadNeta >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"}`}>
+                {formatCurrency(utilidadNeta)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Margen: <span className="font-semibold text-foreground">{formatPct(utilidadNeta)}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-1">
-            <div className="grid grid-cols-3 gap-4 pb-3 border-b-2 border-slate-300 dark:border-slate-600 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
+            <div className="grid grid-cols-3 gap-4 pb-3 border-b border-slate-200 dark:border-slate-700 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
               <span>Concepto</span>
               <span className="text-right">Monto</span>
               <span className="text-right">% Ingresos</span>
             </div>
 
-            <LineItem label="Total Ingresos" value={totalIngresos} isSubtotal />
-            <LineItem label="(-) Costo de Ventas" value={costoVentas} isNegative />
-            <LineItem label="Utilidad Bruta" value={utilidadBruta} isSubtotal />
+            <LineItem label="Total Ingresos" value={totalIngresos} kind="subtotal" hint="Suma de cuentas 4xxx (ingresos) del período" />
 
-            <LineItem label="(-) Gastos Operativos" value={gastosOperativos} isNegative />
-            <LineItem label="(-) Otros Gastos" value={otrosGastos} isNegative />
-            <LineItem label="EBITDA" value={ebitda} isSubtotal />
+            <LineItem label="(-) Costo de Ventas" value={costoVentas} kind="negative" />
+            <LineItem label="Utilidad Bruta" value={utilidadBruta} kind="subtotal" hint="Ingresos - Costo de Ventas" />
 
-            <LineItem label="(-) Depreciaciones y Amortizaciones" value={depreciaciones} isNegative />
-            <LineItem label="EBIT (Utilidad Operativa)" value={ebit} isSubtotal />
+            <LineItem label="(-) Gastos Operativos" value={gastosOperativos} kind="negative" />
+            <LineItem label="(-) Otros Gastos" value={otrosGastos} kind="negative" />
+            <LineItem label="EBITDA" value={ebitda} kind="subtotal" hint="Utilidad Bruta - Gastos Operativos - Otros Gastos" />
 
-            <LineItem label="(-) Costo Financiero" value={costoFinanciero} isNegative />
-            <LineItem label="Utilidad Antes de Impuestos" value={utilidadAntesImpuestos} isSubtotal />
+            <LineItem label="(-) Depreciaciones y Amortizaciones" value={depreciaciones} kind="negative" />
+            <LineItem label="EBIT (Utilidad Operativa)" value={ebit} kind="subtotal" hint="EBITDA - Depreciaciones/Amortizaciones" />
 
-            <LineItem label="(-) Impuestos" value={impuestos} isNegative />
+            <LineItem label="(-) Costo Financiero" value={costoFinanciero} kind="negative" />
+            <LineItem label="Utilidad Antes de Impuestos" value={utilidadAntesImpuestos} kind="subtotal" hint="EBIT - Costo Financiero" />
+
+            <LineItem label="(-) Impuestos" value={impuestos} kind="negative" />
 
             <LineItem
               label={utilidadNeta >= 0 ? "Utilidad Neta" : "Pérdida Neta"}
               value={utilidadNeta}
-              isTotal
+              kind="total"
             />
           </div>
         </CardContent>
