@@ -176,6 +176,27 @@ export default function BalanzaBalance() {
     return null;
   };
 
+  // ===== ✅ FIX E2E: Sub-agrupadores correctos (no repetir Activos/Pasivos/Capital) =====
+  const AGRUPADOR_LABEL: Record<AgrupadorBG, string> = {
+    activos: "Activos",
+    pasivos: "Pasivos",
+    capital: "Capital",
+  };
+
+  function pickKeyCI(obj: any, wanted: string): string | null {
+    if (!obj) return null;
+    const keys = Object.keys(obj);
+    const exact = keys.find((k) => k === wanted);
+    if (exact) return exact;
+    const lower = keys.find((k) => k.toLowerCase() === wanted.toLowerCase());
+    return lower || null;
+  }
+
+  function bgHasAgrupadores(bg: any) {
+    if (!bg) return false;
+    return !!(pickKeyCI(bg, "Activos") && pickKeyCI(bg, "Pasivos") && pickKeyCI(bg, "Capital"));
+  }
+
   const monthOptions = useMemo(() => {
     const base = new Date(2020, 0, 1);
     const list: { label: string; value: string; date: Date }[] = [];
@@ -305,30 +326,44 @@ export default function BalanzaBalance() {
   // =========================
   // ✅ OPCIONES BG (Sub-agrupador / Cuentas)
   // =========================
-  const bgGrupoOptions = useMemo(() => {
+  // ✅ FIX E2E: Sub-agrupadores reales por Activos/Pasivos/Capital
+  const bgSubAgrupadorOptions = useMemo(() => {
     const bg = estadosFinancieros?.["Balance General"];
     if (!bg) return [];
 
-    const grupos = Object.keys(bg || {});
-    const matchesAgrupador = (grupo: string) => {
-      const subObj = bg?.[grupo] || {};
-      const cuentasAll: any[] = Object.values(subObj).flat() as any[];
-      const codigos = cuentasAll.map((c) => String(c?.codigo || "")).filter(Boolean);
-      if (!codigos.length) return false;
-      return codigos.some((codigo) => getTipoBGByCodigo(codigo) === agrupadorBG);
-    };
+    // Si BG viene con Activos/Pasivos/Capital como primer nivel:
+    if (bgHasAgrupadores(bg)) {
+      const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
+      const agrupadorObj = bg?.[agrupadorKey];
+      if (!agrupadorObj) return [];
+      return Object.keys(agrupadorObj || {}).sort((a, b) => a.localeCompare(b));
+    }
 
-    return grupos.filter(matchesAgrupador);
+    // Fallback: si BG no trae ese primer nivel, filtra para no repetir
+    const grupos = Object.keys(bg || {});
+    return grupos
+      .filter((g) => g.toLowerCase() !== "activos" && g.toLowerCase() !== "pasivos" && g.toLowerCase() !== "capital")
+      .sort((a, b) => a.localeCompare(b));
   }, [estadosFinancieros, agrupadorBG]);
 
+  // ✅ FIX E2E: Cuentas dependientes del sub-agrupador correcto
   const bgCuentaOptions = useMemo(() => {
     const bg = estadosFinancieros?.["Balance General"];
     if (!bg) return [];
     if (subAgrupadorBG === "todos") return [];
 
-    const subObj = bg?.[subAgrupadorBG] || {};
-    const cuentasAll: any[] = Object.values(subObj).flat() as any[];
+    let subObj: any = null;
 
+    if (bgHasAgrupadores(bg)) {
+      const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
+      subObj = bg?.[agrupadorKey]?.[subAgrupadorBG] || null;
+    } else {
+      subObj = bg?.[subAgrupadorBG] || null;
+    }
+
+    if (!subObj) return [];
+
+    const cuentasAll: any[] = Array.isArray(subObj) ? subObj : (Object.values(subObj).flat() as any[]);
     const rows = cuentasAll
       .map((c) => ({ codigo: String(c?.codigo || ""), nombre: String(c?.nombre || "N/A") }))
       .filter((x) => !!x.codigo)
@@ -355,17 +390,30 @@ export default function BalanzaBalance() {
   // Agrupador (activos/pasivos/capital)
   movimientosFiltrados = movimientosFiltrados.filter((mov) => getTipoBGByCodigo(mov.cuenta_codigo) === agrupadorBG);
 
-  // Sub-agrupador (grupo BG)
-  if (subAgrupadorBG !== "todos" && estadosFinancieros?.["Balance General"]?.[subAgrupadorBG]) {
-    const obj = estadosFinancieros["Balance General"][subAgrupadorBG] || {};
-    const cuentasAll: any[] = Object.values(obj).flat() as any[];
-    const codigos = new Set(
-      cuentasAll
-        .map((c) => String(c?.codigo || ""))
-        .filter(Boolean)
-        .filter((codigo) => getTipoBGByCodigo(codigo) === agrupadorBG)
-    );
-    movimientosFiltrados = movimientosFiltrados.filter((mov) => codigos.has(String(mov.cuenta_codigo || "")));
+  // ✅ FIX E2E: Sub-agrupador (lee el nivel correcto)
+  if (subAgrupadorBG !== "todos") {
+    const bg = estadosFinancieros?.["Balance General"];
+    let subObj: any = null;
+
+    if (bg) {
+      if (bgHasAgrupadores(bg)) {
+        const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
+        subObj = bg?.[agrupadorKey]?.[subAgrupadorBG] || null;
+      } else {
+        subObj = bg?.[subAgrupadorBG] || null;
+      }
+    }
+
+    if (subObj) {
+      const cuentasAll: any[] = Array.isArray(subObj) ? subObj : (Object.values(subObj).flat() as any[]);
+      const codigos = new Set(
+        cuentasAll
+          .map((c) => String(c?.codigo || ""))
+          .filter(Boolean)
+          .filter((codigo) => getTipoBGByCodigo(codigo) === agrupadorBG)
+      );
+      movimientosFiltrados = movimientosFiltrados.filter((mov) => codigos.has(String(mov.cuenta_codigo || "")));
+    }
   }
 
   // Cuenta específica
@@ -529,6 +577,15 @@ export default function BalanzaBalance() {
     return rows;
   }, [asientosFiltrados]);
 
+  // ✅ FIX UX: Totales Debe/Haber de movimientos (no depende de paginación)
+  const totalDebeMovimientos = useMemo(() => {
+    return filasAsientosBalance.reduce((sum, r) => sum + Number(r.mov?.debe || 0), 0);
+  }, [filasAsientosBalance]);
+
+  const totalHaberMovimientos = useMemo(() => {
+    return filasAsientosBalance.reduce((sum, r) => sum + Number(r.mov?.haber || 0), 0);
+  }, [filasAsientosBalance]);
+
   // =========================
   // ✅ SALDOS filtrados (Balance + filtros)
   // =========================
@@ -543,27 +600,38 @@ export default function BalanzaBalance() {
     Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => getTipoBGByCodigo(codigo) === agrupadorBG)
   );
 
-  // Sub-agrupador
-  if (subAgrupadorBG !== "todos" && estadosFinancieros?.["Balance General"]?.[subAgrupadorBG]) {
-    const obj = estadosFinancieros["Balance General"][subAgrupadorBG] || {};
-    const cuentasAll: any[] = Object.values(obj).flat() as any[];
-    const codigos = new Set(
-      cuentasAll
-        .map((c) => String(c?.codigo || ""))
-        .filter(Boolean)
-        .filter((codigo) => getTipoBGByCodigo(codigo) === agrupadorBG)
-    );
+  // ✅ FIX E2E: Sub-agrupador (lee el nivel correcto)
+  if (subAgrupadorBG !== "todos") {
+    const bg = estadosFinancieros?.["Balance General"];
+    let subObj: any = null;
 
-    saldosPorCuentaFiltrados = Object.fromEntries(
-      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigos.has(String(codigo || "")))
-    );
+    if (bg) {
+      if (bgHasAgrupadores(bg)) {
+        const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
+        subObj = bg?.[agrupadorKey]?.[subAgrupadorBG] || null;
+      } else {
+        subObj = bg?.[subAgrupadorBG] || null;
+      }
+    }
+
+    if (subObj) {
+      const cuentasAll: any[] = Array.isArray(subObj) ? subObj : (Object.values(subObj).flat() as any[]);
+      const codigos = new Set(
+        cuentasAll
+          .map((c) => String(c?.codigo || ""))
+          .filter(Boolean)
+          .filter((codigo) => getTipoBGByCodigo(codigo) === agrupadorBG)
+      );
+
+      saldosPorCuentaFiltrados = Object.fromEntries(
+        Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigos.has(String(codigo || "")))
+      );
+    }
   }
 
   // Cuenta
   if (cuentaBG !== "todos") {
-    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[cuentaBG]
-      ? { [cuentaBG]: saldosPorCuentaFiltrados[cuentaBG] }
-      : {};
+    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[cuentaBG] ? { [cuentaBG]: saldosPorCuentaFiltrados[cuentaBG] } : {};
   }
 
   const totalDebe = useMemo(() => {
@@ -699,9 +767,19 @@ export default function BalanzaBalance() {
       children: [],
     };
 
-    const grupos = Object.keys(bg || {});
+    // =========================
+    // ✅ FIX E2E: Construcción robusta del árbol (con o sin Activos/Pasivos/Capital al primer nivel)
+    // =========================
+    let bgForTree: any = bg;
+
+    if (bgHasAgrupadores(bg)) {
+      const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
+      bgForTree = bg?.[agrupadorKey] || {};
+    }
+
+    const grupos = Object.keys(bgForTree || {});
     for (const grupo of grupos) {
-      const subgruposObj = bg?.[grupo] || {};
+      const subgruposObj = bgForTree?.[grupo] || {};
       const subgrupos = Object.keys(subgruposObj);
 
       const grupoNode: SaldosNode = {
@@ -751,7 +829,7 @@ export default function BalanzaBalance() {
 
     if (!estadoNode.children.length) return fallbackFlat;
     return [estadoNode];
-  }, [saldosPorCuentaFiltrados, estadosFinancieros, cuentasInfoMap]);
+  }, [saldosPorCuentaFiltrados, estadosFinancieros, cuentasInfoMap, agrupadorBG]);
 
   // =========================
   // ✅ PAGINACIÓN (FILAS BALANCE)
@@ -1165,7 +1243,7 @@ export default function BalanzaBalance() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  {bgGrupoOptions.map((g) => (
+                  {bgSubAgrupadorOptions.map((g) => (
                     <SelectItem key={g} value={g}>
                       {g}
                     </SelectItem>
@@ -1383,64 +1461,74 @@ export default function BalanzaBalance() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filasPaginadas.map((row, idx) => {
-                        const debe = Number(row.mov.debe || 0);
-                        const haber = Number(row.mov.haber || 0);
+                      <>
+                        {filasPaginadas.map((row, idx) => {
+                          const debe = Number(row.mov.debe || 0);
+                          const haber = Number(row.mov.haber || 0);
 
-                        return (
-                          <TableRow
-                            key={`${row.referencia}-${row.mov.cuenta_codigo}-${idx}`}
-                            className={cn("hover:bg-muted/20", row.esCancelado ? "bg-red-50 dark:bg-red-950/20" : "")}
-                          >
-                            <TableCell className="font-mono text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">{row.referencia}</span>
-                                {row.esCancelado && (
-                                  <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
+                          return (
+                            <TableRow
+                              key={`${row.referencia}-${row.mov.cuenta_codigo}-${idx}`}
+                              className={cn("hover:bg-muted/20", row.esCancelado ? "bg-red-50 dark:bg-red-950/20" : "")}
+                            >
+                              <TableCell className="font-mono text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">{row.referencia}</span>
+                                  {row.esCancelado && (
+                                    <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1 truncate">{row.asientoDescripcion}</div>
+                              </TableCell>
+
+                              <TableCell className="text-sm">{row.fecha}</TableCell>
+                              <TableCell className="text-sm">{row.tipo}</TableCell>
+
+                              <TableCell className="text-sm">
+                                <span className="font-mono text-xs">{row.mov.cuenta_codigo}</span>
+                                <div className="text-xs text-muted-foreground truncate">{row.mov.cuenta_nombre}</div>
+                              </TableCell>
+
+                              <TableCell className="text-right">
+                                {debe > 0 ? (
+                                  <span className="text-green-600 font-medium">{formatCurrency(debe)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
                                 )}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1 truncate">{row.asientoDescripcion}</div>
-                            </TableCell>
+                              </TableCell>
 
-                            <TableCell className="text-sm">{row.fecha}</TableCell>
-                            <TableCell className="text-sm">{row.tipo}</TableCell>
+                              <TableCell className="text-right">
+                                {haber > 0 ? (
+                                  <span className="text-red-600 font-medium">{formatCurrency(haber)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
 
-                            <TableCell className="text-sm">
-                              <span className="font-mono text-xs">{row.mov.cuenta_codigo}</span>
-                              <div className="text-xs text-muted-foreground truncate">{row.mov.cuenta_nombre}</div>
-                            </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setAsientoModalRef(row.referencia);
+                                    setAsientoModalOpen(true);
+                                  }}
+                                >
+                                  Ver asiento
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
 
-                            <TableCell className="text-right">
-                              {debe > 0 ? (
-                                <span className="text-green-600 font-medium">{formatCurrency(debe)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              {haber > 0 ? (
-                                <span className="text-red-600 font-medium">{formatCurrency(haber)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setAsientoModalRef(row.referencia);
-                                  setAsientoModalOpen(true);
-                                }}
-                              >
-                                Ver asiento
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
+                        {/* ✅ FIX UX: Total Debe/Haber de movimientos del período */}
+                        <TableRow className="font-bold bg-muted/40">
+                          <TableCell colSpan={4}>Total movimientos del período</TableCell>
+                          <TableCell className="text-right text-green-600">{formatCurrency(totalDebeMovimientos)}</TableCell>
+                          <TableCell className="text-right text-red-600">{formatCurrency(totalHaberMovimientos)}</TableCell>
+                          <TableCell />
+                        </TableRow>
+                      </>
                     )}
                   </TableBody>
                 </Table>
@@ -1515,9 +1603,7 @@ export default function BalanzaBalance() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Asiento {asientoModalData?.referencia || ""}</DialogTitle>
-            <DialogDescription>
-              {asientoModalData?.descripcion || "Detalle completo del asiento contable."}
-            </DialogDescription>
+            <DialogDescription>{asientoModalData?.descripcion || "Detalle completo del asiento contable."}</DialogDescription>
           </DialogHeader>
 
           {!asientoModalData ? (
@@ -1549,9 +1635,7 @@ export default function BalanzaBalance() {
                       >
                         <TableCell>
                           <div className="flex items-start gap-2">
-                            {mov.esCuentaFiltrada && (
-                              <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>
-                            )}
+                            {mov.esCuentaFiltrada && <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>}
                             <div className="min-w-0">
                               <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
                               <p className="text-xs text-muted-foreground truncate">{mov.cuenta_nombre}</p>
@@ -1605,9 +1689,7 @@ export default function BalanzaBalance() {
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>
-          <CardDescription>
-            Vista desplegable por Grupo → Subgrupo → Cuenta, con Saldo inicial/final y Debe/Haber del período.
-          </CardDescription>
+          <CardDescription>Vista desplegable por Grupo → Subgrupo → Cuenta, con Saldo inicial/final y Debe/Haber del período.</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
