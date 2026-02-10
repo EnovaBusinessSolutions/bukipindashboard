@@ -598,6 +598,14 @@ export default function BalanzaResultados() {
     return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + Number(cuenta?.haber_total || 0), 0);
   }, [saldosPorCuentaFiltrados]);
 
+  const totalSaldo = useMemo(() => {
+  return Object.values(saldosPorCuentaFiltrados).reduce(
+    (sum, cuenta: any) => sum + Number(cuenta?.saldo ?? cuenta?.saldo_final ?? 0),
+    0
+  );
+}, [saldosPorCuentaFiltrados]);
+
+
   // =========================
   // ✅ SALDOS UI (Plan de Cuentas estilo desplegable)
   //    Con DESGLOSE por subcuentas si existen (4001-01, etc.).
@@ -1799,7 +1807,7 @@ export default function BalanzaResultados() {
                 <div className="col-span-7 font-bold">TOTALES</div>
                 <div className="col-span-2 text-right font-bold text-green-600">{formatCurrency(totalDebe)}</div>
                 <div className="col-span-2 text-right font-bold text-red-600">{formatCurrency(totalHaber)}</div>
-                <div className="col-span-1 text-right font-bold">{formatCurrency(Math.abs(totalDebe - totalHaber))}</div>
+                <div className="col-span-1 text-right font-bold">{formatCurrency(totalSaldo)}</div>
               </div>
             </div>
           </div>
