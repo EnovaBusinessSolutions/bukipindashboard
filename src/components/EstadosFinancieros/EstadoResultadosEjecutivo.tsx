@@ -1,8 +1,10 @@
+// src/components/EstadosFinancieros/EstadoResultadosEjecutivo.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { PeriodType } from "@/pages/EstadoResultados";
+import { cn } from "@/lib/utils";
 
 interface EstadoResultadosEjecutivoProps {
   startDate: Date;
@@ -130,7 +132,10 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     .map((c: any) => String(c?.codigo ?? "").trim())
     .filter((x: string) => x);
 
-  const codigosSaldos = Object.keys(saldosPorCuenta || {}).map((k) => String(k).trim()).filter(Boolean);
+  const codigosSaldos = Object.keys(saldosPorCuenta || {})
+    .map((k) => String(k).trim())
+    .filter(Boolean);
+
   const allCodigos = Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
 
   const sumBy = (predicate: (codigoNum: number, codigoStr: string) => boolean) => {
@@ -157,182 +162,258 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   // ✅ Subtotales (no son cuentas contables, son cálculos)
   const utilidadBruta = totalIngresos - costoVentas;
   const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
-  const ebit = ebitda - depreciaciones;
-  const utilidadAntesImpuestos = ebit - costoFinanciero;
-  const utilidadNeta = utilidadAntesImpuestos - impuestos;
+  const utilidadNeta = (ebitda - depreciaciones - costoFinanciero) - impuestos;
 
+  // --------------------------
+  // UI helpers (estilo limpio)
+  // --------------------------
   const formatCurrency = (value: number) => {
     const absValue = Math.abs(value);
     const formatted = absValue.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
-  const formatPct = (value: number) => {
-    if (!totalIngresos) return "0.00%";
-    return `${((value / totalIngresos) * 100).toFixed(2)}%`;
+  const pct = (value: number) => {
+    if (!totalIngresos) return 0;
+    return (value / totalIngresos) * 100;
   };
 
-  const Badge = ({ children, tone = "slate" }: { children: React.ReactNode; tone?: "slate" | "blue" | "emerald" }) => {
-    const cls =
-      tone === "emerald"
-        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
-        : tone === "blue"
-        ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border-blue-200 dark:border-blue-900"
-        : "bg-slate-50 text-slate-700 dark:bg-slate-900/40 dark:text-slate-200 border-slate-200 dark:border-slate-800";
+  const formatPct = (value: number) => `${pct(value).toFixed(1)}% Mg`;
 
+  const Pill = ({
+    children,
+    tone = "emerald",
+  }: {
+    children: React.ReactNode;
+    tone?: "emerald" | "blue" | "slate";
+  }) => {
+    const cls =
+      tone === "blue"
+        ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-200 border-blue-200 dark:border-blue-900"
+        : tone === "slate"
+        ? "bg-slate-50 text-slate-700 dark:bg-slate-900/40 dark:text-slate-200 border-slate-200 dark:border-slate-800"
+        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 border-emerald-200 dark:border-emerald-900";
     return (
-      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
+      <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold", cls)}>
         {children}
       </span>
     );
   };
 
-  const LineItem = ({
-    label,
+  const KpiCard = ({
+    title,
     value,
-    kind = "normal",
-    hint,
+    rightPill,
+    emphasize = false,
   }: {
-    label: string;
+    title: string;
     value: number;
-    kind?: "normal" | "negative" | "subtotal" | "total";
-    hint?: string;
+    rightPill?: React.ReactNode;
+    emphasize?: boolean;
   }) => {
-    const isTotal = kind === "total";
-    const isSubtotal = kind === "subtotal";
-    const isNegative = kind === "negative";
-
-    const color =
-      isTotal
-        ? value >= 0
-          ? "text-emerald-700 dark:text-emerald-300"
-          : "text-rose-700 dark:text-rose-300"
-        : isSubtotal
-        ? value >= 0
-          ? "text-blue-700 dark:text-blue-300"
-          : "text-rose-700 dark:text-rose-300"
-        : isNegative
-        ? "text-slate-600 dark:text-slate-400"
-        : "text-slate-800 dark:text-slate-200";
-
-    const weight =
-      isTotal ? "font-black text-xl" : isSubtotal ? "font-bold text-lg" : "font-medium";
-
-    const rowBorder =
-      isSubtotal || isTotal ? "border-t-2 border-slate-200 dark:border-slate-700 pt-4 mt-2" : "";
-
-    const pct = formatPct(value);
-
+    const positive = value >= 0;
     return (
-      <div className={`grid grid-cols-3 gap-4 items-center py-2 ${rowBorder}`}>
-        <div className="space-y-1">
-          <div className={`flex items-center gap-2 ${weight} ${color}`}>
-            <span>{label}</span>
-
-            {isSubtotal && <Badge tone="blue">Subtotal</Badge>}
-            {isTotal && <Badge tone="emerald">Resultado</Badge>}
-            {isNegative && <Badge>Salida</Badge>}
-          </div>
-
-          {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
-
-          {isSubtotal ? (
-            <div className="text-xs text-muted-foreground">
-              Margen: <span className="font-semibold text-foreground">{pct}</span>
-            </div>
-          ) : null}
+      <div className="rounded-xl border bg-background p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="text-xs text-muted-foreground">{title}</div>
+          {rightPill ? <div className="shrink-0">{rightPill}</div> : null}
         </div>
 
-        <div className={`text-right ${weight} ${color}`}>{formatCurrency(value)}</div>
-
-        <div className={`text-right ${weight} ${color}`}>
-          {isNegative && value !== 0 ? `(${pct})` : pct}
+        <div
+          className={cn(
+            "mt-2 text-xl font-extrabold tracking-tight",
+            emphasize ? "text-primary" : positive ? "text-foreground" : "text-rose-700 dark:text-rose-300"
+          )}
+        >
+          {formatCurrency(value)}
         </div>
+
+        {/* mini underline tipo captura */}
+        <div className="mt-3 h-1 w-16 rounded-full bg-primary/70" />
       </div>
     );
   };
 
+  const TableRowLine = ({
+    label,
+    value,
+    isSection = false,
+    isSubtotal = false,
+    indent = 0,
+    rightBadge,
+  }: {
+    label: string;
+    value?: number;
+    isSection?: boolean;
+    isSubtotal?: boolean;
+    indent?: number; // 0..2
+    rightBadge?: React.ReactNode; // para margen en subtotales
+  }) => {
+    const v = Number(value ?? 0);
+    const isNegative = v < 0;
+
+    if (isSection) {
+      return (
+        <tr className="bg-muted/30">
+          <td className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground" colSpan={3}>
+            {label}
+          </td>
+        </tr>
+      );
+    }
+
+    if (isSubtotal) {
+      return (
+        <tr className="bg-primary text-primary-foreground">
+          <td className="px-4 py-3 font-semibold">
+            <div className="flex items-center gap-3">
+              <span>{label}</span>
+            </div>
+          </td>
+
+          <td className="px-4 py-3 text-right font-extrabold">
+            {formatCurrency(v)}
+          </td>
+
+          <td className="px-4 py-3 text-right">
+            <span className="inline-flex items-center justify-end gap-2">
+              {rightBadge ? rightBadge : null}
+              <span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">
+                {totalIngresos ? `${pct(v).toFixed(1)}%` : "0.0%"}
+              </span>
+            </span>
+          </td>
+        </tr>
+      );
+    }
+
+    return (
+      <tr className="border-b last:border-b-0">
+        <td className="px-4 py-3">
+          <div className={cn("flex items-center gap-2", indent === 1 ? "pl-4" : indent === 2 ? "pl-8" : "")}>
+            <span className={cn("text-sm", "text-foreground")}>{label}</span>
+          </div>
+        </td>
+
+        <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", isNegative ? "text-rose-700 dark:text-rose-300" : "text-foreground")}>
+          {formatCurrency(v)}
+        </td>
+
+        <td className="px-4 py-3 text-right text-sm text-muted-foreground tabular-nums">
+          {totalIngresos ? `${pct(v).toFixed(1)}%` : "0.0%"}
+        </td>
+      </tr>
+    );
+  };
+
+  // --------------------------
+  // Estructura tipo “captura 2”
+  // --------------------------
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         {utilidadNeta >= 0 ? (
-          <TrendingUp className="h-8 w-8 text-emerald-600" />
+          <TrendingUp className="h-7 w-7 text-emerald-600" />
         ) : (
-          <TrendingDown className="h-8 w-8 text-rose-600" />
+          <TrendingDown className="h-7 w-7 text-rose-600" />
         )}
         <div>
-          <p className="text-sm font-semibold text-foreground">Vista ejecutiva consolidada</p>
-          <p className="text-xs text-muted-foreground">
-            Subtotales calculados + márgenes sobre ingresos (como pide el formato ejecutivo)
-          </p>
+          <p className="text-sm font-semibold text-foreground">Formato ejecutivo</p>
+          <p className="text-xs text-muted-foreground">{formatearPeriodo(startDate, endDate)}</p>
         </div>
       </div>
 
-      <Card className="border-2 border-primary/20 overflow-hidden">
-        <CardHeader className="bg-primary/5">
-          <CardTitle className="text-2xl">Resumen Financiero</CardTitle>
-          <p className="text-sm text-muted-foreground mt-2 font-medium">{formatearPeriodo(startDate, endDate)}</p>
+      {/* Highlights (como pide el cliente) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <KpiCard
+          title="Ingresos Totales"
+          value={totalIngresos}
+          emphasize
+          rightPill={<Pill tone="slate">100% base</Pill>}
+        />
+        <KpiCard
+          title="Utilidad Bruta"
+          value={utilidadBruta}
+          rightPill={<Pill tone={utilidadBruta >= 0 ? "emerald" : "slate"}>{formatPct(utilidadBruta)}</Pill>}
+        />
+        <KpiCard
+          title="EBITDA"
+          value={ebitda}
+          rightPill={<Pill tone={ebitda >= 0 ? "emerald" : "slate"}>{formatPct(ebitda)}</Pill>}
+        />
+        <KpiCard
+          title="Utilidad Neta"
+          value={utilidadNeta}
+          rightPill={<Pill tone={utilidadNeta >= 0 ? "emerald" : "slate"}>{formatPct(utilidadNeta)}</Pill>}
+        />
+      </div>
+
+      {/* Tabla estilo limpio */}
+      <Card className="overflow-hidden border-2 border-primary/15">
+        <CardHeader className="bg-muted/10">
+          <CardTitle className="text-base">Análisis Mensual</CardTitle>
         </CardHeader>
 
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-            <div className="rounded-lg border bg-background p-3">
-              <div className="text-xs text-muted-foreground">Total Ingresos</div>
-              <div className="text-lg font-extrabold text-blue-700 dark:text-blue-300">
-                {formatCurrency(totalIngresos)}
-              </div>
-            </div>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/20">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Concepto contable
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Monto
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Análisis vertical
+                  </th>
+                </tr>
+              </thead>
 
-            <div className="rounded-lg border bg-background p-3">
-              <div className="text-xs text-muted-foreground">EBITDA</div>
-              <div className={`text-lg font-extrabold ${ebitda >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"}`}>
-                {formatCurrency(ebitda)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Margen: <span className="font-semibold text-foreground">{formatPct(ebitda)}</span>
-              </div>
-            </div>
+              <tbody>
+                <TableRowLine label="Ingresos Operativos" isSection />
+                {/* En tu motor hoy sólo tenemos total agregado por rangos, lo dejamos como líneas limpias */}
+                <TableRowLine
+                  label="Ingresos Totales"
+                  value={totalIngresos}
+                  isSubtotal
+                  rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">100.0%</span>}
+                />
 
-            <div className="rounded-lg border bg-background p-3">
-              <div className="text-xs text-muted-foreground">Utilidad Neta</div>
-              <div className={`text-lg font-extrabold ${utilidadNeta >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"}`}>
-                {formatCurrency(utilidadNeta)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Margen: <span className="font-semibold text-foreground">{formatPct(utilidadNeta)}</span>
-              </div>
-            </div>
-          </div>
+                <TableRowLine label="Costos de Ventas (COGS)" isSection />
+                <TableRowLine label="Costo de Ventas" value={-Math.abs(costoVentas)} indent={1} />
+                <TableRowLine
+                  label="Utilidad Bruta"
+                  value={utilidadBruta}
+                  isSubtotal
+                  rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{formatPct(utilidadBruta)}</span>}
+                />
 
-          <div className="space-y-1">
-            <div className="grid grid-cols-3 gap-4 pb-3 border-b border-slate-200 dark:border-slate-700 mb-2 font-semibold text-sm text-slate-600 dark:text-slate-400">
-              <span>Concepto</span>
-              <span className="text-right">Monto</span>
-              <span className="text-right">% Ingresos</span>
-            </div>
+                <TableRowLine label="Gastos Operativos (OPEX)" isSection />
+                <TableRowLine label="Gastos Operativos" value={-Math.abs(gastosOperativos)} indent={1} />
+                <TableRowLine label="Otros Gastos" value={-Math.abs(otrosGastos)} indent={1} />
 
-            <LineItem label="Total Ingresos" value={totalIngresos} kind="subtotal" hint="Suma de cuentas 4xxx (ingresos) del período" />
+                <TableRowLine
+                  label="EBITDA"
+                  value={ebitda}
+                  isSubtotal
+                  rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{formatPct(ebitda)}</span>}
+                />
 
-            <LineItem label="(-) Costo de Ventas" value={costoVentas} kind="negative" />
-            <LineItem label="Utilidad Bruta" value={utilidadBruta} kind="subtotal" hint="Ingresos - Costo de Ventas" />
+                {/* Mantengo estas líneas (limpias) para que el ER sea coherente contablemente */}
+                <TableRowLine label="Depreciación y Amortización" value={-Math.abs(depreciaciones)} indent={1} />
+                <TableRowLine label="Costo Financiero" value={-Math.abs(costoFinanciero)} indent={1} />
+                <TableRowLine label="Impuestos" value={-Math.abs(impuestos)} indent={1} />
 
-            <LineItem label="(-) Gastos Operativos" value={gastosOperativos} kind="negative" />
-            <LineItem label="(-) Otros Gastos" value={otrosGastos} kind="negative" />
-            <LineItem label="EBITDA" value={ebitda} kind="subtotal" hint="Utilidad Bruta - Gastos Operativos - Otros Gastos" />
-
-            <LineItem label="(-) Depreciaciones y Amortizaciones" value={depreciaciones} kind="negative" />
-            <LineItem label="EBIT (Utilidad Operativa)" value={ebit} kind="subtotal" hint="EBITDA - Depreciaciones/Amortizaciones" />
-
-            <LineItem label="(-) Costo Financiero" value={costoFinanciero} kind="negative" />
-            <LineItem label="Utilidad Antes de Impuestos" value={utilidadAntesImpuestos} kind="subtotal" hint="EBIT - Costo Financiero" />
-
-            <LineItem label="(-) Impuestos" value={impuestos} kind="negative" />
-
-            <LineItem
-              label={utilidadNeta >= 0 ? "Utilidad Neta" : "Pérdida Neta"}
-              value={utilidadNeta}
-              kind="total"
-            />
+                <TableRowLine
+                  label="Utilidad Neta del Ejercicio"
+                  value={utilidadNeta}
+                  isSubtotal
+                  rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{formatPct(utilidadNeta)}</span>}
+                />
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
