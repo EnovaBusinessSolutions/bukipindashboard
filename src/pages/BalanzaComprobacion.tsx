@@ -105,7 +105,8 @@ export default function BalanzaComprobacion() {
   // Reset paginación al cambiar filtros
   useEffect(() => setPage(1), [filtroBusqueda, endDate.getTime()]);
 
-  const formatCurrency = (value: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 
   const movimientos: BalanzaEntry[] = (balanzaData?.movimientos as BalanzaEntry[]) || [];
   const saldosPorCuenta: Record<string, any> = (balanzaData?.saldosPorCuenta as Record<string, any>) || {};
@@ -222,7 +223,7 @@ export default function BalanzaComprobacion() {
   const diferencia = Math.abs(totalDebe - totalHaber);
   const cuadra = diferencia < 0.01;
 
-  // ===== UI Saldos por Cuenta (igual que tu archivo, sin cambiar lógica) =====
+  // ===== UI Saldos por Cuenta =====
   type SaldosCuentaRow = {
     codigo: string;
     nombre: string;
@@ -242,17 +243,14 @@ export default function BalanzaComprobacion() {
     children: SaldosNode[];
   };
 
+  // ✅ FIX E2E: Expansión de subcuentas + “Sin clasificar” + “No clasificado”
   const saldosUI = useMemo(() => {
     const saldoMap = new Map<string, any>();
+
     for (const [k, v] of Object.entries(saldosPorCuentaFiltrados || {})) {
-      const codigo = String((v as any)?.cuenta_codigo ?? k ?? "");
+      const codigo = String((v as any)?.cuenta_codigo ?? k ?? "").trim();
       if (!codigo) continue;
       saldoMap.set(codigo, v);
-    }
-    for (const v of Object.values(saldosPorCuentaFiltrados || {})) {
-      const codigo = String((v as any)?.cuenta_codigo ?? "");
-      if (!codigo) continue;
-      if (!saldoMap.has(codigo)) saldoMap.set(codigo, v);
     }
 
     const sumRows = (rows: SaldosCuentaRow[]) =>
@@ -266,14 +264,49 @@ export default function BalanzaComprobacion() {
         { debe: 0, haber: 0, saldo: 0 }
       );
 
-    const buildCuentaRow = (codigo: string, estado_financiero: "Balance General" | "Estado de Resultados" | "—"): SaldosCuentaRow | null => {
+    const getParentCodeCandidates = (codigo: string) => {
+      const c = String(codigo || "").trim();
+      const parents: string[] = [];
+      if (!c) return parents;
+
+      const sepIdx = Math.max(c.indexOf("-"), c.indexOf("."), c.indexOf("/"));
+      if (sepIdx > 0) parents.push(c.slice(0, sepIdx));
+      if (c.length > 4) parents.push(c.slice(0, 4));
+
+      return Array.from(new Set(parents)).filter(Boolean);
+    };
+
+    const resolveInfo = (codigo: string) => {
+      const direct = cuentasInfoMap.get(codigo);
+      if (direct) return { info: direct, resolvedCode: codigo };
+
+      for (const parent of getParentCodeCandidates(codigo)) {
+        const p = cuentasInfoMap.get(parent);
+        if (p) return { info: p, resolvedCode: parent };
+      }
+
+      return { info: undefined, resolvedCode: codigo };
+    };
+
+    const buildRowFromCodigo = (
+      codigo: string,
+      estadoFallback: "Balance General" | "Estado de Resultados" | "—"
+    ): SaldosCuentaRow | null => {
       const raw = saldoMap.get(codigo);
       if (!raw) return null;
-      const info = cuentasInfoMap.get(codigo);
+
+      const { info } = resolveInfo(codigo);
+
+      const estado =
+        (raw?.estado_financiero as any) ||
+        (info?.estado_financiero as any) ||
+        estadoFallback;
+
       return {
         codigo,
-        nombre: info?.nombre || "N/A",
-        estado_financiero,
+        nombre: info?.nombre || String(raw?.cuenta_nombre || "N/A"),
+        estado_financiero:
+          (estado === "Balance General" || estado === "Estado de Resultados" ? estado : "—") as any,
         naturaleza: getNaturaleza(codigo),
         debe: Number(raw?.debe_total || 0),
         haber: Number(raw?.haber_total || 0),
@@ -281,48 +314,69 @@ export default function BalanzaComprobacion() {
       };
     };
 
+    const allRows: SaldosCuentaRow[] = Array.from(saldoMap.keys())
+      .sort((a, b) => a.localeCompare(b))
+      .map((codigo) => buildRowFromCodigo(codigo, "—"))
+      .filter(Boolean) as SaldosCuentaRow[];
+
     const fallbackFlat: SaldosNode[] = (() => {
-      const rows: SaldosCuentaRow[] = Array.from(saldoMap.keys())
-        .sort((a, b) => a.localeCompare(b))
-        .map((codigo) => {
-          const info = cuentasInfoMap.get(codigo);
-          const raw = saldoMap.get(codigo);
-          const estado = ((info?.estado_financiero as any) || "—") as any;
-          return {
-            codigo,
-            nombre: info?.nombre || "N/A",
-            estado_financiero: estado,
-            naturaleza: getNaturaleza(codigo),
-            debe: Number(raw?.debe_total || 0),
-            haber: Number(raw?.haber_total || 0),
-            saldo: Number(raw?.saldo || 0),
-          } as SaldosCuentaRow;
-        });
-      const totals = sumRows(rows);
-      return [{ key: "flat", label: "Saldos por cuenta", level: "estado", totals, cuentas: rows, children: [] }];
+      const totals = sumRows(allRows);
+      return [{ key: "flat", label: "Saldos por cuenta", level: "estado", totals, cuentas: allRows, children: [] }];
     })();
 
     if (!estadosFinancieros) return fallbackFlat;
 
+    // helper: si catálogo trae 5101, incluir 5101 + 5101-xx / 5101.xx / 5101/xx
+    const getCodesWithChildren = (baseCode: string) => {
+      const b = String(baseCode || "").trim();
+      if (!b) return [];
+      const matches = allRows
+        .map((r) => r.codigo)
+        .filter((c) => c === b || c.startsWith(`${b}-`) || c.startsWith(`${b}.`) || c.startsWith(`${b}/`));
+      return Array.from(new Set(matches));
+    };
+
+    const included = new Set<string>();
     const nodes: SaldosNode[] = [];
     const estadoKeys: Array<"Balance General" | "Estado de Resultados"> = ["Balance General", "Estado de Resultados"];
 
     for (const estadoKey of estadoKeys) {
       const grupos = Object.keys(estadosFinancieros?.[estadoKey] || {});
-      const estadoNode: SaldosNode = { key: `estado:${estadoKey}`, label: estadoKey, level: "estado", totals: { debe: 0, haber: 0, saldo: 0 }, cuentas: [], children: [] };
+      const estadoNode: SaldosNode = {
+        key: `estado:${estadoKey}`,
+        label: estadoKey,
+        level: "estado",
+        totals: { debe: 0, haber: 0, saldo: 0 },
+        cuentas: [],
+        children: [],
+      };
 
       for (const grupo of grupos) {
         const subgruposObj = estadosFinancieros?.[estadoKey]?.[grupo] || {};
         const subgrupos = Object.keys(subgruposObj);
 
-        const grupoNode: SaldosNode = { key: `grupo:${estadoKey}:${grupo}`, label: grupo, level: "grupo", totals: { debe: 0, haber: 0, saldo: 0 }, cuentas: [], children: [] };
+        const grupoNode: SaldosNode = {
+          key: `grupo:${estadoKey}:${grupo}`,
+          label: grupo,
+          level: "grupo",
+          totals: { debe: 0, haber: 0, saldo: 0 },
+          cuentas: [],
+          children: [],
+        };
 
         for (const subgrupo of subgrupos) {
           const cuentasArr = (subgruposObj?.[subgrupo] || []) as any[];
-          const codigos = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
 
-          const rows: SaldosCuentaRow[] = codigos.map((codigo) => buildCuentaRow(codigo, estadoKey)).filter(Boolean) as SaldosCuentaRow[];
+          const codigosBase = cuentasArr.map((c) => String(c?.codigo || "").trim()).filter(Boolean);
+          const codigosExpand = codigosBase.flatMap(getCodesWithChildren);
+
+          const rows = codigosExpand
+            .map((codigo) => buildRowFromCodigo(codigo, estadoKey))
+            .filter(Boolean) as SaldosCuentaRow[];
+
           if (!rows.length) continue;
+
+          rows.forEach((r) => included.add(r.codigo));
 
           const subTotals = sumRows(rows);
           grupoNode.children.push({
@@ -346,8 +400,73 @@ export default function BalanzaComprobacion() {
         estadoNode.totals.saldo += grupoNode.totals.saldo;
       }
 
-      if (!estadoNode.children.length) continue;
-      nodes.push(estadoNode);
+      // Cuentas/subcuentas que no entraron al árbol → “Sin clasificar”
+      const leftovers = allRows.filter((r) => {
+        if (included.has(r.codigo)) return false;
+        return r.estado_financiero === estadoKey;
+      });
+
+      if (leftovers.length) {
+        const leftTotals = sumRows(leftovers);
+
+        estadoNode.children.push({
+          key: `grupo:${estadoKey}:__sin_clasificar__`,
+          label: "Sin clasificar",
+          level: "grupo",
+          totals: leftTotals,
+          cuentas: [],
+          children: [
+            {
+              key: `subgrupo:${estadoKey}:__sin_clasificar__:__cuentas__`,
+              label: "Cuentas sin mapeo",
+              level: "subgrupo",
+              totals: leftTotals,
+              cuentas: leftovers.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+              children: [],
+            },
+          ],
+        });
+
+        estadoNode.totals.debe += leftTotals.debe;
+        estadoNode.totals.haber += leftTotals.haber;
+        estadoNode.totals.saldo += leftTotals.saldo;
+
+        leftovers.forEach((r) => included.add(r.codigo));
+      }
+
+      if (estadoNode.children.length) nodes.push(estadoNode);
+    }
+
+    // Si aún quedan cuentas sin estado → “No clasificado”
+    const leftoversGlobal = allRows.filter((r) => !included.has(r.codigo));
+    if (leftoversGlobal.length) {
+      const totals = sumRows(leftoversGlobal);
+      nodes.push({
+        key: "estado:__no_clasificado__",
+        label: "No clasificado",
+        level: "estado",
+        totals,
+        cuentas: [],
+        children: [
+          {
+            key: "grupo:__no_clasificado__",
+            label: "Cuentas sin estado financiero",
+            level: "grupo",
+            totals,
+            cuentas: [],
+            children: [
+              {
+                key: "subgrupo:__no_clasificado__",
+                label: "Cuentas",
+                level: "subgrupo",
+                totals,
+                cuentas: leftoversGlobal.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+                children: [],
+              },
+            ],
+          },
+        ],
+      });
     }
 
     return nodes.length ? nodes : fallbackFlat;
@@ -443,16 +562,6 @@ export default function BalanzaComprobacion() {
               Vista completa de todas las cuentas al corte del {format(endDate, "dd/MM/yyyy")}. Muestra el saldo acumulado desde el inicio de operaciones.
             </p>
           </div>
-
-          {/* ✅ ELIMINADO: bloque duplicado (captura 2) */}
-          {/* 
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={cn("px-3 py-1", cuadra ? "border-green-400/60" : "border-red-400/60")}>
-              {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
-            </Badge>
-            <Badge variant="outline" className="px-3 py-1">Corte: {format(endDate, "dd/MM/yyyy")}</Badge>
-          </div>
-          */}
         </div>
       </div>
 
@@ -523,13 +632,22 @@ export default function BalanzaComprobacion() {
               <label className="text-sm font-medium">Fecha de Corte</label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}>
+                  <Button
+                    variant="outline"
+                    className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                  >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {endDate ? format(endDate, "PPP", { locale: es }) : "Seleccionar"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={(date) => date && setEndDate(date)} initialFocus className="pointer-events-auto" />
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={(date) => date && setEndDate(date)}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
                 </PopoverContent>
               </Popover>
             </div>
@@ -570,7 +688,9 @@ export default function BalanzaComprobacion() {
             <CardDescription className="text-xs">{cuadra ? "Consistente contablemente" : "Hay diferencia entre debe y haber"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className={cn("text-2xl font-bold", cuadra ? "text-green-600" : "text-red-600")}>{cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}</p>
+            <p className={cn("text-2xl font-bold", cuadra ? "text-green-600" : "text-red-600")}>
+              {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
+            </p>
             {!cuadra && <p className="text-sm text-muted-foreground mt-2">Diferencia: {formatCurrency(diferencia)}</p>}
           </CardContent>
         </Card>
@@ -809,7 +929,7 @@ export default function BalanzaComprobacion() {
         </Card>
       </Collapsible>
 
-      {/* Saldos por Cuenta (igual que tu panel original) */}
+      {/* Saldos por Cuenta */}
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>

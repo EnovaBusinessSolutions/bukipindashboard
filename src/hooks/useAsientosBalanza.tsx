@@ -17,6 +17,10 @@ interface BalanzaEntry {
 interface SaldoCuenta {
   cuenta_codigo: string;
 
+  // ✅ Opcionales útiles para UI (especialmente subcuentas)
+  cuenta_nombre?: string;
+  estado_financiero?: string | null;
+
   // ✅ NUEVO (E2E real)
   saldo_inicial: number;
 
@@ -73,6 +77,7 @@ type DetalleLine = {
   haber?: number | string;
   neto?: number | string;
   saldo?: number | string;
+  estado_financiero?: string | null;
 };
 
 function num(v: any, def = 0) {
@@ -112,6 +117,25 @@ function normalizeCode(code: any) {
   return String(code ?? "").trim();
 }
 
+function getParentCandidates(code: string) {
+  const c = normalizeCode(code);
+  if (!c) return [];
+
+  const parents: string[] = [];
+
+  const dash = c.indexOf("-");
+  const dot = c.indexOf(".");
+  const slash = c.indexOf("/");
+
+  const sepIdx = Math.max(dash, dot, slash);
+  if (sepIdx > 0) parents.push(c.slice(0, sepIdx));
+
+  // fallback clásico: primer 4 dígitos
+  if (c.length > 4) parents.push(c.slice(0, 4));
+
+  return Array.from(new Set(parents)).filter(Boolean);
+}
+
 function tipoPorNumeroAsiento(numeroAsiento: string) {
   const n = numeroAsiento || "";
   if (n.startsWith("ING-")) return "Ingreso";
@@ -141,18 +165,24 @@ async function fetchJsonSafe(url: string) {
   }
 }
 
+function looksUsefulForER(saldos: Record<string, SaldoCuenta>) {
+  const keys = Object.keys(saldos || {});
+  if (!keys.length) return false;
+
+  // Si no hay ninguna 4xxx/5xxx/6xxx, ER suele quedar en ceros
+  const has4 = keys.some((k) => String(k).startsWith("4") && num((saldos as any)[k]?.saldo, 0) !== 0);
+  const has5 = keys.some((k) => String(k).startsWith("5") && num((saldos as any)[k]?.saldo, 0) !== 0);
+  const has6 = keys.some((k) => String(k).startsWith("6") && num((saldos as any)[k]?.saldo, 0) !== 0);
+
+  return has4 || has5 || has6;
+}
+
 /**
- * Construye saldos por cuenta desde los ASIENTOS (detalle_asientos)
- * Fallback confiable cuando /api/asientos/detalle no trae ER (4/5/6) o viene incompleto.
+ * Construye saldos por cuenta desde los ASIENTOS (detalle_asientos) para el PERIODO.
+ * ✅ Esto es lo más confiable para capturar SUBCUENTAS, porque vienen en las líneas del asiento.
  */
-function buildSaldosFromAsientos(
-  asientos: AsientoUI[]
-): {
-  saldosPorCuenta: Record<string, SaldoCuenta>;
-  saldoInicialTotal: number;
-  saldoFinalTotal: number;
-} {
-  const agg: Record<string, SaldoCuenta> = {};
+function buildPeriodoFromAsientos(asientos: AsientoUI[]) {
+  const agg = new Map<string, { debe: number; haber: number; cuenta_nombre?: string }>();
 
   for (const a of asientos || []) {
     const lines = Array.isArray(a?.detalle_asientos)
@@ -167,43 +197,17 @@ function buildSaldosFromAsientos(
 
       const debe = num(l?.debe, 0);
       const haber = num(l?.haber, 0);
+      const nombreLinea = normalizeCode(l?.cuenta_nombre);
 
-      if (!agg[code]) {
-        agg[code] = {
-          cuenta_codigo: code,
-          saldo_inicial: 0, // en este fallback no hay acumulado real
-          debe_total: 0,
-          haber_total: 0,
-          saldo_final: 0,
-          saldo: 0, // compat
-        };
-      }
-
-      agg[code].debe_total += debe;
-      agg[code].haber_total += haber;
-
-      // neto del periodo
-      agg[code].saldo_final += debe - haber;
-      agg[code].saldo = agg[code].saldo_final; // ✅ compat
+      const cur = agg.get(code) || { debe: 0, haber: 0, cuenta_nombre: undefined };
+      cur.debe += debe;
+      cur.haber += haber;
+      if (!cur.cuenta_nombre && nombreLinea) cur.cuenta_nombre = nombreLinea;
+      agg.set(code, cur);
     }
   }
 
-  const saldoInicialTotal = 0;
-  const saldoFinalTotal = Object.values(agg).reduce((t, x) => t + num(x.saldo_final, 0), 0);
-
-  return { saldosPorCuenta: agg, saldoInicialTotal, saldoFinalTotal };
-}
-
-function looksUsefulForER(saldos: Record<string, SaldoCuenta>) {
-  const keys = Object.keys(saldos || {});
-  if (!keys.length) return false;
-
-  // Si no hay ninguna 4xxx/5xxx/6xxx, ER suele quedar en ceros
-  const has4 = keys.some((k) => String(k).startsWith("4") && num((saldos as any)[k]?.saldo, 0) !== 0);
-  const has5 = keys.some((k) => String(k).startsWith("5") && num((saldos as any)[k]?.saldo, 0) !== 0);
-  const has6 = keys.some((k) => String(k).startsWith("6") && num((saldos as any)[k]?.saldo, 0) !== 0);
-
-  return has4 || has5 || has6;
+  return agg;
 }
 
 export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
@@ -235,7 +239,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const cuentasJson = await apiFetch("/api/cuentas", { method: "GET" });
       const cuentasPayload = unwrap(cuentasJson);
 
-      const cuentasArr: Array<{ codigo: string; nombre: string }> =
+      const cuentasArr: Array<{ codigo: string; nombre: string; estado_financiero?: string | null }> =
         Array.isArray(cuentasPayload?.data)
           ? (cuentasPayload.data as any)
           : Array.isArray(cuentasPayload)
@@ -246,11 +250,36 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           ? ((cuentasJson as any).data as any)
           : [];
 
-      const cuentasMap = new Map<string, string>(
+      const cuentasMap = new Map<string, { nombre: string; estado_financiero?: string | null }>(
         (cuentasArr || [])
           .filter((c) => c && (c as any).codigo)
-          .map((c: any) => [normalizeCode(c.codigo), String(c.nombre ?? "")])
+          .map((c: any) => [normalizeCode(c.codigo), { nombre: String(c.nombre ?? ""), estado_financiero: c.estado_financiero ?? null }])
       );
+
+      const resolveCuentaMeta = (codigo: string, nombreFromLine?: string) => {
+        const code = normalizeCode(codigo);
+        if (!code) return { nombre: "", estado_financiero: null as string | null };
+
+        // 1) nombre directo de la línea
+        const nLine = normalizeCode(nombreFromLine);
+        if (nLine) {
+          const direct = cuentasMap.get(code);
+          return { nombre: nLine, estado_financiero: direct?.estado_financiero ?? null };
+        }
+
+        // 2) match exacto en catálogo
+        const exact = cuentasMap.get(code);
+        if (exact?.nombre) return { nombre: exact.nombre, estado_financiero: exact.estado_financiero ?? null };
+
+        // 3) fallback a código padre (para subcuentas 5101-01 -> 5101)
+        for (const parent of getParentCandidates(code)) {
+          const p = cuentasMap.get(parent);
+          if (p?.nombre) return { nombre: p.nombre, estado_financiero: p.estado_financiero ?? null };
+        }
+
+        // 4) último fallback
+        return { nombre: code, estado_financiero: null as string | null };
+      };
 
       // =========================
       // 3) Flatten asientos -> movimientos
@@ -274,15 +303,13 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           const cuentaCodigo = normalizeCode(l?.cuenta_codigo);
           if (!cuentaCodigo) continue;
 
-          const nombreLinea = normalizeCode(l?.cuenta_nombre);
-          const cuentaNombre = nombreLinea || cuentasMap.get(cuentaCodigo) || cuentaCodigo;
-
+          const meta = resolveCuentaMeta(cuentaCodigo, String(l?.cuenta_nombre ?? ""));
           movimientos.push({
             fecha: fechaFormateada,
             tipo,
             descripcion: descripcionFinal,
             cuenta_codigo: cuentaCodigo,
-            cuenta_nombre: cuentaNombre,
+            cuenta_nombre: meta.nombre || cuentaCodigo,
             debe: num(l?.debe, 0),
             haber: num(l?.haber, 0),
             referencia,
@@ -290,31 +317,28 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         }
       }
 
+      // Detecta si hay subcuentas en el periodo (para decidir estrategia)
+      const hasSubcuentas = movimientos.some((m) => {
+        const c = normalizeCode(m.cuenta_codigo);
+        return c.includes("-") || c.includes(".") || c.includes("/");
+      });
+
       // =========================
-      // 4) ✅ Saldos por cuenta (E2E + compat)
+      // 4) ✅ Saldos por cuenta (E2E + compat + subcuentas)
       // =========================
 
       // Fast path si backend lo manda (raro, pero lo respetamos)
       const saldosFastRaw: Record<string, any> =
-        (asientosPayload?.saldosPorCuenta as any) ??
-        (asientosJson?.saldosPorCuenta as any) ??
-        {};
+        (asientosPayload?.saldosPorCuenta as any) ?? (asientosJson?.saldosPorCuenta as any) ?? {};
 
-      const saldoInicialTotalFast = num(
-        asientosPayload?.saldoInicialTotal ?? asientosJson?.saldoInicialTotal,
-        0
-      );
-
-      const saldoFinalTotalFast = num(
-        asientosPayload?.saldoFinalTotal ?? asientosJson?.saldoFinalTotal,
-        0
-      );
+      const saldoInicialTotalFast = num(asientosPayload?.saldoInicialTotal ?? asientosJson?.saldoInicialTotal, 0);
+      const saldoFinalTotalFast = num(asientosPayload?.saldoFinalTotal ?? asientosJson?.saldoFinalTotal, 0);
 
       const fastHasAny =
         saldosFastRaw && typeof saldosFastRaw === "object" && Object.keys(saldosFastRaw).length > 0;
 
       if (fastHasAny) {
-        // ✅ Normalizamos para garantizar `saldo` y `saldo_final`
+        // ✅ Normalizamos para garantizar `saldo` y `saldo_final` + nombre
         const saldosFast: Record<string, SaldoCuenta> = {};
         for (const k of Object.keys(saldosFastRaw)) {
           const code = normalizeCode(k);
@@ -324,13 +348,16 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           const debeTotal = num(row?.debe_total ?? row?.debe ?? 0, 0);
           const haberTotal = num(row?.haber_total ?? row?.haber ?? 0, 0);
 
+          const meta = resolveCuentaMeta(code, String(row?.cuenta_nombre ?? ""));
           saldosFast[code] = {
             cuenta_codigo: code,
+            cuenta_nombre: meta.nombre || code,
+            estado_financiero: row?.estado_financiero ?? meta.estado_financiero ?? null,
             saldo_inicial: saldoInicial,
             debe_total: debeTotal,
             haber_total: haberTotal,
             saldo_final: saldoFinal,
-            saldo: saldoFinal, // ✅ compat
+            saldo: saldoFinal,
           };
         }
 
@@ -342,7 +369,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         };
       }
 
-      // ---- A) periodo (si existe endpoint y trae cosas útiles) ----
+      // ---- A) periodo desde /api/asientos/detalle (si existe) ----
       const detPeriodoRes = await fetchJsonSafe(
         `/api/asientos/detalle?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
       );
@@ -356,7 +383,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         ? (detPeriodoRes as any).json.data
         : [];
 
-      // ---- B) saldo inicial (acumulado previo) ----
+      // ---- B) saldo inicial (acumulado previo) desde /api/asientos/detalle ----
       const endPrev = addDaysYMD(start, -1);
 
       const detInicialRes = await fetchJsonSafe(
@@ -372,67 +399,141 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         ? (detInicialRes as any).json.data
         : [];
 
-      const saldoInicialByCuenta = new Map<string, number>();
+      // saldo inicial por cuenta (si viene saldo, úsalo; si no, debe-haber)
+      const saldoInicialByCuenta = new Map<string, { saldo: number; cuenta_nombre?: string; estado_financiero?: string | null }>();
       for (const row of detInicialArr || []) {
         const code = normalizeCode(row?.cuenta_codigo);
         if (!code) continue;
         const saldo = row?.saldo != null ? num(row.saldo, 0) : num(row.debe, 0) - num(row.haber, 0);
-        saldoInicialByCuenta.set(code, saldo);
+        saldoInicialByCuenta.set(code, {
+          saldo,
+          cuenta_nombre: normalizeCode(row?.cuenta_nombre),
+          estado_financiero: row?.estado_financiero ?? null,
+        });
       }
 
-      const periodoByCuenta = new Map<string, { debe: number; haber: number }>();
+      // periodo por cuenta desde /api/asientos/detalle (puede venir sin subcuentas)
+      const periodoByCuentaFromDetalle = new Map<string, { debe: number; haber: number; cuenta_nombre?: string; estado_financiero?: string | null }>();
       for (const row of detPeriodoArr || []) {
         const code = normalizeCode(row?.cuenta_codigo);
         if (!code) continue;
-        const debe = num(row?.debe, 0);
-        const haber = num(row?.haber, 0);
-        periodoByCuenta.set(code, { debe, haber });
+        periodoByCuentaFromDetalle.set(code, {
+          debe: num(row?.debe, 0),
+          haber: num(row?.haber, 0),
+          cuenta_nombre: normalizeCode(row?.cuenta_nombre),
+          estado_financiero: row?.estado_financiero ?? null,
+        });
       }
 
-      const saldosPorCuentaFromDetalle: Record<string, SaldoCuenta> = {};
-      const allCodes = new Set<string>([
-        ...Array.from(saldoInicialByCuenta.keys()),
-        ...Array.from(periodoByCuenta.keys()),
-      ]);
+      // ✅ periodo por cuenta desde ASIENTOS (para capturar SUBCUENTAS 100%)
+      const periodoByCuentaFromAsientos = buildPeriodoFromAsientos(asientos);
 
+      // Armamos el set de códigos final:
+      // - si hay subcuentas, preferimos periodo desde asientos (más granular)
+      // - si no hay subcuentas, usamos lo que traiga el endpoint detalle (más rápido)
+      const allCodes = new Set<string>();
+      if (hasSubcuentas) {
+        for (const code of periodoByCuentaFromAsientos.keys()) allCodes.add(code);
+        for (const code of saldoInicialByCuenta.keys()) allCodes.add(code); // para saldo inicial si coincide
+      } else {
+        for (const code of saldoInicialByCuenta.keys()) allCodes.add(code);
+        for (const code of periodoByCuentaFromDetalle.keys()) allCodes.add(code);
+      }
+
+      const saldosPorCuentaFinal: Record<string, SaldoCuenta> = {};
       let saldoInicialTotal = 0;
       let saldoFinalTotal = 0;
 
       for (const code of allCodes) {
-        const saldoInicial = saldoInicialByCuenta.get(code) ?? 0;
-        const periodo = periodoByCuenta.get(code);
-        const debeTotal = periodo?.debe ?? 0;
-        const haberTotal = periodo?.haber ?? 0;
+        // saldo inicial: si no existe exacto y es subcuenta, intenta padre
+        const initExact = saldoInicialByCuenta.get(code);
+        let saldoInicial = initExact?.saldo ?? 0;
+        let initNombre = initExact?.cuenta_nombre ?? "";
+        let initEstado = initExact?.estado_financiero ?? null;
+
+        if (!initExact && hasSubcuentas) {
+          for (const parent of getParentCandidates(code)) {
+            const p = saldoInicialByCuenta.get(parent);
+            if (p) {
+              saldoInicial = p.saldo ?? 0;
+              initNombre = p.cuenta_nombre ?? "";
+              initEstado = p.estado_financiero ?? null;
+              break;
+            }
+          }
+        }
+
+        // periodo: según estrategia
+        let debeTotal = 0;
+        let haberTotal = 0;
+        let perNombre = "";
+        let perEstado: string | null = null;
+
+        if (hasSubcuentas) {
+          const per = periodoByCuentaFromAsientos.get(code);
+          debeTotal = per?.debe ?? 0;
+          haberTotal = per?.haber ?? 0;
+          perNombre = per?.cuenta_nombre ?? "";
+        } else {
+          const per = periodoByCuentaFromDetalle.get(code);
+          debeTotal = per?.debe ?? 0;
+          haberTotal = per?.haber ?? 0;
+          perNombre = per?.cuenta_nombre ?? "";
+          perEstado = per?.estado_financiero ?? null;
+        }
+
+        const meta = resolveCuentaMeta(code, perNombre || initNombre);
         const saldoFinal = saldoInicial + (debeTotal - haberTotal);
 
-        saldosPorCuentaFromDetalle[code] = {
+        saldosPorCuentaFinal[code] = {
           cuenta_codigo: code,
+          cuenta_nombre: meta.nombre || code,
+          estado_financiero: perEstado ?? initEstado ?? meta.estado_financiero ?? null,
           saldo_inicial: saldoInicial,
           debe_total: debeTotal,
           haber_total: haberTotal,
           saldo_final: saldoFinal,
-          saldo: saldoFinal, // ✅ compat CRÍTICA
+          saldo: saldoFinal,
         };
 
         saldoInicialTotal += saldoInicial;
         saldoFinalTotal += saldoFinal;
       }
 
-      // ✅ Si /api/asientos/detalle NO trae 4/5/6, ER puede quedar en ceros.
-      // En ese caso, usamos el fallback confiable desde detalle_asientos.
-      if (!looksUsefulForER(saldosPorCuentaFromDetalle)) {
-        const fb = buildSaldosFromAsientos(asientos);
+      // ✅ Si /api/asientos/detalle NO trae 4/5/6 (y no hay subcuentas), ER puede quedar en ceros.
+      // En ese caso, fallback a periodo desde asientos.
+      if (!hasSubcuentas && !looksUsefulForER(saldosPorCuentaFinal)) {
+        const per = periodoByCuentaFromAsientos;
+        const fb: Record<string, SaldoCuenta> = {};
+        let fbFinalTotal = 0;
+
+        for (const [code, v] of per.entries()) {
+          const meta = resolveCuentaMeta(code, v.cuenta_nombre || "");
+          const saldoFinal = num(v.debe, 0) - num(v.haber, 0);
+          fb[code] = {
+            cuenta_codigo: code,
+            cuenta_nombre: meta.nombre || code,
+            estado_financiero: meta.estado_financiero ?? null,
+            saldo_inicial: 0,
+            debe_total: num(v.debe, 0),
+            haber_total: num(v.haber, 0),
+            saldo_final: saldoFinal,
+            saldo: saldoFinal,
+          };
+          fbFinalTotal += saldoFinal;
+        }
+
         return {
           movimientos,
-          saldosPorCuenta: fb.saldosPorCuenta,
-          saldoInicialTotal: fb.saldoInicialTotal,
-          saldoFinalTotal: fb.saldoFinalTotal,
+          saldosPorCuenta: fb,
+          saldoInicialTotal: 0,
+          saldoFinalTotal: fbFinalTotal,
         };
       }
 
       return {
         movimientos,
-        saldosPorCuenta: saldosPorCuentaFromDetalle,
+        saldosPorCuenta: saldosPorCuentaFinal,
         saldoInicialTotal,
         saldoFinalTotal,
       };
