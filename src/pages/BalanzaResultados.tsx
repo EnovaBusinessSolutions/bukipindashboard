@@ -117,6 +117,24 @@ function parseFechaFlexible(fecha: string): Date | null {
   return null;
 }
 
+function normalizeCode(code: any) {
+  return String(code ?? "").trim();
+}
+
+// ✅ Subcuentas: "4001-02" => "4001"
+function parentAccountCode(code: string) {
+  const c = normalizeCode(code);
+  if (!c) return "";
+  const idx = c.indexOf("-");
+  return idx > 0 ? c.slice(0, idx) : c;
+}
+
+function num(v: any, def = 0) {
+  if (v == null) return def;
+  const n = Number(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : def;
+}
+
 export default function BalanzaResultados() {
   // =========================
   // ✅ ESTADO (SOLO RESULTADOS)
@@ -176,6 +194,18 @@ export default function BalanzaResultados() {
     if (d === "4") return "ingresos";
     if (d === "5" || d === "6") return "egresos";
     return null;
+  };
+
+  // Para saldo "bonito" si backend manda saldo con signo raro o no manda saldo
+  const computeSaldoFallback = (codigo: string, debe: number, haber: number, rawSaldo?: number) => {
+    const s = Number.isFinite(rawSaldo as any) ? Number(rawSaldo) : NaN;
+    if (Number.isFinite(s)) {
+      // si viene, úsalo
+      return s;
+    }
+    const d = String(codigo || "").charAt(0);
+    const esAcreedora = ["2", "3", "4"].includes(d);
+    return esAcreedora ? haber - debe : debe - haber;
   };
 
   // Opciones Mes/Año
@@ -528,6 +558,13 @@ export default function BalanzaResultados() {
     return rows;
   }, [asientosFiltrados]);
 
+  // ✅ TOTAL para el bloque Resultados (filas afectadas)
+  const totalResultados = useMemo(() => {
+    const debe = filasAsientosResultados.reduce((s, r) => s + Number(r.mov.debe || 0), 0);
+    const haber = filasAsientosResultados.reduce((s, r) => s + Number(r.mov.haber || 0), 0);
+    return { debe, haber, neto: haber - debe };
+  }, [filasAsientosResultados]);
+
   // =========================
   // ✅ SALDOS filtrados (Result. + ER filters)
   // =========================
@@ -553,25 +590,33 @@ export default function BalanzaResultados() {
         .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
     );
 
+    // OJO: el plan suele traer "4001" pero los saldos pueden venir "4001-02"
+    // Aquí filtramos por match directo + match por padre
     saldosPorCuentaFiltrados = Object.fromEntries(
-      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigos.has(String(codigo || "")))
+      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => {
+        const c = String(codigo || "");
+        return codigos.has(c) || codigos.has(parentAccountCode(c));
+      })
     );
   }
 
-  // Cuenta
+  // Cuenta (solo cuenta padre del plan)
   if (cuentaER !== "todos") {
-    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[cuentaER]
-      ? { [cuentaER]: saldosPorCuentaFiltrados[cuentaER] }
-      : {};
+    saldosPorCuentaFiltrados = Object.fromEntries(
+      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => {
+        const c = String(codigo || "");
+        return c === cuentaER || parentAccountCode(c) === cuentaER;
+      })
+    );
   }
 
   // Totales (basados en saldos filtrados)
   const totalDebe = useMemo(() => {
-    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + (cuenta?.debe_total || 0), 0);
+    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + num(cuenta?.debe_total, 0), 0);
   }, [saldosPorCuentaFiltrados]);
 
   const totalHaber = useMemo(() => {
-    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + (cuenta?.haber_total || 0), 0);
+    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + num(cuenta?.haber_total, 0), 0);
   }, [saldosPorCuentaFiltrados]);
 
   const diferencia = Math.abs(totalDebe - totalHaber);
@@ -579,8 +624,11 @@ export default function BalanzaResultados() {
 
   // =========================
   // ✅ SALDOS UI (Plan de Cuentas estilo desplegable)
-  //    Para Resultados mostramos solo “Estado de Resultados”.
+  //    FIX SUBCUENTAS:
+  //    - "4001-02" se acumula en "4001" para que el árbol del plan (padres) refleje montos reales.
   // =========================
+  type SubCuentaRow = { codigo: string; debe: number; haber: number; saldo: number };
+
   type SaldosCuentaRow = {
     codigo: string;
     nombre: string;
@@ -589,6 +637,7 @@ export default function BalanzaResultados() {
     debe: number;
     haber: number;
     saldo: number;
+    subcuentas?: SubCuentaRow[];
   };
 
   type SaldosNode = {
@@ -601,18 +650,37 @@ export default function BalanzaResultados() {
   };
 
   const saldosUI = useMemo(() => {
-    const saldoMap = new Map<string, any>();
-
+    // 1) rawMap: lo que viene tal cual (puede venir "4001-02")
+    const rawMap = new Map<string, any>();
     for (const [k, v] of Object.entries(saldosPorCuentaFiltrados || {})) {
-      const codigo = String((v as any)?.cuenta_codigo ?? k ?? "");
+      const codigo = normalizeCode((v as any)?.cuenta_codigo ?? k ?? "");
       if (!codigo) continue;
-      saldoMap.set(codigo, v);
+      rawMap.set(codigo, v);
     }
 
-    for (const v of Object.values(saldosPorCuentaFiltrados || {})) {
-      const codigo = String((v as any)?.cuenta_codigo ?? "");
-      if (!codigo) continue;
-      if (!saldoMap.has(codigo)) saldoMap.set(codigo, v);
+    // 2) rolledMap: acumulado por cuenta padre ("4001" suma "4001-02", "4001-03", etc.)
+    const rolledMap = new Map<
+      string,
+      { debe_total: number; haber_total: number; saldo: number; sourceCodes: string[] }
+    >();
+
+    const pushToRolled = (code: string, debe: number, haber: number, saldo: number, src: string) => {
+      const cur = rolledMap.get(code) || { debe_total: 0, haber_total: 0, saldo: 0, sourceCodes: [] };
+      cur.debe_total += debe;
+      cur.haber_total += haber;
+      cur.saldo += saldo;
+      if (!cur.sourceCodes.includes(src)) cur.sourceCodes.push(src);
+      rolledMap.set(code, cur);
+    };
+
+    for (const [codigo, raw] of rawMap.entries()) {
+      const debe = num(raw?.debe_total, 0);
+      const haber = num(raw?.haber_total, 0);
+      const saldo = computeSaldoFallback(codigo, debe, haber, raw?.saldo_final ?? raw?.saldo);
+      const parent = parentAccountCode(codigo);
+
+      // suma al padre (si es subcuenta) y también a sí mismo (para poder mostrar breakdown)
+      pushToRolled(parent || codigo, debe, haber, saldo, codigo);
     }
 
     const sumRows = (rows: SaldosCuentaRow[]) =>
@@ -627,16 +695,31 @@ export default function BalanzaResultados() {
       );
 
     const buildCuentaRow = (
-      codigo: string,
+      codigoPlan: string,
       estado_financiero: "Balance General" | "Estado de Resultados" | "—"
     ): SaldosCuentaRow | null => {
-      const raw = saldoMap.get(codigo);
-      if (!raw) return null;
+      const codigo = normalizeCode(codigoPlan);
+      if (!codigo) return null;
+
+      const rolled = rolledMap.get(codigo);
+      if (!rolled) return null;
 
       const info = cuentasInfoMap.get(codigo);
-      const debe = Number(raw?.debe_total || 0);
-      const haber = Number(raw?.haber_total || 0);
-      const saldo = Number(raw?.saldo || 0);
+      const debe = num(rolled.debe_total, 0);
+      const haber = num(rolled.haber_total, 0);
+      const saldo = num(rolled.saldo, 0);
+
+      // subcuentas reales que aportaron (solo las que son diferentes al padre)
+      const subs: SubCuentaRow[] = (rolled.sourceCodes || [])
+        .filter((c) => c !== codigo && parentAccountCode(c) === codigo)
+        .map((c) => {
+          const raw = rawMap.get(c);
+          const d = num(raw?.debe_total, 0);
+          const h = num(raw?.haber_total, 0);
+          const s = computeSaldoFallback(c, d, h, raw?.saldo_final ?? raw?.saldo);
+          return { codigo: c, debe: d, haber: h, saldo: s };
+        })
+        .sort((a, b) => a.codigo.localeCompare(b.codigo));
 
       return {
         codigo,
@@ -646,26 +729,33 @@ export default function BalanzaResultados() {
         debe,
         haber,
         saldo,
+        subcuentas: subs.length ? subs : undefined,
       };
     };
 
     const fallbackFlat: SaldosNode[] = (() => {
-      const rows: SaldosCuentaRow[] = Array.from(saldoMap.keys())
-        .sort((a, b) => a.localeCompare(b))
-        .map((codigo) => {
-          const info = cuentasInfoMap.get(codigo);
-          const raw = saldoMap.get(codigo);
-          const estado = ((info?.estado_financiero as any) || "Estado de Resultados") as any;
-          return {
-            codigo,
-            nombre: info?.nombre || "N/A",
-            estado_financiero: estado,
-            naturaleza: getNaturaleza(codigo),
-            debe: Number(raw?.debe_total || 0),
-            haber: Number(raw?.haber_total || 0),
-            saldo: Number(raw?.saldo || 0),
-          } as SaldosCuentaRow;
-        });
+      const parentCodes = Array.from(rolledMap.keys()).sort((a, b) => a.localeCompare(b));
+
+      const rows: SaldosCuentaRow[] = parentCodes.map((codigo) => {
+        const info = cuentasInfoMap.get(codigo);
+        const rolled = rolledMap.get(codigo)!;
+
+        const estado = ((info?.estado_financiero as any) || "Estado de Resultados") as any;
+
+        const debe = num(rolled.debe_total, 0);
+        const haber = num(rolled.haber_total, 0);
+        const saldo = num(rolled.saldo, 0);
+
+        return {
+          codigo,
+          nombre: info?.nombre || "N/A",
+          estado_financiero: estado,
+          naturaleza: getNaturaleza(codigo),
+          debe,
+          haber,
+          saldo,
+        } as SaldosCuentaRow;
+      });
 
       const totals = sumRows(rows);
       return [
@@ -714,9 +804,9 @@ export default function BalanzaResultados() {
 
       for (const subgrupo of subgrupos) {
         const cuentasArr = (subgruposObj?.[subgrupo] || []) as any[];
-        const codigos = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
+        const codigosPlan = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
 
-        const rows: SaldosCuentaRow[] = codigos
+        const rows: SaldosCuentaRow[] = codigosPlan
           .map((codigo) => buildCuentaRow(codigo, estadoKey))
           .filter(Boolean) as SaldosCuentaRow[];
 
@@ -836,19 +926,6 @@ export default function BalanzaResultados() {
             Cuentas de ingresos, costos y gastos del período (4xxx, 5xxx, 6xxx). Ideal para entender tu utilidad.
           </p>
         </div>
-
-        {/* ✅ ELIMINADO: bloque duplicado del header (cuadrado/rango).
-            Esto ya lo pinta el header padre del módulo (como en tu screenshot). */}
-        {/*
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className={cn("px-3 py-1", cuadra ? "border-green-400/60" : "border-red-400/60")}>
-            {cuadra ? "✓ Cuadrado" : "✗ Descuadrado"}
-          </Badge>
-          <Badge variant="outline" className="px-3 py-1">
-            Rango: {format(startDate, "dd/MM/yyyy")} → {format(endDate, "dd/MM/yyyy")}
-          </Badge>
-        </div>
-        */}
       </div>
 
       {/* Alerta fechas futuras */}
@@ -1377,64 +1454,78 @@ export default function BalanzaResultados() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filasPaginadasResultados.map((row, idx) => {
-                        const debe = Number(row.mov.debe || 0);
-                        const haber = Number(row.mov.haber || 0);
+                      <>
+                        {filasPaginadasResultados.map((row, idx) => {
+                          const debe = Number(row.mov.debe || 0);
+                          const haber = Number(row.mov.haber || 0);
 
-                        return (
-                          <TableRow
-                            key={`${row.referencia}-${row.mov.cuenta_codigo}-${idx}`}
-                            className={cn("hover:bg-muted/20", row.esCancelado ? "bg-red-50 dark:bg-red-950/20" : "")}
-                          >
-                            <TableCell className="font-mono text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">{row.referencia}</span>
-                                {row.esCancelado && (
-                                  <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
+                          return (
+                            <TableRow
+                              key={`${row.referencia}-${row.mov.cuenta_codigo}-${idx}`}
+                              className={cn("hover:bg-muted/20", row.esCancelado ? "bg-red-50 dark:bg-red-950/20" : "")}
+                            >
+                              <TableCell className="font-mono text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">{row.referencia}</span>
+                                  {row.esCancelado && (
+                                    <Badge className="bg-red-600 hover:bg-red-600 text-white">CANCELADO</Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1 truncate">{row.asientoDescripcion}</div>
+                              </TableCell>
+
+                              <TableCell className="text-sm">{row.fecha}</TableCell>
+                              <TableCell className="text-sm">{row.tipo}</TableCell>
+
+                              <TableCell className="text-sm">
+                                <span className="font-mono text-xs">{row.mov.cuenta_codigo}</span>
+                                <div className="text-xs text-muted-foreground truncate">{row.mov.cuenta_nombre}</div>
+                              </TableCell>
+
+                              <TableCell className="text-right">
+                                {debe > 0 ? (
+                                  <span className="text-green-600 font-medium">{formatCurrency(debe)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
                                 )}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1 truncate">{row.asientoDescripcion}</div>
-                            </TableCell>
+                              </TableCell>
 
-                            <TableCell className="text-sm">{row.fecha}</TableCell>
-                            <TableCell className="text-sm">{row.tipo}</TableCell>
+                              <TableCell className="text-right">
+                                {haber > 0 ? (
+                                  <span className="text-red-600 font-medium">{formatCurrency(haber)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
 
-                            <TableCell className="text-sm">
-                              <span className="font-mono text-xs">{row.mov.cuenta_codigo}</span>
-                              <div className="text-xs text-muted-foreground truncate">{row.mov.cuenta_nombre}</div>
-                            </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setAsientoModalRef(row.referencia);
+                                    setAsientoModalOpen(true);
+                                  }}
+                                >
+                                  Ver asiento
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
 
-                            <TableCell className="text-right">
-                              {debe > 0 ? (
-                                <span className="text-green-600 font-medium">{formatCurrency(debe)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              {haber > 0 ? (
-                                <span className="text-red-600 font-medium">{formatCurrency(haber)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setAsientoModalRef(row.referencia);
-                                  setAsientoModalOpen(true);
-                                }}
-                              >
-                                Ver asiento
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
+                        {/* ✅ TOTAL (filtros actuales) */}
+                        <TableRow className="font-bold bg-muted/40">
+                          <TableCell colSpan={4}>Total (filtros actuales)</TableCell>
+                          <TableCell className="text-right text-green-600">{formatCurrency(totalResultados.debe)}</TableCell>
+                          <TableCell className="text-right text-red-600">{formatCurrency(totalResultados.haber)}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="text-xs text-muted-foreground">
+                              Neto: <span className="font-semibold text-foreground">{formatCurrency(totalResultados.neto)}</span>
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      </>
                     )}
                   </TableBody>
                 </Table>
@@ -1686,6 +1777,7 @@ export default function BalanzaResultados() {
                                             {subNode.cuentas.map((c) => (
                                               <TableRow key={c.codigo} className="hover:bg-muted/20">
                                                 <TableCell className="font-mono text-xs">{c.codigo}</TableCell>
+
                                                 <TableCell className="text-sm">
                                                   {c.nombre}
                                                   <div className="text-xs text-muted-foreground mt-0.5">
@@ -1697,6 +1789,17 @@ export default function BalanzaResultados() {
                                                       ? "Gasto"
                                                       : "—"}
                                                   </div>
+
+                                                  {/* ✅ Nota subcuentas integradas */}
+                                                  {c.subcuentas?.length ? (
+                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                      Incluye subcuentas:{" "}
+                                                      <span className="font-mono">
+                                                        {c.subcuentas.slice(0, 4).map((s) => s.codigo).join(", ")}
+                                                        {c.subcuentas.length > 4 ? "…" : ""}
+                                                      </span>
+                                                    </div>
+                                                  ) : null}
                                                 </TableCell>
 
                                                 <TableCell className="text-xs">
@@ -1739,15 +1842,15 @@ export default function BalanzaResultados() {
                 <div className="col-span-7 font-bold">TOTALES</div>
                 <div className="col-span-2 text-right font-bold text-green-600">{formatCurrency(totalDebe)}</div>
                 <div className="col-span-2 text-right font-bold text-red-600">{formatCurrency(totalHaber)}</div>
-                <div className="col-span-1 text-right font-bold">{formatCurrency(Math.abs(totalDebe - totalHaber))}</div>
+                <div className="col-span-1 text-right font-bold">{formatCurrency(Math.abs(totalHaber - totalDebe))}</div>
               </div>
             </div>
           </div>
 
           <div className="rounded-xl border bg-muted/10 p-4">
             <p className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">Checklist rápido:</span> 1) Filtra Ingresos/Egresos,
-              2) Encuentra las cuentas con mayor movimiento, 3) Abre el asiento (“Ver asiento”) para validar lógica y evidencia.
+              <span className="font-semibold text-foreground">Checklist rápido:</span> 1) Filtra Ingresos/Egresos, 2) Encuentra
+              las cuentas con mayor movimiento, 3) Abre el asiento (“Ver asiento”) para validar lógica y evidencia.
             </p>
           </div>
         </CardContent>
