@@ -624,6 +624,16 @@ export default function BalanzaBalance() {
     return filasAsientosBalance.reduce((sum, r) => sum + Number(r.mov?.haber || 0), 0);
   }, [filasAsientosBalance]);
 
+  const codigosAfectados = useMemo(() => {
+  const set = new Set<string>();
+  for (const r of filasAsientosBalance) {
+    const c = String(r?.mov?.cuenta_codigo || "").trim();
+    if (c) set.add(c);
+  }
+  return set;
+}, [filasAsientosBalance]);
+
+
   // =========================
   // ✅ SALDOS filtrados (Balance + filtros)
   // =========================
@@ -720,163 +730,97 @@ export default function BalanzaBalance() {
     children: SaldosNode[];
   };
 
-  const saldosUI = useMemo(() => {
-    const saldoMap = new Map<string, any>();
+   const saldosUI = useMemo(() => {
+  // arma un "map" de saldos por código usando saldosPorCuentaFiltrados
+  const saldoMap = new Map<string, any>();
+  for (const [k, v] of Object.entries(saldosPorCuentaFiltrados || {})) {
+    const codigo = String((v as any)?.cuenta_codigo ?? k ?? "").trim();
+    if (!codigo) continue;
+    saldoMap.set(codigo, v);
+  }
 
-    for (const [k, v] of Object.entries(saldosPorCuentaFiltrados || {})) {
-      const codigo = String((v as any)?.cuenta_codigo ?? k ?? "");
-      if (!codigo) continue;
-      saldoMap.set(codigo, v);
-    }
+  const buildCuentaRow = (codigo: string): SaldosCuentaRow | null => {
+    const raw = saldoMap.get(codigo);
+    if (!raw) return null;
 
-    for (const v of Object.values(saldosPorCuentaFiltrados || {})) {
-      const codigo = String((v as any)?.cuenta_codigo ?? "");
-      if (!codigo) continue;
-      if (!saldoMap.has(codigo)) saldoMap.set(codigo, v);
-    }
+    const info = cuentasInfoMap.get(codigo);
+    const saldoInicial = Number(raw?.saldo_inicial || 0);
+    const debe = Number(raw?.debe_total || 0);
+    const haber = Number(raw?.haber_total || 0);
+    const saldoFinal = saldoInicial + (debe - haber);
 
-    const sumRows = (rows: SaldosCuentaRow[]) =>
-      rows.reduce(
-        (acc, r) => {
-          acc.saldoInicial += r.saldoInicial || 0;
-          acc.debe += r.debe || 0;
-          acc.haber += r.haber || 0;
-          acc.saldoFinal += r.saldoFinal || 0;
-          return acc;
-        },
-        { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 }
-      );
-
-    const buildCuentaRow = (codigo: string, estado_financiero: "Balance General" | "Estado de Resultados" | "—") => {
-      const raw = saldoMap.get(codigo);
-      if (!raw) return null;
-
-      const info = cuentasInfoMap.get(codigo);
-
-      const saldoInicial = Number(raw?.saldo_inicial || 0);
-      const debe = Number(raw?.debe_total || 0);
-      const haber = Number(raw?.haber_total || 0);
-
-      // ✅ FIX: saldo_final por matemática, no por “sumas raras” del backend
-      const saldoFinal = saldoInicial + (debe - haber);
-
-      return {
-        codigo,
-        nombre: info?.nombre || "N/A",
-        estado_financiero,
-        naturaleza: getNaturaleza(codigo),
-        saldoInicial,
-        debe,
-        haber,
-        saldoFinal,
-      } as SaldosCuentaRow;
+    return {
+      codigo,
+      nombre: info?.nombre || String(raw?.cuenta_nombre || "N/A"),
+      estado_financiero: "Balance General",
+      naturaleza: getNaturaleza(codigo),
+      saldoInicial,
+      debe,
+      haber,
+      saldoFinal,
     };
+  };
 
-    const fallbackFlat: SaldosNode[] = (() => {
-      const rows: SaldosCuentaRow[] = Array.from(saldoMap.keys())
-        .sort((a, b) => a.localeCompare(b))
-        .map((codigo) => {
-          const info = cuentasInfoMap.get(codigo);
-          const raw = saldoMap.get(codigo);
-          const estado = ((info?.estado_financiero as any) || "Balance General") as any;
-          const saldoInicial = Number(raw?.saldo_inicial || 0);
-          const debe = Number(raw?.debe_total || 0);
-          const haber = Number(raw?.haber_total || 0);
-          return {
-            codigo,
-            nombre: info?.nombre || "N/A",
-            estado_financiero: estado,
-            naturaleza: getNaturaleza(codigo),
-            saldoInicial,
-            debe,
-            haber,
-            saldoFinal: saldoInicial + (debe - haber),
-          } as SaldosCuentaRow;
-        });
+  const rows: SaldosCuentaRow[] = Array.from(codigosAfectados)
+    .map((codigo) => buildCuentaRow(codigo))
+    .filter(Boolean) as SaldosCuentaRow[];
 
-      const totals = sumRows(rows);
-      return [
-        {
-          key: "flat",
-          label: "Balance General",
-          level: "estado",
-          totals,
-          cuentas: rows,
-          children: [],
-        },
-      ];
-    })();
-
-    const bg = estadosFinancieros?.["Balance General"];
-    if (!bg) return fallbackFlat;
-
-    const estadoKey: "Balance General" = "Balance General";
-
-    const estadoNode: SaldosNode = {
-      key: `estado:${estadoKey}`,
-      label: estadoKey,
-      level: "estado",
-      totals: { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 },
-      cuentas: [],
-      children: [],
-    };
-
-    const bgForTree: any = resolveBgAgrupadorRoot(bg, agrupadorBG) || {};
-    const grupos = Object.keys(bgForTree || {});
-    for (const grupo of grupos) {
-      const subgruposObj = bgForTree?.[grupo] || {};
-      const subgrupos = Object.keys(subgruposObj || {});
-
-      const grupoNode: SaldosNode = {
-        key: `grupo:${estadoKey}:${grupo}`,
-        label: grupo,
-        level: "grupo",
+  // si por algún motivo no hay afectadas, no rompas la UI
+  if (!rows.length) {
+    return [
+      {
+        key: "estado:BalanceGeneral",
+        label: "Balance General",
+        level: "estado",
         totals: { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 },
         cuentas: [],
         children: [],
-      };
+      } as SaldosNode,
+    ];
+  }
 
-      for (const subgrupo of subgrupos) {
-        const cuentasNode = (subgruposObj as any)?.[subgrupo];
-        const cuentasArr = flattenCuentasFromNode(cuentasNode);
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.saldoInicial += r.saldoInicial || 0;
+      acc.debe += r.debe || 0;
+      acc.haber += r.haber || 0;
+      acc.saldoFinal += r.saldoFinal || 0;
+      return acc;
+    },
+    { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 }
+  );
 
-        const codigos = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
+  // Estructura tipo "Resultados": Estado -> Grupo -> Subgrupo -> Tabla
+  const subNode: SaldosNode = {
+    key: "subgrupo:cuentas-afectadas",
+    label: "Cuentas afectadas",
+    level: "subgrupo",
+    totals,
+    cuentas: rows.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+    children: [],
+  };
 
-        const rows: SaldosCuentaRow[] = codigos
-          .map((codigo) => buildCuentaRow(codigo, estadoKey))
-          .filter(Boolean) as SaldosCuentaRow[];
+  const grupoNode: SaldosNode = {
+    key: `grupo:${agrupadorBG}`,
+    label: agrupadorBG === "activos" ? "Activos" : agrupadorBG === "pasivos" ? "Pasivos" : "Capital",
+    level: "grupo",
+    totals,
+    cuentas: [],
+    children: [subNode],
+  };
 
-        if (!rows.length) continue;
+  const estadoNode: SaldosNode = {
+    key: "estado:BalanceGeneral",
+    label: "Balance General · Cuentas afectadas",
+    level: "estado",
+    totals,
+    cuentas: [],
+    children: [grupoNode],
+  };
 
-        const subTotals = sumRows(rows);
+  return [estadoNode];
+}, [saldosPorCuentaFiltrados, cuentasInfoMap, codigosAfectados, agrupadorBG]);
 
-        grupoNode.children.push({
-          key: `subgrupo:${estadoKey}:${grupo}:${subgrupo}`,
-          label: subgrupo,
-          level: "subgrupo",
-          totals: subTotals,
-          cuentas: rows.sort((a, b) => a.codigo.localeCompare(b.codigo)),
-          children: [],
-        });
-
-        grupoNode.totals.saldoInicial += subTotals.saldoInicial;
-        grupoNode.totals.debe += subTotals.debe;
-        grupoNode.totals.haber += subTotals.haber;
-        grupoNode.totals.saldoFinal += subTotals.saldoFinal;
-      }
-
-      if (!grupoNode.children.length) continue;
-
-      estadoNode.children.push(grupoNode);
-      estadoNode.totals.saldoInicial += grupoNode.totals.saldoInicial;
-      estadoNode.totals.debe += grupoNode.totals.debe;
-      estadoNode.totals.haber += grupoNode.totals.haber;
-      estadoNode.totals.saldoFinal += grupoNode.totals.saldoFinal;
-    }
-
-    if (!estadoNode.children.length) return fallbackFlat;
-    return [estadoNode];
-  }, [saldosPorCuentaFiltrados, estadosFinancieros, cuentasInfoMap, agrupadorBG]);
 
   // =========================
   // ✅ PAGINACIÓN (FILAS BALANCE)
@@ -1739,8 +1683,8 @@ export default function BalanzaBalance() {
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>
           <CardDescription>
-            Vista desplegable por Grupo → Subgrupo → Cuenta, con Saldo inicial/final y Debe/Haber del período.
-          </CardDescription>
+  Desglose por cuenta afectada (ej. Caja/Bancos) con Debe/Haber acumulado del período y saldo inicial/final.
+</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
