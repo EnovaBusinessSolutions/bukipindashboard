@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
@@ -75,6 +76,12 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   }
 
   const normalizeCodigo = (codigo: string) => String(codigo || "").trim();
+  const getCodigoBase = (codigo: string) => {
+    const s = normalizeCodigo(codigo);
+    if (!s) return "";
+    return s.includes("-") ? s.split("-")[0].trim() : s;
+  };
+  const isSubcuenta = (codigo: string) => normalizeCodigo(codigo).includes("-");
 
   /**
    * ✅ Monto del PERÍODO (NO saldo acumulado raro)
@@ -118,18 +125,37 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
 
     for (const codigoStr of allCodigos) {
       const codigo = normalizeCodigo(codigoStr);
-      const n = Number(codigo);
+      if (!codigo) continue;
+
+      // ✅ clave: para rangos usamos el "código base" (ej. 4001-01 -> 4001)
+      const base = getCodigoBase(codigo);
+      const n = Number(base);
       if (!Number.isFinite(n)) continue;
       if (!predicate(n)) continue;
 
-      const cuenta = cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === codigo);
-      res.push({
-        codigo,
-        nombre: String((cuenta as any)?.nombre ?? "Cuenta"),
-      });
+      // nombre: intenta exacto, si no, intenta base
+      const cuentaExacta = cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === codigo);
+      const cuentaBase =
+        !cuentaExacta ? cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === base) : null;
+
+      const nombreExacto = String((cuentaExacta as any)?.nombre ?? "").trim();
+      const nombreBase = String((cuentaBase as any)?.nombre ?? "").trim();
+
+      const nombre =
+        nombreExacto ||
+        (isSubcuenta(codigo) ? `Subcuenta de ${base}` : nombreBase || "Cuenta");
+
+      res.push({ codigo, nombre });
     }
 
-    res.sort((a, b) => Number(a.codigo) - Number(b.codigo));
+    // ✅ orden: por base numérico, luego por código completo (subcuentas debajo)
+    res.sort((a, b) => {
+      const ab = Number(getCodigoBase(a.codigo));
+      const bb = Number(getCodigoBase(b.codigo));
+      if (ab !== bb) return ab - bb;
+      return a.codigo.localeCompare(b.codigo);
+    });
+
     return res;
   };
 

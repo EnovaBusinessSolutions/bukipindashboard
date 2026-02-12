@@ -53,20 +53,47 @@ type AsientoUI = {
   descripcion?: string;
 
   detalle_asientos?: Array<{
+    // ✅ variantes comunes
     cuenta_codigo?: string | null;
+    cuentaCodigo?: string | null;
+    accountCodigo?: string | null;
+    codigo?: string | null;
+    account_code?: string | null;
+
     cuenta_nombre?: string | null;
+    cuentaNombre?: string | null;
+    accountNombre?: string | null;
+    nombre?: string | null;
+
     debe?: number | string | null;
     haber?: number | string | null;
+    debit?: number | string | null;
+    credit?: number | string | null;
+
     memo?: string | null;
+    descripcion?: string | null;
   }>;
 
   // compat vieja
   lines?: Array<{
     cuenta_codigo?: string | null;
+    cuentaCodigo?: string | null;
+    accountCodigo?: string | null;
+    codigo?: string | null;
+    account_code?: string | null;
+
     cuenta_nombre?: string | null;
+    cuentaNombre?: string | null;
+    accountNombre?: string | null;
+    nombre?: string | null;
+
     debe?: number | string | null;
     haber?: number | string | null;
+    debit?: number | string | null;
+    credit?: number | string | null;
+
     memo?: string | null;
+    descripcion?: string | null;
   }>;
 };
 
@@ -115,6 +142,34 @@ function formatDMYFromYMD(ymd?: string) {
 
 function normalizeCode(code: any) {
   return String(code ?? "").trim();
+}
+
+function pickLineCodigo(line: any) {
+  const codigo =
+    line?.cuenta_codigo ??
+    line?.cuentaCodigo ??
+    line?.accountCodigo ??
+    line?.codigo ??
+    line?.account_code ??
+    "";
+  return normalizeCode(codigo);
+}
+
+function pickLineNombre(line: any) {
+  const nombre =
+    line?.cuenta_nombre ??
+    line?.cuentaNombre ??
+    line?.accountNombre ??
+    line?.nombre ??
+    "";
+  return normalizeCode(nombre);
+}
+
+function pickDebeHaber(line: any) {
+  // compat: debe/haber o debit/credit
+  const debe = num(line?.debe ?? line?.debit ?? 0, 0);
+  const haber = num(line?.haber ?? line?.credit ?? 0, 0);
+  return { debe, haber };
 }
 
 function getParentCandidates(code: string) {
@@ -169,7 +224,7 @@ function looksUsefulForER(saldos: Record<string, SaldoCuenta>) {
   const keys = Object.keys(saldos || {});
   if (!keys.length) return false;
 
-  // Si no hay ninguna 4xxx/5xxx/6xxx, ER suele quedar en ceros
+  // Si no hay ninguna 4xxx/5xxx/6xxx con saldo != 0, ER suele quedar en ceros
   const has4 = keys.some((k) => String(k).startsWith("4") && num((saldos as any)[k]?.saldo, 0) !== 0);
   const has5 = keys.some((k) => String(k).startsWith("5") && num((saldos as any)[k]?.saldo, 0) !== 0);
   const has6 = keys.some((k) => String(k).startsWith("6") && num((saldos as any)[k]?.saldo, 0) !== 0);
@@ -192,12 +247,11 @@ function buildPeriodoFromAsientos(asientos: AsientoUI[]) {
       : [];
 
     for (const l of lines) {
-      const code = normalizeCode(l?.cuenta_codigo);
+      const code = pickLineCodigo(l);
       if (!code) continue;
 
-      const debe = num(l?.debe, 0);
-      const haber = num(l?.haber, 0);
-      const nombreLinea = normalizeCode(l?.cuenta_nombre);
+      const { debe, haber } = pickDebeHaber(l);
+      const nombreLinea = pickLineNombre(l);
 
       const cur = agg.get(code) || { debe: 0, haber: 0, cuenta_nombre: undefined };
       cur.debe += debe;
@@ -229,8 +283,8 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const asientos: AsientoUI[] =
         asientosPayload?.asientos ??
         asientosPayload?.items ??
-        asientosJson?.asientos ??
-        asientosJson?.items ??
+        (asientosJson as any)?.asientos ??
+        (asientosJson as any)?.items ??
         (Array.isArray(asientosPayload) ? asientosPayload : []);
 
       // =========================
@@ -253,7 +307,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const cuentasMap = new Map<string, { nombre: string; estado_financiero?: string | null }>(
         (cuentasArr || [])
           .filter((c) => c && (c as any).codigo)
-          .map((c: any) => [normalizeCode(c.codigo), { nombre: String(c.nombre ?? ""), estado_financiero: c.estado_financiero ?? null }])
+          .map((c: any) => [
+            normalizeCode(c.codigo),
+            { nombre: String(c.nombre ?? ""), estado_financiero: c.estado_financiero ?? null },
+          ])
       );
 
       const resolveCuentaMeta = (codigo: string, nombreFromLine?: string) => {
@@ -300,18 +357,20 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           : [];
 
         for (const l of lines) {
-          const cuentaCodigo = normalizeCode(l?.cuenta_codigo);
+          const cuentaCodigo = pickLineCodigo(l);
           if (!cuentaCodigo) continue;
 
-          const meta = resolveCuentaMeta(cuentaCodigo, String(l?.cuenta_nombre ?? ""));
+          const meta = resolveCuentaMeta(cuentaCodigo, pickLineNombre(l));
+          const { debe, haber } = pickDebeHaber(l);
+
           movimientos.push({
             fecha: fechaFormateada,
             tipo,
             descripcion: descripcionFinal,
             cuenta_codigo: cuentaCodigo,
             cuenta_nombre: meta.nombre || cuentaCodigo,
-            debe: num(l?.debe, 0),
-            haber: num(l?.haber, 0),
+            debe,
+            haber,
             referencia,
           });
         }
@@ -327,18 +386,17 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       // 4) ✅ Saldos por cuenta (E2E + compat + subcuentas)
       // =========================
 
-      // Fast path si backend lo manda (raro, pero lo respetamos)
+      // Fast path si backend lo manda
       const saldosFastRaw: Record<string, any> =
-        (asientosPayload?.saldosPorCuenta as any) ?? (asientosJson?.saldosPorCuenta as any) ?? {};
+        ((asientosPayload as any)?.saldosPorCuenta as any) ?? ((asientosJson as any)?.saldosPorCuenta as any) ?? {};
 
-      const saldoInicialTotalFast = num(asientosPayload?.saldoInicialTotal ?? asientosJson?.saldoInicialTotal, 0);
-      const saldoFinalTotalFast = num(asientosPayload?.saldoFinalTotal ?? asientosJson?.saldoFinalTotal, 0);
+      const saldoInicialTotalFast = num((asientosPayload as any)?.saldoInicialTotal ?? (asientosJson as any)?.saldoInicialTotal, 0);
+      const saldoFinalTotalFast = num((asientosPayload as any)?.saldoFinalTotal ?? (asientosJson as any)?.saldoFinalTotal, 0);
 
       const fastHasAny =
         saldosFastRaw && typeof saldosFastRaw === "object" && Object.keys(saldosFastRaw).length > 0;
 
       if (fastHasAny) {
-        // ✅ Normalizamos para garantizar `saldo` y `saldo_final` + nombre
         const saldosFast: Record<string, SaldoCuenta> = {};
         for (const k of Object.keys(saldosFastRaw)) {
           const code = normalizeCode(k);
@@ -400,7 +458,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         : [];
 
       // saldo inicial por cuenta (si viene saldo, úsalo; si no, debe-haber)
-      const saldoInicialByCuenta = new Map<string, { saldo: number; cuenta_nombre?: string; estado_financiero?: string | null }>();
+      const saldoInicialByCuenta = new Map<
+        string,
+        { saldo: number; cuenta_nombre?: string; estado_financiero?: string | null }
+      >();
       for (const row of detInicialArr || []) {
         const code = normalizeCode(row?.cuenta_codigo);
         if (!code) continue;
@@ -413,7 +474,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       }
 
       // periodo por cuenta desde /api/asientos/detalle (puede venir sin subcuentas)
-      const periodoByCuentaFromDetalle = new Map<string, { debe: number; haber: number; cuenta_nombre?: string; estado_financiero?: string | null }>();
+      const periodoByCuentaFromDetalle = new Map<
+        string,
+        { debe: number; haber: number; cuenta_nombre?: string; estado_financiero?: string | null }
+      >();
       for (const row of detPeriodoArr || []) {
         const code = normalizeCode(row?.cuenta_codigo);
         if (!code) continue;
@@ -429,12 +493,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const periodoByCuentaFromAsientos = buildPeriodoFromAsientos(asientos);
 
       // Armamos el set de códigos final:
-      // - si hay subcuentas, preferimos periodo desde asientos (más granular)
-      // - si no hay subcuentas, usamos lo que traiga el endpoint detalle (más rápido)
       const allCodes = new Set<string>();
       if (hasSubcuentas) {
         for (const code of periodoByCuentaFromAsientos.keys()) allCodes.add(code);
-        for (const code of saldoInicialByCuenta.keys()) allCodes.add(code); // para saldo inicial si coincide
+        for (const code of saldoInicialByCuenta.keys()) allCodes.add(code);
       } else {
         for (const code of saldoInicialByCuenta.keys()) allCodes.add(code);
         for (const code of periodoByCuentaFromDetalle.keys()) allCodes.add(code);
