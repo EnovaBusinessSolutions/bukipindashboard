@@ -19,7 +19,7 @@ type DetalleAsiento = {
   totalDebe?: number | string | null;
   totalHaber?: number | string | null;
 
-  // ✅ si el backend ya manda saldo por cuenta
+  
   saldo?: number | string | null;
 };
 
@@ -39,14 +39,14 @@ const pickHaber = (d: DetalleAsiento) => safeNumber(d?.haber ?? d?.totalHaber);
 const normalizeDetalles = (json: AnyJson): DetalleAsiento[] => {
   const root = json?.data ?? json;
 
-  // 1) ya viene como array directo
+  
   if (Array.isArray(root)) return root as DetalleAsiento[];
 
-  // 2) wrappers típicos
+  
   const maybeArr = root?.items ?? root?.detalles ?? root?.rows ?? root?.data;
   if (Array.isArray(maybeArr)) return maybeArr as DetalleAsiento[];
 
-  // 3) shape por cuenta: { saldos: { "1001": {...}, "1002": {...} } }
+  
   const saldosObj = root?.saldos ?? root?.balances ?? root?.byAccount;
   if (saldosObj && typeof saldosObj === "object" && !Array.isArray(saldosObj)) {
     return Object.entries(saldosObj).map(([codigo, v]: any) => ({
@@ -57,7 +57,7 @@ const normalizeDetalles = (json: AnyJson): DetalleAsiento[] => {
     }));
   }
 
-  // 4) nada usable
+  
   return [];
 };
 
@@ -65,15 +65,7 @@ export const useSaldosDisponibles = () => {
   return useQuery<SaldosDisponibles>({
     queryKey: ["saldos-disponibles"],
     queryFn: async () => {
-      /**
-       * Endpoint esperado:
-       *   GET /api/asientos/detalle?cuentas=1001,1002
-       *
-       * Soporta respuestas:
-       *   - Array: [{ cuentaCodigo|cuenta_codigo, debe|totalDebe, haber|totalHaber, saldo? }]
-       *   - Wrapper: { data: [...] } / { items: [...] } / { detalles: [...] }
-       *   - Objeto: { saldos: { "1001": {debe,haber|saldo}, "1002": {...} } }
-       */
+      
       const json: AnyJson = await apiFetch(
         "/api/asientos/detalle?cuentas=1001,1002",
         { method: "GET" }
@@ -88,7 +80,7 @@ export const useSaldosDisponibles = () => {
         const codigo = pickCuentaCodigo(d);
         if (!codigo) continue;
 
-        // ✅ si backend manda saldo, úsalo; si no, calcula debe-haber
+       
         const saldo =
           d?.saldo !== undefined && d?.saldo !== null
             ? safeNumber(d.saldo)

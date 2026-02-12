@@ -176,11 +176,17 @@ export default function BalanzaBalance() {
     return null;
   };
 
-  // ===== ✅ FIX E2E: Sub-agrupadores correctos (no repetir Activos/Pasivos/Capital) =====
+  // ===== ✅ FIX E2E: Sub-agrupadores correctos por Agrupador (incluye "Capital Contable") =====
   const AGRUPADOR_LABEL: Record<AgrupadorBG, string> = {
     activos: "Activos",
     pasivos: "Pasivos",
     capital: "Capital",
+  };
+
+  const AGRUPADOR_ALIASES: Record<AgrupadorBG, string[]> = {
+    activos: ["Activos"],
+    pasivos: ["Pasivos"],
+    capital: ["Capital", "Capital Contable", "Capital contable"],
   };
 
   function pickKeyCI(obj: any, wanted: string): string | null {
@@ -192,9 +198,45 @@ export default function BalanzaBalance() {
     return lower || null;
   }
 
+  function pickKeyCIAny(obj: any, wantedList: string[]): string | null {
+    for (const w of wantedList) {
+      const k = pickKeyCI(obj, w);
+      if (k) return k;
+    }
+    return null;
+  }
+
   function bgHasAgrupadores(bg: any) {
     if (!bg) return false;
-    return !!(pickKeyCI(bg, "Activos") && pickKeyCI(bg, "Pasivos") && pickKeyCI(bg, "Capital"));
+    const a = pickKeyCIAny(bg, AGRUPADOR_ALIASES.activos);
+    const p = pickKeyCIAny(bg, AGRUPADOR_ALIASES.pasivos);
+    const c = pickKeyCIAny(bg, AGRUPADOR_ALIASES.capital);
+    return !!(a && p && c);
+  }
+
+  function flattenCuentasFromNode(node: any): any[] {
+    if (!node) return [];
+    if (Array.isArray(node)) return node;
+    return Object.values(node).flatMap((v: any) => (Array.isArray(v) ? v : []));
+  }
+
+  function nodeMatchesAgrupador(node: any, agrupador: AgrupadorBG) {
+    const cuentas = flattenCuentasFromNode(node);
+    for (const c of cuentas) {
+      const codigo = String(c?.codigo || "");
+      if (!codigo) continue;
+      if (getTipoBGByCodigo(codigo) === agrupador) return true;
+    }
+    return false;
+  }
+
+  function resolveBgAgrupadorRoot(bg: any, agrupador: AgrupadorBG) {
+    if (!bg) return null;
+    if (bgHasAgrupadores(bg)) {
+      const key = pickKeyCIAny(bg, AGRUPADOR_ALIASES[agrupador]) || AGRUPADOR_LABEL[agrupador];
+      return bg?.[key] || null;
+    }
+    return bg; // fallback: no hay primer nivel por agrupador
   }
 
   const monthOptions = useMemo(() => {
@@ -331,20 +373,31 @@ export default function BalanzaBalance() {
     const bg = estadosFinancieros?.["Balance General"];
     if (!bg) return [];
 
-    // Si BG viene con Activos/Pasivos/Capital como primer nivel:
-    if (bgHasAgrupadores(bg)) {
-      const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
-      const agrupadorObj = bg?.[agrupadorKey];
-      if (!agrupadorObj) return [];
-      return Object.keys(agrupadorObj || {}).sort((a, b) => a.localeCompare(b));
-    }
+    const root = resolveBgAgrupadorRoot(bg, agrupadorBG);
+    if (!root) return [];
 
-    // Fallback: si BG no trae ese primer nivel, filtra para no repetir
-    const grupos = Object.keys(bg || {});
-    return grupos
-      .filter((g) => g.toLowerCase() !== "activos" && g.toLowerCase() !== "pasivos" && g.toLowerCase() !== "capital")
+    const keys = Object.keys(root || {});
+    const filtered = keys
+      .filter((k) => {
+        const node = (root as any)?.[k];
+        if (bgHasAgrupadores(bg)) return true; // ya está segmentado por agrupador
+        return nodeMatchesAgrupador(node, agrupadorBG); // fallback: validar por códigos dentro del subgrupo
+      })
       .sort((a, b) => a.localeCompare(b));
+
+    return filtered;
   }, [estadosFinancieros, agrupadorBG]);
+
+  // 🔒 Blindaje: si cambian los options y el sub-agrupador ya no existe, resetea
+  useEffect(() => {
+    if (subAgrupadorBG === "todos") return;
+    if (!bgSubAgrupadorOptions.length) return;
+    const exists = bgSubAgrupadorOptions.includes(subAgrupadorBG);
+    if (!exists) {
+      setSubAgrupadorBG("todos");
+      setCuentaBG("todos");
+    }
+  }, [bgSubAgrupadorOptions, subAgrupadorBG]);
 
   // ✅ FIX E2E: Cuentas dependientes del sub-agrupador correcto
   const bgCuentaOptions = useMemo(() => {
@@ -352,18 +405,14 @@ export default function BalanzaBalance() {
     if (!bg) return [];
     if (subAgrupadorBG === "todos") return [];
 
-    let subObj: any = null;
+    const root = resolveBgAgrupadorRoot(bg, agrupadorBG);
+    if (!root) return [];
 
-    if (bgHasAgrupadores(bg)) {
-      const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
-      subObj = bg?.[agrupadorKey]?.[subAgrupadorBG] || null;
-    } else {
-      subObj = bg?.[subAgrupadorBG] || null;
-    }
+    const subNode = (root as any)?.[subAgrupadorBG] || null;
+    if (!subNode) return [];
 
-    if (!subObj) return [];
+    const cuentasAll = flattenCuentasFromNode(subNode);
 
-    const cuentasAll: any[] = Array.isArray(subObj) ? subObj : (Object.values(subObj).flat() as any[]);
     const rows = cuentasAll
       .map((c) => ({ codigo: String(c?.codigo || ""), nombre: String(c?.nombre || "N/A") }))
       .filter((x) => !!x.codigo)
@@ -396,16 +445,12 @@ export default function BalanzaBalance() {
     let subObj: any = null;
 
     if (bg) {
-      if (bgHasAgrupadores(bg)) {
-        const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
-        subObj = bg?.[agrupadorKey]?.[subAgrupadorBG] || null;
-      } else {
-        subObj = bg?.[subAgrupadorBG] || null;
-      }
+      const root = resolveBgAgrupadorRoot(bg, agrupadorBG);
+      subObj = (root as any)?.[subAgrupadorBG] || null;
     }
 
     if (subObj) {
-      const cuentasAll: any[] = Array.isArray(subObj) ? subObj : (Object.values(subObj).flat() as any[]);
+      const cuentasAll = flattenCuentasFromNode(subObj);
       const codigos = new Set(
         cuentasAll
           .map((c) => String(c?.codigo || ""))
@@ -606,16 +651,12 @@ export default function BalanzaBalance() {
     let subObj: any = null;
 
     if (bg) {
-      if (bgHasAgrupadores(bg)) {
-        const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
-        subObj = bg?.[agrupadorKey]?.[subAgrupadorBG] || null;
-      } else {
-        subObj = bg?.[subAgrupadorBG] || null;
-      }
+      const root = resolveBgAgrupadorRoot(bg, agrupadorBG);
+      subObj = (root as any)?.[subAgrupadorBG] || null;
     }
 
     if (subObj) {
-      const cuentasAll: any[] = Array.isArray(subObj) ? subObj : (Object.values(subObj).flat() as any[]);
+      const cuentasAll = flattenCuentasFromNode(subObj);
       const codigos = new Set(
         cuentasAll
           .map((c) => String(c?.codigo || ""))
@@ -631,7 +672,9 @@ export default function BalanzaBalance() {
 
   // Cuenta
   if (cuentaBG !== "todos") {
-    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[cuentaBG] ? { [cuentaBG]: saldosPorCuentaFiltrados[cuentaBG] } : {};
+    saldosPorCuentaFiltrados = saldosPorCuentaFiltrados[cuentaBG]
+      ? { [cuentaBG]: saldosPorCuentaFiltrados[cuentaBG] }
+      : {};
   }
 
   const totalDebe = useMemo(() => {
@@ -767,16 +810,8 @@ export default function BalanzaBalance() {
       children: [],
     };
 
-    // =========================
-    // ✅ FIX E2E: Construcción robusta del árbol (con o sin Activos/Pasivos/Capital al primer nivel)
-    // =========================
-    let bgForTree: any = bg;
-
-    if (bgHasAgrupadores(bg)) {
-      const agrupadorKey = pickKeyCI(bg, AGRUPADOR_LABEL[agrupadorBG]) || AGRUPADOR_LABEL[agrupadorBG];
-      bgForTree = bg?.[agrupadorKey] || {};
-    }
-
+    // ✅ Arma árbol desde el root del agrupador seleccionado (si aplica)
+    const bgForTree: any = resolveBgAgrupadorRoot(bg, agrupadorBG) || {};
     const grupos = Object.keys(bgForTree || {});
     for (const grupo of grupos) {
       const subgruposObj = bgForTree?.[grupo] || {};
@@ -969,8 +1004,8 @@ export default function BalanzaBalance() {
               <div className="mt-4 rounded-xl border bg-muted/10 p-4">
                 <p className="text-sm">
                   <span className="font-semibold">Pro-tip BUKIPIN:</span> Aquí verás una tabla por{" "}
-                  <span className="font-semibold">cuenta afectada</span> (fila afectada) para que encuentres rápido
-                  qué cuenta exacta se movió.
+                  <span className="font-semibold">cuenta afectada</span> (fila afectada) para que encuentres rápido qué
+                  cuenta exacta se movió.
                 </p>
               </div>
             </CardContent>
@@ -1318,7 +1353,9 @@ export default function BalanzaBalance() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="space-y-1">
                     <CardTitle className="flex items-center gap-2">
-                      <ChevronRight className={cn("h-4 w-4 transition-transform", asientosOpen ? "rotate-90" : "rotate-0")} />
+                      <ChevronRight
+                        className={cn("h-4 w-4 transition-transform", asientosOpen ? "rotate-90" : "rotate-0")}
+                      />
                       Balance (filas afectadas)
                     </CardTitle>
                     <CardDescription>
@@ -1603,7 +1640,9 @@ export default function BalanzaBalance() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Asiento {asientoModalData?.referencia || ""}</DialogTitle>
-            <DialogDescription>{asientoModalData?.descripcion || "Detalle completo del asiento contable."}</DialogDescription>
+            <DialogDescription>
+              {asientoModalData?.descripcion || "Detalle completo del asiento contable."}
+            </DialogDescription>
           </DialogHeader>
 
           {!asientoModalData ? (
@@ -1635,7 +1674,9 @@ export default function BalanzaBalance() {
                       >
                         <TableCell>
                           <div className="flex items-start gap-2">
-                            {mov.esCuentaFiltrada && <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>}
+                            {mov.esCuentaFiltrada && (
+                              <span className="mt-1 text-blue-600 dark:text-blue-400 font-bold">●</span>
+                            )}
                             <div className="min-w-0">
                               <p className="font-mono text-sm">{mov.cuenta_codigo}</p>
                               <p className="text-xs text-muted-foreground truncate">{mov.cuenta_nombre}</p>
@@ -1689,7 +1730,9 @@ export default function BalanzaBalance() {
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>
-          <CardDescription>Vista desplegable por Grupo → Subgrupo → Cuenta, con Saldo inicial/final y Debe/Haber del período.</CardDescription>
+          <CardDescription>
+            Vista desplegable por Grupo → Subgrupo → Cuenta, con Saldo inicial/final y Debe/Haber del período.
+          </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">

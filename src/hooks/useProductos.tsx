@@ -328,10 +328,10 @@ export const useCreateProducto = () => {
           return { id: productId, esActualizacion: true };
         }
 
-        // 1) lookup opcional por nombre (solo cuando NO hay productId)
+        
         let productoExistente = await lookupProductoPorNombre(nombre);
 
-        // 2) fallback cache
+        
         if (!productoExistente) {
           const cached =
             (queryClient.getQueryData(["productos"]) as ProductoConSubcuenta[] | undefined) || [];
@@ -340,7 +340,7 @@ export const useCreateProducto = () => {
             null;
         }
 
-        // Si existe por nombre => restock
+        
         if (productoExistente?.id) {
           const patch: any = {};
           if (descripcion !== undefined) patch.descripcion = descripcion || null;

@@ -23,7 +23,7 @@ type UseCuentasResponse = {
   cuentasFlat: Cuenta[];
 };
 
-// ---------- helpers ----------
+
 const normStr = (v: any) => String(v ?? "").trim();
 
 const normalizeCuenta = (raw: any): Cuenta => {

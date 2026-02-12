@@ -4,38 +4,34 @@ import { format } from "date-fns";
 import { apiFetch } from "@/lib/api";
 
 interface BalanzaEntry {
-  fecha: string; // dd/MM/yyyy
+  fecha: string; 
   tipo: string;
   descripcion: string;
   cuenta_codigo: string;
   cuenta_nombre: string;
   debe: number;
   haber: number;
-  referencia: string; // numero_asiento
+  referencia: string; 
 }
 
 interface SaldoCuenta {
   cuenta_codigo: string;
 
-  // ✅ Opcionales útiles para UI (especialmente subcuentas)
+  
   cuenta_nombre?: string;
   estado_financiero?: string | null;
 
-  // ✅ NUEVO (E2E real)
+  
   saldo_inicial: number;
 
-  // ✅ Periodo
+  
   debe_total: number;
   haber_total: number;
 
-  // ✅ NUEVO (E2E real)
+  
   saldo_final: number;
 
-  /**
-   * ✅ COMPAT CRÍTICA:
-   * Mucho front legacy espera `.saldo`.
-   * Lo mapeamos SIEMPRE a `saldo_final`.
-   */
+  
   saldo: number;
 }
 
@@ -46,14 +42,14 @@ type AsientoUI = {
   numero_asiento?: string;
   numeroAsiento?: string;
 
-  asiento_fecha?: string; // "YYYY-MM-DD"
-  fecha?: string; // compat
+  asiento_fecha?: string; 
+  fecha?: string; 
 
   concepto?: string;
   descripcion?: string;
 
   detalle_asientos?: Array<{
-    // ✅ variantes comunes
+    
     cuenta_codigo?: string | null;
     cuentaCodigo?: string | null;
     accountCodigo?: string | null;
