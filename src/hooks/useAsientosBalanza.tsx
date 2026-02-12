@@ -4,34 +4,29 @@ import { format } from "date-fns";
 import { apiFetch } from "@/lib/api";
 
 interface BalanzaEntry {
-  fecha: string; 
+  fecha: string;
   tipo: string;
   descripcion: string;
   cuenta_codigo: string;
   cuenta_nombre: string;
   debe: number;
   haber: number;
-  referencia: string; 
+  referencia: string;
 }
 
 interface SaldoCuenta {
   cuenta_codigo: string;
 
-  
   cuenta_nombre?: string;
   estado_financiero?: string | null;
 
-  
   saldo_inicial: number;
 
-  
   debe_total: number;
   haber_total: number;
 
-  
   saldo_final: number;
 
-  
   saldo: number;
 }
 
@@ -42,14 +37,13 @@ type AsientoUI = {
   numero_asiento?: string;
   numeroAsiento?: string;
 
-  asiento_fecha?: string; 
-  fecha?: string; 
+  asiento_fecha?: string;
+  fecha?: string;
 
   concepto?: string;
   descripcion?: string;
 
   detalle_asientos?: Array<{
-    
     cuenta_codigo?: string | null;
     cuentaCodigo?: string | null;
     accountCodigo?: string | null;
@@ -260,6 +254,18 @@ function buildPeriodoFromAsientos(asientos: AsientoUI[]) {
   return agg;
 }
 
+function sumNetFromMap(m: Map<string, { debe: number; haber: number }>) {
+  let t = 0;
+  for (const v of m.values()) t += num(v.debe, 0) - num(v.haber, 0);
+  return t;
+}
+
+function sumNetFromDetalle(arr: DetalleLine[]) {
+  let t = 0;
+  for (const r of arr || []) t += num(r?.debe, 0) - num(r?.haber, 0);
+  return t;
+}
+
 export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
   return useQuery({
     queryKey: ["asientos-balanza", toYMDLocal(startDate), toYMDLocal(endDate)],
@@ -372,7 +378,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         }
       }
 
-      // Detecta si hay subcuentas en el periodo (para decidir estrategia)
+      // Detecta si hay subcuentas en el periodo (para UX/metadata)
       const hasSubcuentas = movimientos.some((m) => {
         const c = normalizeCode(m.cuenta_codigo);
         return c.includes("-") || c.includes(".") || c.includes("/");
@@ -386,11 +392,16 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
       const saldosFastRaw: Record<string, any> =
         ((asientosPayload as any)?.saldosPorCuenta as any) ?? ((asientosJson as any)?.saldosPorCuenta as any) ?? {};
 
-      const saldoInicialTotalFast = num((asientosPayload as any)?.saldoInicialTotal ?? (asientosJson as any)?.saldoInicialTotal, 0);
-      const saldoFinalTotalFast = num((asientosPayload as any)?.saldoFinalTotal ?? (asientosJson as any)?.saldoFinalTotal, 0);
+      const saldoInicialTotalFast = num(
+        (asientosPayload as any)?.saldoInicialTotal ?? (asientosJson as any)?.saldoInicialTotal,
+        0
+      );
+      const saldoFinalTotalFast = num(
+        (asientosPayload as any)?.saldoFinalTotal ?? (asientosJson as any)?.saldoFinalTotal,
+        0
+      );
 
-      const fastHasAny =
-        saldosFastRaw && typeof saldosFastRaw === "object" && Object.keys(saldosFastRaw).length > 0;
+      const fastHasAny = saldosFastRaw && typeof saldosFastRaw === "object" && Object.keys(saldosFastRaw).length > 0;
 
       if (fastHasAny) {
         const saldosFast: Record<string, SaldoCuenta> = {};
@@ -453,23 +464,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         ? (detInicialRes as any).json.data
         : [];
 
-      // saldo inicial por cuenta (si viene saldo, úsalo; si no, debe-haber)
-      const saldoInicialByCuenta = new Map<
-        string,
-        { saldo: number; cuenta_nombre?: string; estado_financiero?: string | null }
-      >();
-      for (const row of detInicialArr || []) {
-        const code = normalizeCode(row?.cuenta_codigo);
-        if (!code) continue;
-        const saldo = row?.saldo != null ? num(row.saldo, 0) : num(row.debe, 0) - num(row.haber, 0);
-        saldoInicialByCuenta.set(code, {
-          saldo,
-          cuenta_nombre: normalizeCode(row?.cuenta_nombre),
-          estado_financiero: row?.estado_financiero ?? null,
-        });
-      }
+      // ✅ periodo por cuenta desde ASIENTOS (fuente de verdad)
+      const periodoByCuentaFromAsientos = buildPeriodoFromAsientos(asientos);
 
-      // periodo por cuenta desde /api/asientos/detalle (puede venir sin subcuentas)
+      // periodo por cuenta desde /api/asientos/detalle (solo si sirve)
       const periodoByCuentaFromDetalle = new Map<
         string,
         { debe: number; haber: number; cuenta_nombre?: string; estado_financiero?: string | null }
@@ -485,18 +483,48 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         });
       }
 
-      // ✅ periodo por cuenta desde ASIENTOS (para capturar SUBCUENTAS 100%)
-      const periodoByCuentaFromAsientos = buildPeriodoFromAsientos(asientos);
+      // saldo inicial por cuenta (si viene saldo, úsalo; si no, debe-haber)
+      const saldoInicialByCuenta = new Map<string, { saldo: number; cuenta_nombre?: string; estado_financiero?: string | null }>();
+      for (const row of detInicialArr || []) {
+        const code = normalizeCode(row?.cuenta_codigo);
+        if (!code) continue;
+
+        const saldo = row?.saldo != null ? num(row.saldo, 0) : num(row.debe, 0) - num(row.haber, 0);
+        saldoInicialByCuenta.set(code, {
+          saldo,
+          cuenta_nombre: normalizeCode(row?.cuenta_nombre),
+          estado_financiero: row?.estado_financiero ?? null,
+        });
+      }
+
+      /**
+       * ✅ AUTO-FIX: decide si /api/asientos/detalle realmente está respetando el rango
+       * Si el neto del "detalle" es significativamente mayor que el neto real de los asientos,
+       * asumimos que el endpoint está regresando acumulados y lo ignoramos para el período.
+       */
+      const netAsientos = sumNetFromMap(periodoByCuentaFromAsientos);
+      const netDetalle = sumNetFromDetalle(detPeriodoArr);
+
+      // umbral: si detalle es 25% mayor que asientos (y ambos no son ~0), lo consideramos "cumulativo"
+      const detalleEsCumulativo =
+        Math.abs(netAsientos) > 0.0001 && Math.abs(netDetalle) > Math.abs(netAsientos) * 1.25;
+
+      // ✅ Fuente final del PERIODO:
+      // - Siempre preferimos asientos (porque coincide con movimientos UI)
+      // - Solo si NO hay líneas en asientos (caso raro) y detalle no parece cumulativo, usamos detalle
+      const useDetalleParaPeriodo =
+        !periodoByCuentaFromAsientos.size && detPeriodoArr.length && !detalleEsCumulativo;
 
       // Armamos el set de códigos final:
       const allCodes = new Set<string>();
-      if (hasSubcuentas) {
-        for (const code of periodoByCuentaFromAsientos.keys()) allCodes.add(code);
-        for (const code of saldoInicialByCuenta.keys()) allCodes.add(code);
-      } else {
-        for (const code of saldoInicialByCuenta.keys()) allCodes.add(code);
-        for (const code of periodoByCuentaFromDetalle.keys()) allCodes.add(code);
-      }
+
+      // Códigos por periodo: preferir el mapa confiable
+      const periodoCodes = useDetalleParaPeriodo
+        ? Array.from(periodoByCuentaFromDetalle.keys())
+        : Array.from(periodoByCuentaFromAsientos.keys());
+
+      for (const code of periodoCodes) allCodes.add(code);
+      for (const code of saldoInicialByCuenta.keys()) allCodes.add(code);
 
       const saldosPorCuentaFinal: Record<string, SaldoCuenta> = {};
       let saldoInicialTotal = 0;
@@ -509,7 +537,7 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         let initNombre = initExact?.cuenta_nombre ?? "";
         let initEstado = initExact?.estado_financiero ?? null;
 
-        if (!initExact && hasSubcuentas) {
+        if (!initExact && (code.includes("-") || code.includes(".") || code.includes("/"))) {
           for (const parent of getParentCandidates(code)) {
             const p = saldoInicialByCuenta.get(parent);
             if (p) {
@@ -521,23 +549,23 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           }
         }
 
-        // periodo: según estrategia
+        // periodo: fuente final
         let debeTotal = 0;
         let haberTotal = 0;
         let perNombre = "";
         let perEstado: string | null = null;
 
-        if (hasSubcuentas) {
-          const per = periodoByCuentaFromAsientos.get(code);
-          debeTotal = per?.debe ?? 0;
-          haberTotal = per?.haber ?? 0;
-          perNombre = per?.cuenta_nombre ?? "";
-        } else {
+        if (useDetalleParaPeriodo) {
           const per = periodoByCuentaFromDetalle.get(code);
           debeTotal = per?.debe ?? 0;
           haberTotal = per?.haber ?? 0;
           perNombre = per?.cuenta_nombre ?? "";
           perEstado = per?.estado_financiero ?? null;
+        } else {
+          const per = periodoByCuentaFromAsientos.get(code);
+          debeTotal = per?.debe ?? 0;
+          haberTotal = per?.haber ?? 0;
+          perNombre = per?.cuenta_nombre ?? "";
         }
 
         const meta = resolveCuentaMeta(code, perNombre || initNombre);
@@ -558,9 +586,9 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         saldoFinalTotal += saldoFinal;
       }
 
-      // ✅ Si /api/asientos/detalle NO trae 4/5/6 (y no hay subcuentas), ER puede quedar en ceros.
-      // En ese caso, fallback a periodo desde asientos.
-      if (!hasSubcuentas && !looksUsefulForER(saldosPorCuentaFinal)) {
+      // ✅ Si /api/asientos/detalle NO trae 4/5/6, fallback a periodo desde asientos (ya lo usamos como default).
+      // Esta parte se mantiene por compat, pero ya no debería ser necesaria.
+      if (!looksUsefulForER(saldosPorCuentaFinal)) {
         const per = periodoByCuentaFromAsientos;
         const fb: Record<string, SaldoCuenta> = {};
         let fbFinalTotal = 0;
@@ -594,6 +622,16 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
         saldosPorCuenta: saldosPorCuentaFinal,
         saldoInicialTotal,
         saldoFinalTotal,
+        // debug opcional (si quisieras verlo en consola desde UI, lo puedes leer)
+        _debug: {
+          start,
+          end,
+          netAsientos,
+          netDetalle,
+          detalleEsCumulativo,
+          useDetalleParaPeriodo,
+          hasSubcuentas,
+        },
       };
     },
     enabled: !!startDate && !!endDate,
