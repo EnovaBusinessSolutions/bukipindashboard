@@ -42,6 +42,17 @@ const moneyMX = (v: any) => {
   return n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const toStrId = (v: any) => {
+  if (v === null || v === undefined) return "";
+  const s = String(v).trim();
+  return s;
+};
+
+const toStrIdOrNull = (v: any) => {
+  const s = toStrId(v);
+  return s ? s : null;
+};
+
 /**
  * Normaliza un producto venga como venga (backend nuevo / legacy / wrapper / payload plano)
  * ✅ La UI siempre consume: unidad, cuenta_contable, total_transacciones, precio_promedio, variacion_precio, ultima_compra,
@@ -65,13 +76,18 @@ const normalizeProducto = (p: any) => {
     p.cuentaCodigo ??
     "";
 
-  const subcuenta_id = p.subcuenta_id ?? p.subcuentaId ?? null;
+  // ✅ subcuenta puede venir como ObjectId, string, o con keys distintas
+  const subcuentaRaw =
+    p.subcuenta_id ??
+    p.subcuentaId ??
+    p.subcuenta ??
+    p.subcuentaID ??
+    p.subcuenta_id_str ??
+    null;
 
-  const proveedor_principal =
-    p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
+  const proveedor_principal = p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
 
-  const imagen_url =
-    p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? p.imagen ?? "";
+  const imagen_url = p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? p.imagen ?? "";
 
   const precio_promedio = p.precio_promedio ?? p.precioPromedio ?? 0;
   const variacion_precio = p.variacion_precio ?? p.variacionPrecio ?? 0;
@@ -79,16 +95,17 @@ const normalizeProducto = (p: any) => {
   const ultima_compra = p.ultima_compra ?? p.ultimaCompra ?? null;
   const es_recurrente = p.es_recurrente ?? p.esRecurrente ?? false;
 
-  const id = p.id ?? (p._id ? String(p._id) : "");
+  const id = toStrId(p.id ?? p._id ?? "");
 
   return {
     ...p,
     id,
-    unidad,
-    cuenta_contable,
-    subcuenta_id,
-    proveedor_principal,
-    imagen_url,
+    unidad: String(unidad || ""),
+    cuenta_contable: String(cuenta_contable || ""),
+    // ✅ SIEMPRE string o null
+    subcuenta_id: toStrIdOrNull(subcuentaRaw),
+    proveedor_principal: String(proveedor_principal || ""),
+    imagen_url: String(imagen_url || ""),
     precio_promedio: toNum(precio_promedio, 0),
     variacion_precio: toNum(variacion_precio, 0),
     total_transacciones: toNum(total_transacciones, 0),
@@ -249,6 +266,9 @@ const CatalogoProductos = () => {
       }
     }
 
+    const subId = newProduct.tipo === "costo" ? toStrId(newProduct.subcuentaId) : "";
+    const subIdOrNull = newProduct.tipo === "costo" ? subId : null;
+
     // ✅ Enviamos duplicados defensivos (unidad_medida / proveedorPrincipal) por compat con backend legacy
     const createData: (CreateProductoEgresoData & Record<string, any>) = {
       nombre: newProduct.nombre,
@@ -259,7 +279,8 @@ const CatalogoProductos = () => {
       unidad: newProduct.unidad,
       proveedor_principal: newProduct.proveedorPrincipal,
       es_recurrente: newProduct.esRecurrente,
-      subcuenta_id: newProduct.tipo === "costo" ? newProduct.subcuentaId : "",
+      // ✅ para costo mandamos string, para gasto mandamos null (NO "")
+      subcuenta_id: subIdOrNull,
       cuenta_contable: newProduct.cuentaContable,
       imagen: newProduct.imagen || undefined,
 
@@ -267,7 +288,7 @@ const CatalogoProductos = () => {
       unidad_medida: newProduct.unidad,
       proveedorPrincipal: newProduct.proveedorPrincipal,
       cuentaCodigo: newProduct.cuentaContable,
-      subcuentaId: newProduct.tipo === "costo" ? newProduct.subcuentaId : "",
+      subcuentaId: subIdOrNull,
       esRecurrente: newProduct.esRecurrente,
     };
 
@@ -308,7 +329,8 @@ const CatalogoProductos = () => {
       unidad: p.unidad || "",
       proveedorPrincipal: p.proveedor_principal || "",
       esRecurrente: !!p.es_recurrente,
-      subcuentaId: p.subcuenta_id || "",
+      // ✅ SIEMPRE string para que el selector lo detecte
+      subcuentaId: p.subcuenta_id ? String(p.subcuenta_id) : "",
       cuentaContable: p.cuenta_contable || "",
       imagen: null,
     });
@@ -363,6 +385,9 @@ const CatalogoProductos = () => {
       }
     }
 
+    const subId = editingProduct.tipo === "costo" ? toStrId(editingProduct.subcuentaId) : "";
+    const subIdOrNull = editingProduct.tipo === "costo" ? subId : null;
+
     const updateData: (UpdateProductoEgresoData & Record<string, any>) = {
       id: editingProduct.id,
       nombre: editingProduct.nombre,
@@ -373,7 +398,8 @@ const CatalogoProductos = () => {
       unidad: editingProduct.unidad,
       proveedor_principal: editingProduct.proveedorPrincipal,
       es_recurrente: editingProduct.esRecurrente,
-      subcuenta_id: editingProduct.tipo === "costo" ? editingProduct.subcuentaId : "",
+      // ✅ para costo mandamos string, para gasto mandamos null (NO "")
+      subcuenta_id: subIdOrNull,
       cuenta_contable: editingProduct.cuentaContable,
       imagen: editingProduct.imagen || undefined,
 
@@ -381,7 +407,7 @@ const CatalogoProductos = () => {
       unidad_medida: editingProduct.unidad,
       proveedorPrincipal: editingProduct.proveedorPrincipal,
       cuentaCodigo: editingProduct.cuentaContable,
-      subcuentaId: editingProduct.tipo === "costo" ? editingProduct.subcuentaId : "",
+      subcuentaId: subIdOrNull,
       esRecurrente: editingProduct.esRecurrente,
     };
 
@@ -421,6 +447,11 @@ const CatalogoProductos = () => {
 
     const imagenUrl = producto?.imagen_url || producto?.imagenUrl || producto?.imageUrl || "";
 
+    const cuentaContable = producto?.cuenta_contable || producto?.cuentaContable || producto?.cuentaCodigo || "";
+    const subcuentaId = toStrId(producto?.subcuenta_id ?? producto?.subcuentaId ?? "");
+
+    const isCosto = producto?.tipo === "costo";
+
     return (
       <Card key={producto.id} className="hover:shadow-md transition-shadow">
         <CardHeader className="pb-3">
@@ -456,6 +487,21 @@ const CatalogoProductos = () => {
             <span className="text-muted-foreground">Unidad:</span>
             <span className="font-medium">{unidad}</span>
           </div>
+
+          {/* ✅ Contexto contable (como Ingresos) */}
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Cuenta contable:</span>
+            <span className="font-medium">{cuentaContable ? `${cuentaContable}` : "No asignada"}</span>
+          </div>
+
+          {isCosto && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subcuenta:</span>
+              <span className={`font-medium ${subcuentaId ? "text-green-600" : "text-destructive"}`}>
+                {subcuentaId ? "Asignada" : "No asignada"}
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Precio promedio:</span>
@@ -504,8 +550,6 @@ const CatalogoProductos = () => {
               Analíticas
             </Button>
 
-            {/* ✅ IMPORTANTE: este botón estaba marcando “rojo” por un JSX mal cerrado en tu archivo.
-                Déjalo EXACTAMENTE así (nota el “>” al final del Button opening tag). */}
             <Button
               size="sm"
               variant="outline"
@@ -644,7 +688,7 @@ const CatalogoProductos = () => {
                 <FriendlySubcuentaSelector
                   value={newProduct.subcuentaId}
                   onValueChange={(subcuentaId, cuentaCodigo) =>
-                    setNewProduct({ ...newProduct, subcuentaId, cuentaContable: cuentaCodigo })
+                    setNewProduct({ ...newProduct, subcuentaId: toStrId(subcuentaId), cuentaContable: cuentaCodigo })
                   }
                   accountType="costo"
                 />
@@ -873,9 +917,13 @@ const CatalogoProductos = () => {
               {/* ✅ subcuenta SOLO aplica para COSTO */}
               {editingProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
-                  value={editingProduct.subcuentaId}
+                  value={toStrId(editingProduct.subcuentaId)}
                   onValueChange={(subcuentaId, cuentaCodigo) =>
-                    setEditingProduct({ ...editingProduct, subcuentaId, cuentaContable: cuentaCodigo })
+                    setEditingProduct({
+                      ...editingProduct,
+                      subcuentaId: toStrId(subcuentaId),
+                      cuentaContable: cuentaCodigo,
+                    })
                   }
                   accountType="costo"
                 />
