@@ -23,7 +23,6 @@ type UseCuentasResponse = {
   cuentasFlat: Cuenta[];
 };
 
-
 const normStr = (v: any) => String(v ?? "").trim();
 
 const normalizeCuenta = (raw: any): Cuenta => {
@@ -44,7 +43,10 @@ const normalizeCuenta = (raw: any): Cuenta => {
   );
 
   const estado_financiero = normStr(
-    raw?.estado_financiero ?? raw?.estadoFinanciero ?? raw?.estado ?? raw?.financial_state
+    raw?.estado_financiero ??
+      raw?.estadoFinanciero ??
+      raw?.estado ??
+      raw?.financial_state
   );
 
   const grupo = normStr(raw?.grupo ?? raw?.group);
@@ -77,20 +79,53 @@ const buildEstadosFinancieros = (cuentas: Cuenta[]): EstadosFinancieros => {
   return estadosFinancieros;
 };
 
+/**
+ * Desenvuelve respuestas tipo:
+ * - {ok:true,data:[...]}
+ * - {ok:true,data:{...}}
+ * - {ok:true,data:{ok:true,data:[...]}}
+ * - payload plano
+ *
+ * Lo hace en loop (máx 3 niveles) para que no falle si el backend envuelve varias veces.
+ */
+function unwrapDeep(input: any) {
+  let cur = input;
+
+  for (let i = 0; i < 3; i++) {
+    if (!cur || typeof cur !== "object") break;
+    if ("data" in cur) {
+      const next = (cur as any).data;
+      // si data viene null/undefined, ya no seguimos
+      if (next == null) break;
+      cur = next;
+      continue;
+    }
+    break;
+  }
+
+  return cur;
+}
+
 function extractCuentasArray(payload: any): any[] {
-  // payload ya viene normalizado a (json.data ?? json)
+  // payload puede ser array, objeto con cuentas, objeto con items, etc.
   if (Array.isArray(payload)) return payload;
 
+  if (!payload || typeof payload !== "object") return [];
+
   // casos típicos
-  if (Array.isArray(payload?.cuentas)) return payload.cuentas;
-  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray((payload as any).cuentas)) return (payload as any).cuentas;
+  if (Array.isArray((payload as any).items)) return (payload as any).items;
 
   // si por alguna razón viene anidado
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.data?.cuentas)) return payload.data.cuentas;
-  if (Array.isArray(payload?.data?.items)) return payload.data.items;
+  if (Array.isArray((payload as any).data)) return (payload as any).data;
+  if (Array.isArray((payload as any).data?.cuentas)) return (payload as any).data.cuentas;
+  if (Array.isArray((payload as any).data?.items)) return (payload as any).data.items;
 
   return [];
+}
+
+function safeObject(obj: any): obj is Record<string, any> {
+  return !!obj && typeof obj === "object" && !Array.isArray(obj);
 }
 
 // ---------- hook ----------
@@ -110,19 +145,32 @@ export const useCuentas = () => {
        */
       const json = await apiFetch("/api/cuentas", { method: "GET" });
 
-      const payload = (json as any)?.data ?? json; // normalización estándar Bukipin
+      // ✅ unwrap profundo (por si viene envuelto más de una vez)
+      const payload = unwrapDeep(json);
+
+      // ✅ extraer array real (o [] si no se puede)
       const cuentasRaw = extractCuentasArray(payload);
 
-      const cuentasFlat = cuentasRaw.map(normalizeCuenta);
+      // ✅ blindaje definitivo: jamás map si no es array
+      const cuentasFlat = Array.isArray(cuentasRaw) ? cuentasRaw.map(normalizeCuenta) : [];
 
       // Orden defensivo
       cuentasFlat.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
 
-      // Si backend ya manda estadosFinancieros, úsalo; si no, constrúyelo
-      const estadosFinancieros: EstadosFinancieros =
-        (payload?.estadosFinancieros && typeof payload.estadosFinancieros === "object")
-          ? payload.estadosFinancieros
-          : buildEstadosFinancieros(cuentasFlat);
+      // estadosFinancieros: si backend manda algo utilizable, úsalo; si no, construir
+      let estadosFinancieros: EstadosFinancieros | null = null;
+
+      // puede venir en el payload o en json original (por wrappers raros)
+      const ef1 = safeObject(payload) ? (payload as any).estadosFinancieros : null;
+      const ef2 = safeObject(json) ? (json as any).estadosFinancieros : null;
+
+      const candidate = safeObject(ef1) ? ef1 : safeObject(ef2) ? ef2 : null;
+
+      if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+        estadosFinancieros = candidate as EstadosFinancieros;
+      } else {
+        estadosFinancieros = buildEstadosFinancieros(cuentasFlat);
+      }
 
       return { estadosFinancieros, cuentasFlat };
     },
