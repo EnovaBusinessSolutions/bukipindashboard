@@ -283,10 +283,6 @@ export default function BalanzaBalance() {
   const cuentasFlat: CuentaFlat[] = (cuentasData?.cuentasFlat as CuentaFlat[]) || [];
   const estadosFinancieros: any = cuentasData?.estadosFinancieros;
 
-  // ✅ saldos totales de arrastre (si el hook ya los retorna)
-  const saldoInicialTotal = Number((balanzaData as any)?.saldoInicialTotal || 0);
-  const saldoFinalTotal = Number((balanzaData as any)?.saldoFinalTotal || 0);
-
   const cuentasInfoMap = useMemo(() => {
     const entries: Array<[string, CuentaInfo]> = (cuentasFlat || []).map((cuenta) => [
       cuenta.codigo,
@@ -375,7 +371,6 @@ export default function BalanzaBalance() {
   // =========================
   // ✅ OPCIONES BG (Sub-agrupador / Cuentas)
   // =========================
-  // ✅ FIX E2E: Sub-agrupadores reales por Activos/Pasivos/Capital
   const bgSubAgrupadorOptions = useMemo(() => {
     const bg = estadosFinancieros?.["Balance General"];
     if (!bg) return [];
@@ -387,15 +382,14 @@ export default function BalanzaBalance() {
     const filtered = keys
       .filter((k) => {
         const node = (root as any)?.[k];
-        if (bgHasAgrupadores(bg)) return true; // ya está segmentado por agrupador
-        return nodeMatchesAgrupador(node, agrupadorBG); // fallback: validar por códigos dentro del subgrupo
+        if (bgHasAgrupadores(bg)) return true;
+        return nodeMatchesAgrupador(node, agrupadorBG);
       })
       .sort((a, b) => a.localeCompare(b));
 
     return filtered;
   }, [estadosFinancieros, agrupadorBG]);
 
-  // 🔒 Blindaje: si cambian los options y el sub-agrupador ya no existe, resetea
   useEffect(() => {
     if (subAgrupadorBG === "todos") return;
     if (!bgSubAgrupadorOptions.length) return;
@@ -406,7 +400,6 @@ export default function BalanzaBalance() {
     }
   }, [bgSubAgrupadorOptions, subAgrupadorBG]);
 
-  // ✅ FIX E2E: Cuentas dependientes del sub-agrupador correcto
   const bgCuentaOptions = useMemo(() => {
     const bg = estadosFinancieros?.["Balance General"];
     if (!bg) return [];
@@ -443,10 +436,8 @@ export default function BalanzaBalance() {
     ["1", "2", "3"].includes((mov.cuenta_codigo || "").charAt(0))
   );
 
-  // Agrupador (activos/pasivos/capital)
   movimientosFiltrados = movimientosFiltrados.filter((mov) => getTipoBGByCodigo(mov.cuenta_codigo) === agrupadorBG);
 
-  // ✅ FIX E2E: Sub-agrupador (lee el nivel correcto)
   if (subAgrupadorBG !== "todos") {
     const bg = estadosFinancieros?.["Balance General"];
     let subObj: any = null;
@@ -468,12 +459,10 @@ export default function BalanzaBalance() {
     }
   }
 
-  // Cuenta específica
   if (cuentaBG !== "todos") {
     movimientosFiltrados = movimientosFiltrados.filter((mov) => mov.cuenta_codigo === cuentaBG);
   }
 
-  // Fechas futuras detectadas
   const today = useMemo(() => {
     const t = new Date();
     t.setHours(0, 0, 0, 0);
@@ -512,7 +501,7 @@ export default function BalanzaBalance() {
       const haberFiltrado = movimientosFiltradosAsiento.reduce((sum, m) => sum + (m.haber || 0), 0);
 
       const primerDigito = (movimientosFiltradosAsiento[0].cuenta_codigo || "").charAt(0);
-      const esDeudora = ["1"].includes(primerDigito); // activos deudora
+      const esDeudora = ["1"].includes(primerDigito);
       const efectoNeto = esDeudora ? debeFiltrado - haberFiltrado : haberFiltrado - debeFiltrado;
 
       efectoNetoCuentaFiltrada = {
@@ -541,7 +530,6 @@ export default function BalanzaBalance() {
 
   const asientosArray = Object.values(asientosAgrupados);
 
-  // Detectar reversión/cancelación (misma heurística que Resultados)
   const asientosConReversion = asientosArray
     .map((asiento) => {
       const descripcionLower = (asiento.descripcion || "").toLowerCase();
@@ -576,7 +564,6 @@ export default function BalanzaBalance() {
     })
     .filter(Boolean) as (AsientoAgrupado & { esCancelado: boolean; asientoReversion: AsientoAgrupado | null })[];
 
-  // Búsqueda global
   let asientosFiltrados = asientosConReversion;
 
   if (filtroBusqueda) {
@@ -629,7 +616,6 @@ export default function BalanzaBalance() {
     return rows;
   }, [asientosFiltrados]);
 
-  // ✅ FIX UX: Totales Debe/Haber de movimientos (no depende de paginación)
   const totalDebeMovimientos = useMemo(() => {
     return filasAsientosBalance.reduce((sum, r) => sum + Number(r.mov?.debe || 0), 0);
   }, [filasAsientosBalance]);
@@ -652,7 +638,7 @@ export default function BalanzaBalance() {
     Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => getTipoBGByCodigo(codigo) === agrupadorBG)
   );
 
-  // ✅ FIX E2E: Sub-agrupador (lee el nivel correcto)
+  // Sub-agrupador
   if (subAgrupadorBG !== "todos") {
     const bg = estadosFinancieros?.["Balance General"];
     let subObj: any = null;
@@ -691,6 +677,22 @@ export default function BalanzaBalance() {
   const totalHaber = useMemo(() => {
     return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + (cuenta?.haber_total || 0), 0);
   }, [saldosPorCuentaFiltrados]);
+
+  // ✅ FIX CRÍTICO: saldo inicial/final calculados con filtros (evita “duplicados”)
+  const saldoInicialFiltrado = useMemo(() => {
+    return Object.values(saldosPorCuentaFiltrados).reduce((sum, cuenta: any) => sum + Number(cuenta?.saldo_inicial || 0), 0);
+  }, [saldosPorCuentaFiltrados]);
+
+  const saldoFinalFiltrado = useMemo(() => {
+    // Matemática contable esperada:
+    // Saldo final = Saldo inicial + Total Debe - Total Haber
+    return saldoInicialFiltrado + (Number(totalDebe || 0) - Number(totalHaber || 0));
+  }, [saldoInicialFiltrado, totalDebe, totalHaber]);
+
+  // Para “filas afectadas” (cuadra EXACTO con el total de la tabla mostrada)
+  const saldoFinalFiltradoFromMovs = useMemo(() => {
+    return saldoInicialFiltrado + (Number(totalDebeMovimientos || 0) - Number(totalHaberMovimientos || 0));
+  }, [saldoInicialFiltrado, totalDebeMovimientos, totalHaberMovimientos]);
 
   const diferencia = Math.abs(totalDebe - totalHaber);
   const cuadra = diferencia < 0.01;
@@ -745,10 +747,7 @@ export default function BalanzaBalance() {
         { saldoInicial: 0, debe: 0, haber: 0, saldoFinal: 0 }
       );
 
-    const buildCuentaRow = (
-      codigo: string,
-      estado_financiero: "Balance General" | "Estado de Resultados" | "—"
-    ): SaldosCuentaRow | null => {
+    const buildCuentaRow = (codigo: string, estado_financiero: "Balance General" | "Estado de Resultados" | "—") => {
       const raw = saldoMap.get(codigo);
       if (!raw) return null;
 
@@ -757,7 +756,9 @@ export default function BalanzaBalance() {
       const saldoInicial = Number(raw?.saldo_inicial || 0);
       const debe = Number(raw?.debe_total || 0);
       const haber = Number(raw?.haber_total || 0);
-      const saldoFinal = Number(raw?.saldo_final || 0);
+
+      // ✅ FIX: saldo_final por matemática, no por “sumas raras” del backend
+      const saldoFinal = saldoInicial + (debe - haber);
 
       return {
         codigo,
@@ -768,7 +769,7 @@ export default function BalanzaBalance() {
         debe,
         haber,
         saldoFinal,
-      };
+      } as SaldosCuentaRow;
     };
 
     const fallbackFlat: SaldosNode[] = (() => {
@@ -778,15 +779,18 @@ export default function BalanzaBalance() {
           const info = cuentasInfoMap.get(codigo);
           const raw = saldoMap.get(codigo);
           const estado = ((info?.estado_financiero as any) || "Balance General") as any;
+          const saldoInicial = Number(raw?.saldo_inicial || 0);
+          const debe = Number(raw?.debe_total || 0);
+          const haber = Number(raw?.haber_total || 0);
           return {
             codigo,
             nombre: info?.nombre || "N/A",
             estado_financiero: estado,
             naturaleza: getNaturaleza(codigo),
-            saldoInicial: Number(raw?.saldo_inicial || 0),
-            debe: Number(raw?.debe_total || 0),
-            haber: Number(raw?.haber_total || 0),
-            saldoFinal: Number(raw?.saldo_final || 0),
+            saldoInicial,
+            debe,
+            haber,
+            saldoFinal: saldoInicial + (debe - haber),
           } as SaldosCuentaRow;
         });
 
@@ -817,7 +821,6 @@ export default function BalanzaBalance() {
       children: [],
     };
 
-    // ✅ Arma árbol desde el root del agrupador seleccionado (si aplica)
     const bgForTree: any = resolveBgAgrupadorRoot(bg, agrupadorBG) || {};
     const grupos = Object.keys(bgForTree || {});
     for (const grupo of grupos) {
@@ -834,13 +837,10 @@ export default function BalanzaBalance() {
       };
 
       for (const subgrupo of subgrupos) {
-        // ✅ FIX CRÍTICO: el subgrupo puede venir como objeto anidado, no array
         const cuentasNode = (subgruposObj as any)?.[subgrupo];
-        const cuentasArr = flattenCuentasFromNode(cuentasNode); // ✅ SIEMPRE array
+        const cuentasArr = flattenCuentasFromNode(cuentasNode);
 
-        const codigos = cuentasArr
-          .map((c) => String(c?.codigo || ""))
-          .filter(Boolean);
+        const codigos = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
 
         const rows: SaldosCuentaRow[] = codigos
           .map((codigo) => buildCuentaRow(codigo, estadoKey))
@@ -960,8 +960,6 @@ export default function BalanzaBalance() {
             Activos, Pasivos y Capital del período (1xxx, 2xxx, 3xxx). Ideal para validar posición financiera.
           </p>
         </div>
-
-        {/* ✅ Eliminado: bloques "Descuadrado" y "Rango" (captura 2) */}
       </div>
 
       {/* Alerta fechas futuras */}
@@ -1471,7 +1469,7 @@ export default function BalanzaBalance() {
 
           <CollapsibleContent>
             <CardContent>
-              {/* ✅ Saldo inicial (arrastre real) */}
+              {/* ✅ Saldo inicial (con filtros) */}
               <div className="mb-4 rounded-xl border bg-muted/10 p-4">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
@@ -1482,7 +1480,7 @@ export default function BalanzaBalance() {
                   </div>
 
                   <div className="text-right">
-                    <p className="text-lg font-bold">{formatCurrency(saldoInicialTotal)}</p>
+                    <p className="text-lg font-bold">{formatCurrency(saldoInicialFiltrado)}</p>
                     <p className="text-xs text-muted-foreground">Según filtros activos</p>
                   </div>
                 </div>
@@ -1570,7 +1568,6 @@ export default function BalanzaBalance() {
                           );
                         })}
 
-                        {/* ✅ FIX UX: Total Debe/Haber de movimientos del período */}
                         <TableRow className="font-bold bg-muted/40">
                           <TableCell colSpan={4}>Total movimientos del período</TableCell>
                           <TableCell className="text-right text-green-600">{formatCurrency(totalDebeMovimientos)}</TableCell>
@@ -1583,7 +1580,7 @@ export default function BalanzaBalance() {
                 </Table>
               </div>
 
-              {/* ✅ Saldo final */}
+              {/* ✅ Saldo final (matemática contable, con filtros) */}
               <div className="mt-4 rounded-xl border bg-muted/10 p-4">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
@@ -1592,13 +1589,12 @@ export default function BalanzaBalance() {
                   </div>
 
                   <div className="text-right">
-                    <p className="text-lg font-bold">{formatCurrency(saldoFinalTotal)}</p>
-                    <p className="text-xs text-muted-foreground">Saldo inicial + movimientos del periodo</p>
+                    <p className="text-lg font-bold">{formatCurrency(saldoFinalFiltradoFromMovs)}</p>
+                    <p className="text-xs text-muted-foreground">Saldo inicial + Debe − Haber (filas mostradas)</p>
                   </div>
                 </div>
               </div>
 
-              {/* Footer paginación */}
               {totalItems > PAGE_SIZE && (
                 <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-sm text-muted-foreground">
@@ -1913,13 +1909,14 @@ export default function BalanzaBalance() {
               ))}
             </div>
 
+            {/* ✅ Totales con filtros (matemática contable) */}
             <div className="bg-muted/40 px-4 py-3">
               <div className="grid grid-cols-12 gap-3 items-center">
                 <div className="col-span-7 font-bold">TOTALES</div>
-                <div className="col-span-2 text-right font-bold">{formatCurrency(saldoInicialTotal)}</div>
+                <div className="col-span-2 text-right font-bold">{formatCurrency(saldoInicialFiltrado)}</div>
                 <div className="col-span-1 text-right font-bold text-green-600">{formatCurrency(totalDebe)}</div>
                 <div className="col-span-1 text-right font-bold text-red-600">{formatCurrency(totalHaber)}</div>
-                <div className="col-span-1 text-right font-bold">{formatCurrency(saldoFinalTotal)}</div>
+                <div className="col-span-1 text-right font-bold">{formatCurrency(saldoFinalFiltrado)}</div>
               </div>
             </div>
           </div>
