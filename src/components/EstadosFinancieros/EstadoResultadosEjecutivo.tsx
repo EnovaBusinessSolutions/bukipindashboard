@@ -22,7 +22,7 @@ type SaldoRow = {
   // compat (por si algún endpoint antiguo lo manda)
   saldo?: number;
 
-  // ✅ para mostrar nombres si el hook los manda (useAsientosBalanza ya los arma)
+  // para mostrar nombres si el hook los manda (useAsientosBalanza ya los arma)
   cuenta_nombre?: string;
 };
 
@@ -39,54 +39,12 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   // ✅ Toggle para mostrar/ocultar detalle por cuenta (incluye subcuentas)
   const [showDetalle, setShowDetalle] = useState<boolean>(true);
 
-  // Función para formatear el período
-  const formatearPeriodo = (start: Date, end: Date): string => {
-    const formatoFecha = (fecha: Date) =>
-      fecha.toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-
-    const fechaInicio = formatoFecha(start);
-    const fechaFin = formatoFecha(end);
-
-    if (start.toDateString() === end.toDateString()) {
-      return `Estado de Resultados del ${fechaInicio}`;
-    }
-    return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
-  };
-
-  if (cuentasLoading || asientosLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  const cuentasFlat = cuentasData?.cuentasFlat || [];
+  // --------------------------
+  // Helpers / data safe defaults
+  // (IMPORTANTE: para que los useMemo se ejecuten siempre y no truene #310)
+  // --------------------------
+  const cuentasFlat = (cuentasData?.cuentasFlat || []) as any[];
   const saldosPorCuenta = (asientosData?.saldosPorCuenta || {}) as Record<string, SaldoRow>;
-
-  // ✅ Hay datos si hay movimientos o si hay saldos por cuenta
-  const hayDatos =
-    (Array.isArray(asientosData?.movimientos) && (asientosData?.movimientos?.length ?? 0) > 0) ||
-    (saldosPorCuenta && Object.keys(saldosPorCuenta).length > 0);
-
-  if (!hayDatos) {
-    return (
-      <Card>
-        <CardContent className="p-12">
-          <div className="text-center space-y-2">
-            <p className="text-xl font-medium text-muted-foreground">No hay datos financieros registrados</p>
-            <p className="text-sm text-muted-foreground">
-              Comienza registrando transacciones para ver el estado de resultados
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   const normalizeCodigo = (codigo: string) => String(codigo || "").trim();
 
@@ -160,16 +118,20 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     return "Cuenta";
   };
 
-  // Tomamos códigos del catálogo; si el catálogo falla, fallback a saldos
-  const codigosCatalogo = cuentasFlat
-    .map((c: any) => String(c?.codigo ?? "").trim())
-    .filter((x: string) => x);
+  // --------------------------
+  // ✅ allCodigos (catálogo + saldos) en memo (siempre se ejecuta)
+  // --------------------------
+  const allCodigos = useMemo(() => {
+    const codigosCatalogo = (cuentasFlat || [])
+      .map((c: any) => String(c?.codigo ?? "").trim())
+      .filter((x: string) => x);
 
-  const codigosSaldos = Object.keys(saldosPorCuenta || {})
-    .map((k) => String(k).trim())
-    .filter(Boolean);
+    const codigosSaldos = Object.keys(saldosPorCuenta || {})
+      .map((k) => String(k).trim())
+      .filter(Boolean);
 
-  const allCodigos = Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
+    return Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
+  }, [cuentasFlat, saldosPorCuenta]);
 
   // ✅ SUMA por rangos usando baseNum para que NO se pierdan subcuentas
   const sumBy = (predicate: (baseNum: number, fullCode: string, baseCode: string) => boolean) => {
@@ -184,7 +146,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     return total;
   };
 
-  // ✅ Clasificación por rangos (Ejecutivo)
+  // ✅ Clasificación por rangos (Ejecutivo) — incluye subcuentas
   const totalIngresos = sumBy((n) => n >= 4000 && n <= 4999);
   const costoVentas = sumBy((n) => n >= 5000 && n <= 5099);
   const depreciaciones = sumBy((n, _full, base) => base === "5109" || base === "5110");
@@ -199,8 +161,75 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   const utilidadNeta = ebitda - depreciaciones - costoFinanciero - impuestos;
 
   // --------------------------
+  // ✅ Detalle por bloque (con subcuentas) — en useMemo (SIEMPRE)
+  // --------------------------
+  const buildList = (predicate: (baseNum: number, fullCode: string, baseCode: string) => boolean) => {
+    const rows: Array<{ code: string; name: string; baseNum: number; base: string; isSub: boolean; amount: number }> = [];
+
+    for (const codigoStr of allCodigos) {
+      const code = normalizeCodigo(codigoStr);
+      if (!code) continue;
+
+      const { base, baseNum } = splitCode(code);
+      if (!Number.isFinite(baseNum)) continue;
+      if (!predicate(baseNum, code, base)) continue;
+
+      const amount = obtenerMontoPeriodoER(code);
+
+      // En ejecutivo: mostramos solo cuentas con movimiento para que no se llene de ceros
+      if (Math.abs(amount) < 0.0000001) continue;
+
+      rows.push({
+        code,
+        name: resolveNombreCuenta(code),
+        baseNum,
+        base,
+        isSub: isSubcuenta(code),
+        amount,
+      });
+    }
+
+    rows.sort((a, b) => {
+      if (a.baseNum !== b.baseNum) return a.baseNum - b.baseNum;
+      // 4001 antes que 4001-01
+      if (a.base === b.base) return a.code.localeCompare(b.code);
+      return a.base.localeCompare(b.base);
+    });
+
+    return rows;
+  };
+
+  const detalleIngresos = useMemo(() => buildList((n) => n >= 4000 && n <= 4999), [allCodigos]);
+  const detalleCostos = useMemo(() => buildList((n) => n >= 5000 && n <= 5099), [allCodigos]);
+  const detalleGastosOp = useMemo(
+    () => buildList((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110"),
+    [allCodigos]
+  );
+  const detalleOtrosGastos = useMemo(
+    () => buildList((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201"),
+    [allCodigos]
+  );
+  const detalleDep = useMemo(() => buildList((_n, _full, base) => base === "5109" || base === "5110"), [allCodigos]);
+  const detalleFin = useMemo(
+    () => buildList((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199)),
+    [allCodigos]
+  );
+  const detalleImp = useMemo(() => buildList((n) => n >= 6000 && n <= 6999), [allCodigos]);
+
+  // --------------------------
   // UI helpers (estilo limpio)
   // --------------------------
+  const formatearPeriodo = (start: Date, end: Date): string => {
+    const formatoFecha = (fecha: Date) =>
+      fecha.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+
+    const fechaInicio = formatoFecha(start);
+    const fechaFin = formatoFecha(end);
+
+    if (start.toDateString() === end.toDateString()) return `Estado de Resultados del ${fechaInicio}`;
+    return `Estado de Resultados del ${fechaInicio} al ${fechaFin}`;
+  };
+
   const formatCurrency = (value: number) => {
     const absValue = Math.abs(value);
     const formatted = absValue.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -279,8 +308,8 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     value?: number;
     isSection?: boolean;
     isSubtotal?: boolean;
-    indent?: number; // 0..2
-    rightBadge?: React.ReactNode; // para margen en subtotales
+    indent?: number;
+    rightBadge?: React.ReactNode;
   }) => {
     const v = Number(value ?? 0);
     const isNegative = v < 0;
@@ -299,9 +328,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       return (
         <tr className="bg-primary text-primary-foreground">
           <td className="px-4 py-3 font-semibold">{label}</td>
-
           <td className="px-4 py-3 text-right font-extrabold">{formatCurrency(v)}</td>
-
           <td className="px-4 py-3 text-right">
             <span className="inline-flex items-center justify-end gap-2">
               {rightBadge ? rightBadge : null}
@@ -318,7 +345,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       <tr className="border-b last:border-b-0">
         <td className="px-4 py-3">
           <div className={cn("flex items-center gap-2", indent === 1 ? "pl-4" : indent === 2 ? "pl-8" : "")}>
-            <span className={cn("text-sm", "text-foreground")}>{label}</span>
+            <span className="text-sm text-foreground">{label}</span>
           </div>
         </td>
 
@@ -338,63 +365,37 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     );
   };
 
-  // ✅ Armar listas por bloque (con subcuentas) para pintarlas en Ejecutivo
-  const buildList = (predicate: (baseNum: number, fullCode: string, baseCode: string) => boolean) => {
-    const rows: Array<{ code: string; name: string; baseNum: number; base: string; isSub: boolean; amount: number }> = [];
+  // --------------------------
+  // ✅ Ahora sí: returns condicionales (después de ejecutar TODOS los hooks)
+  // --------------------------
+  if (cuentasLoading || asientosLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-    for (const codigoStr of allCodigos) {
-      const code = normalizeCodigo(codigoStr);
-      if (!code) continue;
+  const hayDatos =
+    (Array.isArray(asientosData?.movimientos) && (asientosData?.movimientos?.length ?? 0) > 0) ||
+    (saldosPorCuenta && Object.keys(saldosPorCuenta).length > 0);
 
-      const { base, baseNum } = splitCode(code);
-      if (!Number.isFinite(baseNum)) continue;
-      if (!predicate(baseNum, code, base)) continue;
+  if (!hayDatos) {
+    return (
+      <Card>
+        <CardContent className="p-12">
+          <div className="text-center space-y-2">
+            <p className="text-xl font-medium text-muted-foreground">No hay datos financieros registrados</p>
+            <p className="text-sm text-muted-foreground">Comienza registrando transacciones para ver el estado de resultados</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
-      const amount = obtenerMontoPeriodoER(code);
-
-      // En ejecutivo: mostramos solo cuentas con movimiento para que no se llene de ceros
-      if (Math.abs(amount) < 0.0000001) continue;
-
-      rows.push({
-        code,
-        name: resolveNombreCuenta(code),
-        baseNum,
-        base,
-        isSub: isSubcuenta(code),
-        amount,
-      });
-    }
-
-    rows.sort((a, b) => {
-      if (a.baseNum !== b.baseNum) return a.baseNum - b.baseNum;
-      // para que 4001 salga antes que 4001-01
-      if (a.base === b.base) return a.code.localeCompare(b.code);
-      return a.base.localeCompare(b.base);
-    });
-
-    return rows;
-  };
-
-  const detalleIngresos = useMemo(() => buildList((n) => n >= 4000 && n <= 4999), [allCodigos.join("|")]);
-  const detalleCostos = useMemo(() => buildList((n) => n >= 5000 && n <= 5099), [allCodigos.join("|")]);
-  const detalleGastosOp = useMemo(
-    () => buildList((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110"),
-    [allCodigos.join("|")]
-  );
-  const detalleOtrosGastos = useMemo(
-    () => buildList((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201"),
-    [allCodigos.join("|")]
-  );
-  const detalleDep = useMemo(
-    () => buildList((_n, _full, base) => base === "5109" || base === "5110"),
-    [allCodigos.join("|")]
-  );
-  const detalleFin = useMemo(
-    () => buildList((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199)),
-    [allCodigos.join("|")]
-  );
-  const detalleImp = useMemo(() => buildList((n) => n >= 6000 && n <= 6999), [allCodigos.join("|")]);
-
+  // --------------------------
+  // Render
+  // --------------------------
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -489,11 +490,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                       />
                     ))
                   : null}
-                <TableRowLine
-                  label="Costo de Ventas"
-                  value={-Math.abs(costoVentas)}
-                  indent={1}
-                />
+                <TableRowLine label="Costo de Ventas" value={-Math.abs(costoVentas)} indent={1} />
                 <TableRowLine
                   label="Utilidad Bruta"
                   value={utilidadBruta}
