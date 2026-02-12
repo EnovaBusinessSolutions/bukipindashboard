@@ -1,8 +1,9 @@
 // src/components/EstadosFinancieros/EstadoResultadosEjecutivo.tsx
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
-import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, ChevronDown } from "lucide-react";
 import { PeriodType } from "@/pages/EstadoResultados";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,9 @@ type SaldoRow = {
 
   // compat (por si algún endpoint antiguo lo manda)
   saldo?: number;
+
+  // ✅ para mostrar nombres si el hook los manda (useAsientosBalanza ya los arma)
+  cuenta_nombre?: string;
 };
 
 function num(v: any, def = 0) {
@@ -31,6 +35,9 @@ function num(v: any, def = 0) {
 const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecutivoProps) => {
   const { data: cuentasData, isLoading: cuentasLoading } = useCuentas();
   const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, endDate);
+
+  // ✅ Toggle para mostrar/ocultar detalle por cuenta (incluye subcuentas)
+  const [showDetalle, setShowDetalle] = useState<boolean>(true);
 
   // Función para formatear el período
   const formatearPeriodo = (start: Date, end: Date): string => {
@@ -83,11 +90,23 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
   const normalizeCodigo = (codigo: string) => String(codigo || "").trim();
 
+  // ✅ Para incluir subcuentas (4001-01 / 5101.02 / 5201/01, etc.)
+  const splitCode = (code: string) => {
+    const c = normalizeCodigo(code);
+    if (!c) return { base: "", baseNum: NaN };
+    const base = c.split(/[-./]/)[0]?.trim() || c;
+    const baseNum = Number(base);
+    return { base, baseNum };
+  };
+
+  const isSubcuenta = (code: string) => /[-./]/.test(normalizeCodigo(code));
+
   /**
    * ✅ Monto “del período” para ER
    * - 4xxx (Ingresos): normalmente crédito => (haber - debe) positivo
    * - 5xxx/6xxx (Costos/Gastos/Impuestos): normalmente débito => (debe - haber) positivo
-   * - fallback: usa saldo_final/saldo con reglas de signo “suaves”
+   * - 4003: descuentos sobre ventas => NEGATIVO
+   * - fallback: saldo_final/saldo con reglas suaves
    */
   const obtenerMontoPeriodoER = (codigoCuenta: string): number => {
     const codigo = normalizeCodigo(codigoCuenta);
@@ -100,31 +119,45 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
     if (Number.isFinite(debe) && Number.isFinite(haber)) {
       if (codigo.startsWith("4")) {
-        // ingresos
-        // 4003 (Descuentos sobre ventas) debe verse negativo en ER
         if (codigo === "4003") return -Math.abs(haber - debe);
         return Math.abs(haber - debe);
       }
       if (codigo.startsWith("5") || codigo.startsWith("6")) {
         return Math.abs(debe - haber);
       }
-      // fallback por si llega otro código raro
       return Math.abs(debe - haber);
     }
 
     // 2) fallback: saldo_final/saldo (compat)
     const rawSaldo = num(row?.saldo_final ?? row?.saldo, 0);
 
-    // 4003: Descuentos sobre ventas (contra cuenta)
     if (codigo === "4003") return -Math.abs(rawSaldo);
-
-    // 4xxx en muchos motores viene negativo (acreedor), lo hacemos positivo
     if (codigo.startsWith("4")) return Math.abs(rawSaldo);
-
-    // 5/6 normalmente deudoras (gasto/costo) -> positivo
     if (codigo.startsWith("5") || codigo.startsWith("6")) return Math.abs(rawSaldo);
 
     return rawSaldo;
+  };
+
+  const resolveNombreCuenta = (codigo: string) => {
+    const c = normalizeCodigo(codigo);
+
+    // 1) si el hook lo trae, úsalo
+    const row = saldosPorCuenta[c] as any;
+    const fromHook = String(row?.cuenta_nombre ?? "").trim();
+    if (fromHook) return fromHook;
+
+    // 2) catálogo exacto
+    const exact = cuentasFlat.find((x: any) => String(x?.codigo ?? "").trim() === c);
+    if (exact?.nombre) return String(exact.nombre);
+
+    // 3) catálogo por padre (para subcuentas)
+    const parent = c.split(/[-./]/)[0]?.trim();
+    if (parent && parent !== c) {
+      const p = cuentasFlat.find((x: any) => String(x?.codigo ?? "").trim() === parent);
+      if (p?.nombre) return `Subcuenta de ${parent} — ${String(p.nombre)}`;
+    }
+
+    return "Cuenta";
   };
 
   // Tomamos códigos del catálogo; si el catálogo falla, fallback a saldos
@@ -138,31 +171,32 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
   const allCodigos = Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
 
-  const sumBy = (predicate: (codigoNum: number, codigoStr: string) => boolean) => {
+  // ✅ SUMA por rangos usando baseNum para que NO se pierdan subcuentas
+  const sumBy = (predicate: (baseNum: number, fullCode: string, baseCode: string) => boolean) => {
     let total = 0;
     for (const codigoStr of allCodigos) {
-      const codigo = normalizeCodigo(codigoStr);
-      const codigoNum = Number(codigo);
-      if (!Number.isFinite(codigoNum)) continue;
-      if (!predicate(codigoNum, codigo)) continue;
-      total += obtenerMontoPeriodoER(codigo);
+      const full = normalizeCodigo(codigoStr);
+      const { base, baseNum } = splitCode(full);
+      if (!Number.isFinite(baseNum)) continue;
+      if (!predicate(baseNum, full, base)) continue;
+      total += obtenerMontoPeriodoER(full);
     }
     return total;
   };
 
-  // ✅ Clasificación por rangos (como pide el cliente en Ejecutivo)
+  // ✅ Clasificación por rangos (Ejecutivo)
   const totalIngresos = sumBy((n) => n >= 4000 && n <= 4999);
   const costoVentas = sumBy((n) => n >= 5000 && n <= 5099);
-  const depreciaciones = sumBy((n) => n === 5109 || n === 5110);
-  const gastosOperativos = sumBy((n) => n >= 5100 && n <= 5199 && n !== 5109 && n !== 5110);
-  const otrosGastos = sumBy((n) => n >= 5200 && n <= 5299 && n !== 5201);
-  const costoFinanciero = sumBy((n) => n === 5201 || (n >= 5111 && n <= 5199));
+  const depreciaciones = sumBy((n, _full, base) => base === "5109" || base === "5110");
+  const gastosOperativos = sumBy((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110");
+  const otrosGastos = sumBy((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201");
+  const costoFinanciero = sumBy((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199));
   const impuestos = sumBy((n) => n >= 6000 && n <= 6999);
 
-  // ✅ Subtotales (no son cuentas contables, son cálculos)
+  // ✅ Subtotales (cálculos)
   const utilidadBruta = totalIngresos - costoVentas;
   const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
-  const utilidadNeta = (ebitda - depreciaciones - costoFinanciero) - impuestos;
+  const utilidadNeta = ebitda - depreciaciones - costoFinanciero - impuestos;
 
   // --------------------------
   // UI helpers (estilo limpio)
@@ -228,7 +262,6 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
           {formatCurrency(value)}
         </div>
 
-        {/* mini underline tipo captura */}
         <div className="mt-3 h-1 w-16 rounded-full bg-primary/70" />
       </div>
     );
@@ -265,15 +298,9 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     if (isSubtotal) {
       return (
         <tr className="bg-primary text-primary-foreground">
-          <td className="px-4 py-3 font-semibold">
-            <div className="flex items-center gap-3">
-              <span>{label}</span>
-            </div>
-          </td>
+          <td className="px-4 py-3 font-semibold">{label}</td>
 
-          <td className="px-4 py-3 text-right font-extrabold">
-            {formatCurrency(v)}
-          </td>
+          <td className="px-4 py-3 text-right font-extrabold">{formatCurrency(v)}</td>
 
           <td className="px-4 py-3 text-right">
             <span className="inline-flex items-center justify-end gap-2">
@@ -295,7 +322,12 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
           </div>
         </td>
 
-        <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", isNegative ? "text-rose-700 dark:text-rose-300" : "text-foreground")}>
+        <td
+          className={cn(
+            "px-4 py-3 text-right font-semibold tabular-nums",
+            isNegative ? "text-rose-700 dark:text-rose-300" : "text-foreground"
+          )}
+        >
           {formatCurrency(v)}
         </td>
 
@@ -306,41 +338,97 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     );
   };
 
-  // --------------------------
-  // Estructura tipo “captura 2”
-  // --------------------------
+  // ✅ Armar listas por bloque (con subcuentas) para pintarlas en Ejecutivo
+  const buildList = (predicate: (baseNum: number, fullCode: string, baseCode: string) => boolean) => {
+    const rows: Array<{ code: string; name: string; baseNum: number; base: string; isSub: boolean; amount: number }> = [];
+
+    for (const codigoStr of allCodigos) {
+      const code = normalizeCodigo(codigoStr);
+      if (!code) continue;
+
+      const { base, baseNum } = splitCode(code);
+      if (!Number.isFinite(baseNum)) continue;
+      if (!predicate(baseNum, code, base)) continue;
+
+      const amount = obtenerMontoPeriodoER(code);
+
+      // En ejecutivo: mostramos solo cuentas con movimiento para que no se llene de ceros
+      if (Math.abs(amount) < 0.0000001) continue;
+
+      rows.push({
+        code,
+        name: resolveNombreCuenta(code),
+        baseNum,
+        base,
+        isSub: isSubcuenta(code),
+        amount,
+      });
+    }
+
+    rows.sort((a, b) => {
+      if (a.baseNum !== b.baseNum) return a.baseNum - b.baseNum;
+      // para que 4001 salga antes que 4001-01
+      if (a.base === b.base) return a.code.localeCompare(b.code);
+      return a.base.localeCompare(b.base);
+    });
+
+    return rows;
+  };
+
+  const detalleIngresos = useMemo(() => buildList((n) => n >= 4000 && n <= 4999), [allCodigos.join("|")]);
+  const detalleCostos = useMemo(() => buildList((n) => n >= 5000 && n <= 5099), [allCodigos.join("|")]);
+  const detalleGastosOp = useMemo(
+    () => buildList((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110"),
+    [allCodigos.join("|")]
+  );
+  const detalleOtrosGastos = useMemo(
+    () => buildList((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201"),
+    [allCodigos.join("|")]
+  );
+  const detalleDep = useMemo(
+    () => buildList((_n, _full, base) => base === "5109" || base === "5110"),
+    [allCodigos.join("|")]
+  );
+  const detalleFin = useMemo(
+    () => buildList((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199)),
+    [allCodigos.join("|")]
+  );
+  const detalleImp = useMemo(() => buildList((n) => n >= 6000 && n <= 6999), [allCodigos.join("|")]);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        {utilidadNeta >= 0 ? (
-          <TrendingUp className="h-7 w-7 text-emerald-600" />
-        ) : (
-          <TrendingDown className="h-7 w-7 text-rose-600" />
-        )}
-        <div>
-          <p className="text-sm font-semibold text-foreground">Formato ejecutivo</p>
-          <p className="text-xs text-muted-foreground">{formatearPeriodo(startDate, endDate)}</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          {utilidadNeta >= 0 ? (
+            <TrendingUp className="h-7 w-7 text-emerald-600" />
+          ) : (
+            <TrendingDown className="h-7 w-7 text-rose-600" />
+          )}
+          <div>
+            <p className="text-sm font-semibold text-foreground">Formato ejecutivo</p>
+            <p className="text-xs text-muted-foreground">{formatearPeriodo(startDate, endDate)}</p>
+          </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowDetalle((v) => !v)}
+          className="inline-flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted/40"
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform", showDetalle ? "rotate-180" : "rotate-0")} />
+          {showDetalle ? "Ocultar detalle" : "Ver detalle"}
+        </button>
       </div>
 
-      {/* Highlights (como pide el cliente) */}
+      {/* Highlights */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <KpiCard
-          title="Ingresos Totales"
-          value={totalIngresos}
-          emphasize
-          rightPill={<Pill tone="slate">100% base</Pill>}
-        />
+        <KpiCard title="Ingresos Totales" value={totalIngresos} emphasize rightPill={<Pill tone="slate">100% base</Pill>} />
         <KpiCard
           title="Utilidad Bruta"
           value={utilidadBruta}
           rightPill={<Pill tone={utilidadBruta >= 0 ? "emerald" : "slate"}>{formatPct(utilidadBruta)}</Pill>}
         />
-        <KpiCard
-          title="EBITDA"
-          value={ebitda}
-          rightPill={<Pill tone={ebitda >= 0 ? "emerald" : "slate"}>{formatPct(ebitda)}</Pill>}
-        />
+        <KpiCard title="EBITDA" value={ebitda} rightPill={<Pill tone={ebitda >= 0 ? "emerald" : "slate"}>{formatPct(ebitda)}</Pill>} />
         <KpiCard
           title="Utilidad Neta"
           value={utilidadNeta}
@@ -348,7 +436,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
         />
       </div>
 
-      {/* Tabla estilo limpio */}
+      {/* Tabla */}
       <Card className="overflow-hidden border-2 border-primary/15">
         <CardHeader className="bg-muted/10">
           <CardTitle className="text-base">Análisis Mensual</CardTitle>
@@ -373,7 +461,16 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
               <tbody>
                 <TableRowLine label="Ingresos Operativos" isSection />
-                {/* En tu motor hoy sólo tenemos total agregado por rangos, lo dejamos como líneas limpias */}
+                {showDetalle
+                  ? detalleIngresos.map((r) => (
+                      <TableRowLine
+                        key={`ing-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={r.amount}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
                 <TableRowLine
                   label="Ingresos Totales"
                   value={totalIngresos}
@@ -382,7 +479,21 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                 />
 
                 <TableRowLine label="Costos de Ventas (COGS)" isSection />
-                <TableRowLine label="Costo de Ventas" value={-Math.abs(costoVentas)} indent={1} />
+                {showDetalle
+                  ? detalleCostos.map((r) => (
+                      <TableRowLine
+                        key={`cogs-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={-Math.abs(r.amount)}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
+                <TableRowLine
+                  label="Costo de Ventas"
+                  value={-Math.abs(costoVentas)}
+                  indent={1}
+                />
                 <TableRowLine
                   label="Utilidad Bruta"
                   value={utilidadBruta}
@@ -391,7 +502,28 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                 />
 
                 <TableRowLine label="Gastos Operativos (OPEX)" isSection />
+                {showDetalle
+                  ? detalleGastosOp.map((r) => (
+                      <TableRowLine
+                        key={`opex-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={-Math.abs(r.amount)}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
                 <TableRowLine label="Gastos Operativos" value={-Math.abs(gastosOperativos)} indent={1} />
+
+                {showDetalle
+                  ? detalleOtrosGastos.map((r) => (
+                      <TableRowLine
+                        key={`otros-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={-Math.abs(r.amount)}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
                 <TableRowLine label="Otros Gastos" value={-Math.abs(otrosGastos)} indent={1} />
 
                 <TableRowLine
@@ -401,9 +533,40 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                   rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{formatPct(ebitda)}</span>}
                 />
 
-                {/* Mantengo estas líneas (limpias) para que el ER sea coherente contablemente */}
+                {showDetalle
+                  ? detalleDep.map((r) => (
+                      <TableRowLine
+                        key={`dep-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={-Math.abs(r.amount)}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
                 <TableRowLine label="Depreciación y Amortización" value={-Math.abs(depreciaciones)} indent={1} />
+
+                {showDetalle
+                  ? detalleFin.map((r) => (
+                      <TableRowLine
+                        key={`fin-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={-Math.abs(r.amount)}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
                 <TableRowLine label="Costo Financiero" value={-Math.abs(costoFinanciero)} indent={1} />
+
+                {showDetalle
+                  ? detalleImp.map((r) => (
+                      <TableRowLine
+                        key={`imp-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={-Math.abs(r.amount)}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
                 <TableRowLine label="Impuestos" value={-Math.abs(impuestos)} indent={1} />
 
                 <TableRowLine
