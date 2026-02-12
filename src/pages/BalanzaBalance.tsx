@@ -214,10 +214,17 @@ export default function BalanzaBalance() {
     return !!(a && p && c);
   }
 
+  // ✅ Robust: aplana arrays incluso si viene objeto anidado (cualquier profundidad)
   function flattenCuentasFromNode(node: any): any[] {
     if (!node) return [];
     if (Array.isArray(node)) return node;
-    return Object.values(node).flatMap((v: any) => (Array.isArray(v) ? v : []));
+
+    const out: any[] = [];
+    for (const v of Object.values(node)) {
+      if (Array.isArray(v)) out.push(...v);
+      else if (v && typeof v === "object") out.push(...flattenCuentasFromNode(v));
+    }
+    return out;
   }
 
   function nodeMatchesAgrupador(node: any, agrupador: AgrupadorBG) {
@@ -815,7 +822,7 @@ export default function BalanzaBalance() {
     const grupos = Object.keys(bgForTree || {});
     for (const grupo of grupos) {
       const subgruposObj = bgForTree?.[grupo] || {};
-      const subgrupos = Object.keys(subgruposObj);
+      const subgrupos = Object.keys(subgruposObj || {});
 
       const grupoNode: SaldosNode = {
         key: `grupo:${estadoKey}:${grupo}`,
@@ -827,8 +834,13 @@ export default function BalanzaBalance() {
       };
 
       for (const subgrupo of subgrupos) {
-        const cuentasArr = (subgruposObj?.[subgrupo] || []) as any[];
-        const codigos = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
+        // ✅ FIX CRÍTICO: el subgrupo puede venir como objeto anidado, no array
+        const cuentasNode = (subgruposObj as any)?.[subgrupo];
+        const cuentasArr = flattenCuentasFromNode(cuentasNode); // ✅ SIEMPRE array
+
+        const codigos = cuentasArr
+          .map((c) => String(c?.codigo || ""))
+          .filter(Boolean);
 
         const rows: SaldosCuentaRow[] = codigos
           .map((codigo) => buildCuentaRow(codigo, estadoKey))
