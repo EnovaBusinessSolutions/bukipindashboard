@@ -122,7 +122,6 @@ function normalizeCode(code: any) {
 }
 
 function isSubcuentaCodigo(code: string) {
-  // patrón típico: 4001-01, 5101-03, etc.
   const c = normalizeCode(code);
   return /^\d{4}-\d{2,}$/.test(c);
 }
@@ -131,6 +130,39 @@ function getCuentaPadre(code: string) {
   const c = normalizeCode(code);
   const m = c.match(/^(\d{4})-/);
   return m ? m[1] : null;
+}
+
+// =========================
+// ✅ Helpers para ER (agrupador/sub-agrupador robusto)
+// =========================
+function pickKeyCI(obj: any, wanted: string): string | null {
+  if (!obj) return null;
+  const keys = Object.keys(obj);
+  const exact = keys.find((k) => k === wanted);
+  if (exact) return exact;
+  const lower = keys.find((k) => k.toLowerCase() === wanted.toLowerCase());
+  return lower || null;
+}
+
+function pickKeyCIAny(obj: any, wantedList: string[]): string | null {
+  for (const w of wantedList) {
+    const k = pickKeyCI(obj, w);
+    if (k) return k;
+  }
+  return null;
+}
+
+// aplana arrays incluso si vienen objetos anidados (cualquier profundidad)
+function flattenCuentasFromNode(node: any): any[] {
+  if (!node) return [];
+  if (Array.isArray(node)) return node;
+
+  const out: any[] = [];
+  for (const v of Object.values(node)) {
+    if (Array.isArray(v)) out.push(...v);
+    else if (v && typeof v === "object") out.push(...flattenCuentasFromNode(v));
+  }
+  return out;
 }
 
 export default function BalanzaResultados() {
@@ -160,7 +192,7 @@ export default function BalanzaResultados() {
   });
 
   const [agrupadorER, setAgrupadorER] = useState<AgrupadorER>("ingresos");
-  const [subAgrupadorER, setSubAgrupadorER] = useState<string>("todos"); // grupo ER
+  const [subAgrupadorER, setSubAgrupadorER] = useState<string>("todos"); // sub-agrupador ER
   const [cuentaER, setCuentaER] = useState<string>("todos");
 
   // Educación
@@ -191,6 +223,47 @@ export default function BalanzaResultados() {
     if (d === "4") return "ingresos";
     if (d === "5" || d === "6") return "egresos";
     return null;
+  };
+
+  // ===== ✅ Agrupadores/aliases ER
+  const AGRUPADOR_LABEL: Record<AgrupadorER, string> = {
+    ingresos: "Ingresos",
+    egresos: "Egresos",
+  };
+
+  const AGRUPADOR_ALIASES: Record<AgrupadorER, string[]> = {
+    ingresos: ["Ingresos", "INGRESOS"],
+    egresos: ["Egresos", "EGRESOS", "Gastos", "COSTOS Y GASTOS", "Costos y Gastos"],
+  };
+
+  const erHasAgrupadores = (er: any) => {
+    if (!er) return false;
+    const i = pickKeyCIAny(er, AGRUPADOR_ALIASES.ingresos);
+    const e = pickKeyCIAny(er, AGRUPADOR_ALIASES.egresos);
+    return !!(i && e);
+  };
+
+  const resolveErAgrupadorRoot = (er: any, agrupador: AgrupadorER) => {
+    if (!er) return null;
+
+    // Caso ideal: ER viene como { Ingresos: {...}, Egresos: {...} }
+    if (erHasAgrupadores(er)) {
+      const key = pickKeyCIAny(er, AGRUPADOR_ALIASES[agrupador]) || AGRUPADOR_LABEL[agrupador];
+      return er?.[key] || null;
+    }
+
+    // Fallback: ER no está segmentado, regresamos el árbol completo
+    return er;
+  };
+
+  const nodeMatchesAgrupador = (node: any, agrupador: AgrupadorER) => {
+    const cuentas = flattenCuentasFromNode(node);
+    for (const c of cuentas) {
+      const codigo = String(c?.codigo || "");
+      if (!codigo) continue;
+      if (getTipoERByCodigo(codigo) === agrupador) return true;
+    }
+    return false;
   };
 
   // Opciones Mes/Año
@@ -319,31 +392,49 @@ export default function BalanzaResultados() {
   ]);
 
   // =========================
-  // ✅ OPCIONES ER (Sub-agrupador / Cuentas)
+  // ✅ OPCIONES ER (Sub-agrupador / Cuentas) RESPETANDO AGRUPADOR
   // =========================
   const erGrupoOptions = useMemo(() => {
     const er = estadosFinancieros?.["Estado de Resultados"];
     if (!er) return [];
 
-    const grupos = Object.keys(er || {});
-    const matchesAgrupador = (grupo: string) => {
-      const subObj = er?.[grupo] || {};
-      const cuentasAll: any[] = Object.values(subObj).flat() as any[];
-      const codigos = cuentasAll.map((c) => String(c?.codigo || "")).filter(Boolean);
-      if (!codigos.length) return false;
-      return codigos.some((codigo) => getTipoERByCodigo(codigo) === agrupadorER);
-    };
+    const root = resolveErAgrupadorRoot(er, agrupadorER);
+    if (!root) return [];
 
-    return grupos.filter(matchesAgrupador);
+    const keys = Object.keys(root || {});
+    const filtered = keys
+      .filter((k) => {
+        const node = (root as any)?.[k];
+        if (erHasAgrupadores(er)) return true; // ya está segmentado: todas son válidas
+        return nodeMatchesAgrupador(node, agrupadorER); // fallback: valida por códigos
+      })
+      .sort((a, b) => a.localeCompare(b));
+
+    return filtered;
   }, [estadosFinancieros, agrupadorER]);
+
+  // Si el sub-agrupador actual deja de existir, resetea
+  useEffect(() => {
+    if (subAgrupadorER === "todos") return;
+    if (!erGrupoOptions.length) return;
+    if (!erGrupoOptions.includes(subAgrupadorER)) {
+      setSubAgrupadorER("todos");
+      setCuentaER("todos");
+    }
+  }, [erGrupoOptions, subAgrupadorER]);
 
   const erCuentaOptions = useMemo(() => {
     const er = estadosFinancieros?.["Estado de Resultados"];
     if (!er) return [];
     if (subAgrupadorER === "todos") return [];
 
-    const subObj = er?.[subAgrupadorER] || {};
-    const cuentasAll: any[] = Object.values(subObj).flat() as any[];
+    const root = resolveErAgrupadorRoot(er, agrupadorER);
+    if (!root) return [];
+
+    const subNode = (root as any)?.[subAgrupadorER] || null;
+    if (!subNode) return [];
+
+    const cuentasAll = flattenCuentasFromNode(subNode);
 
     const rows = cuentasAll
       .map((c) => ({ codigo: String(c?.codigo || ""), nombre: String(c?.nombre || "N/A") }))
@@ -371,17 +462,23 @@ export default function BalanzaResultados() {
   // Agrupador (ingresos/egresos)
   movimientosFiltrados = movimientosFiltrados.filter((mov) => getTipoERByCodigo(mov.cuenta_codigo) === agrupadorER);
 
-  // Sub-agrupador (grupo ER)
-  if (subAgrupadorER !== "todos" && estadosFinancieros?.["Estado de Resultados"]?.[subAgrupadorER]) {
-    const obj = estadosFinancieros["Estado de Resultados"][subAgrupadorER] || {};
-    const cuentasAll: any[] = Object.values(obj).flat() as any[];
-    const codigos = new Set(
-      cuentasAll
-        .map((c) => String(c?.codigo || ""))
-        .filter(Boolean)
-        .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
-    );
-    movimientosFiltrados = movimientosFiltrados.filter((mov) => codigos.has(String(mov.cuenta_codigo || "")));
+  // Sub-agrupador (usando root por agrupador)
+  if (subAgrupadorER !== "todos") {
+    const er = estadosFinancieros?.["Estado de Resultados"];
+    if (er) {
+      const root = resolveErAgrupadorRoot(er, agrupadorER);
+      const subNode = root?.[subAgrupadorER];
+      if (subNode) {
+        const cuentasAll = flattenCuentasFromNode(subNode);
+        const codigos = new Set(
+          cuentasAll
+            .map((c) => String(c?.codigo || ""))
+            .filter(Boolean)
+            .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
+        );
+        movimientosFiltrados = movimientosFiltrados.filter((mov) => codigos.has(String(mov.cuenta_codigo || "")));
+      }
+    }
   }
 
   // Cuenta específica
@@ -553,7 +650,7 @@ export default function BalanzaResultados() {
   );
 
   // =========================
-  // ✅ SALDOS filtrados (Result. + ER filters)
+  // ✅ SALDOS filtrados (Result. + ER filters) RESPETANDO AGRUPADOR
   // =========================
   let saldosPorCuentaFiltrados: Record<string, any> = saldosPorCuenta;
 
@@ -566,20 +663,26 @@ export default function BalanzaResultados() {
     Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => getTipoERByCodigo(codigo) === agrupadorER)
   );
 
-  // Sub-agrupador
-  if (subAgrupadorER !== "todos" && estadosFinancieros?.["Estado de Resultados"]?.[subAgrupadorER]) {
-    const obj = estadosFinancieros["Estado de Resultados"][subAgrupadorER] || {};
-    const cuentasAll: any[] = Object.values(obj).flat() as any[];
-    const codigos = new Set(
-      cuentasAll
-        .map((c) => String(c?.codigo || ""))
-        .filter(Boolean)
-        .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
-    );
+  // Sub-agrupador (usando root por agrupador)
+  if (subAgrupadorER !== "todos") {
+    const er = estadosFinancieros?.["Estado de Resultados"];
+    if (er) {
+      const root = resolveErAgrupadorRoot(er, agrupadorER);
+      const subNode = root?.[subAgrupadorER];
+      if (subNode) {
+        const cuentasAll = flattenCuentasFromNode(subNode);
+        const codigos = new Set(
+          cuentasAll
+            .map((c) => String(c?.codigo || ""))
+            .filter(Boolean)
+            .filter((codigo) => getTipoERByCodigo(codigo) === agrupadorER)
+        );
 
-    saldosPorCuentaFiltrados = Object.fromEntries(
-      Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigos.has(String(codigo || "")))
-    );
+        saldosPorCuentaFiltrados = Object.fromEntries(
+          Object.entries(saldosPorCuentaFiltrados).filter(([codigo]) => codigos.has(String(codigo || "")))
+        );
+      }
+    }
   }
 
   // Cuenta
@@ -599,16 +702,16 @@ export default function BalanzaResultados() {
   }, [saldosPorCuentaFiltrados]);
 
   const totalSaldo = useMemo(() => {
-  return Object.values(saldosPorCuentaFiltrados).reduce(
-    (sum, cuenta: any) => sum + Number(cuenta?.saldo ?? cuenta?.saldo_final ?? 0),
-    0
-  );
-}, [saldosPorCuentaFiltrados]);
-
+    return Object.values(saldosPorCuentaFiltrados).reduce(
+      (sum, cuenta: any) => sum + Number(cuenta?.saldo ?? cuenta?.saldo_final ?? 0),
+      0
+    );
+  }, [saldosPorCuentaFiltrados]);
 
   // =========================
   // ✅ SALDOS UI (Plan de Cuentas estilo desplegable)
   //    Con DESGLOSE por subcuentas si existen (4001-01, etc.).
+  //    Ahora respeta agrupador (Ingresos/Egresos).
   // =========================
   type SaldosCuentaRow = {
     codigo: string;
@@ -632,7 +735,7 @@ export default function BalanzaResultados() {
   };
 
   const saldosUI = useMemo(() => {
-    // 1) normalizamos map por código real
+    // 1) normalizamos map por código real (ya filtrado por ER)
     const saldoMap = new Map<string, any>();
     for (const [k, v] of Object.entries(saldosPorCuentaFiltrados || {})) {
       const codigo = normalizeCode((v as any)?.cuenta_codigo ?? k ?? "");
@@ -703,10 +806,11 @@ export default function BalanzaResultados() {
         });
 
       const totals = sumRows(rows);
+
       return [
         {
           key: "flat",
-          label: "Estado de Resultados",
+          label: `Estado de Resultados · ${agrupadorER === "ingresos" ? "Ingresos" : "Egresos"}`,
           level: "estado",
           totals,
           cuentas: rows,
@@ -720,6 +824,9 @@ export default function BalanzaResultados() {
     const estadoKey: "Estado de Resultados" = "Estado de Resultados";
     const er = estadosFinancieros?.[estadoKey];
     if (!er) return fallbackFlat;
+
+    const root = resolveErAgrupadorRoot(er, agrupadorER);
+    if (!root) return fallbackFlat;
 
     // 5) índice de subcuentas por padre: 4001 => [4001-01, 4001-02...]
     const subcuentasByPadre = new Map<string, string[]>();
@@ -735,70 +842,109 @@ export default function BalanzaResultados() {
       subcuentasByPadre.set(p, Array.from(new Set(arr)).sort((a, b) => a.localeCompare(b)));
     }
 
-    const nodes: SaldosNode[] = [];
+    // 6) construir árbol: Sub-agrupador -> (subgrupo) -> cuentas
+    // Tu UI actual muestra: EstadoNode -> GrupoNode -> SubNode -> tabla cuentas
+    // Aquí mapeamos:
+    // - EstadoNode: "Estado de Resultados · Ingresos/Egresos"
+    // - GrupoNode: cada subAgrupador (p.ej. "Ingresos por Ventas")
+    // - SubNode: cada subgrupo interno (p.ej. "Ventas", "Servicios", etc.) si existe, si no, se hace uno "General"
 
-    const grupos = Object.keys(er || {});
     const estadoNode: SaldosNode = {
-      key: `estado:${estadoKey}`,
-      label: estadoKey,
+      key: `estado:${estadoKey}:${agrupadorER}`,
+      label: `${estadoKey} · ${agrupadorER === "ingresos" ? "Ingresos" : "Egresos"}`,
       level: "estado",
       totals: { debe: 0, haber: 0, saldo: 0 },
       cuentas: [],
       children: [],
     };
 
-    for (const grupo of grupos) {
-      const subgruposObj = er?.[grupo] || {};
-      const subgrupos = Object.keys(subgruposObj);
+    const subAgrupadores = Object.keys(root || {}).sort((a, b) => a.localeCompare(b));
+
+    for (const subAgr of subAgrupadores) {
+      const subObj = root?.[subAgr];
+      if (!subObj) continue;
+
+      // Si ER no venía segmentado por agrupador, filtramos por match real de códigos
+      if (!erHasAgrupadores(er) && !nodeMatchesAgrupador(subObj, agrupadorER)) continue;
 
       const grupoNode: SaldosNode = {
-        key: `grupo:${estadoKey}:${grupo}`,
-        label: grupo,
+        key: `grupo:${estadoKey}:${agrupadorER}:${subAgr}`,
+        label: subAgr,
         level: "grupo",
         totals: { debe: 0, haber: 0, saldo: 0 },
         cuentas: [],
         children: [],
       };
 
-      for (const subgrupo of subgrupos) {
-        const cuentasArr = (subgruposObj?.[subgrupo] || []) as any[];
-        const codigosBase = cuentasArr.map((c) => String(c?.codigo || "")).filter(Boolean);
+      // Detectar si subObj es { subgrupo: [] } o directamente un array/estructura rara
+      const subKeys = Array.isArray(subObj) ? [] : Object.keys(subObj || {});
+      const hasSubgroups = subKeys.length > 0 && subKeys.some((k) => Array.isArray(subObj?.[k]) || typeof subObj?.[k] === "object");
 
-        // ✅ aquí está el fix:
-        // por cada cuenta base (ej 4001) agregamos sus subcuentas si existen en saldos
+      if (!hasSubgroups) {
+        // Todo en un solo subgrupo "General"
+        const cuentasAll = flattenCuentasFromNode(subObj);
+        const codigosBase = cuentasAll.map((c) => String(c?.codigo || "")).filter(Boolean);
+
         const codigosExpand: string[] = [];
         for (const base of codigosBase) {
           codigosExpand.push(base);
-
           const subs = subcuentasByPadre.get(base);
-          if (subs?.length) {
-            // insertamos subcuentas inmediatamente después del padre
-            codigosExpand.push(...subs);
-          }
+          if (subs?.length) codigosExpand.push(...subs);
         }
 
         const rows: SaldosCuentaRow[] = codigosExpand
           .map((codigo) => buildCuentaRow(codigo, estadoKey))
           .filter(Boolean) as SaldosCuentaRow[];
 
-        // Además: si el backend mandó subcuentas que NO están en el plan, pero sí existen en saldos
-        // y su padre está en este subgrupo, ya quedaron incluidas arriba.
-        if (!rows.length) continue;
+        if (rows.length) {
+          const subTotals = sumRows(rows);
+          grupoNode.children.push({
+            key: `subgrupo:${estadoKey}:${agrupadorER}:${subAgr}:General`,
+            label: "General",
+            level: "subgrupo",
+            totals: subTotals,
+            cuentas: rows.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+            children: [],
+          });
 
-        const subTotals = sumRows(rows);
+          grupoNode.totals.debe += subTotals.debe;
+          grupoNode.totals.haber += subTotals.haber;
+          grupoNode.totals.saldo += subTotals.saldo;
+        }
+      } else {
+        // Caso normal: subObj tiene subgrupos
+        for (const subgrupo of subKeys) {
+          const node = subObj?.[subgrupo];
+          const cuentasAll = flattenCuentasFromNode(node);
+          const codigosBase = cuentasAll.map((c) => String(c?.codigo || "")).filter(Boolean);
 
-        grupoNode.children.push({
-          key: `subgrupo:${estadoKey}:${grupo}:${subgrupo}`,
-          label: subgrupo,
-          level: "subgrupo",
-          totals: subTotals,
-          cuentas: rows.sort((a, b) => a.codigo.localeCompare(b.codigo)),
-          children: [],
-        });
+          const codigosExpand: string[] = [];
+          for (const base of codigosBase) {
+            codigosExpand.push(base);
+            const subs = subcuentasByPadre.get(base);
+            if (subs?.length) codigosExpand.push(...subs);
+          }
 
-        grupoNode.totals.debe += subTotals.debe;
-        grupoNode.totals.haber += subTotals.haber;
-        grupoNode.totals.saldo += subTotals.saldo;
+          const rows: SaldosCuentaRow[] = codigosExpand
+            .map((codigo) => buildCuentaRow(codigo, estadoKey))
+            .filter(Boolean) as SaldosCuentaRow[];
+
+          if (!rows.length) continue;
+
+          const subTotals = sumRows(rows);
+          grupoNode.children.push({
+            key: `subgrupo:${estadoKey}:${agrupadorER}:${subAgr}:${subgrupo}`,
+            label: subgrupo,
+            level: "subgrupo",
+            totals: subTotals,
+            cuentas: rows.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+            children: [],
+          });
+
+          grupoNode.totals.debe += subTotals.debe;
+          grupoNode.totals.haber += subTotals.haber;
+          grupoNode.totals.saldo += subTotals.saldo;
+        }
       }
 
       if (!grupoNode.children.length) continue;
@@ -811,9 +957,8 @@ export default function BalanzaResultados() {
 
     if (!estadoNode.children.length) return fallbackFlat;
 
-    nodes.push(estadoNode);
-    return nodes;
-  }, [saldosPorCuentaFiltrados, estadosFinancieros, cuentasInfoMap]);
+    return [estadoNode];
+  }, [saldosPorCuentaFiltrados, estadosFinancieros, cuentasInfoMap, agrupadorER]);
 
   // =========================
   // ✅ PAGINACIÓN (FILAS RESULTADOS)
@@ -1513,7 +1658,12 @@ export default function BalanzaResultados() {
                       <ChevronsLeft className="h-4 w-4" />
                     </Button>
 
-                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={pageSafe === 1}
+                    >
                       <ChevronLeft className="h-4 w-4" />
                       Anterior
                     </Button>
@@ -1528,7 +1678,12 @@ export default function BalanzaResultados() {
                       <ChevronRight className="h-4 w-4" />
                     </Button>
 
-                    <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={pageSafe === totalPages}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(totalPages)}
+                      disabled={pageSafe === totalPages}
+                    >
                       <ChevronsRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1631,7 +1786,7 @@ export default function BalanzaResultados() {
         <CardHeader className="space-y-1">
           <CardTitle>Saldos por Cuenta</CardTitle>
           <CardDescription>
-            Vista desplegable por Grupo → Subgrupo → Cuenta, con Debe/Haber acumulado y saldo neto. Incluye subcuentas (ej. 4001-01).
+            Vista desplegable por Sub-agrupador → Subgrupo → Cuenta, con Debe/Haber acumulado y saldo neto. Incluye subcuentas (ej. 4001-01).
           </CardDescription>
         </CardHeader>
 
