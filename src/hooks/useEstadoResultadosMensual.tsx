@@ -91,6 +91,7 @@ const pickCuentaCodigo = (ln: any): string => {
     ln?.cuenta_codigo ??
     ln?.cuentaCodigo ??
     ln?.accountCodigo ??
+    ln?.account_code ?? // extra compat
     ln?.codigo ??
     "";
 
@@ -102,6 +103,13 @@ const pickDebeHaber = (ln: any) => {
   const debe = num(ln?.debe ?? ln?.debit ?? 0);
   const haber = num(ln?.haber ?? ln?.credit ?? 0);
   return { debe, haber };
+};
+
+// 🔑 NUEVO: normaliza subcuentas "4001-01" -> "4001"
+const getCodigoBase = (codigo: string) => {
+  const s = String(codigo || "").trim();
+  if (!s) return "";
+  return s.includes("-") ? s.split("-")[0].trim() : s;
 };
 
 export const useEstadoResultadosMensual = (año?: number, opts?: { debug?: boolean }) => {
@@ -194,35 +202,42 @@ export const useEstadoResultadosMensual = (año?: number, opts?: { debug?: boole
         let intereses = 0;
 
         for (const detalle of detallesMes) {
-          const codigo = String(detalle.cuenta_codigo || "");
+          const codigo = String(detalle.cuenta_codigo || "").trim();
+          const codigoBase = getCodigoBase(codigo); // ✅ aquí la magia
+
           const debe = num(detalle.debe);
           const haber = num(detalle.haber);
 
           // === INGRESOS ===
-          if (codigo === "4001" || codigo === "4004") {
+          // Ventas / Ingresos por ventas
+          if (codigoBase === "4001" || codigoBase === "4004") {
             ingresos += haber - debe;
-          } else if (codigo === "4002" || codigo === "4003") {
+          }
+          // Devoluciones / descuentos sobre ventas (si tu catálogo lo usa así)
+          else if (codigoBase === "4002" || codigoBase === "4003") {
             ingresos -= debe - haber;
-          } else if (codigo.startsWith("41")) {
+          }
+          // Otros ingresos 41xx (incluye subcuentas 41xx-yy)
+          else if (codigoBase.startsWith("41")) {
             ingresos += haber - debe;
           }
 
           // === COSTOS ===
-          else if (codigo === "5001" || codigo === "5002") {
+          else if (codigoBase === "5001" || codigoBase === "5002") {
             costos += debe - haber;
-          } else if (codigo === "5003" || codigo === "5004") {
+          } else if (codigoBase === "5003" || codigoBase === "5004") {
             costos -= debe - haber;
           }
 
           // === GASTOS ===
-          else if (codigo === "5109" || codigo === "5110") {
+          else if (codigoBase === "5109" || codigoBase === "5110") {
             depreciacion += debe - haber;
-          } else if (codigo.startsWith("51") && codigo !== "5109" && codigo !== "5110") {
+          } else if (codigoBase.startsWith("51") && codigoBase !== "5109" && codigoBase !== "5110") {
             gastos += debe - haber;
           }
 
           // === INTERESES ===
-          else if (codigo === "5201") {
+          else if (codigoBase === "5201") {
             intereses += debe - haber;
           }
         }
