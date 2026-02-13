@@ -15,7 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Filter, Package2, Edit, Trash2, Eye, Plus } from "lucide-react";
+import { Search, Filter, Package2, Edit, Trash2, Eye, Plus, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
@@ -59,7 +59,6 @@ const safeStr = (v: any) => {
 };
 
 const buildSubcuentaLabel = (p: any) => {
-  // Intentamos obtener un nombre “humano” si el backend lo trae
   const name =
     p?.subcuenta_nombre ??
     p?.subcuentaNombre ??
@@ -85,7 +84,6 @@ const buildSubcuentaLabel = (p: any) => {
   if (n) return n;
   if (c) return c;
 
-  // Fallback: si solo existe id, mostramos genérico (sin exponerlo demasiado)
   const id = toStrId(p?.subcuenta_id ?? p?.subcuentaId ?? "");
   if (id) return "Subcuenta asignada";
 
@@ -115,7 +113,6 @@ const normalizeProducto = (p: any) => {
     p.cuentaCodigo ??
     "";
 
-  // ✅ subcuenta puede venir como ObjectId, string, o con keys distintas
   const subcuentaRaw =
     p.subcuenta_id ??
     p.subcuentaId ??
@@ -140,7 +137,6 @@ const normalizeProducto = (p: any) => {
     id,
     unidad: String(unidad || ""),
     cuenta_contable: String(cuenta_contable || ""),
-    // ✅ SIEMPRE string o null
     subcuenta_id: toStrIdOrNull(subcuentaRaw),
     proveedor_principal: String(proveedor_principal || ""),
     imagen_url: String(imagen_url || ""),
@@ -153,7 +149,6 @@ const normalizeProducto = (p: any) => {
 
   return {
     ...normalized,
-    // label best-effort (no rompe si no existe en backend)
     subcuenta_label: buildSubcuentaLabel(normalized),
   };
 };
@@ -163,6 +158,8 @@ const CatalogoProductos = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [showOrphanCosts, setShowOrphanCosts] = useState(false);
+
   const navigate = useNavigate();
 
   // Hooks (E2E)
@@ -256,12 +253,11 @@ const CatalogoProductos = () => {
     return n.includes(st) || prov.includes(st);
   });
 
-  // ✅ Agrupación “tipo catálogo de productos”: subcuentas vs cuenta general
+  // ✅ Agrupación de COSTOS solo por SUBCUENTA (como catálogo de productos de ingresos)
   const costosAgrupados = useMemo(() => {
     const withSub = filteredCostos.filter((p: any) => !!toStrIdOrNull(p?.subcuenta_id));
-    const withoutSub = filteredCostos.filter((p: any) => !toStrIdOrNull(p?.subcuenta_id));
+    const orphan = filteredCostos.filter((p: any) => !toStrIdOrNull(p?.subcuenta_id));
 
-    // group by subcuenta label (si no hay label, cae a "Subcuenta asignada")
     const groups: Record<string, any[]> = {};
     for (const p of withSub) {
       const label = (p?.subcuenta_label || "Subcuenta asignada").trim() || "Subcuenta asignada";
@@ -269,16 +265,15 @@ const CatalogoProductos = () => {
       groups[label].push(p);
     }
 
-    // orden: alfabético por label
     const groupedList = Object.entries(groups)
       .sort((a, b) => a[0].localeCompare(b[0], "es"))
       .map(([label, items]) => ({ label, items }));
 
     return {
       groupedList,
-      withoutSub,
       withSubCount: withSub.length,
-      withoutSubCount: withoutSub.length,
+      orphanCount: orphan.length,
+      orphanItems: orphan,
     };
   }, [filteredCostos]);
 
@@ -330,31 +325,25 @@ const CatalogoProductos = () => {
         });
         return;
       }
-      // Para gasto no usamos subcuenta aquí (evita contaminación)
-      if (newProduct.subcuentaId) {
-        setNewProduct((p) => ({ ...p, subcuentaId: "" }));
-      }
+      if (newProduct.subcuentaId) setNewProduct((p) => ({ ...p, subcuentaId: "" }));
     }
 
     const subId = newProduct.tipo === "costo" ? toStrId(newProduct.subcuentaId) : "";
     const subIdOrNull = newProduct.tipo === "costo" ? subId : null;
 
-    // ✅ Enviamos duplicados defensivos (unidad_medida / proveedorPrincipal) por compat con backend legacy
     const createData: (CreateProductoEgresoData & Record<string, any>) = {
       nombre: newProduct.nombre,
       descripcion: newProduct.descripcion,
       tipo: newProduct.tipo as "gasto" | "costo",
 
-      // canonical
       unidad: newProduct.unidad,
       proveedor_principal: newProduct.proveedorPrincipal,
       es_recurrente: newProduct.esRecurrente,
-      // ✅ para costo mandamos string, para gasto mandamos null (NO "")
       subcuenta_id: subIdOrNull,
       cuenta_contable: newProduct.cuentaContable,
       imagen: newProduct.imagen || undefined,
 
-      // legacy compat (por si el backend espera otros nombres)
+      // legacy compat
       unidad_medida: newProduct.unidad,
       proveedorPrincipal: newProduct.proveedorPrincipal,
       cuentaCodigo: newProduct.cuentaContable,
@@ -399,7 +388,6 @@ const CatalogoProductos = () => {
       unidad: p.unidad || "",
       proveedorPrincipal: p.proveedor_principal || "",
       esRecurrente: !!p.es_recurrente,
-      // ✅ SIEMPRE string para que el selector lo detecte
       subcuentaId: p.subcuenta_id ? String(p.subcuenta_id) : "",
       cuentaContable: p.cuenta_contable || "",
       imagen: null,
@@ -438,7 +426,6 @@ const CatalogoProductos = () => {
       return;
     }
 
-    // ✅ Hard guard en edición
     if (editingProduct.tipo === "gasto") {
       const allowed = allowedCuentaByTipo("gasto");
       if (!allowed.has(editingProduct.cuentaContable)) {
@@ -449,10 +436,7 @@ const CatalogoProductos = () => {
         });
         return;
       }
-      // Limpia subcuenta si quedó residual
-      if (editingProduct.subcuentaId) {
-        setEditingProduct((p: any) => ({ ...p, subcuentaId: "" }));
-      }
+      if (editingProduct.subcuentaId) setEditingProduct((p: any) => ({ ...p, subcuentaId: "" }));
     }
 
     const subId = editingProduct.tipo === "costo" ? toStrId(editingProduct.subcuentaId) : "";
@@ -464,11 +448,9 @@ const CatalogoProductos = () => {
       descripcion: editingProduct.descripcion,
       tipo: editingProduct.tipo,
 
-      // canonical
       unidad: editingProduct.unidad,
       proveedor_principal: editingProduct.proveedorPrincipal,
       es_recurrente: editingProduct.esRecurrente,
-      // ✅ para costo mandamos string, para gasto mandamos null (NO "")
       subcuenta_id: subIdOrNull,
       cuenta_contable: editingProduct.cuentaContable,
       imagen: editingProduct.imagen || undefined,
@@ -501,7 +483,6 @@ const CatalogoProductos = () => {
     const varPrecio = toNum(producto?.variacion_precio, 0);
     const txs = toNum(producto?.total_transacciones, 0);
 
-    // ✅ Fallbacks extra (por si el backend manda keys distintas)
     const unidad =
       producto?.unidad ||
       producto?.unidad_medida ||
@@ -522,18 +503,11 @@ const CatalogoProductos = () => {
     const isCosto = producto?.tipo === "costo";
 
     return (
-      <Card
-        key={producto.id}
-        className="hover:shadow-md transition-shadow border-border/60"
-      >
+      <Card key={producto.id} className="hover:shadow-md transition-shadow border-border/60">
         <CardHeader className="pb-3">
           <div className="flex gap-3 items-start">
             {imagenUrl ? (
-              <img
-                src={imagenUrl}
-                alt={producto.nombre}
-                className="w-16 h-16 object-cover rounded-md border"
-              />
+              <img src={imagenUrl} alt={producto.nombre} className="w-16 h-16 object-cover rounded-md border" />
             ) : (
               <div className="w-16 h-16 bg-muted rounded-md border flex items-center justify-center">
                 <Package2 className="h-8 w-8 text-muted-foreground" />
@@ -542,9 +516,7 @@ const CatalogoProductos = () => {
 
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg truncate">{producto.nombre}</CardTitle>
-              <CardDescription className="mt-1 line-clamp-2">
-                {producto.descripcion || "Sin descripción"}
-              </CardDescription>
+              <CardDescription className="mt-1 line-clamp-2">{producto.descripcion || "Sin descripción"}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -560,13 +532,11 @@ const CatalogoProductos = () => {
             <span className="font-medium">{unidad}</span>
           </div>
 
-          {/* ✅ Contexto contable */}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Cuenta contable:</span>
             <span className="font-medium">{cuentaContable ? `${cuentaContable}` : "No asignada"}</span>
           </div>
 
-          {/* ✅ En costos, ya damos visibilidad por agrupación; esto solo refuerza el estado */}
           {isCosto && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subcuenta:</span>
@@ -585,9 +555,7 @@ const CatalogoProductos = () => {
 
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Variación de precio:</span>
-            <span className={`font-medium ${getVariationColor(varPrecio)}`}>
-              ±{moneyMX(varPrecio)}%
-            </span>
+            <span className={`font-medium ${getVariationColor(varPrecio)}`}>±{moneyMX(varPrecio)}%</span>
           </div>
 
           <div className="flex justify-between text-sm">
@@ -626,12 +594,7 @@ const CatalogoProductos = () => {
               Editar
             </Button>
 
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive"
-              onClick={() => deleteProducto.mutate(producto.id)}
-            >
+            <Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteProducto.mutate(producto.id)}>
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
@@ -715,11 +678,8 @@ const CatalogoProductos = () => {
                     onValueChange={(value) => {
                       const updatedProduct = { ...newProduct, tipo: value, subcuentaId: "" };
 
-                      if (value === "costo") {
-                        updatedProduct.cuentaContable = "5001";
-                      } else {
-                        updatedProduct.cuentaContable = "";
-                      }
+                      if (value === "costo") updatedProduct.cuentaContable = "5001";
+                      else updatedProduct.cuentaContable = "";
 
                       setNewProduct(updatedProduct);
                     }}
@@ -767,7 +727,6 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {/* ✅ subcuenta SOLO aplica para COSTO */}
               {newProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
                   value={newProduct.subcuentaId}
@@ -845,12 +804,12 @@ const CatalogoProductos = () => {
         </Dialog>
       </div>
 
-      {/* Tip / recomendación (estilo pro, similar a Catálogo de Productos) */}
+      {/* Tip / recomendación */}
       <Card className="bg-muted/30 border-border/60">
         <CardContent className="py-4">
           <div className="text-sm text-muted-foreground">
-            Recomendación: asignar subcuentas a los <span className="font-medium text-foreground">costos</span> ayuda a tener mejor control contable. Los elementos sin subcuenta se consideran dentro de la{" "}
-            <span className="font-medium text-foreground">cuenta general 5001 - Costo de Ventas</span>.
+            Recomendación: en <span className="font-medium text-foreground">costos</span> es obligatorio asignar una{" "}
+            <span className="font-medium text-foreground">subcuenta</span> para mantener un control contable más claro y un catálogo más ordenado.
           </div>
         </CardContent>
       </Card>
@@ -875,7 +834,7 @@ const CatalogoProductos = () => {
         )}
       </div>
 
-      {/* Costos (AGRUPADO como Catálogo de Productos: subcuentas vs cuenta general) */}
+      {/* Costos (SOLO por SUBCUENTA) */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold">Catálogo de Costos</h2>
@@ -885,9 +844,6 @@ const CatalogoProductos = () => {
             <div className="ml-auto flex gap-2">
               <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
                 Con subcuenta: {costosAgrupados.withSubCount}
-              </Badge>
-              <Badge variant="outline" className="border-border/60">
-                Cuenta general: {costosAgrupados.withoutSubCount}
               </Badge>
             </div>
           )}
@@ -901,6 +857,44 @@ const CatalogoProductos = () => {
           />
         ) : (
           <div className="space-y-4">
+            {/* Si existen costos sin subcuenta (legacy), NO mostramos bloque “Cuenta General”;
+               mostramos aviso pro + toggle colapsado por default */}
+            {costosAgrupados.orphanCount > 0 && (
+              <Card className="border-border/60 bg-muted/30">
+                <CardContent className="py-4">
+                  <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">
+                        <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium">
+                          Hay {costosAgrupados.orphanCount} costo(s) sin subcuenta asignada
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Por política, los costos deben tener subcuenta. Edita estos registros para asignar su subcuenta.
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowOrphanCosts((v) => !v)}
+                      className="w-full md:w-auto"
+                    >
+                      {showOrphanCosts ? "Ocultar pendientes" : "Ver pendientes"}
+                    </Button>
+                  </div>
+
+                  {showOrphanCosts && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {costosAgrupados.orphanItems.map(renderProductCard)}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Subcuentas */}
             {costosAgrupados.groupedList.map((g) => (
               <Card key={g.label} className="bg-muted/30 border-border/60">
@@ -909,7 +903,7 @@ const CatalogoProductos = () => {
                     <div className="font-semibold">Subcuenta: {g.label}</div>
                     <Badge variant="secondary">{g.items.length}</Badge>
                   </div>
-                  <CardDescription>Costos registrados con subcuenta asignada</CardDescription>
+                  <CardDescription>Costos registrados con esta subcuenta</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -918,28 +912,6 @@ const CatalogoProductos = () => {
                 </CardContent>
               </Card>
             ))}
-
-            {/* Cuenta general */}
-            <Card className="bg-muted/30 border-border/60">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="font-semibold">Cuenta General: 5001 - Costo de Ventas</div>
-                  <Badge variant="secondary">{costosAgrupados.withoutSub.length}</Badge>
-                </div>
-                <CardDescription>Costos sin subcuenta específica</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {costosAgrupados.withoutSub.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {costosAgrupados.withoutSub.map(renderProductCard)}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground py-6 text-center">
-                    Perfecto: no hay costos pendientes de asignación de subcuenta.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
         )}
       </div>
@@ -1027,7 +999,6 @@ const CatalogoProductos = () => {
                 </div>
               )}
 
-              {/* ✅ subcuenta SOLO aplica para COSTO */}
               {editingProduct.tipo === "costo" && (
                 <FriendlySubcuentaSelector
                   value={toStrId(editingProduct.subcuentaId)}
