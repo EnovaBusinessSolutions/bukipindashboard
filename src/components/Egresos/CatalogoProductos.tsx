@@ -53,10 +53,49 @@ const toStrIdOrNull = (v: any) => {
   return s ? s : null;
 };
 
+const safeStr = (v: any) => {
+  if (v === null || v === undefined) return "";
+  return String(v);
+};
+
+const buildSubcuentaLabel = (p: any) => {
+  // Intentamos obtener un nombre “humano” si el backend lo trae
+  const name =
+    p?.subcuenta_nombre ??
+    p?.subcuentaNombre ??
+    p?.subcuenta_name ??
+    p?.subcuentaName ??
+    p?.subcuenta?.nombre ??
+    p?.subcuenta?.name ??
+    "";
+
+  const codigo =
+    p?.subcuenta_codigo ??
+    p?.subcuentaCodigo ??
+    p?.subcuenta_code ??
+    p?.subcuentaCode ??
+    p?.subcuenta?.codigo ??
+    p?.subcuenta?.code ??
+    "";
+
+  const n = safeStr(name).trim();
+  const c = safeStr(codigo).trim();
+
+  if (c && n) return `${c} - ${n}`;
+  if (n) return n;
+  if (c) return c;
+
+  // Fallback: si solo existe id, mostramos genérico (sin exponerlo demasiado)
+  const id = toStrId(p?.subcuenta_id ?? p?.subcuentaId ?? "");
+  if (id) return "Subcuenta asignada";
+
+  return "";
+};
+
 /**
  * Normaliza un producto venga como venga (backend nuevo / legacy / wrapper / payload plano)
  * ✅ La UI siempre consume: unidad, cuenta_contable, total_transacciones, precio_promedio, variacion_precio, ultima_compra,
- *    proveedor_principal, imagen_url, es_recurrente, subcuenta_id
+ *    proveedor_principal, imagen_url, es_recurrente, subcuenta_id (+ subcuenta_label best-effort)
  */
 const normalizeProducto = (p: any) => {
   if (!p) return null;
@@ -86,7 +125,6 @@ const normalizeProducto = (p: any) => {
     null;
 
   const proveedor_principal = p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
-
   const imagen_url = p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? p.imagen ?? "";
 
   const precio_promedio = p.precio_promedio ?? p.precioPromedio ?? 0;
@@ -97,7 +135,7 @@ const normalizeProducto = (p: any) => {
 
   const id = toStrId(p.id ?? p._id ?? "");
 
-  return {
+  const normalized = {
     ...p,
     id,
     unidad: String(unidad || ""),
@@ -111,6 +149,12 @@ const normalizeProducto = (p: any) => {
     total_transacciones: toNum(total_transacciones, 0),
     ultima_compra: ultima_compra ? String(ultima_compra) : null,
     es_recurrente: !!es_recurrente,
+  };
+
+  return {
+    ...normalized,
+    // label best-effort (no rompe si no existe en backend)
+    subcuenta_label: buildSubcuentaLabel(normalized),
   };
 };
 
@@ -211,6 +255,32 @@ const CatalogoProductos = () => {
     ).toLowerCase();
     return n.includes(st) || prov.includes(st);
   });
+
+  // ✅ Agrupación “tipo catálogo de productos”: subcuentas vs cuenta general
+  const costosAgrupados = useMemo(() => {
+    const withSub = filteredCostos.filter((p: any) => !!toStrIdOrNull(p?.subcuenta_id));
+    const withoutSub = filteredCostos.filter((p: any) => !toStrIdOrNull(p?.subcuenta_id));
+
+    // group by subcuenta label (si no hay label, cae a "Subcuenta asignada")
+    const groups: Record<string, any[]> = {};
+    for (const p of withSub) {
+      const label = (p?.subcuenta_label || "Subcuenta asignada").trim() || "Subcuenta asignada";
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(p);
+    }
+
+    // orden: alfabético por label
+    const groupedList = Object.entries(groups)
+      .sort((a, b) => a[0].localeCompare(b[0], "es"))
+      .map(([label, items]) => ({ label, items }));
+
+    return {
+      groupedList,
+      withoutSub,
+      withSubCount: withSub.length,
+      withoutSubCount: withoutSub.length,
+    };
+  }, [filteredCostos]);
 
   const getVariationColor = (variacion: number) => {
     const v = toNum(variacion, 0);
@@ -449,11 +519,13 @@ const CatalogoProductos = () => {
 
     const cuentaContable = producto?.cuenta_contable || producto?.cuentaContable || producto?.cuentaCodigo || "";
     const subcuentaId = toStrId(producto?.subcuenta_id ?? producto?.subcuentaId ?? "");
-
     const isCosto = producto?.tipo === "costo";
 
     return (
-      <Card key={producto.id} className="hover:shadow-md transition-shadow">
+      <Card
+        key={producto.id}
+        className="hover:shadow-md transition-shadow border-border/60"
+      >
         <CardHeader className="pb-3">
           <div className="flex gap-3 items-start">
             {imagenUrl ? (
@@ -468,9 +540,9 @@ const CatalogoProductos = () => {
               </div>
             )}
 
-            <div className="flex-1">
-              <CardTitle className="text-lg">{producto.nombre}</CardTitle>
-              <CardDescription className="mt-1">
+            <div className="flex-1 min-w-0">
+              <CardTitle className="text-lg truncate">{producto.nombre}</CardTitle>
+              <CardDescription className="mt-1 line-clamp-2">
                 {producto.descripcion || "Sin descripción"}
               </CardDescription>
             </div>
@@ -478,9 +550,9 @@ const CatalogoProductos = () => {
         </CardHeader>
 
         <CardContent className="space-y-3">
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between text-sm gap-3">
             <span className="text-muted-foreground">Proveedor principal:</span>
-            <span className="font-medium">{proveedor}</span>
+            <span className="font-medium truncate">{proveedor}</span>
           </div>
 
           <div className="flex justify-between text-sm">
@@ -488,12 +560,13 @@ const CatalogoProductos = () => {
             <span className="font-medium">{unidad}</span>
           </div>
 
-          {/* ✅ Contexto contable (como Ingresos) */}
+          {/* ✅ Contexto contable */}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Cuenta contable:</span>
             <span className="font-medium">{cuentaContable ? `${cuentaContable}` : "No asignada"}</span>
           </div>
 
+          {/* ✅ En costos, ya damos visibilidad por agrupación; esto solo refuerza el estado */}
           {isCosto && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subcuenta:</span>
@@ -524,9 +597,7 @@ const CatalogoProductos = () => {
 
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Última compra:</span>
-            <span>
-              {producto.ultima_compra ? new Date(producto.ultima_compra).toLocaleDateString() : "-"}
-            </span>
+            <span>{producto.ultima_compra ? new Date(producto.ultima_compra).toLocaleDateString() : "-"}</span>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -550,12 +621,7 @@ const CatalogoProductos = () => {
               Analíticas
             </Button>
 
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1"
-              onClick={() => handleEditProduct(producto)}
-            >
+            <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEditProduct(producto)}>
               <Edit className="h-3 w-3 mr-1" />
               Editar
             </Button>
@@ -573,6 +639,28 @@ const CatalogoProductos = () => {
       </Card>
     );
   };
+
+  const EmptyState = ({ text }: { text: string }) => (
+    <Card>
+      <CardContent className="text-center py-8">
+        <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">{text}</p>
+      </CardContent>
+    </Card>
+  );
+
+  const LoadingGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[1, 2, 3].map((i) => (
+        <Card key={i} className="animate-pulse">
+          <CardContent className="p-6">
+            <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+            <div className="h-3 bg-muted rounded w-1/2"></div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -652,9 +740,7 @@ const CatalogoProductos = () => {
                   <Label htmlFor="cuenta-contable">Cuenta Contable a Afectar *</Label>
                   <Select
                     value={newProduct.cuentaContable}
-                    onValueChange={(value) =>
-                      setNewProduct({ ...newProduct, cuentaContable: value, subcuentaId: "" })
-                    }
+                    onValueChange={(value) => setNewProduct({ ...newProduct, cuentaContable: value, subcuentaId: "" })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cuenta contable" />
@@ -667,9 +753,7 @@ const CatalogoProductos = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).
-                  </p>
+                  <p className="text-xs text-muted-foreground">Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).</p>
                 </div>
               )}
 
@@ -761,6 +845,16 @@ const CatalogoProductos = () => {
         </Dialog>
       </div>
 
+      {/* Tip / recomendación (estilo pro, similar a Catálogo de Productos) */}
+      <Card className="bg-muted/30 border-border/60">
+        <CardContent className="py-4">
+          <div className="text-sm text-muted-foreground">
+            Recomendación: asignar subcuentas a los <span className="font-medium text-foreground">costos</span> ayuda a tener mejor control contable. Los elementos sin subcuenta se consideran dentro de la{" "}
+            <span className="font-medium text-foreground">cuenta general 5001 - Costo de Ventas</span>.
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Gastos */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -769,63 +863,84 @@ const CatalogoProductos = () => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <LoadingGrid />
         ) : filteredGastos.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredGastos.map(renderProductCard)}
           </div>
         ) : (
-          <Card>
-            <CardContent className="text-center py-8">
-              <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">
-                {searchTerm ? "No se encontraron gastos que coincidan con la búsqueda" : "Aún no has agregado gastos al catálogo"}
-              </p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            text={searchTerm ? "No se encontraron gastos que coincidan con la búsqueda" : "Aún no has agregado gastos al catálogo"}
+          />
         )}
       </div>
 
-      {/* Costos */}
+      {/* Costos (AGRUPADO como Catálogo de Productos: subcuentas vs cuenta general) */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold">Catálogo de Costos</h2>
           <Badge variant="secondary">{filteredCostos.length}</Badge>
+
+          {!isLoading && filteredCostos.length > 0 && (
+            <div className="ml-auto flex gap-2">
+              <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
+                Con subcuenta: {costosAgrupados.withSubCount}
+              </Badge>
+              <Badge variant="outline" className="border-border/60">
+                Cuenta general: {costosAgrupados.withoutSubCount}
+              </Badge>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
+          <LoadingGrid />
+        ) : filteredCostos.length === 0 ? (
+          <EmptyState
+            text={searchTerm ? "No se encontraron costos que coincidan con la búsqueda" : "Aún no has agregado costos al catálogo"}
+          />
+        ) : (
+          <div className="space-y-4">
+            {/* Subcuentas */}
+            {costosAgrupados.groupedList.map((g) => (
+              <Card key={g.label} className="bg-muted/30 border-border/60">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="font-semibold">Subcuenta: {g.label}</div>
+                    <Badge variant="secondary">{g.items.length}</Badge>
+                  </div>
+                  <CardDescription>Costos registrados con subcuenta asignada</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {g.items.map(renderProductCard)}
+                  </div>
                 </CardContent>
               </Card>
             ))}
+
+            {/* Cuenta general */}
+            <Card className="bg-muted/30 border-border/60">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold">Cuenta General: 5001 - Costo de Ventas</div>
+                  <Badge variant="secondary">{costosAgrupados.withoutSub.length}</Badge>
+                </div>
+                <CardDescription>Costos sin subcuenta específica</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {costosAgrupados.withoutSub.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {costosAgrupados.withoutSub.map(renderProductCard)}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground py-6 text-center">
+                    Perfecto: no hay costos pendientes de asignación de subcuenta.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        ) : filteredCostos.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCostos.map(renderProductCard)}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="text-center py-8">
-              <Package2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">
-                {searchTerm ? "No se encontraron costos que coincidan con la búsqueda" : "Aún no has agregado costos al catálogo"}
-              </p>
-            </CardContent>
-          </Card>
         )}
       </div>
 
@@ -886,9 +1001,7 @@ const CatalogoProductos = () => {
                   <Label htmlFor="edit-cuenta-contable">Cuenta Contable a Afectar *</Label>
                   <Select
                     value={editingProduct.cuentaContable}
-                    onValueChange={(value) =>
-                      setEditingProduct({ ...editingProduct, cuentaContable: value, subcuentaId: "" })
-                    }
+                    onValueChange={(value) => setEditingProduct({ ...editingProduct, cuentaContable: value, subcuentaId: "" })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cuenta contable" />
@@ -941,10 +1054,7 @@ const CatalogoProductos = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="edit-unidad">Unidad de Medida *</Label>
-                <Select
-                  value={editingProduct.unidad}
-                  onValueChange={(value) => setEditingProduct({ ...editingProduct, unidad: value })}
-                >
+                <Select value={editingProduct.unidad} onValueChange={(value) => setEditingProduct({ ...editingProduct, unidad: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar unidad" />
                   </SelectTrigger>
@@ -982,9 +1092,7 @@ const CatalogoProductos = () => {
                   }}
                   className="cursor-pointer"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Si eliges una imagen nueva, se reemplazará la anterior.
-                </p>
+                <p className="text-xs text-muted-foreground">Si eliges una imagen nueva, se reemplazará la anterior.</p>
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
