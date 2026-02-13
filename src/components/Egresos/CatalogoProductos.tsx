@@ -29,6 +29,8 @@ import {
   UpdateProductoEgresoData,
 } from "@/hooks/useProductosEgresos";
 
+import { useCuentas } from "@/hooks/useCuentas";
+
 /**
  * Helpers defensivos (para evitar crashes por undefined / strings)
  */
