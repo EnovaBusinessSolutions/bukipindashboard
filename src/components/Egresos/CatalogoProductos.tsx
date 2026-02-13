@@ -19,6 +19,7 @@ import { Search, Filter, Package2, Edit, Trash2, Eye, Plus, AlertTriangle } from
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import FriendlySubcuentaSelector from "@/components/ui/friendly-subcuenta-selector";
+import { useCuentas } from "@/hooks/useCuentas";
 
 import {
   useProductosEgresos,
@@ -28,8 +29,6 @@ import {
   CreateProductoEgresoData,
   UpdateProductoEgresoData,
 } from "@/hooks/useProductosEgresos";
-
-import { useCuentas } from "@/hooks/useCuentas";
 
 /**
  * Helpers defensivos (para evitar crashes por undefined / strings)
@@ -213,7 +212,41 @@ const CatalogoProductos = () => {
   const updateProducto = useUpdateProductoEgreso();
   const deleteProducto = useDeleteProductoEgreso();
 
+  // 🔥 Para resolver nombre/código de subcuenta aunque el endpoint de productos solo mande el ID
+  const { data: cuentasRaw } = useCuentas() as any;
+
+  // Mapa: subcuentaId -> { codigo, nombre, label }
+  const subcuentaById = useMemo(() => {
+    const map = new Map<string, { codigo: string; nombre: string; label: string }>();
+
+    const cuentas = Array.isArray(cuentasRaw)
+      ? cuentasRaw
+      : Array.isArray(cuentasRaw?.data)
+      ? cuentasRaw.data
+      : [];
+
+    for (const c of cuentas) {
+      const subs = c?.subcuentas || c?.subcuentas_contables || c?.subaccounts || [];
+      if (!Array.isArray(subs)) continue;
+
+      for (const s of subs) {
+        const id = String(s?._id ?? s?.id ?? "").trim();
+        if (!id) continue;
+
+        const codigo = String(s?.codigo ?? s?.code ?? "").trim();
+        const nombre = String(s?.nombre ?? s?.name ?? "").trim();
+
+        const label = codigo && nombre ? `${codigo} - ${nombre}` : nombre ? nombre : codigo ? codigo : "";
+
+        if (label) map.set(id, { codigo, nombre, label });
+      }
+    }
+
+    return map;
+  }, [cuentasRaw]);
+
   // Normaliza SIEMPRE para que el UI no dependa del shape del backend
+  // y además "enriquece" subcuenta_label desde el mapa (para no mostrar IDs)
   const productosEgresos = useMemo(() => {
     const arr = Array.isArray(productosEgresosRaw)
       ? productosEgresosRaw
@@ -221,8 +254,30 @@ const CatalogoProductos = () => {
       ? productosEgresosRaw.data
       : [];
 
-    return (arr || []).map(normalizeProducto).filter(Boolean);
-  }, [productosEgresosRaw]);
+    const normalized = (arr || []).map(normalizeProducto).filter(Boolean) as any[];
+
+    return normalized.map((p) => {
+      const subId = p?.subcuenta_id ? String(p.subcuenta_id).trim() : "";
+      if (!subId) return p;
+
+      const label = String(p?.subcuenta_label || "").trim();
+      const looksLikeIdFallback = !label || label === `Subcuenta: ${subId}` || label.startsWith("Subcuenta: ");
+
+      if (looksLikeIdFallback) {
+        const fromMap = subcuentaById.get(subId);
+        if (fromMap?.label) {
+          return {
+            ...p,
+            subcuenta_codigo: p.subcuenta_codigo || fromMap.codigo,
+            subcuenta_nombre: p.subcuenta_nombre || fromMap.nombre,
+            subcuenta_label: fromMap.label,
+          };
+        }
+      }
+
+      return p;
+    });
+  }, [productosEgresosRaw, subcuentaById]);
 
   const [newProduct, setNewProduct] = useState({
     nombre: "",
@@ -308,14 +363,16 @@ const CatalogoProductos = () => {
     const withSub = filteredCostos.filter((p: any) => !!toStrIdOrNull(p?.subcuenta_id));
     const orphan = filteredCostos.filter((p: any) => !toStrIdOrNull(p?.subcuenta_id));
 
-    const groups = new Map<
-      string,
-      { subcuentaId: string; label: string; items: any[] }
-    >();
+    const groups = new Map<string, { subcuentaId: string; label: string; items: any[] }>();
 
     for (const p of withSub) {
       const subId = toStrId(p?.subcuenta_id);
-      const label = safeStr(p?.subcuenta_label).trim() || `Subcuenta: ${subId}`;
+
+      // ✅ resolver label humano: producto -> mapa -> fallback a ID
+      const label =
+        safeStr(p?.subcuenta_label).trim() ||
+        subcuentaById.get(subId)?.label ||
+        `Subcuenta: ${subId}`;
 
       if (!groups.has(subId)) {
         groups.set(subId, { subcuentaId: subId, label, items: [] });
@@ -327,7 +384,9 @@ const CatalogoProductos = () => {
       .sort((a, b) => a.label.localeCompare(b.label, "es"))
       .map((g) => ({
         ...g,
-        items: (g.items || []).slice().sort((x, y) => safeStr(x?.nombre).localeCompare(safeStr(y?.nombre), "es")),
+        items: (g.items || [])
+          .slice()
+          .sort((x, y) => safeStr(x?.nombre).localeCompare(safeStr(y?.nombre), "es")),
       }));
 
     return {
@@ -336,7 +395,7 @@ const CatalogoProductos = () => {
       orphanCount: orphan.length,
       orphanItems: orphan,
     };
-  }, [filteredCostos]);
+  }, [filteredCostos, subcuentaById]);
 
   const getVariationColor = (variacion: number) => {
     const v = toNum(variacion, 0);
@@ -450,7 +509,7 @@ const CatalogoProductos = () => {
       proveedorPrincipal: p.proveedor_principal || "",
       esRecurrente: !!p.es_recurrente,
 
-      // ✅ aquí estaba el bug: ahora SIEMPRE es el id real (string)
+      // ✅ id real para que FriendlySubcuentaSelector lo refleje al abrir
       subcuentaId: p.subcuenta_id ? String(p.subcuenta_id) : "",
 
       cuentaContable: p.cuenta_contable || "",
@@ -563,8 +622,13 @@ const CatalogoProductos = () => {
     const imagenUrl = producto?.imagen_url || producto?.imagenUrl || producto?.imageUrl || "";
 
     const cuentaContable = producto?.cuenta_contable || producto?.cuentaContable || producto?.cuentaCodigo || "";
-    const subcuentaLabel = safeStr(producto?.subcuenta_label).trim();
     const isCosto = producto?.tipo === "costo";
+
+    const subId = producto?.subcuenta_id ? String(producto.subcuenta_id).trim() : "";
+    const subcuentaLabel =
+      safeStr(producto?.subcuenta_label).trim() ||
+      (subId ? subcuentaById.get(subId)?.label : "") ||
+      "";
 
     return (
       <Card key={producto.id} className="hover:shadow-md transition-shadow border-border/60">
