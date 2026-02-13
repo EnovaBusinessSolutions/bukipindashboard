@@ -42,6 +42,11 @@ const moneyMX = (v: any) => {
   return n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const safeStr = (v: any) => {
+  if (v === null || v === undefined) return "";
+  return String(v);
+};
+
 const toStrId = (v: any) => {
   if (v === null || v === undefined) return "";
   const s = String(v).trim();
@@ -53,47 +58,89 @@ const toStrIdOrNull = (v: any) => {
   return s ? s : null;
 };
 
-const safeStr = (v: any) => {
-  if (v === null || v === undefined) return "";
-  return String(v);
-};
+/**
+ * Extrae subcuenta de forma robusta:
+ * - subcuenta_id / subcuentaId (string)
+ * - subcuenta (objeto) con id/_id/codigo/nombre
+ * - evita caer en "[object Object]"
+ */
+const extractSubcuentaInfo = (p: any) => {
+  const raw =
+    p?.subcuenta_id ??
+    p?.subcuentaId ??
+    p?.subcuentaID ??
+    p?.subcuenta_id_str ??
+    p?.subcuenta ??
+    null;
 
-const buildSubcuentaLabel = (p: any) => {
-  const name =
-    p?.subcuenta_nombre ??
-    p?.subcuentaNombre ??
-    p?.subcuenta_name ??
-    p?.subcuentaName ??
-    p?.subcuenta?.nombre ??
-    p?.subcuenta?.name ??
-    "";
+  // Si viene como objeto, intentar sacar id/_id
+  let id = "";
+  let codigo = "";
+  let nombre = "";
 
-  const codigo =
-    p?.subcuenta_codigo ??
-    p?.subcuentaCodigo ??
-    p?.subcuenta_code ??
-    p?.subcuentaCode ??
-    p?.subcuenta?.codigo ??
-    p?.subcuenta?.code ??
-    "";
+  if (raw && typeof raw === "object") {
+    id = toStrId(raw?._id ?? raw?.id ?? "");
+    codigo = safeStr(raw?.codigo ?? raw?.code ?? "").trim();
+    nombre = safeStr(raw?.nombre ?? raw?.name ?? "").trim();
+  } else {
+    id = toStrId(raw);
+  }
 
-  const n = safeStr(name).trim();
-  const c = safeStr(codigo).trim();
+  // También puede venir “plano” en el producto
+  const codigoPlano =
+    safeStr(
+      p?.subcuenta_codigo ??
+        p?.subcuentaCodigo ??
+        p?.subcuenta_code ??
+        p?.subcuentaCode ??
+        ""
+    ).trim();
 
-  if (c && n) return `${c} - ${n}`;
-  if (n) return n;
-  if (c) return c;
+  const nombrePlano =
+    safeStr(
+      p?.subcuenta_nombre ??
+        p?.subcuentaNombre ??
+        p?.subcuenta_name ??
+        p?.subcuentaName ??
+        ""
+    ).trim();
 
-  const id = toStrId(p?.subcuenta_id ?? p?.subcuentaId ?? "");
-  if (id) return "Subcuenta asignada";
+  if (!codigo) codigo = codigoPlano;
+  if (!nombre) nombre = nombrePlano;
 
-  return "";
+  const cleanId = toStrIdOrNull(id);
+  const cleanCodigo = safeStr(codigo).trim();
+  const cleanNombre = safeStr(nombre).trim();
+
+  const label =
+    cleanCodigo && cleanNombre
+      ? `${cleanCodigo} - ${cleanNombre}`
+      : cleanNombre
+      ? cleanNombre
+      : cleanCodigo
+      ? cleanCodigo
+      : cleanId
+      ? `Subcuenta: ${cleanId}`
+      : "";
+
+  return {
+    id: cleanId,
+    codigo: cleanCodigo || "",
+    nombre: cleanNombre || "",
+    label: label || "",
+  };
 };
 
 /**
  * Normaliza un producto venga como venga (backend nuevo / legacy / wrapper / payload plano)
- * ✅ La UI siempre consume: unidad, cuenta_contable, total_transacciones, precio_promedio, variacion_precio, ultima_compra,
- *    proveedor_principal, imagen_url, es_recurrente, subcuenta_id (+ subcuenta_label best-effort)
+ * ✅ La UI siempre consume:
+ * - id
+ * - unidad
+ * - cuenta_contable
+ * - proveedor_principal
+ * - imagen_url
+ * - precio_promedio / variacion_precio / total_transacciones / ultima_compra
+ * - subcuenta_id (string real) + subcuenta_label
  */
 const normalizeProducto = (p: any) => {
   if (!p) return null;
@@ -113,14 +160,6 @@ const normalizeProducto = (p: any) => {
     p.cuentaCodigo ??
     "";
 
-  const subcuentaRaw =
-    p.subcuenta_id ??
-    p.subcuentaId ??
-    p.subcuenta ??
-    p.subcuentaID ??
-    p.subcuenta_id_str ??
-    null;
-
   const proveedor_principal = p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
   const imagen_url = p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? p.imagen ?? "";
 
@@ -132,12 +171,13 @@ const normalizeProducto = (p: any) => {
 
   const id = toStrId(p.id ?? p._id ?? "");
 
+  const sub = extractSubcuentaInfo(p);
+
   const normalized = {
     ...p,
     id,
     unidad: String(unidad || ""),
     cuenta_contable: String(cuenta_contable || ""),
-    subcuenta_id: toStrIdOrNull(subcuentaRaw),
     proveedor_principal: String(proveedor_principal || ""),
     imagen_url: String(imagen_url || ""),
     precio_promedio: toNum(precio_promedio, 0),
@@ -145,12 +185,15 @@ const normalizeProducto = (p: any) => {
     total_transacciones: toNum(total_transacciones, 0),
     ultima_compra: ultima_compra ? String(ultima_compra) : null,
     es_recurrente: !!es_recurrente,
+
+    // subcuenta canonical
+    subcuenta_id: sub.id,
+    subcuenta_codigo: sub.codigo,
+    subcuenta_nombre: sub.nombre,
+    subcuenta_label: sub.label,
   };
 
-  return {
-    ...normalized,
-    subcuenta_label: buildSubcuentaLabel(normalized),
-  };
+  return normalized;
 };
 
 const CatalogoProductos = () => {
@@ -253,21 +296,37 @@ const CatalogoProductos = () => {
     return n.includes(st) || prov.includes(st);
   });
 
-  // ✅ Agrupación de COSTOS solo por SUBCUENTA (como catálogo de productos de ingresos)
+  /**
+   * ✅ COSTOS: se agrupan POR subcuenta_id (NO por label)
+   * Esto replica el comportamiento del catálogo de ingresos:
+   * - Cada subcuenta es un bloque independiente
+   * - Si agregas un costo a esa subcuenta, cae en ese bloque y se acomoda “a un lado”
+   */
   const costosAgrupados = useMemo(() => {
     const withSub = filteredCostos.filter((p: any) => !!toStrIdOrNull(p?.subcuenta_id));
     const orphan = filteredCostos.filter((p: any) => !toStrIdOrNull(p?.subcuenta_id));
 
-    const groups: Record<string, any[]> = {};
+    const groups = new Map<
+      string,
+      { subcuentaId: string; label: string; items: any[] }
+    >();
+
     for (const p of withSub) {
-      const label = (p?.subcuenta_label || "Subcuenta asignada").trim() || "Subcuenta asignada";
-      if (!groups[label]) groups[label] = [];
-      groups[label].push(p);
+      const subId = toStrId(p?.subcuenta_id);
+      const label = safeStr(p?.subcuenta_label).trim() || `Subcuenta: ${subId}`;
+
+      if (!groups.has(subId)) {
+        groups.set(subId, { subcuentaId: subId, label, items: [] });
+      }
+      groups.get(subId)!.items.push(p);
     }
 
-    const groupedList = Object.entries(groups)
-      .sort((a, b) => a[0].localeCompare(b[0], "es"))
-      .map(([label, items]) => ({ label, items }));
+    const groupedList = Array.from(groups.values())
+      .sort((a, b) => a.label.localeCompare(b.label, "es"))
+      .map((g) => ({
+        ...g,
+        items: (g.items || []).slice().sort((x, y) => safeStr(x?.nombre).localeCompare(safeStr(y?.nombre), "es")),
+      }));
 
     return {
       groupedList,
@@ -388,7 +447,10 @@ const CatalogoProductos = () => {
       unidad: p.unidad || "",
       proveedorPrincipal: p.proveedor_principal || "",
       esRecurrente: !!p.es_recurrente,
+
+      // ✅ aquí estaba el bug: ahora SIEMPRE es el id real (string)
       subcuentaId: p.subcuenta_id ? String(p.subcuenta_id) : "",
+
       cuentaContable: p.cuenta_contable || "",
       imagen: null,
     });
@@ -499,7 +561,7 @@ const CatalogoProductos = () => {
     const imagenUrl = producto?.imagen_url || producto?.imagenUrl || producto?.imageUrl || "";
 
     const cuentaContable = producto?.cuenta_contable || producto?.cuentaContable || producto?.cuentaCodigo || "";
-    const subcuentaId = toStrId(producto?.subcuenta_id ?? producto?.subcuentaId ?? "");
+    const subcuentaLabel = safeStr(producto?.subcuenta_label).trim();
     const isCosto = producto?.tipo === "costo";
 
     return (
@@ -540,8 +602,8 @@ const CatalogoProductos = () => {
           {isCosto && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subcuenta:</span>
-              <span className={`font-medium ${subcuentaId ? "text-green-600" : "text-destructive"}`}>
-                {subcuentaId ? "Asignada" : "No asignada"}
+              <span className={`font-medium ${subcuentaLabel ? "text-green-600" : "text-destructive"}`}>
+                {subcuentaLabel || "No asignada"}
               </span>
             </div>
           )}
@@ -834,7 +896,7 @@ const CatalogoProductos = () => {
         )}
       </div>
 
-      {/* Costos (SOLO por SUBCUENTA) */}
+      {/* Costos (idéntico concepto al catálogo de ingresos: un bloque por subcuenta) */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold">Catálogo de Costos</h2>
@@ -857,8 +919,7 @@ const CatalogoProductos = () => {
           />
         ) : (
           <div className="space-y-4">
-            {/* Si existen costos sin subcuenta (legacy), NO mostramos bloque “Cuenta General”;
-               mostramos aviso pro + toggle colapsado por default */}
+            {/* pendientes legacy */}
             {costosAgrupados.orphanCount > 0 && (
               <Card className="border-border/60 bg-muted/30">
                 <CardContent className="py-4">
@@ -868,20 +929,14 @@ const CatalogoProductos = () => {
                         <AlertTriangle className="h-5 w-5 text-yellow-600" />
                       </div>
                       <div>
-                        <div className="font-medium">
-                          Hay {costosAgrupados.orphanCount} costo(s) sin subcuenta asignada
-                        </div>
+                        <div className="font-medium">Hay {costosAgrupados.orphanCount} costo(s) sin subcuenta asignada</div>
                         <div className="text-sm text-muted-foreground">
-                          Por política, los costos deben tener subcuenta. Edita estos registros para asignar su subcuenta.
+                          Por política, los costos deben tener subcuenta. Edita estos registros para asignarla.
                         </div>
                       </div>
                     </div>
 
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowOrphanCosts((v) => !v)}
-                      className="w-full md:w-auto"
-                    >
+                    <Button variant="outline" onClick={() => setShowOrphanCosts((v) => !v)} className="w-full md:w-auto">
                       {showOrphanCosts ? "Ocultar pendientes" : "Ver pendientes"}
                     </Button>
                   </div>
@@ -895,15 +950,17 @@ const CatalogoProductos = () => {
               </Card>
             )}
 
-            {/* Subcuentas */}
+            {/* ✅ un bloque por subcuenta real */}
             {costosAgrupados.groupedList.map((g) => (
-              <Card key={g.label} className="bg-muted/30 border-border/60">
+              <Card key={g.subcuentaId} className="bg-muted/30 border-border/60">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="font-semibold">Subcuenta: {g.label}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-semibold">Subcuenta: {g.label}</div>
+                      <CardDescription>{g.items.length} costo(s)</CardDescription>
+                    </div>
                     <Badge variant="secondary">{g.items.length}</Badge>
                   </div>
-                  <CardDescription>Costos registrados con esta subcuenta</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -953,7 +1010,9 @@ const CatalogoProductos = () => {
                       if (value === "costo") next.cuentaContable = next.cuentaContable || "5001";
                       if (value === "gasto") next.cuentaContable = "";
 
-                      next.subcuentaId = "";
+                      // solo resetear subcuenta si cambia a gasto (para no perder la selección al reabrir)
+                      if (value === "gasto") next.subcuentaId = "";
+
                       setEditingProduct(next);
                     }}
                   >
