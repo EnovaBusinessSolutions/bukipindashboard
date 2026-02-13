@@ -59,9 +59,17 @@ const toStrIdOrNull = (v: any) => {
   return s ? s : null;
 };
 
+const stripSubcuentaPrefix = (label: string) => {
+  const s = safeStr(label).trim();
+  if (!s) return "";
+  return s.replace(/^Subcuenta:\s*/i, "").trim();
+};
+
+const looksLikeMongoId = (s: string) => /^[a-f0-9]{24}$/i.test((s || "").trim());
+
 /**
  * Extrae subcuenta de forma robusta:
- * - subcuenta_id / subcuentaId (string)
+ * - subcuenta_id / subcuentaId (string u ObjectId)
  * - subcuenta (objeto) con id/_id/codigo/nombre
  * - evita caer en "[object Object]"
  */
@@ -74,7 +82,6 @@ const extractSubcuentaInfo = (p: any) => {
     p?.subcuenta ??
     null;
 
-  // Si viene como objeto, intentar sacar id/_id
   let id = "";
   let codigo = "";
   let nombre = "";
@@ -88,23 +95,13 @@ const extractSubcuentaInfo = (p: any) => {
   }
 
   // También puede venir “plano” en el producto
-  const codigoPlano =
-    safeStr(
-      p?.subcuenta_codigo ??
-        p?.subcuentaCodigo ??
-        p?.subcuenta_code ??
-        p?.subcuentaCode ??
-        ""
-    ).trim();
+  const codigoPlano = safeStr(
+    p?.subcuenta_codigo ?? p?.subcuentaCodigo ?? p?.subcuenta_code ?? p?.subcuentaCode ?? ""
+  ).trim();
 
-  const nombrePlano =
-    safeStr(
-      p?.subcuenta_nombre ??
-        p?.subcuentaNombre ??
-        p?.subcuenta_name ??
-        p?.subcuentaName ??
-        ""
-    ).trim();
+  const nombrePlano = safeStr(
+    p?.subcuenta_nombre ?? p?.subcuentaNombre ?? p?.subcuenta_name ?? p?.subcuentaName ?? ""
+  ).trim();
 
   if (!codigo) codigo = codigoPlano;
   if (!nombre) nombre = nombrePlano;
@@ -121,14 +118,14 @@ const extractSubcuentaInfo = (p: any) => {
       : cleanCodigo
       ? cleanCodigo
       : cleanId
-      ? `Subcuenta: ${cleanId}`
+      ? cleanId // 👈 IMPORTANT: NO prefijamos "Subcuenta:" aquí para evitar duplicados en UI
       : "";
 
   return {
     id: cleanId,
     codigo: cleanCodigo || "",
     nombre: cleanNombre || "",
-    label: label || "",
+    label: stripSubcuentaPrefix(label || ""),
   };
 };
 
@@ -141,25 +138,16 @@ const extractSubcuentaInfo = (p: any) => {
  * - proveedor_principal
  * - imagen_url
  * - precio_promedio / variacion_precio / total_transacciones / ultima_compra
- * - subcuenta_id (string real) + subcuenta_label
+ * - subcuenta_id (string real) + subcuenta_label (humano cuando exista)
  */
 const normalizeProducto = (p: any) => {
   if (!p) return null;
 
   const unidad =
-    p.unidad ??
-    p.unidad_medida ??
-    p.unidadMedida ??
-    p.unidad_de_medida ??
-    p.unidadDeMedida ??
-    "";
+    p.unidad ?? p.unidad_medida ?? p.unidadMedida ?? p.unidad_de_medida ?? p.unidadDeMedida ?? "";
 
   const cuenta_contable =
-    p.cuenta_contable ??
-    p.cuentaContable ??
-    p.cuenta_codigo ??
-    p.cuentaCodigo ??
-    "";
+    p.cuenta_contable ?? p.cuentaContable ?? p.cuenta_codigo ?? p.cuentaCodigo ?? "";
 
   const proveedor_principal = p.proveedor_principal ?? p.proveedorPrincipal ?? p.proveedor ?? "";
   const imagen_url = p.imagen_url ?? p.imagenUrl ?? p.imageUrl ?? p.imagen ?? "";
@@ -191,7 +179,7 @@ const normalizeProducto = (p: any) => {
     subcuenta_id: sub.id,
     subcuenta_codigo: sub.codigo,
     subcuenta_nombre: sub.nombre,
-    subcuenta_label: sub.label,
+    subcuenta_label: stripSubcuentaPrefix(sub.label),
   };
 
   return normalized;
@@ -215,16 +203,38 @@ const CatalogoProductos = () => {
   // 🔥 Para resolver nombre/código de subcuenta aunque el endpoint de productos solo mande el ID
   const { data: cuentasRaw } = useCuentas() as any;
 
-  // Mapa: subcuentaId -> { codigo, nombre, label }
+  /**
+   * ✅ Mapa subcuentaId -> { codigo, nombre, label }
+   *
+   * IMPORTANTE (tu caso real):
+   * En tu BD, la “subcuenta” NO viene dentro de `cuenta.subcuentas[]`,
+   * sino como documentos en `accounts` con `parentCode` (ej. 5001-02 con parentCode=5001).
+   *
+   * Entonces:
+   * 1) Soportamos nested subcuentas (legacy)
+   * 2) Soportamos subcuentas como accounts (parentCode presente)
+   */
   const subcuentaById = useMemo(() => {
     const map = new Map<string, { codigo: string; nombre: string; label: string }>();
 
-    const cuentas = Array.isArray(cuentasRaw)
-      ? cuentasRaw
-      : Array.isArray(cuentasRaw?.data)
-      ? cuentasRaw.data
-      : [];
+    const cuentas = Array.isArray(cuentasRaw) ? cuentasRaw : Array.isArray(cuentasRaw?.data) ? cuentasRaw.data : [];
 
+    // (A) Caso moderno/real: subcuentas como documentos "Account" (tienen parentCode)
+    for (const a of cuentas) {
+      const id = String(a?._id ?? a?.id ?? "").trim();
+      if (!id) continue;
+
+      const parentCode = String(a?.parentCode ?? a?.parent_code ?? a?.parentCodigo ?? "").trim();
+      // si tiene parentCode, es subcuenta (según tu modelo actual)
+      if (parentCode) {
+        const codigo = String(a?.code ?? a?.codigo ?? a?.accountCode ?? "").trim();
+        const nombre = String(a?.name ?? a?.nombre ?? "").trim();
+        const label = stripSubcuentaPrefix(codigo && nombre ? `${codigo} - ${nombre}` : nombre || codigo || "");
+        if (label) map.set(id, { codigo, nombre, label });
+      }
+    }
+
+    // (B) Caso legacy: cuenta.subcuentas[]
     for (const c of cuentas) {
       const subs = c?.subcuentas || c?.subcuentas_contables || c?.subaccounts || [];
       if (!Array.isArray(subs)) continue;
@@ -236,9 +246,8 @@ const CatalogoProductos = () => {
         const codigo = String(s?.codigo ?? s?.code ?? "").trim();
         const nombre = String(s?.nombre ?? s?.name ?? "").trim();
 
-        const label = codigo && nombre ? `${codigo} - ${nombre}` : nombre ? nombre : codigo ? codigo : "";
-
-        if (label) map.set(id, { codigo, nombre, label });
+        const label = stripSubcuentaPrefix(codigo && nombre ? `${codigo} - ${nombre}` : nombre || codigo || "");
+        if (label && !map.has(id)) map.set(id, { codigo, nombre, label });
       }
     }
 
@@ -260,10 +269,13 @@ const CatalogoProductos = () => {
       const subId = p?.subcuenta_id ? String(p.subcuenta_id).trim() : "";
       if (!subId) return p;
 
-      const label = String(p?.subcuenta_label || "").trim();
-      const looksLikeIdFallback = !label || label === `Subcuenta: ${subId}` || label.startsWith("Subcuenta: ");
+      // label actual (si backend lo manda)
+      const currentLabel = stripSubcuentaPrefix(String(p?.subcuenta_label || "").trim());
 
-      if (looksLikeIdFallback) {
+      // Detectar fallback que termina siendo el id (o vacío)
+      const isIdFallback = !currentLabel || looksLikeMongoId(currentLabel);
+
+      if (isIdFallback) {
         const fromMap = subcuentaById.get(subId);
         if (fromMap?.label) {
           return {
@@ -275,7 +287,7 @@ const CatalogoProductos = () => {
         }
       }
 
-      return p;
+      return { ...p, subcuenta_label: currentLabel || p.subcuenta_label };
     });
   }, [productosEgresosRaw, subcuentaById]);
 
@@ -355,7 +367,6 @@ const CatalogoProductos = () => {
 
   /**
    * ✅ COSTOS: se agrupan POR subcuenta_id (NO por label)
-   * Esto replica el comportamiento del catálogo de ingresos:
    * - Cada subcuenta es un bloque independiente
    * - Si agregas un costo a esa subcuenta, cae en ese bloque y se acomoda “a un lado”
    */
@@ -369,10 +380,13 @@ const CatalogoProductos = () => {
       const subId = toStrId(p?.subcuenta_id);
 
       // ✅ resolver label humano: producto -> mapa -> fallback a ID
+      const rawLabel = stripSubcuentaPrefix(safeStr(p?.subcuenta_label).trim());
+      const fromMap = subcuentaById.get(subId)?.label || "";
+
       const label =
-        safeStr(p?.subcuenta_label).trim() ||
-        subcuentaById.get(subId)?.label ||
-        `Subcuenta: ${subId}`;
+        (rawLabel && !looksLikeMongoId(rawLabel) ? rawLabel : "") ||
+        (fromMap && !looksLikeMongoId(fromMap) ? fromMap : "") ||
+        subId; // último recurso: id (pero ya sin "Subcuenta:" duplicado)
 
       if (!groups.has(subId)) {
         groups.set(subId, { subcuentaId: subId, label, items: [] });
@@ -384,9 +398,7 @@ const CatalogoProductos = () => {
       .sort((a, b) => a.label.localeCompare(b.label, "es"))
       .map((g) => ({
         ...g,
-        items: (g.items || [])
-          .slice()
-          .sort((x, y) => safeStr(x?.nombre).localeCompare(safeStr(y?.nombre), "es")),
+        items: (g.items || []).slice().sort((x, y) => safeStr(x?.nombre).localeCompare(safeStr(y?.nombre), "es")),
       }));
 
     return {
@@ -607,17 +619,10 @@ const CatalogoProductos = () => {
     const txs = toNum(producto?.total_transacciones, 0);
 
     const unidad =
-      producto?.unidad ||
-      producto?.unidad_medida ||
-      producto?.unidadMedida ||
-      producto?.unidadDeMedida ||
-      "-";
+      producto?.unidad || producto?.unidad_medida || producto?.unidadMedida || producto?.unidadDeMedida || "-";
 
     const proveedor =
-      producto?.proveedor_principal ||
-      producto?.proveedorPrincipal ||
-      producto?.proveedor ||
-      "No especificado";
+      producto?.proveedor_principal || producto?.proveedorPrincipal || producto?.proveedor || "No especificado";
 
     const imagenUrl = producto?.imagen_url || producto?.imagenUrl || producto?.imageUrl || "";
 
@@ -625,9 +630,12 @@ const CatalogoProductos = () => {
     const isCosto = producto?.tipo === "costo";
 
     const subId = producto?.subcuenta_id ? String(producto.subcuenta_id).trim() : "";
+    const rawLabel = stripSubcuentaPrefix(safeStr(producto?.subcuenta_label).trim());
+    const fromMap = subId ? stripSubcuentaPrefix(subcuentaById.get(subId)?.label || "") : "";
+
     const subcuentaLabel =
-      safeStr(producto?.subcuenta_label).trim() ||
-      (subId ? subcuentaById.get(subId)?.label : "") ||
+      (rawLabel && !looksLikeMongoId(rawLabel) ? rawLabel : "") ||
+      (fromMap && !looksLikeMongoId(fromMap) ? fromMap : "") ||
       "";
 
     return (
@@ -644,7 +652,9 @@ const CatalogoProductos = () => {
 
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg truncate">{producto.nombre}</CardTitle>
-              <CardDescription className="mt-1 line-clamp-2">{producto.descripcion || "Sin descripción"}</CardDescription>
+              <CardDescription className="mt-1 line-clamp-2">
+                {producto.descripcion || "Sin descripción"}
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -722,7 +732,12 @@ const CatalogoProductos = () => {
               Editar
             </Button>
 
-            <Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteProducto.mutate(producto.id)}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              onClick={() => deleteProducto.mutate(producto.id)}
+            >
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
@@ -841,7 +856,9 @@ const CatalogoProductos = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).</p>
+                  <p className="text-xs text-muted-foreground">
+                    Para gastos solo se permiten cuentas 5101–5108 (incluye 5103).
+                  </p>
                 </div>
               )}
 
@@ -1017,24 +1034,27 @@ const CatalogoProductos = () => {
             )}
 
             {/* ✅ un bloque por subcuenta real */}
-            {costosAgrupados.groupedList.map((g) => (
-              <Card key={g.subcuentaId} className="bg-muted/30 border-border/60">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="font-semibold">Subcuenta: {g.label}</div>
-                      <CardDescription>{g.items.length} costo(s)</CardDescription>
+            {costosAgrupados.groupedList.map((g) => {
+              const cleanLabel = stripSubcuentaPrefix(g.label);
+              return (
+                <Card key={g.subcuentaId} className="bg-muted/30 border-border/60">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold">Subcuenta: {cleanLabel || g.subcuentaId}</div>
+                        <CardDescription>{g.items.length} costo(s)</CardDescription>
+                      </div>
+                      <Badge variant="secondary">{g.items.length}</Badge>
                     </div>
-                    <Badge variant="secondary">{g.items.length}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {g.items.map(renderProductCard)}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {g.items.map(renderProductCard)}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
