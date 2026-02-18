@@ -1,3 +1,4 @@
+// src/components/EstadosFinancieros/BalanceGeneralEjecutivo.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useAsientosBalanza } from "@/hooks/useAsientosBalanza";
@@ -41,9 +42,7 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
         <CardContent className="p-12">
           <div className="text-center space-y-2">
             <p className="text-xl font-medium text-muted-foreground">No hay datos financieros registrados</p>
-            <p className="text-sm text-muted-foreground">
-              Comienza registrando transacciones para ver el balance general
-            </p>
+            <p className="text-sm text-muted-foreground">Comienza registrando transacciones para ver el balance general</p>
           </div>
         </CardContent>
       </Card>
@@ -89,32 +88,32 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
 
   // Desglosar activos por tipo para mostrar (ejecutivo usa totales)
   const activoCirculante = cuentasFlat.filter(
-    (cuenta) => cuenta.subgrupo === "Activo Circulante" && cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Activo Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   const activoFijo = cuentasFlat.filter(
-    (cuenta) => cuenta.subgrupo === "Activo No Circulante" && cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Activo No Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   const activoDiferido = cuentasFlat.filter(
-    (cuenta) => cuenta.subgrupo === "Activo Diferido" && cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Activo Diferido" && cuenta.estado_financiero === "Balance General"
   );
 
   const pasivoCortoPlazo = cuentasFlat.filter(
-    (cuenta) => cuenta.subgrupo === "Pasivo Circulante" && cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Pasivo Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   const pasivoLargoPlazo = cuentasFlat.filter(
-    (cuenta) => cuenta.subgrupo === "Pasivo No Circulante" && cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Pasivo No Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   // Calcular subtotales para mostrar (solo para display, los totales ya los tenemos)
-  const totalActivoCirculante = activoCirculante.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalActivoFijo = activoFijo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalActivoDiferido = activoDiferido.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoCirculante = activoCirculante.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoFijo = activoFijo.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalActivoDiferido = activoDiferido.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
-  const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
-  const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total, cuenta) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
+  const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
   // ✅ Requerimiento: Capital Contable en 2 rubros
   const otrasCuentasCapital = totalCapitalContable;
@@ -129,6 +128,11 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
     return value < 0 ? `-$${formatted}` : `$${formatted}`;
   };
 
+  // 🎨 Azul “padre” de la captura 2 (RGB 11,66,117)
+  const brandBlueText = "text-[#0B4275] dark:text-[#7FA6D6]";
+  const brandBlueBorder = "border-[#0B4275]/20 dark:border-[#0B4275]/35";
+  const brandBlueHeader = "bg-[#0B4275]";
+
   const LineItem = ({
     label,
     value,
@@ -142,7 +146,7 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
   }) => {
     const getColor = () => {
       if (isTotal) return "text-emerald-700 dark:text-emerald-400";
-      if (isSubtotal) return "text-blue-700 dark:text-blue-400";
+      if (isSubtotal) return brandBlueText; // ✅ antes era azul agua -> ahora azul padre
       return "text-slate-700 dark:text-slate-300";
     };
 
@@ -157,7 +161,7 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
     return (
       <div
         className={`grid grid-cols-3 gap-4 items-center py-3 ${
-          isSubtotal || isTotal ? "border-t-2 border-slate-300 dark:border-slate-600 pt-4" : ""
+          isSubtotal || isTotal ? `border-t-2 ${brandBlueBorder} pt-4` : ""
         }`}
       >
         <span className={`${getFontWeight()} ${getColor()}`}>{label}</span>
@@ -170,15 +174,20 @@ const BalanceGeneralEjecutivo = ({ cutoffDate }: BalanceGeneralEjecutivoProps) =
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        {balanceCuadrado ? <Scale className="h-8 w-8 text-green-600" /> : <TrendingUp className="h-8 w-8 text-amber-600" />}
+        {balanceCuadrado ? (
+          <Scale className="h-8 w-8 text-green-600" />
+        ) : (
+          <TrendingUp className="h-8 w-8 text-amber-600" />
+        )}
         <p className="text-muted-foreground">Vista ejecutiva del balance al {cutoffDate.toLocaleDateString("es-CO")}</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Lado Izquierdo - Activos */}
-        <Card className="border-2">
-          <CardHeader className="bg-blue-50 dark:bg-blue-950">
-            <CardTitle className="text-2xl text-blue-700">Activos</CardTitle>
+        <Card className={`border-2 ${brandBlueBorder}`}>
+          {/* ✅ antes: bg-blue-50 (azul agua). Ahora: azul padre de la captura 2 */}
+          <CardHeader className={`${brandBlueHeader} text-white`}>
+            <CardTitle className="text-2xl text-white">Activos</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-1">

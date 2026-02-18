@@ -20,10 +20,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
 
   // Usar la misma lógica que la balanza
   const startDate = new Date(0); // Desde el inicio
-  const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(
-    startDate,
-    cutoffDate
-  );
+  const { data: asientosData, isLoading: asientosLoading } = useAsientosBalanza(startDate, cutoffDate);
 
   if (cuentasLoading || asientosLoading) {
     return (
@@ -37,20 +34,15 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
   const saldosPorCuenta = asientosData?.saldosPorCuenta || {};
 
   // Verificar si hay datos
-  const hayDatos =
-    asientosData?.movimientos && asientosData.movimientos.length > 0;
+  const hayDatos = asientosData?.movimientos && asientosData.movimientos.length > 0;
 
   if (!hayDatos) {
     return (
       <Card>
         <CardContent className="p-12">
           <div className="text-center space-y-2">
-            <p className="text-xl font-medium text-muted-foreground">
-              No hay datos financieros registrados
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Comienza registrando transacciones para ver el balance general
-            </p>
+            <p className="text-xl font-medium text-muted-foreground">No hay datos financieros registrados</p>
+            <p className="text-sm text-muted-foreground">Comienza registrando transacciones para ver el balance general</p>
           </div>
         </CardContent>
       </Card>
@@ -63,9 +55,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
   };
 
   // Calcular TODOS los activos desde los saldos de la balanza (cuentas 1xxx)
-  const codigosActivos = Object.keys(saldosPorCuenta).filter((c) =>
-    c.startsWith("1")
-  );
+  const codigosActivos = Object.keys(saldosPorCuenta).filter((c) => c.startsWith("1"));
 
   const totalActivos = codigosActivos.reduce((sum, codigo) => {
     const saldo = saldosPorCuenta[codigo]?.saldo || 0;
@@ -73,9 +63,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
   }, 0);
 
   // Calcular TODOS los pasivos desde los saldos de la balanza (cuentas 2xxx)
-  const codigosPasivos = Object.keys(saldosPorCuenta).filter((c) =>
-    c.startsWith("2")
-  );
+  const codigosPasivos = Object.keys(saldosPorCuenta).filter((c) => c.startsWith("2"));
 
   const totalPasivos = codigosPasivos.reduce((sum, codigo) => {
     const saldo = saldosPorCuenta[codigo]?.saldo || 0;
@@ -83,9 +71,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
   }, 0);
 
   // Calcular TODOS los capital contable desde los saldos de la balanza (cuentas 3xxx)
-  const codigosCapital = Object.keys(saldosPorCuenta).filter((c) =>
-    c.startsWith("3")
-  );
+  const codigosCapital = Object.keys(saldosPorCuenta).filter((c) => c.startsWith("3"));
 
   const totalCapitalContable = codigosCapital.reduce((sum, codigo) => {
     const saldo = saldosPorCuenta[codigo]?.saldo || 0;
@@ -93,116 +79,78 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
   }, 0);
 
   // Calcular utilidad del ejercicio desde los saldos de la balanza (cuentas 4xxx - 5xxx)
-  const ingresosCodigos = Object.keys(saldosPorCuenta).filter((c) =>
-    c.startsWith("4")
-  );
-  const egresosCodigos = Object.keys(saldosPorCuenta).filter((c) =>
-    c.startsWith("5")
-  );
-  const impuestosCodigos = Object.keys(saldosPorCuenta).filter((c) =>
-    c.startsWith("6")
-  );
+  const ingresosCodigos = Object.keys(saldosPorCuenta).filter((c) => c.startsWith("4"));
+  const egresosCodigos = Object.keys(saldosPorCuenta).filter((c) => c.startsWith("5"));
+  const impuestosCodigos = Object.keys(saldosPorCuenta).filter((c) => c.startsWith("6"));
 
-  const ingresos = ingresosCodigos.reduce(
-    (sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0),
-    0
-  );
-  const egresos = egresosCodigos.reduce(
-    (sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0),
-    0
-  );
-  const impuestos = impuestosCodigos.reduce(
-    (sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0),
-    0
-  );
+  const ingresos = ingresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const egresos = egresosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
+  const impuestos = impuestosCodigos.reduce((sum, c) => sum + (saldosPorCuenta[c]?.saldo || 0), 0);
 
   const utilidadEjercicio = ingresos - egresos - impuestos;
 
   // Desglosar activos por tipo para mostrar
   const activoCirculante = cuentasFlat.filter(
-    (cuenta) =>
-      cuenta.subgrupo === "Activo Circulante" &&
-      cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Activo Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   const activoFijo = cuentasFlat.filter(
-    (cuenta) =>
-      cuenta.subgrupo === "Activo No Circulante" &&
-      cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Activo No Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   // Separar activos fijos brutos de depreciación acumulada
-  const activoFijoBruto = activoFijo.filter((cuenta) => {
+  const activoFijoBruto = activoFijo.filter((cuenta: any) => {
     const codigo = parseInt(cuenta.codigo);
     return (codigo >= 1201 && codigo <= 1206) || codigo === 1212; // Activos brutos
   });
 
-  const depreciacionAcumulada = activoFijo.filter((cuenta) => {
+  const depreciacionAcumulada = activoFijo.filter((cuenta: any) => {
     const codigo = parseInt(cuenta.codigo);
     return codigo >= 1207 && codigo <= 1213; // Depreciaciones acumuladas
   });
 
   const activoDiferido = cuentasFlat.filter(
-    (cuenta) =>
-      cuenta.subgrupo === "Activo Diferido" &&
-      cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Activo Diferido" && cuenta.estado_financiero === "Balance General"
   );
 
   const pasivoCortoPlazo = cuentasFlat.filter(
-    (cuenta) =>
-      cuenta.subgrupo === "Pasivo Circulante" &&
-      cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Pasivo Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   const pasivoLargoPlazo = cuentasFlat.filter(
-    (cuenta) =>
-      cuenta.subgrupo === "Pasivo No Circulante" &&
-      cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.subgrupo === "Pasivo No Circulante" && cuenta.estado_financiero === "Balance General"
   );
 
   const capitalContable = cuentasFlat.filter(
-    (cuenta) =>
-      cuenta.codigo.startsWith("3") &&
-      cuenta.estado_financiero === "Balance General"
+    (cuenta: any) => cuenta.codigo.startsWith("3") && cuenta.estado_financiero === "Balance General"
   );
 
   // Calcular subtotales para mostrar (solo para display, los totales ya los tenemos)
-  const totalActivoCirculante = activoCirculante.reduce(
-    (total, cuenta) => total + obtenerSaldo(cuenta.codigo),
-    0
-  );
+  const totalActivoCirculante = activoCirculante.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
-  const totalActivoFijoBruto = activoFijoBruto.reduce(
-    (total, cuenta) => total + obtenerSaldo(cuenta.codigo),
-    0
-  );
+  const totalActivoFijoBruto = activoFijoBruto.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
-  const totalDepreciacionAcumulada = depreciacionAcumulada.reduce(
-    (total, cuenta) => total + obtenerSaldo(cuenta.codigo),
-    0
-  );
+  const totalDepreciacionAcumulada = depreciacionAcumulada.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
   const totalActivoFijoNeto = totalActivoFijoBruto + totalDepreciacionAcumulada; // totalDepreciacionAcumulada es negativo
 
-  const totalActivoDiferido = activoDiferido.reduce(
-    (total, cuenta) => total + obtenerSaldo(cuenta.codigo),
-    0
-  );
+  const totalActivoDiferido = activoDiferido.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
-  const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce(
-    (total, cuenta) => total + obtenerSaldo(cuenta.codigo),
-    0
-  );
+  const totalPasivoCortoPlazo = pasivoCortoPlazo.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
-  const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce(
-    (total, cuenta) => total + obtenerSaldo(cuenta.codigo),
-    0
-  );
+  const totalPasivoLargoPlazo = pasivoLargoPlazo.reduce((total: number, cuenta: any) => total + obtenerSaldo(cuenta.codigo), 0);
 
   const totalCapitalContableConUtilidad = totalCapitalContable + utilidadEjercicio;
   const totalPasivoMasCapital = totalPasivos + totalCapitalContableConUtilidad;
 
   const balanceCuadrado = Math.abs(totalActivos - totalPasivoMasCapital) < 0.01;
+
+  // 🎨 Azul “padre” (captura 2) para TODO el lado Activos (lo que era azul agua)
+  const brandBlueBg = "bg-[#0B4275]";
+  const brandBlueTextOn = "text-white";
+  const brandBlueText = "text-[#0B4275] dark:text-[#7FA6D6]";
+  const brandBlueBorder = "border-[#0B4275]/20 dark:border-[#0B4275]/35";
+  const brandBlueSoftBg = "bg-[#0B4275]/10 dark:bg-[#0B4275]/25";
 
   return (
     <div className="space-y-6">
@@ -210,8 +158,8 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Balance General al {cutoffDate.toLocaleDateString("es-CO")} - Los saldos
-          reflejan la situación financiera a esta fecha específica.
+          Balance General al {cutoffDate.toLocaleDateString("es-CO")} - Los saldos reflejan la situación financiera a esta
+          fecha específica.
         </AlertDescription>
       </Alert>
 
@@ -219,9 +167,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
         {/* Lado Izquierdo - Activos */}
         <div className="space-y-6">
           {/* Activo Circulante */}
-          <Card className="border-2">
-            <CardHeader className="bg-blue-50 dark:bg-blue-950">
-              <CardTitle className="text-blue-700">Activo Circulante</CardTitle>
+          <Card className={`border-2 ${brandBlueBorder}`}>
+            {/* ✅ antes: bg-blue-50 / text-blue-700 */}
+            <CardHeader className={`${brandBlueBg} ${brandBlueTextOn}`}>
+              <CardTitle className={`${brandBlueTextOn}`}>Activo Circulante</CardTitle>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -232,12 +181,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
               </div>
 
               <div className="space-y-1">
-                {activoCirculante.map((cuenta) => {
+                {activoCirculante.map((cuenta: any) => {
                   const saldo = obtenerSaldo(cuenta.codigo);
-                  const percentage =
-                    totalActivos > 0
-                      ? ((saldo / totalActivos) * 100).toFixed(2)
-                      : "0.00";
+                  const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                   return (
                     <div
@@ -248,29 +194,21 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                         {cuenta.codigo} - {cuenta.nombre}
                       </span>
                       <span className="text-right">
-                        $
-                        {saldo.toLocaleString("es-CO", {
-                          minimumFractionDigits: 2,
-                        })}
+                        ${saldo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                       </span>
                       <span className="text-right">{percentage}%</span>
                     </div>
                   );
                 })}
 
-                <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold text-blue-600 text-base">
+                {/* ✅ antes: text-blue-600 */}
+                <div className={`grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold ${brandBlueText} text-base`}>
                   <span>Total Activo Circulante</span>
                   <span className="text-right">
-                    $
-                    {totalActivoCirculante.toLocaleString("es-CO", {
-                      minimumFractionDigits: 2,
-                    })}
+                    ${totalActivoCirculante.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                   </span>
                   <span className="text-right">
-                    {totalActivos > 0
-                      ? ((totalActivoCirculante / totalActivos) * 100).toFixed(2)
-                      : "0.00"}
-                    %
+                    {totalActivos > 0 ? ((totalActivoCirculante / totalActivos) * 100).toFixed(2) : "0.00"}%
                   </span>
                 </div>
               </div>
@@ -278,9 +216,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
           </Card>
 
           {/* Activo Fijo */}
-          <Card className="border-2">
-            <CardHeader className="bg-indigo-50 dark:bg-indigo-950">
-              <CardTitle className="text-indigo-700">Activo Fijo</CardTitle>
+          <Card className={`border-2 ${brandBlueBorder}`}>
+            {/* ✅ antes: bg-indigo-50 / text-indigo-700 */}
+            <CardHeader className={`${brandBlueBg} ${brandBlueTextOn}`}>
+              <CardTitle className={`${brandBlueTextOn}`}>Activo Fijo</CardTitle>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -293,16 +232,11 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
               <div className="space-y-1">
                 {/* Activos Fijos Brutos */}
                 <div className="space-y-1 border-b border-slate-200 dark:border-slate-700 pb-2">
-                  <div className="font-medium text-sm text-slate-600 dark:text-slate-400 py-2">
-                    Activo Fijo Bruto
-                  </div>
+                  <div className="font-medium text-sm text-slate-600 dark:text-slate-400 py-2">Activo Fijo Bruto</div>
 
-                  {activoFijoBruto.map((cuenta) => {
+                  {activoFijoBruto.map((cuenta: any) => {
                     const saldo = obtenerSaldo(cuenta.codigo);
-                    const percentage =
-                      totalActivos > 0
-                        ? ((saldo / totalActivos) * 100).toFixed(2)
-                        : "0.00";
+                    const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                     return (
                       <div
@@ -313,45 +247,32 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                           {cuenta.codigo} - {cuenta.nombre}
                         </span>
                         <span className="text-right">
-                          $
-                          {saldo.toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${saldo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">{percentage}%</span>
                       </div>
                     );
                   })}
 
-                  <div className="grid grid-cols-3 gap-4 items-center py-2 font-medium text-indigo-600 pl-4">
+                  {/* ✅ antes: text-indigo-600 */}
+                  <div className={`grid grid-cols-3 gap-4 items-center py-2 font-medium ${brandBlueText} pl-4`}>
                     <span className="text-sm">Subtotal Activo Fijo Bruto</span>
                     <span className="text-right">
-                      $
-                      {totalActivoFijoBruto.toLocaleString("es-CO", {
-                        minimumFractionDigits: 2,
-                      })}
+                      ${totalActivoFijoBruto.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                     </span>
                     <span className="text-right">
-                      {totalActivos > 0
-                        ? ((totalActivoFijoBruto / totalActivos) * 100).toFixed(2)
-                        : "0.00"}
-                      %
+                      {totalActivos > 0 ? ((totalActivoFijoBruto / totalActivos) * 100).toFixed(2) : "0.00"}%
                     </span>
                   </div>
                 </div>
 
                 {/* Depreciación Acumulada */}
                 <div className="space-y-1 border-b border-slate-200 dark:border-slate-700 pb-2">
-                  <div className="font-medium text-sm text-slate-600 dark:text-slate-400 py-2">
-                    Depreciación Acumulada
-                  </div>
+                  <div className="font-medium text-sm text-slate-600 dark:text-slate-400 py-2">Depreciación Acumulada</div>
 
-                  {depreciacionAcumulada.map((cuenta) => {
+                  {depreciacionAcumulada.map((cuenta: any) => {
                     const saldo = obtenerSaldo(cuenta.codigo);
-                    const percentage =
-                      totalActivos > 0
-                        ? ((saldo / totalActivos) * 100).toFixed(2)
-                        : "0.00";
+                    const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                     return (
                       <div
@@ -362,15 +283,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                           {cuenta.codigo} - {cuenta.nombre}
                         </span>
                         <span className="text-right text-rose-600">
-                          (
-                          {Math.abs(saldo).toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
-                          )
+                          ({Math.abs(saldo).toLocaleString("es-CO", { minimumFractionDigits: 2 })})
                         </span>
-                        <span className="text-right text-rose-600">
-                          ({Math.abs(parseFloat(percentage)).toFixed(2)}%)
-                        </span>
+                        <span className="text-right text-rose-600">({Math.abs(parseFloat(percentage)).toFixed(2)}%)</span>
                       </div>
                     );
                   })}
@@ -378,38 +293,25 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                   <div className="grid grid-cols-3 gap-4 items-center py-2 font-medium text-rose-600 pl-4">
                     <span className="text-sm">Subtotal Depreciación Acum.</span>
                     <span className="text-right">
-                      (
-                      {Math.abs(totalDepreciacionAcumulada).toLocaleString("es-CO", {
-                        minimumFractionDigits: 2,
-                      })}
-                      )
+                      ({Math.abs(totalDepreciacionAcumulada).toLocaleString("es-CO", { minimumFractionDigits: 2 })})
                     </span>
                     <span className="text-right">
                       (
-                      {Math.abs(
-                        totalActivos > 0
-                          ? (totalDepreciacionAcumulada / totalActivos) * 100
-                          : 0
-                      ).toFixed(2)}
+                      {Math.abs(totalActivos > 0 ? (totalDepreciacionAcumulada / totalActivos) * 100 : 0).toFixed(2)}
                       %)
                     </span>
                   </div>
                 </div>
 
-                {/* Total Activo Fijo Neto */}
-                <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold text-indigo-600 text-base">
+                {/* ✅ Total Activo Fijo Neto */}
+                {/* antes: text-indigo-600 */}
+                <div className={`grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold ${brandBlueText} text-base`}>
                   <span>= Activo Fijo Neto</span>
                   <span className="text-right">
-                    $
-                    {totalActivoFijoNeto.toLocaleString("es-CO", {
-                      minimumFractionDigits: 2,
-                    })}
+                    ${totalActivoFijoNeto.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                   </span>
                   <span className="text-right">
-                    {totalActivos > 0
-                      ? ((totalActivoFijoNeto / totalActivos) * 100).toFixed(2)
-                      : "0.00"}
-                    %
+                    {totalActivos > 0 ? ((totalActivoFijoNeto / totalActivos) * 100).toFixed(2) : "0.00"}%
                   </span>
                 </div>
               </div>
@@ -417,11 +319,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
           </Card>
 
           {/* Activo Diferido */}
-          <Card className="border-2">
-            <CardHeader className="bg-cyan-50 dark:bg-cyan-950">
-              <CardTitle className="text-cyan-700">
-                Activo Diferido / Largo Plazo
-              </CardTitle>
+          <Card className={`border-2 ${brandBlueBorder}`}>
+            {/* ✅ antes: bg-cyan-50 / text-cyan-700 */}
+            <CardHeader className={`${brandBlueBg} ${brandBlueTextOn}`}>
+              <CardTitle className={`${brandBlueTextOn}`}>Activo Diferido / Largo Plazo</CardTitle>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -432,12 +333,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
               </div>
 
               <div className="space-y-1">
-                {activoDiferido.map((cuenta) => {
+                {activoDiferido.map((cuenta: any) => {
                   const saldo = obtenerSaldo(cuenta.codigo);
-                  const percentage =
-                    totalActivos > 0
-                      ? ((saldo / totalActivos) * 100).toFixed(2)
-                      : "0.00";
+                  const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                   return (
                     <div
@@ -448,29 +346,21 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                         {cuenta.codigo} - {cuenta.nombre}
                       </span>
                       <span className="text-right">
-                        $
-                        {saldo.toLocaleString("es-CO", {
-                          minimumFractionDigits: 2,
-                        })}
+                        ${saldo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                       </span>
                       <span className="text-right">{percentage}%</span>
                     </div>
                   );
                 })}
 
-                <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold text-cyan-600 text-base">
+                {/* ✅ antes: text-cyan-600 */}
+                <div className={`grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold ${brandBlueText} text-base`}>
                   <span>Total Activo Diferido</span>
                   <span className="text-right">
-                    $
-                    {totalActivoDiferido.toLocaleString("es-CO", {
-                      minimumFractionDigits: 2,
-                    })}
+                    ${totalActivoDiferido.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                   </span>
                   <span className="text-right">
-                    {totalActivos > 0
-                      ? ((totalActivoDiferido / totalActivos) * 100).toFixed(2)
-                      : "0.00"}
-                    %
+                    {totalActivos > 0 ? ((totalActivoDiferido / totalActivos) * 100).toFixed(2) : "0.00"}%
                   </span>
                 </div>
               </div>
@@ -478,19 +368,17 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
           </Card>
 
           {/* Total Activos */}
-          <Card className="border-2 border-blue-400 dark:border-blue-500">
-            <CardHeader className="bg-blue-100 dark:bg-blue-900">
-              <CardTitle className="text-blue-800">Total Activo</CardTitle>
+          <Card className={`border-2 ${brandBlueBorder}`}>
+            {/* ✅ antes: border-blue-400 / bg-blue-100 / text-blue-800 */}
+            <CardHeader className={`${brandBlueSoftBg}`}>
+              <CardTitle className={`${brandBlueText}`}>Total Activo</CardTitle>
             </CardHeader>
 
             <CardContent className="p-6">
-              <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl text-blue-800">
+              <div className={`grid grid-cols-3 gap-4 items-center font-bold text-xl ${brandBlueText}`}>
                 <span>Total Activos</span>
                 <span className="text-right">
-                  $
-                  {totalActivos.toLocaleString("es-CO", {
-                    minimumFractionDigits: 2,
-                  })}
+                  ${totalActivos.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                 </span>
                 <span className="text-right">100.00%</span>
               </div>
@@ -522,12 +410,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                     </div>
 
                     <div className="space-y-1">
-                      {pasivoCortoPlazo.map((cuenta) => {
+                      {pasivoCortoPlazo.map((cuenta: any) => {
                         const saldo = obtenerSaldo(cuenta.codigo);
-                        const percentage =
-                          totalActivos > 0
-                            ? ((saldo / totalActivos) * 100).toFixed(2)
-                            : "0.00";
+                        const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                         return (
                           <div
@@ -538,10 +423,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                               {cuenta.codigo} - {cuenta.nombre}
                             </span>
                             <span className="text-right">
-                              $
-                              {saldo.toLocaleString("es-CO", {
-                                minimumFractionDigits: 2,
-                              })}
+                              ${saldo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                             </span>
                             <span className="text-right">{percentage}%</span>
                           </div>
@@ -551,16 +433,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                       <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold text-red-600 text-base">
                         <span>Total Pasivo Corto Plazo</span>
                         <span className="text-right">
-                          $
-                          {totalPasivoCortoPlazo.toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${totalPasivoCortoPlazo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">
-                          {totalActivos > 0
-                            ? ((totalPasivoCortoPlazo / totalActivos) * 100).toFixed(2)
-                            : "0.00"}
-                          %
+                          {totalActivos > 0 ? ((totalPasivoCortoPlazo / totalActivos) * 100).toFixed(2) : "0.00"}%
                         </span>
                       </div>
                     </div>
@@ -581,12 +457,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                     </div>
 
                     <div className="space-y-1">
-                      {pasivoLargoPlazo.map((cuenta) => {
+                      {pasivoLargoPlazo.map((cuenta: any) => {
                         const saldo = obtenerSaldo(cuenta.codigo);
-                        const percentage =
-                          totalActivos > 0
-                            ? ((saldo / totalActivos) * 100).toFixed(2)
-                            : "0.00";
+                        const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                         return (
                           <div
@@ -597,10 +470,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                               {cuenta.codigo} - {cuenta.nombre}
                             </span>
                             <span className="text-right">
-                              $
-                              {saldo.toLocaleString("es-CO", {
-                                minimumFractionDigits: 2,
-                              })}
+                              ${saldo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                             </span>
                             <span className="text-right">{percentage}%</span>
                           </div>
@@ -610,16 +480,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                       <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-semibold text-orange-600 text-base">
                         <span>Total Pasivo Largo Plazo</span>
                         <span className="text-right">
-                          $
-                          {totalPasivoLargoPlazo.toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${totalPasivoLargoPlazo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">
-                          {totalActivos > 0
-                            ? ((totalPasivoLargoPlazo / totalActivos) * 100).toFixed(2)
-                            : "0.00"}
-                          %
+                          {totalActivos > 0 ? ((totalPasivoLargoPlazo / totalActivos) * 100).toFixed(2) : "0.00"}%
                         </span>
                       </div>
                     </div>
@@ -636,16 +500,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                     <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl text-red-800">
                       <span>Total Pasivo</span>
                       <span className="text-right">
-                        $
-                        {totalPasivos.toLocaleString("es-CO", {
-                          minimumFractionDigits: 2,
-                        })}
+                        ${totalPasivos.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                       </span>
                       <span className="text-right">
-                        {totalActivos > 0
-                          ? ((totalPasivos / totalActivos) * 100).toFixed(2)
-                          : "0.00"}
-                        %
+                        {totalActivos > 0 ? ((totalPasivos / totalActivos) * 100).toFixed(2) : "0.00"}%
                       </span>
                     </div>
                   </CardContent>
@@ -676,12 +534,9 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                     </div>
 
                     <div className="space-y-1">
-                      {capitalContable.map((cuenta) => {
+                      {capitalContable.map((cuenta: any) => {
                         const saldo = obtenerSaldo(cuenta.codigo);
-                        const percentage =
-                          totalActivos > 0
-                            ? ((saldo / totalActivos) * 100).toFixed(2)
-                            : "0.00";
+                        const percentage = totalActivos > 0 ? ((saldo / totalActivos) * 100).toFixed(2) : "0.00";
 
                         return (
                           <div
@@ -692,10 +547,7 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                               {cuenta.codigo} - {cuenta.nombre}
                             </span>
                             <span className="text-right">
-                              $
-                              {saldo.toLocaleString("es-CO", {
-                                minimumFractionDigits: 2,
-                              })}
+                              ${saldo.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                             </span>
                             <span className="text-right">{percentage}%</span>
                           </div>
@@ -706,64 +558,40 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
                       <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
                         <span className="text-sm font-medium">Capital Social (3001)</span>
                         <span className="text-right">
-                          $
-                          {obtenerSaldo("3001").toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${obtenerSaldo("3001").toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">
-                          {totalActivos > 0
-                            ? ((obtenerSaldo("3001") / totalActivos) * 100).toFixed(2)
-                            : "0.00"}
-                          %
+                          {totalActivos > 0 ? ((obtenerSaldo("3001") / totalActivos) * 100).toFixed(2) : "0.00"}%
                         </span>
                       </div>
 
                       <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
                         <span className="text-sm font-medium">Utilidades Retenidas (3002)</span>
                         <span className="text-right">
-                          $
-                          {obtenerSaldo("3002").toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${obtenerSaldo("3002").toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">
-                          {totalActivos > 0
-                            ? ((obtenerSaldo("3002") / totalActivos) * 100).toFixed(2)
-                            : "0.00"}
-                          %
+                          {totalActivos > 0 ? ((obtenerSaldo("3002") / totalActivos) * 100).toFixed(2) : "0.00"}%
                         </span>
                       </div>
 
                       <div className="grid grid-cols-3 gap-4 items-center py-2 text-slate-700 dark:text-slate-300">
                         <span className="text-sm font-medium">Utilidad del Ejercicio</span>
                         <span className="text-right">
-                          $
-                          {utilidadEjercicio.toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${utilidadEjercicio.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">
-                          {totalActivos > 0
-                            ? ((utilidadEjercicio / totalActivos) * 100).toFixed(2)
-                            : "0.00"}
-                          %
+                          {totalActivos > 0 ? ((utilidadEjercicio / totalActivos) * 100).toFixed(2) : "0.00"}%
                         </span>
                       </div>
 
                       <div className="grid grid-cols-3 gap-4 items-center py-3 border-t-2 border-slate-300 dark:border-slate-600 pt-4 font-bold text-green-600 text-lg">
                         <span>Total Capital Contable</span>
                         <span className="text-right">
-                          $
-                          {totalCapitalContableConUtilidad.toLocaleString("es-CO", {
-                            minimumFractionDigits: 2,
-                          })}
+                          ${totalCapitalContableConUtilidad.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-right">
-                          {totalActivos > 0
-                            ? ((totalCapitalContableConUtilidad / totalActivos) * 100).toFixed(2)
-                            : "0.00"}
-                          %
+                          {totalActivos > 0 ? ((totalCapitalContableConUtilidad / totalActivos) * 100).toFixed(2) : "0.00"}%
                         </span>
                       </div>
                     </div>
@@ -783,16 +611,10 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
               <div className="grid grid-cols-3 gap-4 items-center font-bold text-xl">
                 <span>Total</span>
                 <span className="text-right">
-                  $
-                  {totalPasivoMasCapital.toLocaleString("es-CO", {
-                    minimumFractionDigits: 2,
-                  })}
+                  ${totalPasivoMasCapital.toLocaleString("es-CO", { minimumFractionDigits: 2 })}
                 </span>
                 <span className="text-right">
-                  {totalActivos > 0
-                    ? ((totalPasivoMasCapital / totalActivos) * 100).toFixed(2)
-                    : "0.00"}
-                  %
+                  {totalActivos > 0 ? ((totalPasivoMasCapital / totalActivos) * 100).toFixed(2) : "0.00"}%
                 </span>
               </div>
             </CardContent>
@@ -802,17 +624,12 @@ const BalanceGeneralOperativo = ({ cutoffDate }: BalanceGeneralOperativoProps) =
 
       {/* Balance Status */}
       <div className="mt-6 text-center">
-        <div
-          className={`font-semibold text-lg ${
-            balanceCuadrado ? "text-green-600" : "text-amber-600"
-          }`}
-        >
+        <div className={`font-semibold text-lg ${balanceCuadrado ? "text-green-600" : "text-amber-600"}`}>
           {balanceCuadrado
             ? "✓ Balance Cuadrado"
-            : `⚠ Diferencia: $${Math.abs(totalActivos - totalPasivoMasCapital).toLocaleString(
-                "es-CO",
-                { minimumFractionDigits: 2 }
-              )}`}
+            : `⚠ Diferencia: $${Math.abs(totalActivos - totalPasivoMasCapital).toLocaleString("es-CO", {
+                minimumFractionDigits: 2,
+              })}`}
         </div>
       </div>
     </div>
