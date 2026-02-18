@@ -369,17 +369,22 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
       );
     }
 
+    // ✅ FIX: en subtotales NO duplicar %.
+    // Si se pasa rightBadge (ej. "xx.x% Mg" o "100%"), mostramos SOLO ese badge.
+    // Si NO se pasa rightBadge, mostramos el % automático.
     if (isSubtotal) {
+      const autoPct = totalIngresos ? `${pct(v).toFixed(1)}%` : "0.0%";
       return (
         <tr className="bg-primary text-primary-foreground">
           <td className="px-4 py-3 font-semibold">{label}</td>
           <td className="px-4 py-3 text-right font-extrabold">{formatCurrency(v)}</td>
           <td className="px-4 py-3 text-right">
             <span className="inline-flex items-center justify-end gap-2">
-              {rightBadge ? rightBadge : null}
-              <span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">
-                {totalIngresos ? `${pct(v).toFixed(1)}%` : "0.0%"}
-              </span>
+              {rightBadge ? (
+                rightBadge
+              ) : (
+                <span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{autoPct}</span>
+              )}
             </span>
           </td>
         </tr>
@@ -581,7 +586,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                   rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{formatPct(ebitda)}</span>}
                 />
 
-                {/* (-) Depreciación y Amortización (se mantiene, pero ya no “vive” dentro del bloque de EBITDA; va después del subtotal) */}
+                {/* (-) Depreciación y Amortización */}
                 {showDetalle
                   ? detalleDep.map((r) => (
                       <TableRowLine
@@ -594,7 +599,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                   : null}
                 <TableRowLine label="Depreciación y Amortización" value={-Math.abs(depreciaciones)} indent={1} />
 
-                {/* (=) EBITDA (segunda línea según estructura del cliente) */}
+                {/* (=) EBITDA (segunda línea) */}
                 <TableRowLine
                   label="EBITDA"
                   value={ebitdaDespuesDep}
