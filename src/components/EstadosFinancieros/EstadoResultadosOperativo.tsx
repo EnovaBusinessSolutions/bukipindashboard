@@ -1,3 +1,4 @@
+// src/components/EstadosFinancieros/EstadoResultadosOperativo.tsx
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCuentas } from "@/hooks/useCuentas";
@@ -76,12 +77,15 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   }
 
   const normalizeCodigo = (codigo: string) => String(codigo || "").trim();
+
+  // ✅ Base robusta: soporta 4001-01 / 5101.02 / 5201/01, etc.
   const getCodigoBase = (codigo: string) => {
     const s = normalizeCodigo(codigo);
     if (!s) return "";
-    return s.includes("-") ? s.split("-")[0].trim() : s;
+    return s.split(/[-./]/)[0]?.trim() || s;
   };
-  const isSubcuenta = (codigo: string) => normalizeCodigo(codigo).includes("-");
+
+  const isSubcuenta = (codigo: string) => /[-./]/.test(normalizeCodigo(codigo));
 
   /**
    * ✅ Monto del PERÍODO (NO saldo acumulado raro)
@@ -117,33 +121,33 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   };
 
   const codigosCatalogo = cuentasFlat.map((c: any) => String(c?.codigo ?? "").trim()).filter(Boolean);
-  const codigosSaldos = Object.keys(saldosPorCuenta || {}).map((k) => String(k).trim()).filter(Boolean);
+  const codigosSaldos = Object.keys(saldosPorCuenta || {})
+    .map((k) => String(k).trim())
+    .filter(Boolean);
+
   const allCodigos = Array.from(new Set([...codigosCatalogo, ...codigosSaldos]));
 
-  const cuentasPorRango = (predicate: (codigoNum: number) => boolean) => {
+  const cuentasPorRango = (predicate: (baseNum: number, fullCode: string, baseCode: string) => boolean) => {
     const res: Array<{ codigo: string; nombre: string }> = [];
 
     for (const codigoStr of allCodigos) {
       const codigo = normalizeCodigo(codigoStr);
       if (!codigo) continue;
 
-      // ✅ clave: para rangos usamos el "código base" (ej. 4001-01 -> 4001)
       const base = getCodigoBase(codigo);
       const n = Number(base);
       if (!Number.isFinite(n)) continue;
-      if (!predicate(n)) continue;
+
+      if (!predicate(n, codigo, base)) continue;
 
       // nombre: intenta exacto, si no, intenta base
       const cuentaExacta = cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === codigo);
-      const cuentaBase =
-        !cuentaExacta ? cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === base) : null;
+      const cuentaBase = !cuentaExacta ? cuentasFlat.find((c: any) => String(c?.codigo ?? "").trim() === base) : null;
 
       const nombreExacto = String((cuentaExacta as any)?.nombre ?? "").trim();
       const nombreBase = String((cuentaBase as any)?.nombre ?? "").trim();
 
-      const nombre =
-        nombreExacto ||
-        (isSubcuenta(codigo) ? `Subcuenta de ${base}` : nombreBase || "Cuenta");
+      const nombre = nombreExacto || (isSubcuenta(codigo) ? `Subcuenta de ${base}` : nombreBase || "Cuenta");
 
       res.push({ codigo, nombre });
     }
@@ -159,19 +163,28 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
     return res;
   };
 
-  const sumCuentas = (lista: Array<{ codigo: string }>) =>
-    lista.reduce((acc, c) => acc + obtenerMontoPeriodoER(c.codigo), 0);
+  const sumCuentas = (lista: Array<{ codigo: string }>) => lista.reduce((acc, c) => acc + obtenerMontoPeriodoER(c.codigo), 0);
 
-  // ✅ Definiciones por rangos
-  const cuentasIngresos = cuentasPorRango((n) => n >= 4000 && n <= 4999);
+  // ============================
+  // ✅ ESTRUCTURA EXCEL (separar Ventas vs Otros Ingresos)
+  // ============================
+  // Ventas: 4000–4099 (incluye 4001, 4002, 4003, 4004… y sus subcuentas)
+  // Otros Ingresos: 4100–4999 (incluye 4101, 4102, 4103… y sus subcuentas)
+  const cuentasVentas = cuentasPorRango((n) => n >= 4000 && n <= 4099);
+  const cuentasOtrosIngresos = cuentasPorRango((n) => n >= 4100 && n <= 4999);
+
+  // Otros bloques (igual que hoy)
   const cuentasCostos = cuentasPorRango((n) => n >= 5000 && n <= 5099);
   const cuentasDepreciaciones = cuentasPorRango((n) => n === 5109 || n === 5110);
-  const cuentasGastosOperativos = cuentasPorRango((n) => n >= 5100 && n <= 5199 && n !== 5109 && n !== 5110);
-  const cuentasOtrosGastos = cuentasPorRango((n) => n >= 5200 && n <= 5299 && n !== 5201);
-  const cuentasCostoFinanciero = cuentasPorRango((n) => n === 5201 || (n >= 5111 && n <= 5199));
+  const cuentasGastosOperativos = cuentasPorRango((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110");
+  const cuentasOtrosGastos = cuentasPorRango((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201");
+  const cuentasCostoFinanciero = cuentasPorRango((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199));
   const cuentasImpuestos = cuentasPorRango((n) => n >= 6000 && n <= 6999);
 
-  const totalIngresos = sumCuentas(cuentasIngresos);
+  const totalVentas = sumCuentas(cuentasVentas);
+  const totalOtrosIngresos = sumCuentas(cuentasOtrosIngresos);
+  const totalIngresos = totalVentas + totalOtrosIngresos;
+
   const totalCostos = sumCuentas(cuentasCostos);
   const totalGastosOperativos = sumCuentas(cuentasGastosOperativos);
   const totalOtrosGastos = sumCuentas(cuentasOtrosGastos);
@@ -185,8 +198,9 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
   const utilidadAntesImpuestos = ebit - totalCostoFinanciero;
   const utilidadNeta = utilidadAntesImpuestos - totalImpuestos;
 
-  const money = (n: number) =>
-    `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (n: number) => `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // ✅ Margenes / análisis vertical SIEMPRE contra TOTAL INGRESOS (como pide el cliente)
   const pct = (n: number) => (totalIngresos !== 0 ? `${((n / totalIngresos) * 100).toFixed(2)}%` : "0.00%");
 
   const Pill = ({
@@ -252,6 +266,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
     rows,
     totalLabel,
     totalValue,
+    badgeText,
   }: {
     title: string;
     tone: "green" | "orange" | "red" | "purple" | "amber" | "rose";
@@ -259,6 +274,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
     rows: Array<{ codigo: string; nombre: string }>;
     totalLabel: string;
     totalValue: number;
+    badgeText?: string;
   }) => {
     return (
       <Card className="border-2 border-primary/10 overflow-hidden">
@@ -267,14 +283,28 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">{title}</CardTitle>
-                <Pill tone={tone}>{title.includes("(4") ? "Ingresos" : title.includes("(50") ? "Costos" : "Detalle"}</Pill>
+                <Pill tone={tone}>{badgeText ?? "Detalle"}</Pill>
               </div>
               {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
             </div>
 
             <div className="text-right">
               <div className="text-xs text-muted-foreground">Total</div>
-              <div className={`text-xl font-black ${tone === "green" ? "text-emerald-700 dark:text-emerald-300" : "text-foreground"}`}>
+              <div
+                className={`text-xl font-black ${
+                  tone === "green"
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : tone === "orange"
+                    ? "text-orange-700 dark:text-orange-300"
+                    : tone === "red"
+                    ? "text-rose-700 dark:text-rose-300"
+                    : tone === "purple"
+                    ? "text-purple-700 dark:text-purple-300"
+                    : tone === "amber"
+                    ? "text-amber-800 dark:text-amber-300"
+                    : "text-foreground"
+                }`}
+              >
                 {money(totalValue)}
               </div>
               <div className="text-xs text-muted-foreground">{pct(totalValue)}</div>
@@ -290,7 +320,11 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
           </div>
 
           <div className="mt-2">
-            {rows.length ? rows.map((c) => <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />) : <EmptyNice text="No hay cuentas con movimientos en este bloque para el rango seleccionado." />}
+            {rows.length ? (
+              rows.map((c) => <Row key={c.codigo} codigo={c.codigo} nombre={c.nombre} />)
+            ) : (
+              <EmptyNice text="No hay cuentas con movimientos en este bloque para el rango seleccionado." />
+            )}
           </div>
 
           <div className="border-t pt-3 mt-4">
@@ -372,30 +406,95 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
           Este Estado de Resultados refleja automáticamente todas las transacciones registradas: ingresos, costos, gastos,
-          depreciaciones, costo financiero e impuestos.
+          depreciaciones, costo financiero e impuestos. Los márgenes (% Ingresos) se calculan siempre contra el total de ingresos.
         </AlertDescription>
       </Alert>
 
       <div className="grid gap-6">
+        {/* ✅ 1) (+) Ventas */}
         <Section
-          title="Ingresos (4xxx)"
+          title="Ventas"
           tone="green"
+          badgeText="Ingresos"
           subtitle="Detalle por cuenta (monto del período)"
-          rows={cuentasIngresos}
-          totalLabel="Total Ingresos"
-          totalValue={totalIngresos}
+          rows={cuentasVentas}
+          totalLabel="Total Ventas"
+          totalValue={totalVentas}
         />
 
+        {/* ✅ 2) (+) Otros Ingresos */}
         <Section
-          title="Costos de Ventas (50xx)"
+          title="Otros Ingresos"
+          tone="green"
+          badgeText="Ingresos"
+          subtitle="Detalle por cuenta (monto del período)"
+          rows={cuentasOtrosIngresos}
+          totalLabel="Total Otros Ingresos"
+          totalValue={totalOtrosIngresos}
+        />
+
+        {/* ✅ 3) (=) Ingresos Totales (subtotal como en el Excel) */}
+        <Card className="border-2 border-primary/10 overflow-hidden">
+          <CardHeader className="bg-muted/40">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">Ingresos Totales</CardTitle>
+                  <Pill tone="green">Subtotal</Pill>
+                </div>
+                <p className="text-xs text-muted-foreground">Ventas + Otros Ingresos</p>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground">Margen</div>
+                <div className="text-xl font-black text-emerald-700 dark:text-emerald-300">{pct(totalIngresos)}</div>
+                <div className="text-xs text-muted-foreground">{money(totalIngresos)}</div>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4">
+            <div className="grid grid-cols-3 gap-4 pb-2 border-b text-xs font-semibold text-muted-foreground">
+              <span>Concepto</span>
+              <span className="text-right">Monto</span>
+              <span className="text-right">% Ingresos</span>
+            </div>
+
+            <div className="mt-2 space-y-1">
+              <div className="grid grid-cols-3 gap-4 items-center py-2 px-2 rounded-md hover:bg-muted/40 transition">
+                <span className="text-sm">Ventas</span>
+                <span className="text-right font-medium">{money(totalVentas)}</span>
+                <span className="text-right text-sm text-muted-foreground">{pct(totalVentas)}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 items-center py-2 px-2 rounded-md hover:bg-muted/40 transition">
+                <span className="text-sm">Otros Ingresos</span>
+                <span className="text-right font-medium">{money(totalOtrosIngresos)}</span>
+                <span className="text-right text-sm text-muted-foreground">{pct(totalOtrosIngresos)}</span>
+              </div>
+
+              <div className="border-t pt-3 mt-3">
+                <div className="grid grid-cols-3 gap-4 items-center font-bold text-emerald-700 dark:text-emerald-300">
+                  <span>Ingresos Totales</span>
+                  <span className="text-right">{money(totalIngresos)}</span>
+                  <span className="text-right text-muted-foreground">100.00%</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 4) (-) Costo de Ventas */}
+        <Section
+          title="Costo de Ventas (50xx)"
           tone="orange"
+          badgeText="Costos"
           subtitle="Detalle por cuenta (monto del período)"
           rows={cuentasCostos}
           totalLabel="Total Costos"
           totalValue={totalCostos}
         />
 
-        {/* Utilidad Bruta (bloque de cálculo) */}
+        {/* (=) Utilidad Bruta (bloque de cálculo) */}
         <Card className="border-2 border-primary/10 overflow-hidden">
           <CardHeader className="bg-muted/40">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -404,7 +503,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
                   <CardTitle className="text-lg">Utilidad Bruta</CardTitle>
                   <Pill tone={utilidadBruta >= 0 ? "blue" : "rose"}>Subtotal</Pill>
                 </div>
-                <p className="text-xs text-muted-foreground">Ingresos - Costos</p>
+                <p className="text-xs text-muted-foreground">Ingresos Totales - Costo de Ventas</p>
               </div>
               <div className="text-right">
                 <div className="text-xs text-muted-foreground">Margen</div>
@@ -425,16 +524,14 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
 
             <div className="mt-2 space-y-1">
               <div className="grid grid-cols-3 gap-4 items-center py-2 px-2 rounded-md hover:bg-muted/40 transition">
-                <span className="text-sm">Ingresos</span>
+                <span className="text-sm">Ingresos Totales</span>
                 <span className="text-right font-medium">{money(totalIngresos)}</span>
                 <span className="text-right text-sm text-muted-foreground">100.00%</span>
               </div>
 
               <div className="grid grid-cols-3 gap-4 items-center py-2 px-2 rounded-md hover:bg-muted/40 transition">
                 <span className="text-sm">(-) Costos</span>
-                <span className="text-right font-medium text-orange-700 dark:text-orange-300">
-                  ({money(totalCostos)})
-                </span>
+                <span className="text-right font-medium text-orange-700 dark:text-orange-300">({money(totalCostos)})</span>
                 <span className="text-right text-sm text-muted-foreground">
                   {totalIngresos ? `(${((totalCostos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}
                 </span>
@@ -454,6 +551,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
         <Section
           title="Gastos Operativos (51xx)"
           tone="red"
+          badgeText="Gastos"
           subtitle="Detalle por cuenta (monto del período)"
           rows={cuentasGastosOperativos}
           totalLabel="Total Gastos Operativos"
@@ -463,13 +561,14 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
         <Section
           title="Otros Gastos (52xx)"
           tone="red"
+          badgeText="Gastos"
           subtitle="Detalle por cuenta (monto del período)"
           rows={cuentasOtrosGastos}
           totalLabel="Total Otros Gastos"
           totalValue={totalOtrosGastos}
         />
 
-        {/* EBITDA (cálculo) */}
+        {/* (=) EBITDA (cálculo) */}
         <Card className="border-2 border-primary/10 overflow-hidden">
           <CardHeader className="bg-muted/40">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -506,9 +605,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
 
               <div className="grid grid-cols-3 gap-4 items-center py-2 px-2 rounded-md hover:bg-muted/40 transition">
                 <span className="text-sm">(-) Gastos Operativos</span>
-                <span className="text-right font-medium text-rose-700 dark:text-rose-300">
-                  ({money(totalGastosOperativos)})
-                </span>
+                <span className="text-right font-medium text-rose-700 dark:text-rose-300">({money(totalGastosOperativos)})</span>
                 <span className="text-right text-sm text-muted-foreground">
                   {totalIngresos ? `(${((totalGastosOperativos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}
                 </span>
@@ -516,9 +613,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
 
               <div className="grid grid-cols-3 gap-4 items-center py-2 px-2 rounded-md hover:bg-muted/40 transition">
                 <span className="text-sm">(-) Otros Gastos</span>
-                <span className="text-right font-medium text-rose-700 dark:text-rose-300">
-                  ({money(totalOtrosGastos)})
-                </span>
+                <span className="text-right font-medium text-rose-700 dark:text-rose-300">({money(totalOtrosGastos)})</span>
                 <span className="text-right text-sm text-muted-foreground">
                   {totalIngresos ? `(${((totalOtrosGastos / totalIngresos) * 100).toFixed(2)}%)` : "0.00%"}
                 </span>
@@ -538,6 +633,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
         <Section
           title="Depreciaciones y Amortizaciones (5109/5110)"
           tone="purple"
+          badgeText="Ajustes"
           subtitle="Detalle por cuenta (monto del período)"
           rows={cuentasDepreciaciones}
           totalLabel="Total Depreciaciones"
@@ -547,6 +643,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
         <Section
           title="Costo Financiero (5201)"
           tone="amber"
+          badgeText="Finanzas"
           subtitle="Detalle por cuenta (monto del período)"
           rows={cuentasCostoFinanciero}
           totalLabel="Total Costo Financiero"
@@ -556,6 +653,7 @@ const EstadoResultadosOperativo = ({ startDate, endDate }: EstadoResultadosOpera
         <Section
           title="Impuestos (6xxx)"
           tone="rose"
+          badgeText="Impuestos"
           subtitle="Detalle por cuenta (monto del período)"
           rows={cuentasImpuestos}
           totalLabel="Total Impuestos"
