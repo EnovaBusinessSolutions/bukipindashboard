@@ -41,7 +41,6 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
   // --------------------------
   // Helpers / data safe defaults
-  // (IMPORTANTE: para que los useMemo se ejecuten siempre y no truene #310)
   // --------------------------
   const cuentasFlat = (cuentasData?.cuentasFlat || []) as any[];
   const saldosPorCuenta = (asientosData?.saldosPorCuenta || {}) as Record<string, SaldoRow>;
@@ -149,16 +148,30 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   // ✅ Clasificación por rangos (Ejecutivo) — incluye subcuentas
   const totalIngresos = sumBy((n) => n >= 4000 && n <= 4999);
   const costoVentas = sumBy((n) => n >= 5000 && n <= 5099);
-  const depreciaciones = sumBy((n, _full, base) => base === "5109" || base === "5110");
-  const gastosOperativos = sumBy((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110");
+
+  // ✅ Cap 1 / Cap 2: Ventas (4001), Descuentos (4003) y Otros Ingresos (41xx)
+  const ventas = sumBy((_n, _full, base) => base === "4001");
+  const descuentos = sumBy((_n, _full, base) => base === "4003"); // negativo por regla 4003
+
+  // ✅ “Otros ingresos” real (Cap 2 muestra 4102 “Otros Productos”)
+  const otrosIngresos = sumBy((n) => n >= 4100 && n <= 4199);
+
+  // ✅ Gastos Operativos: incluyen Depreciación y Amortización (ya NO va bloque separado)
+  const gastosOperativos = sumBy((n) => n >= 5100 && n <= 5199);
+
   const otrosGastos = sumBy((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201");
   const costoFinanciero = sumBy((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199));
   const impuestos = sumBy((n) => n >= 6000 && n <= 6999);
 
   // ✅ Subtotales (cálculos)
   const utilidadBruta = totalIngresos - costoVentas;
+
+  // ✅ EBITDA sin mostrar Dep/Amort como bloque separado (va dentro de OPEX)
   const ebitda = utilidadBruta - gastosOperativos - otrosGastos;
-  const utilidadNeta = ebitda - depreciaciones - costoFinanciero - impuestos;
+
+  // ✅ Estructura Cap 3: Utilidad antes de impuestos → Impuestos → Utilidad neta
+  const utilidadAntesImpuestos = ebitda - costoFinanciero;
+  const utilidadNeta = utilidadAntesImpuestos - impuestos;
 
   // --------------------------
   // ✅ Detalle por bloque (con subcuentas) — en useMemo (SIEMPRE)
@@ -199,17 +212,20 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     return rows;
   };
 
-  const detalleIngresos = useMemo(() => buildList((n) => n >= 4000 && n <= 4999), [allCodigos]);
+  // ✅ Detalle Ingresos separado para evitar duplicados visuales con “Otros ingresos”
+  const detalleVentas = useMemo(() => buildList((n) => n >= 4000 && n <= 4099), [allCodigos]);
+  const detalleOtrosIngresos = useMemo(() => buildList((n) => n >= 4100 && n <= 4199), [allCodigos]);
+
   const detalleCostos = useMemo(() => buildList((n) => n >= 5000 && n <= 5099), [allCodigos]);
-  const detalleGastosOp = useMemo(
-    () => buildList((n, _full, base) => n >= 5100 && n <= 5199 && base !== "5109" && base !== "5110"),
-    [allCodigos]
-  );
+
+  // ✅ OPEX incluye Dep/Amort (sin excluir 5109/5110)
+  const detalleGastosOp = useMemo(() => buildList((n) => n >= 5100 && n <= 5199), [allCodigos]);
+
   const detalleOtrosGastos = useMemo(
     () => buildList((n, _full, base) => n >= 5200 && n <= 5299 && base !== "5201"),
     [allCodigos]
   );
-  const detalleDep = useMemo(() => buildList((_n, _full, base) => base === "5109" || base === "5110"), [allCodigos]);
+
   const detalleFin = useMemo(
     () => buildList((n, _full, base) => base === "5201" || (n >= 5111 && n <= 5199)),
     [allCodigos]
@@ -303,6 +319,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     isSubtotal = false,
     indent = 0,
     rightBadge,
+    forceShowZero = false,
   }: {
     label: string;
     value?: number;
@@ -310,9 +327,17 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
     isSubtotal?: boolean;
     indent?: number;
     rightBadge?: React.ReactNode;
+    forceShowZero?: boolean;
   }) => {
     const v = Number(value ?? 0);
     const isNegative = v < 0;
+
+    // Para el caso “Otros ingresos”: siempre visible aunque sea 0
+    if (!isSection && !isSubtotal && !forceShowZero) {
+      if (Math.abs(v) < 0.0000001) {
+        // (se deja tal cual; en este formato no ocultamos líneas)
+      }
+    }
 
     if (isSection) {
       return (
@@ -366,7 +391,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
   };
 
   // --------------------------
-  // ✅ Ahora sí: returns condicionales (después de ejecutar TODOS los hooks)
+  // ✅ returns condicionales (después de ejecutar TODOS los hooks)
   // --------------------------
   if (cuentasLoading || asientosLoading) {
     return (
@@ -431,7 +456,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
         />
         <KpiCard title="EBITDA" value={ebitda} rightPill={<Pill tone={ebitda >= 0 ? "emerald" : "slate"}>{formatPct(ebitda)}</Pill>} />
         <KpiCard
-          title="Utilidad Neta"
+          title="Utilidad neta"
           value={utilidadNeta}
           rightPill={<Pill tone={utilidadNeta >= 0 ? "emerald" : "slate"}>{formatPct(utilidadNeta)}</Pill>}
         />
@@ -462,16 +487,34 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
 
               <tbody>
                 <TableRowLine label="Ingresos Operativos" isSection />
+
+                {/* ✅ Detalle ventas (40xx) */}
                 {showDetalle
-                  ? detalleIngresos.map((r) => (
+                  ? detalleVentas.map((r) => (
                       <TableRowLine
-                        key={`ing-${r.code}`}
+                        key={`ing-vta-${r.code}`}
                         label={`${r.code} — ${r.name}`}
                         value={r.amount}
                         indent={r.isSub ? 2 : 1}
                       />
                     ))
                   : null}
+
+                {/* ✅ Detalle 41xx (solo si hay movimiento) */}
+                {showDetalle
+                  ? detalleOtrosIngresos.map((r) => (
+                      <TableRowLine
+                        key={`ing-oi-${r.code}`}
+                        label={`${r.code} — ${r.name}`}
+                        value={r.amount}
+                        indent={r.isSub ? 2 : 1}
+                      />
+                    ))
+                  : null}
+
+                {/* ✅ SIEMPRE presente aunque sea 0 */}
+                <TableRowLine label="Otros ingresos" value={otrosIngresos} indent={1} forceShowZero />
+
                 <TableRowLine
                   label="Ingresos Totales"
                   value={totalIngresos}
@@ -531,18 +574,6 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                 />
 
                 {showDetalle
-                  ? detalleDep.map((r) => (
-                      <TableRowLine
-                        key={`dep-${r.code}`}
-                        label={`${r.code} — ${r.name}`}
-                        value={-Math.abs(r.amount)}
-                        indent={r.isSub ? 2 : 1}
-                      />
-                    ))
-                  : null}
-                <TableRowLine label="Depreciación y Amortización" value={-Math.abs(depreciaciones)} indent={1} />
-
-                {showDetalle
                   ? detalleFin.map((r) => (
                       <TableRowLine
                         key={`fin-${r.code}`}
@@ -553,6 +584,17 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                     ))
                   : null}
                 <TableRowLine label="Costo Financiero" value={-Math.abs(costoFinanciero)} indent={1} />
+
+                <TableRowLine
+                  label="Utilidad antes de impuestos"
+                  value={utilidadAntesImpuestos}
+                  isSubtotal
+                  rightBadge={
+                    <span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">
+                      {formatPct(utilidadAntesImpuestos)}
+                    </span>
+                  }
+                />
 
                 {showDetalle
                   ? detalleImp.map((r) => (
@@ -567,7 +609,7 @@ const EstadoResultadosEjecutivo = ({ startDate, endDate }: EstadoResultadosEjecu
                 <TableRowLine label="Impuestos" value={-Math.abs(impuestos)} indent={1} />
 
                 <TableRowLine
-                  label="Utilidad Neta del Ejercicio"
+                  label="Utilidad neta"
                   value={utilidadNeta}
                   isSubtotal
                   rightBadge={<span className="rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs font-semibold">{formatPct(utilidadNeta)}</span>}
