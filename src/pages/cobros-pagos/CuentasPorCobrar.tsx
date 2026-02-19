@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,16 +20,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Search, 
-  Calendar, 
-  DollarSign, 
-  User, 
+import {
+  Search,
+  Calendar,
+  DollarSign,
+  User,
   AlertCircle,
   BarChart3,
-  TrendingUp, 
-  Users, 
-  Clock, 
+  TrendingUp,
+  Users,
+  Clock,
   Target,
   CheckCircle2,
   FileText,
@@ -39,24 +39,19 @@ import {
   History,
   Settings
 } from "lucide-react";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   LineChart,
   Line,
-  Area,
-  AreaChart,
   LabelList
 } from "recharts";
-import { useAnalyticsCuentasPorCobrar, useCuentasPorCobrarDetalle } from "@/hooks/useAnalyticsCuentasPorCobrar";
+import { useAnalyticsCuentasPorCobrar } from "@/hooks/useAnalyticsCuentasPorCobrar";
 import { formatCurrency } from "@/lib/utils";
 
 const COLORS = {
@@ -68,30 +63,43 @@ const COLORS = {
   success: "hsl(var(--success))"
 };
 
-const PIE_COLORS = [COLORS.primary, COLORS.secondary, COLORS.accent, COLORS.destructive];
-
 type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string; error?: any } | T;
 const unwrap = <T,>(json: ApiEnvelope<T>): T => (json as any)?.data ?? (json as T);
 
+// ✅ helper: fecha segura (evita RangeError: Invalid time value)
+function safeDate(value: any): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function safeFormatDate(value: any, fmt: string, opts?: any): string {
+  const d = safeDate(value);
+  if (!d) return "-";
+  try {
+    return format(d, fmt, opts);
+  } catch {
+    return "-";
+  }
+}
 
 // Componente personalizado para mostrar el total a la derecha de las barras apiladas
 const CustomTotalLabel = (props: any) => {
   const { x, y, width, height, index, filtroAntiguedad, dataFiltradaCliente, formatearConPreferenciasAnalitica } = props;
-  
+
   if (!dataFiltradaCliente || !dataFiltradaCliente[index]) return null;
-  
+
   const cliente = dataFiltradaCliente[index];
-  const total = filtroAntiguedad === "todos" 
-    ? cliente.total 
+  const total = filtroAntiguedad === "todos"
+    ? cliente.total
     : cliente[filtroAntiguedad] || 0;
-  
-  // Posicionar el texto a la derecha de la barra con un pequeño offset
+
   const labelX = x + width + 8;
   const labelY = y + height / 2;
-  
+
   return (
-    <text 
-      x={labelX} 
+    <text
+      x={labelX}
       y={labelY}
       fill="hsl(var(--foreground))"
       fontSize="11"
@@ -118,7 +126,7 @@ const CuentasPorCobrar = () => {
   const [filtroCliente, setFiltroCliente] = useState<string>("todos");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
   const [ordenMonto, setOrdenMonto] = useState<string>("ninguno");
-  
+
   // Filtros para la tabla de transacciones
   const [filtroMesTransaccion, setFiltroMesTransaccion] = useState<string>("todos");
   const [filtroAnoTransaccion, setFiltroAnoTransaccion] = useState<string>("todos");
@@ -127,25 +135,25 @@ const CuentasPorCobrar = () => {
   const [filtroTipoIngreso, setFiltroTipoIngreso] = useState<string>("todos");
   const [filtroClienteTransaccion, setFiltroClienteTransaccion] = useState<string>("todos");
   const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
-  
+
   // Estados para modal de detalle contable
   const [detalleContableOpen, setDetalleContableOpen] = useState(false);
   const [selectedTransaccionId, setSelectedTransaccionId] = useState<string | null>(null);
-  
+
   // Estados para agrupación por cliente
   const [expandedClientes, setExpandedClientes] = useState<Set<string>>(new Set());
   const [historialPagosOpen, setHistorialPagosOpen] = useState(false);
   const [selectedFacturaId, setSelectedFacturaId] = useState<string | null>(null);
-  
+
   // Estados para formato de números en analíticas
   const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
   const [decimalesAnalitica, setDecimalesAnalitica] = useState<0 | 1 | 2>(2);
-  
+
   // Función para formatear números según preferencias del usuario
   const formatearConPreferenciasAnalitica = (valor: number) => {
     let valorFormateado = valor;
     let sufijo = '';
-    
+
     if (formatoNumerosAnalitica === 'miles') {
       valorFormateado = valor / 1000;
       sufijo = 'K';
@@ -153,196 +161,245 @@ const CuentasPorCobrar = () => {
       valorFormateado = valor / 1000000;
       sufijo = 'M';
     }
-    
+
     return `$${valorFormateado.toLocaleString('en-US', {
       minimumFractionDigits: decimalesAnalitica,
       maximumFractionDigits: decimalesAnalitica
     })}${sufijo}`;
   };
 
-
- const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
-  queryKey: ["todas-transacciones-ingresos"],
-  queryFn: async () => {
-    // Debe devolver un array con la misma forma que usabas (id, created_at, monto_total, monto_pagado, monto_pendiente, etc.)
-    const json = await apiFetch("/api/transacciones/ingresos?include_all=true&order=created_at_desc", {
-      method: "GET",
-    });
-    return unwrap<any[]>(json) || [];
-  },
-});
-
-
   const queryClient = useQueryClient();
 
-  // Hooks para analíticas
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC, filtroClienteAnalitica);
-  const { data: cuentasPorCobrar, isLoading: loadingDetalles } = useCuentasPorCobrarDetalle();
-  
-  // Obtener lista única de clientes para el filtro de analíticas
-  const clientesUnicos = Array.from(
-    new Set(
-      cuentasPorCobrar
-        ?.map(c => c.cliente_nombre || 'Sin nombre')
-        .filter(Boolean) || []
-    )
-  ).sort();
-
-  const { data: asientosContables, isLoading: loadingAsientos } = useQuery({
-  queryKey: ["asientos-contables-transaccion", selectedTransaccionId],
-  queryFn: async () => {
-    if (!selectedTransaccionId) return null;
-
-    // Debe devolver el asiento con detalle_asientos + cuentas + subcuentas como lo esperas en el render
-    const json = await apiFetch(
-      `/api/asientos/by-transaccion-ingreso/${encodeURIComponent(selectedTransaccionId)}`,
-      { method: "GET" }
-    );
-
-    return unwrap<any>(json) ?? null;
-  },
-  enabled: !!selectedTransaccionId && detalleContableOpen,
-});
-
-  
-  const { data: historialPagos, isLoading: loadingHistorial } = useQuery({
-  queryKey: ["historial-pagos", selectedFacturaId],
-  queryFn: async () => {
-    if (!selectedFacturaId) return [];
-
-    // 1) Historial de cobros registrados
-    const pagosJson = await apiFetch(
-      `/api/cobros-pagos/historial?referencia_id=${encodeURIComponent(selectedFacturaId)}&tipo=cobro`,
-      { method: "GET" }
-    );
-    const pagos = (unwrap<any[]>(pagosJson) || []).sort((a, b) => {
-      const da = new Date(a?.fecha || a?.created_at || 0).getTime();
-      const db = new Date(b?.fecha || b?.created_at || 0).getTime();
-      return db - da;
-    });
-
-    // 2) Si no existe “Pago inicial”, intentar inferir desde la transacción original
-    const tienePagoInicial = pagos?.some((p) => String(p?.descripcion || "").includes("Pago inicial"));
-
-    if (!tienePagoInicial) {
-      const trxJson = await apiFetch(`/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`, {
+  // ✅ TRANSACCIONES INGRESOS (historial completo)
+  const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
+    queryKey: ["todas-transacciones-ingresos"],
+    queryFn: async () => {
+      const json = await apiFetch("/api/transacciones/ingresos?include_all=true&order=created_at_desc", {
         method: "GET",
       });
-      const transaccion = unwrap<any>(trxJson);
+      return unwrap<any[]>(json) || [];
+    },
+  });
 
-      if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
-        const pagoInicial = {
-          id: `inicial-${selectedFacturaId}`,
-          user_id: transaccion.user_id,
-          tipo_transaccion: "cobro",
-          referencia_id: selectedFacturaId,
-          referencia_tabla: "transacciones_ingresos",
-          monto: transaccion.monto_pagado,
-          metodo_pago: transaccion.metodo_pago,
-          fecha: new Date(transaccion.created_at).toISOString().split("T")[0],
-          descripcion: `Pago inicial - ${transaccion.descripcion}`,
-          created_at: transaccion.created_at,
-          updated_at: transaccion.created_at,
-          _es_pago_inicial: true,
-        };
+  // ✅ ANALÍTICAS (se queda igual)
+  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC, filtroClienteAnalitica);
 
-        return [pagoInicial, ...(pagos || [])];
+  // ✅ FIX E2E: No depender de /api/cxc/ventas-activos (puede no existir en backend)
+  // - intentamos /api/cxc/detalle?pendientes=1 (nuevo)
+  // - fallback /api/cxc/ingresos?pendientes=1 (compat)
+  // - intentamos /api/cxc/ventas-activos?pendientes=1 solo si existe (si da 404 se ignora)
+  const { data: cuentasPorCobrar, isLoading: loadingDetalles } = useQuery({
+    queryKey: ["cuentas-por-cobrar-detalle"],
+    queryFn: async () => {
+      const results: any[] = [];
+
+      // helper de fetch tolerante a 404
+      const tryFetchArray = async (url: string) => {
+        try {
+          const json = await apiFetch(url, { method: "GET" });
+          const arr = unwrap<any[]>(json);
+          return Array.isArray(arr) ? arr : [];
+        } catch (e: any) {
+          // si el backend responde 404 para una ruta, NO rompemos la pantalla
+          return [];
+        }
+      };
+
+      // 1) principal recomendado
+      const base = await tryFetchArray("/api/cxc/detalle?pendientes=1");
+      if (base.length) results.push(...base);
+
+      // 2) compat (por si aún no montan /detalle)
+      if (!results.length) {
+        const compat = await tryFetchArray("/api/cxc/ingresos?pendientes=1");
+        if (compat.length) results.push(...compat);
       }
-    }
 
-    return pagos || [];
-  },
-  enabled: !!selectedFacturaId && historialPagosOpen,
-});
+      // 3) ventas activos (solo si existe; si 404 lo ignoramos)
+      const activos = await tryFetchArray("/api/cxc/ventas-activos?pendientes=1");
+      if (activos.length) results.push(...activos);
 
+      // normalización mínima: asegurar keys esperadas y evitar fechas inválidas
+      return (results || []).map((r: any) => {
+        const id = String(r.id ?? r._id ?? "");
+        const created_at = r.created_at ?? r.createdAt ?? r.fecha ?? r.asiento_fecha ?? null;
 
-  // Mutación para registrar pago
+        const monto_total = Number(r.monto_total ?? r.montoTotal ?? r.total ?? 0) || 0;
+        const monto_pagado = Number(r.monto_pagado ?? r.montoPagado ?? r.pagado ?? 0) || 0;
+        const monto_pendiente = Number(
+          r.monto_pendiente ?? r.montoPendiente ?? Math.max(0, monto_total - monto_pagado)
+        ) || 0;
+
+        return {
+          ...r,
+          id,
+          created_at,
+          monto_total,
+          monto_pagado,
+          monto_pendiente,
+        };
+      });
+    },
+  });
+
+  const clientesUnicos = useMemo(() => {
+    return Array.from(
+      new Set(
+        (cuentasPorCobrar || [])
+          ?.map((c: any) => c.cliente_nombre || 'Sin nombre')
+          .filter(Boolean)
+      )
+    ).sort();
+  }, [cuentasPorCobrar]);
+
+  const { data: asientosContables, isLoading: loadingAsientos } = useQuery({
+    queryKey: ["asientos-contables-transaccion", selectedTransaccionId],
+    queryFn: async () => {
+      if (!selectedTransaccionId) return null;
+      const json = await apiFetch(
+        `/api/asientos/by-transaccion-ingreso/${encodeURIComponent(selectedTransaccionId)}`,
+        { method: "GET" }
+      );
+      return unwrap<any>(json) ?? null;
+    },
+    enabled: !!selectedTransaccionId && detalleContableOpen,
+  });
+
+  const { data: historialPagos, isLoading: loadingHistorial } = useQuery({
+    queryKey: ["historial-pagos", selectedFacturaId],
+    queryFn: async () => {
+      if (!selectedFacturaId) return [];
+
+      const pagosJson = await apiFetch(
+        `/api/cobros-pagos/historial?referencia_id=${encodeURIComponent(selectedFacturaId)}&tipo=cobro`,
+        { method: "GET" }
+      );
+
+      const pagos = (unwrap<any[]>(pagosJson) || []).sort((a, b) => {
+        const da = safeDate(a?.fecha || a?.created_at)?.getTime() ?? 0;
+        const db = safeDate(b?.fecha || b?.created_at)?.getTime() ?? 0;
+        return db - da;
+      });
+
+      const tienePagoInicial = pagos?.some((p) => String(p?.descripcion || "").includes("Pago inicial"));
+
+      if (!tienePagoInicial) {
+        const trxJson = await apiFetch(`/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`, {
+          method: "GET",
+        });
+        const transaccion = unwrap<any>(trxJson);
+
+        if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
+          const created = transaccion.created_at ?? transaccion.createdAt ?? null;
+          const pagoInicial = {
+            id: `inicial-${selectedFacturaId}`,
+            user_id: transaccion.user_id,
+            tipo_transaccion: "cobro",
+            referencia_id: selectedFacturaId,
+            referencia_tabla: "transacciones_ingresos",
+            monto: transaccion.monto_pagado,
+            metodo_pago: transaccion.metodo_pago,
+            fecha: safeDate(created)?.toISOString().split("T")[0] ?? new Date().toISOString().split("T")[0],
+            descripcion: `Pago inicial - ${transaccion.descripcion}`,
+            created_at: created,
+            updated_at: created,
+            _es_pago_inicial: true,
+          };
+
+          return [pagoInicial, ...(pagos || [])];
+        }
+      }
+
+      return pagos || [];
+    },
+    enabled: !!selectedFacturaId && historialPagosOpen,
+  });
+
   const registrarPagoMutation = useMutation({
-  mutationFn: async ({
-    cuentaId,
-    monto,
-    metodo,
-    tipoRegistro,
-  }: {
-    cuentaId: string;
-    monto: number;
-    metodo: string;
-    tipoRegistro: "ingreso" | "venta_activo";
-  }) => {
-    const json = await apiFetch("/api/cuentas-por-cobrar/registrar-pago", {
-      method: "POST",
-      body: JSON.stringify({
-        cuentaId,
-        monto,
-        metodo_pago: metodo,
-        tipoRegistro,
-      }),
-    });
+    mutationFn: async ({
+      cuentaId,
+      monto,
+      metodo,
+      tipoRegistro,
+    }: {
+      cuentaId: string;
+      monto: number;
+      metodo: string;
+      tipoRegistro: "ingreso" | "venta_activo";
+    }) => {
+      const json = await apiFetch("/api/cuentas-por-cobrar/registrar-pago", {
+        method: "POST",
+        body: JSON.stringify({
+          cuentaId,
+          monto,
+          metodo_pago: metodo,
+          tipoRegistro,
+        }),
+      });
 
-    return unwrap<any>(json);
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
-    queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
-    queryClient.invalidateQueries({ queryKey: ["todas-transacciones-ingresos"] });
-    toast.success("Pago registrado exitosamente");
-    setPagoDialogOpen(false);
-    resetPagoForm();
-  },
-  onError: (error: any) => {
-    toast.error("Error al registrar el pago: " + (error?.message || "Error desconocido"));
-  },
-});
-
+      return unwrap<any>(json);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
+      queryClient.invalidateQueries({ queryKey: ["todas-transacciones-ingresos"] });
+      toast.success("Pago registrado exitosamente");
+      setPagoDialogOpen(false);
+      resetPagoForm();
+    },
+    onError: (error: any) => {
+      toast.error("Error al registrar el pago: " + (error?.message || "Error desconocido"));
+    },
+  });
 
   const filteredCuentas = (() => {
-    let cuentas = cuentasPorCobrar?.filter(
-      (cuenta) =>
-        cuenta.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cuenta.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cuenta as any).cliente_telefono?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cuenta as any).cliente_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cuenta as any).cliente_rfc?.toLowerCase().includes(searchTerm.toLowerCase())
-    ) || [];
+    let cuentas = (cuentasPorCobrar || []).filter((cuenta: any) => {
+      const s = searchTerm.toLowerCase();
+      return (
+        String(cuenta.cliente_nombre || "").toLowerCase().includes(s) ||
+        String(cuenta.descripcion || "").toLowerCase().includes(s) ||
+        String((cuenta as any).cliente_telefono || "").toLowerCase().includes(s) ||
+        String((cuenta as any).cliente_email || "").toLowerCase().includes(s) ||
+        String((cuenta as any).cliente_rfc || "").toLowerCase().includes(s)
+      );
+    });
 
-    // Filtro por cliente específico
     if (filtroCliente !== "todos") {
-      cuentas = cuentas.filter(cuenta => cuenta.cliente_nombre === filtroCliente);
+      cuentas = cuentas.filter((cuenta: any) => cuenta.cliente_nombre === filtroCliente);
     }
 
-    // Filtro por estado
     if (filtroEstado !== "todos") {
       const hoy = new Date();
-      cuentas = cuentas.filter(cuenta => {
+      cuentas = cuentas.filter((cuenta: any) => {
         if (filtroEstado === "vencida") {
-          return cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) < hoy;
+          return cuenta.fecha_vencimiento && safeDate(cuenta.fecha_vencimiento) && safeDate(cuenta.fecha_vencimiento)!.getTime() < hoy.getTime();
         } else if (filtroEstado === "porVencer") {
-          return cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) >= hoy;
+          return cuenta.fecha_vencimiento && safeDate(cuenta.fecha_vencimiento) && safeDate(cuenta.fecha_vencimiento)!.getTime() >= hoy.getTime();
         } else if (filtroEstado === "sinVencimiento") {
           return !cuenta.fecha_vencimiento;
         } else if (filtroEstado === "cobrado") {
-          return cuenta.monto_pendiente === 0;
+          return Number(cuenta.monto_pendiente || 0) === 0;
         }
         return true;
       });
     }
 
-    // Ordenamiento por monto
     if (ordenMonto === "menorMayor") {
-      cuentas = [...cuentas].sort((a, b) => (a.monto_pendiente || 0) - (b.monto_pendiente || 0));
+      cuentas = [...cuentas].sort((a: any, b: any) => (a.monto_pendiente || 0) - (b.monto_pendiente || 0));
     } else if (ordenMonto === "mayorMenor") {
-      cuentas = [...cuentas].sort((a, b) => (b.monto_pendiente || 0) - (a.monto_pendiente || 0));
+      cuentas = [...cuentas].sort((a: any, b: any) => (b.monto_pendiente || 0) - (a.monto_pendiente || 0));
     }
 
     return cuentas;
   })();
 
-  const totalPorCobrar = filteredCuentas.reduce((sum, cuenta) => sum + (cuenta.monto_pendiente || 0), 0);
-  const vencidas = filteredCuentas.filter(cuenta => 
-    cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) < new Date()
+  const totalPorCobrar = filteredCuentas.reduce((sum: number, cuenta: any) => sum + (cuenta.monto_pendiente || 0), 0);
+  const vencidas = filteredCuentas.filter((cuenta: any) =>
+    cuenta.fecha_vencimiento && safeDate(cuenta.fecha_vencimiento) && safeDate(cuenta.fecha_vencimiento)!.getTime() < new Date().getTime()
   ).length;
-  const porVencer = filteredCuentas.filter(cuenta => 
-    cuenta.fecha_vencimiento && new Date(cuenta.fecha_vencimiento) >= new Date()
+
+  const porVencer = filteredCuentas.filter((cuenta: any) =>
+    cuenta.fecha_vencimiento && safeDate(cuenta.fecha_vencimiento) && safeDate(cuenta.fecha_vencimiento)!.getTime() >= new Date().getTime()
   ).length;
 
   const openPagoDialog = (cuenta: any) => {
@@ -375,37 +432,28 @@ const CuentasPorCobrar = () => {
       return;
     }
 
-    // Detectar si es venta de activo
     const tipoRegistro = selectedCuenta.tipo_ingreso === 'venta_activo' ? 'venta_activo' : 'ingreso';
 
     registrarPagoMutation.mutate({
       cuentaId: selectedCuenta.id,
-      monto: monto,
+      monto,
       metodo: metodoPago,
-      tipoRegistro: tipoRegistro
+      tipoRegistro
     });
   };
 
   const getEstadoBadge = (fechaVencimiento: string | null, montoPendiente: number) => {
-    if (montoPendiente === 0) {
-      return <Badge variant="secondary">Cobrado</Badge>;
-    }
-    
-    if (!fechaVencimiento) {
-      return <Badge variant="outline">Sin vencimiento</Badge>;
-    }
+    if (montoPendiente === 0) return <Badge variant="secondary">Cobrado</Badge>;
+    if (!fechaVencimiento) return <Badge variant="outline">Sin vencimiento</Badge>;
 
-    const fechaVence = new Date(fechaVencimiento);
+    const fechaVence = safeDate(fechaVencimiento);
+    if (!fechaVence) return <Badge variant="outline">Sin fecha válida</Badge>;
+
     const hoy = new Date();
-    
-    if (fechaVence < hoy) {
-      return <Badge variant="destructive">Vencida</Badge>;
-    } else {
-      return <Badge variant="default">Por vencer</Badge>;
-    }
+    if (fechaVence < hoy) return <Badge variant="destructive">Vencida</Badge>;
+    return <Badge variant="default">Por vencer</Badge>;
   };
-  
-  // Función para agrupar cuentas por cliente
+
   const cuentasAgrupadasPorCliente = (() => {
     const grupos = new Map<string, {
       cliente: string;
@@ -419,10 +467,10 @@ const CuentasPorCobrar = () => {
         rfc?: string;
       };
     }>();
-    
-    filteredCuentas.forEach(cuenta => {
+
+    filteredCuentas.forEach((cuenta: any) => {
       const clienteKey = cuenta.cliente_nombre || "Sin cliente asignado";
-      
+
       if (!grupos.has(clienteKey)) {
         grupos.set(clienteKey, {
           cliente: clienteKey,
@@ -437,27 +485,24 @@ const CuentasPorCobrar = () => {
           }
         });
       }
-      
+
       const grupo = grupos.get(clienteKey)!;
       grupo.facturas.push(cuenta);
       grupo.totalPendiente += cuenta.monto_pendiente || 0;
       grupo.totalOriginal += cuenta.monto_total || 0;
       grupo.totalPagado += cuenta.monto_pagado || 0;
     });
-    
+
     return Array.from(grupos.values());
   })();
-  
+
   const toggleClienteExpansion = (cliente: string) => {
     const newExpanded = new Set(expandedClientes);
-    if (newExpanded.has(cliente)) {
-      newExpanded.delete(cliente);
-    } else {
-      newExpanded.add(cliente);
-    }
+    if (newExpanded.has(cliente)) newExpanded.delete(cliente);
+    else newExpanded.add(cliente);
     setExpandedClientes(newExpanded);
   };
-  
+
   const openHistorialPagos = (facturaId: string) => {
     setSelectedFacturaId(facturaId);
     setHistorialPagosOpen(true);
@@ -581,7 +626,7 @@ const CuentasPorCobrar = () => {
                       <SelectContent className="bg-background z-50">
                         <SelectItem value="todos">Todos los clientes</SelectItem>
                         {Array.from(new Set((cuentasPorCobrar || [])
-                          .map(c => c.cliente_nombre)
+                          .map((c: any) => c.cliente_nombre)
                           .filter(Boolean)))
                           .sort()
                           .map((cliente) => (
@@ -669,8 +714,7 @@ const CuentasPorCobrar = () => {
                       <TableBody>
                         {cuentasAgrupadasPorCliente.map((grupo) => (
                           <>
-                            {/* Fila del Cliente (Agrupado) */}
-                            <TableRow 
+                            <TableRow
                               key={`cliente-${grupo.cliente}`}
                               className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
                               onClick={() => toggleClienteExpansion(grupo.cliente)}
@@ -722,24 +766,21 @@ const CuentasPorCobrar = () => {
                                 </Badge>
                               </TableCell>
                             </TableRow>
-                            
-                            {/* Filas de Facturas Individuales (Expandidas) */}
+
                             {expandedClientes.has(grupo.cliente) && grupo.facturas.map((cuenta) => (
                               <TableRow key={cuenta.id} className="bg-background">
                                 <TableCell></TableCell>
                                 <TableCell colSpan={5}>
                                   <div className="pl-4 border-l-2 border-primary/30 ml-4">
                                     <div className="grid grid-cols-12 gap-4 items-center">
-                                      {/* Descripción */}
                                       <div className="col-span-3">
                                         <div className="font-medium">{cuenta.descripcion}</div>
                                         <div className="text-xs text-muted-foreground">
-                                          {format(new Date(cuenta.created_at), "dd/MM/yyyy", { locale: es })}
+                                          {safeFormatDate(cuenta.created_at, "dd/MM/yyyy", { locale: es })}
                                         </div>
                                       </div>
-                                      
-                                      {/* Desglose de Montos */}
-                                       <div className="col-span-3">
+
+                                      <div className="col-span-3">
                                         <div className="space-y-1 text-sm">
                                           <div className="flex justify-between">
                                             <span className="text-muted-foreground">Total:</span>
@@ -765,14 +806,13 @@ const CuentasPorCobrar = () => {
                                           </div>
                                         </div>
                                       </div>
-                                      
-                                      {/* Estado de Pago y Método */}
+
                                       <div className="col-span-2">
                                         <div className="space-y-1">
                                           <Badge variant={cuenta.tipo_pago === 'contado' ? 'default' : cuenta.tipo_pago === 'parcial' ? 'secondary' : 'outline'}>
-                                            {cuenta.tipo_pago === 'contado' ? 'Contado' : 
-                                             cuenta.tipo_pago === 'parcial' ? 'Parcial' : 
-                                             'Crédito'}
+                                            {cuenta.tipo_pago === 'contado' ? 'Contado' :
+                                              cuenta.tipo_pago === 'parcial' ? 'Parcial' :
+                                                'Crédito'}
                                           </Badge>
                                           {cuenta.metodo_pago && (
                                             <div className="text-xs text-muted-foreground">
@@ -781,21 +821,22 @@ const CuentasPorCobrar = () => {
                                           )}
                                         </div>
                                       </div>
-                                      
-                                      {/* Fecha Vencimiento */}
+
                                       <div className="col-span-2">
                                         {cuenta.fecha_vencimiento ? (
                                           <div className="space-y-1">
                                             <div className="text-sm font-medium">
-                                              {format(new Date(cuenta.fecha_vencimiento), "dd/MM/yyyy", { locale: es })}
+                                              {safeFormatDate(cuenta.fecha_vencimiento, "dd/MM/yyyy", { locale: es })}
                                             </div>
                                             <div className="text-xs">
                                               {(() => {
                                                 const today = new Date();
-                                                const dueDate = new Date(cuenta.fecha_vencimiento);
+                                                const dueDate = safeDate(cuenta.fecha_vencimiento);
+                                                if (!dueDate) return <span className="text-muted-foreground">Fecha inválida</span>;
+
                                                 const diffTime = dueDate.getTime() - today.getTime();
                                                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                                
+
                                                 if (diffDays < 0) {
                                                   return (
                                                     <span className="text-destructive font-medium">
@@ -829,20 +870,19 @@ const CuentasPorCobrar = () => {
                                           <span className="text-muted-foreground text-sm">Sin fecha límite</span>
                                         )}
                                       </div>
-                                      
-                                      {/* Acciones */}
+
                                       <div className="col-span-2 flex gap-2">
-                                        <Button 
-                                          size="sm" 
+                                        <Button
+                                          size="sm"
                                           variant="outline"
                                           onClick={() => openHistorialPagos(cuenta.id)}
                                           title="Ver historial de pagos"
                                         >
                                           <History className="w-4 h-4" />
                                         </Button>
-                                        <Button 
-                                          size="sm" 
-                                          variant="default" 
+                                        <Button
+                                          size="sm"
+                                          variant="default"
                                           onClick={() => openPagoDialog(cuenta)}
                                           disabled={cuenta.monto_pendiente <= 0}
                                         >
@@ -872,7 +912,6 @@ const CuentasPorCobrar = () => {
               </div>
             ) : (
               <>
-                {/* KPIs de Transacciones */}
                 <div className="grid gap-4 md:grid-cols-4">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -891,7 +930,7 @@ const CuentasPorCobrar = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-success">
-                        {todasTransacciones?.filter(t => t.monto_pendiente === 0).length || 0}
+                        {todasTransacciones?.filter((t: any) => t.monto_pendiente === 0).length || 0}
                       </div>
                     </CardContent>
                   </Card>
@@ -903,7 +942,7 @@ const CuentasPorCobrar = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-warning">
-                        {todasTransacciones?.filter(t => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0}
+                        {todasTransacciones?.filter((t: any) => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0}
                       </div>
                     </CardContent>
                   </Card>
@@ -915,13 +954,12 @@ const CuentasPorCobrar = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-destructive">
-                        {todasTransacciones?.filter(t => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0}
+                        {todasTransacciones?.filter((t: any) => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0}
                       </div>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Tabla de Transacciones Completas */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -932,10 +970,9 @@ const CuentasPorCobrar = () => {
                       Trazabilidad de todas las transacciones de ingresos, desde su creación hasta su liquidación
                     </CardDescription>
                   </CardHeader>
+
                   <CardContent className="space-y-6">
-                    {/* Filtros para transacciones */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
-                      {/* Filtro por mes */}
                       <div>
                         <Label htmlFor="filtro-mes-transaccion" className="mb-2 block">Mes</Label>
                         <Select value={filtroMesTransaccion} onValueChange={setFiltroMesTransaccion}>
@@ -960,7 +997,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Filtro por año */}
                       <div>
                         <Label htmlFor="filtro-ano-transaccion" className="mb-2 block">Año</Label>
                         <Select value={filtroAnoTransaccion} onValueChange={setFiltroAnoTransaccion}>
@@ -970,9 +1006,10 @@ const CuentasPorCobrar = () => {
                           <SelectContent className="bg-background z-50">
                             <SelectItem value="todos">Todos los años</SelectItem>
                             {Array.from(new Set((todasTransacciones || [])
-                              .map(t => new Date(t.created_at).getFullYear())))
-                              .sort((a, b) => b - a)
-                              .map((year) => (
+                              .map((t: any) => safeDate(t.created_at)?.getFullYear())
+                              .filter((y: any) => typeof y === "number")))
+                              .sort((a: any, b: any) => b - a)
+                              .map((year: any) => (
                                 <SelectItem key={year} value={year.toString()}>
                                   {year}
                                 </SelectItem>
@@ -981,7 +1018,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Filtro por cliente */}
                       <div>
                         <Label htmlFor="filtro-cliente-transaccion" className="mb-2 block">Cliente</Label>
                         <Select value={filtroClienteTransaccion} onValueChange={setFiltroClienteTransaccion}>
@@ -991,10 +1027,10 @@ const CuentasPorCobrar = () => {
                           <SelectContent className="bg-background z-50">
                             <SelectItem value="todos">Todos los clientes</SelectItem>
                             {Array.from(new Set((todasTransacciones || [])
-                              .map(t => t.cliente_nombre)
+                              .map((t: any) => t.cliente_nombre)
                               .filter(Boolean)))
                               .sort()
-                              .map((cliente) => (
+                              .map((cliente: any) => (
                                 <SelectItem key={cliente} value={cliente!}>
                                   {cliente}
                                 </SelectItem>
@@ -1003,7 +1039,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Filtro por tipo de ingreso */}
                       <div>
                         <Label htmlFor="filtro-tipo-ingreso" className="mb-2 block">Tipo de Ingreso</Label>
                         <Select value={filtroTipoIngreso} onValueChange={setFiltroTipoIngreso}>
@@ -1012,10 +1047,9 @@ const CuentasPorCobrar = () => {
                           </SelectTrigger>
                           <SelectContent className="bg-background z-50">
                             <SelectItem value="todos">Todos los tipos</SelectItem>
-                            {Array.from(new Set((todasTransacciones || [])
-                              .map(t => t.tipo_ingreso)))
+                            {Array.from(new Set((todasTransacciones || []).map((t: any) => t.tipo_ingreso)))
                               .sort()
-                              .map((tipo) => (
+                              .map((tipo: any) => (
                                 <SelectItem key={tipo} value={tipo}>
                                   {tipo}
                                 </SelectItem>
@@ -1024,7 +1058,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Filtro por estado */}
                       <div>
                         <Label htmlFor="filtro-estado-transaccion" className="mb-2 block">Estado</Label>
                         <Select value={filtroEstadoTransaccion} onValueChange={setFiltroEstadoTransaccion}>
@@ -1040,7 +1073,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Filtro por método de pago */}
                       <div>
                         <Label htmlFor="filtro-metodo-pago" className="mb-2 block">Método de Pago</Label>
                         <Select value={filtroMetodoPago} onValueChange={setFiltroMetodoPago}>
@@ -1050,10 +1082,10 @@ const CuentasPorCobrar = () => {
                           <SelectContent className="bg-background z-50">
                             <SelectItem value="todos">Todos los métodos</SelectItem>
                             {Array.from(new Set((todasTransacciones || [])
-                              .map(t => t.metodo_pago)
+                              .map((t: any) => t.metodo_pago)
                               .filter(Boolean)))
                               .sort()
-                              .map((metodo) => (
+                              .map((metodo: any) => (
                                 <SelectItem key={metodo} value={metodo!}>
                                   {metodo}
                                 </SelectItem>
@@ -1062,7 +1094,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Ordenar por monto */}
                       <div>
                         <Label htmlFor="orden-monto-transaccion" className="mb-2 block">Ordenar por Monto</Label>
                         <Select value={ordenMontoTransaccion} onValueChange={setOrdenMontoTransaccion}>
@@ -1077,7 +1108,6 @@ const CuentasPorCobrar = () => {
                         </Select>
                       </div>
 
-                      {/* Botón para limpiar filtros */}
                       <div className="flex items-end">
                         <Button
                           variant="outline"
@@ -1095,218 +1125,210 @@ const CuentasPorCobrar = () => {
                           Limpiar Filtros
                         </Button>
                       </div>
-                     </div>
+                    </div>
+
                     {(() => {
-                      // Aplicar filtros a las transacciones
                       let transaccionesFiltradas = todasTransacciones || [];
 
-                      // Filtro por mes
                       if (filtroMesTransaccion !== "todos") {
-                        transaccionesFiltradas = transaccionesFiltradas.filter(t => {
-                          const mes = new Date(t.created_at).getMonth() + 1;
+                        transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => {
+                          const d = safeDate(t.created_at);
+                          if (!d) return false;
+                          const mes = d.getMonth() + 1;
                           return mes === parseInt(filtroMesTransaccion);
                         });
                       }
 
-                      // Filtro por año
                       if (filtroAnoTransaccion !== "todos") {
-                        transaccionesFiltradas = transaccionesFiltradas.filter(t => {
-                          const ano = new Date(t.created_at).getFullYear();
+                        transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => {
+                          const d = safeDate(t.created_at);
+                          if (!d) return false;
+                          const ano = d.getFullYear();
                           return ano === parseInt(filtroAnoTransaccion);
                         });
                       }
 
-                      // Filtro por cliente
                       if (filtroClienteTransaccion !== "todos") {
-                        transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                        transaccionesFiltradas = transaccionesFiltradas.filter((t: any) =>
                           t.cliente_nombre === filtroClienteTransaccion
                         );
                       }
 
-                      // Filtro por tipo de ingreso
                       if (filtroTipoIngreso !== "todos") {
-                        transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                        transaccionesFiltradas = transaccionesFiltradas.filter((t: any) =>
                           t.tipo_ingreso === filtroTipoIngreso
                         );
                       }
 
-                      // Filtro por estado
                       if (filtroEstadoTransaccion !== "todos") {
-                        transaccionesFiltradas = transaccionesFiltradas.filter(t => {
-                          if (filtroEstadoTransaccion === "completado") {
-                            return t.monto_pendiente === 0;
-                          } else if (filtroEstadoTransaccion === "enProgreso") {
-                            return t.monto_pendiente > 0 && t.monto_pagado > 0;
-                          } else if (filtroEstadoTransaccion === "sinPagar") {
-                            return t.monto_pagado === 0 && t.monto_pendiente > 0;
-                          }
+                        transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => {
+                          if (filtroEstadoTransaccion === "completado") return t.monto_pendiente === 0;
+                          if (filtroEstadoTransaccion === "enProgreso") return t.monto_pendiente > 0 && t.monto_pagado > 0;
+                          if (filtroEstadoTransaccion === "sinPagar") return t.monto_pagado === 0 && t.monto_pendiente > 0;
                           return true;
                         });
                       }
 
-                      // Filtro por método de pago
                       if (filtroMetodoPago !== "todos") {
-                        transaccionesFiltradas = transaccionesFiltradas.filter(t => 
+                        transaccionesFiltradas = transaccionesFiltradas.filter((t: any) =>
                           t.metodo_pago === filtroMetodoPago
                         );
                       }
 
-                      // Ordenamiento por monto
                       if (ordenMontoTransaccion === "menorMayor") {
-                        transaccionesFiltradas = [...transaccionesFiltradas].sort((a, b) => 
-                          a.monto_neto - b.monto_neto
+                        transaccionesFiltradas = [...transaccionesFiltradas].sort((a: any, b: any) =>
+                          (a.monto_neto || 0) - (b.monto_neto || 0)
                         );
                       } else if (ordenMontoTransaccion === "mayorMenor") {
-                        transaccionesFiltradas = [...transaccionesFiltradas].sort((a, b) => 
-                          b.monto_neto - a.monto_neto
+                        transaccionesFiltradas = [...transaccionesFiltradas].sort((a: any, b: any) =>
+                          (b.monto_neto || 0) - (a.monto_neto || 0)
                         );
                       }
 
                       return !transaccionesFiltradas || transaccionesFiltradas.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground">
-                          {todasTransacciones && todasTransacciones.length > 0 
-                            ? "No se encontraron transacciones con los filtros seleccionados."
-                            : "No hay transacciones registradas."}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                           <TableHeader>
-                            <TableRow>
-                              <TableHead>Fecha Creación</TableHead>
-                              <TableHead>Cliente</TableHead>
-                              <TableHead>Descripción</TableHead>
-                              <TableHead>Tipo Ingreso</TableHead>
-                              <TableHead className="text-right">Monto Total</TableHead>
-                              <TableHead className="text-right">Descuento</TableHead>
-                              <TableHead className="text-right">Monto Neto</TableHead>
-                              <TableHead className="text-right">Pagado</TableHead>
-                              <TableHead className="text-right">Pendiente</TableHead>
-                              <TableHead>Tipo Pago</TableHead>
-                              <TableHead>Método Pago</TableHead>
-                              <TableHead>Estado</TableHead>
-                              <TableHead>Progreso</TableHead>
-                              <TableHead className="text-center">Detalle Contable</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {transaccionesFiltradas.map((transaccion) => {
-                              const porcentajePagado = transaccion.monto_neto > 0 
-                                ? (transaccion.monto_pagado / transaccion.monto_neto) * 100 
-                                : 0;
-                              
-                              return (
-                                <TableRow key={transaccion.id}>
-                                  <TableCell className="font-medium">
-                                    {format(new Date(transaccion.created_at), "dd MMM yyyy HH:mm", { locale: es })}
-                                  </TableCell>
-                                  <TableCell>{transaccion.cliente_nombre || "Sin especificar"}</TableCell>
-                                  <TableCell className="max-w-[200px] truncate">
-                                    {transaccion.descripcion}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline" className="capitalize">
-                                      {transaccion.tipo_ingreso}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-right font-medium">
-                                    {formatCurrency(transaccion.monto_total)}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {transaccion.monto_descuento > 0 ? (
-                                      <span className="text-destructive">
-                                        -{formatCurrency(transaccion.monto_descuento)}
-                                      </span>
-                                    ) : (
-                                      <span className="text-muted-foreground">-</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-right font-semibold">
-                                    {formatCurrency(transaccion.monto_neto)}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <span className="text-success font-semibold">
-                                      {formatCurrency(transaccion.monto_pagado)}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {transaccion.monto_pendiente > 0 ? (
-                                      <span className="text-destructive font-semibold">
-                                        {formatCurrency(transaccion.monto_pendiente)}
-                                      </span>
-                                    ) : (
-                                      <span className="text-muted-foreground">$0</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {transaccion.tipo_pago === 'contado' ? (
-                                      <Badge variant="secondary">Contado</Badge>
-                                    ) : transaccion.tipo_pago === 'credito' ? (
-                                      <Badge variant="outline">Crédito</Badge>
-                                    ) : (
-                                      <Badge className="bg-amber-500">Parcial</Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="capitalize">
-                                    {transaccion.metodo_pago || "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {transaccion.monto_pendiente === 0 ? (
-                                      <Badge className="bg-success">Completado</Badge>
-                                    ) : transaccion.monto_pagado > 0 ? (
-                                      <Badge className="bg-warning">En Progreso</Badge>
-                                    ) : (
-                                      <Badge variant="destructive">Sin Pagar</Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="min-w-[150px]">
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between text-xs">
-                                        <span>{porcentajePagado.toFixed(0)}%</span>
-                                        <span className="text-muted-foreground">
-                                          {transaccion.monto_pagado > 0 && transaccion.monto_pendiente > 0
-                                            ? 'Parcial'
-                                            : transaccion.monto_pendiente === 0
-                                            ? 'Completo'
-                                            : 'Sin pago'}
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground">
+                            {todasTransacciones && todasTransacciones.length > 0
+                              ? "No se encontraron transacciones con los filtros seleccionados."
+                              : "No hay transacciones registradas."}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha Creación</TableHead>
+                                <TableHead>Cliente</TableHead>
+                                <TableHead>Descripción</TableHead>
+                                <TableHead>Tipo Ingreso</TableHead>
+                                <TableHead className="text-right">Monto Total</TableHead>
+                                <TableHead className="text-right">Descuento</TableHead>
+                                <TableHead className="text-right">Monto Neto</TableHead>
+                                <TableHead className="text-right">Pagado</TableHead>
+                                <TableHead className="text-right">Pendiente</TableHead>
+                                <TableHead>Tipo Pago</TableHead>
+                                <TableHead>Método Pago</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead>Progreso</TableHead>
+                                <TableHead className="text-center">Detalle Contable</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {transaccionesFiltradas.map((transaccion: any) => {
+                                const porcentajePagado = transaccion.monto_neto > 0
+                                  ? (transaccion.monto_pagado / transaccion.monto_neto) * 100
+                                  : 0;
+
+                                return (
+                                  <TableRow key={transaccion.id}>
+                                    <TableCell className="font-medium">
+                                      {safeFormatDate(transaccion.created_at, "dd MMM yyyy HH:mm", { locale: es })}
+                                    </TableCell>
+                                    <TableCell>{transaccion.cliente_nombre || "Sin especificar"}</TableCell>
+                                    <TableCell className="max-w-[200px] truncate">
+                                      {transaccion.descripcion}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className="capitalize">
+                                        {transaccion.tipo_ingreso}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right font-medium">
+                                      {formatCurrency(transaccion.monto_total)}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {transaccion.monto_descuento > 0 ? (
+                                        <span className="text-destructive">
+                                          -{formatCurrency(transaccion.monto_descuento)}
                                         </span>
-                                      </div>
-                                      <div className="w-full bg-muted rounded-full h-2">
-                                        <div
-                                          className={`h-2 rounded-full transition-all ${
-                                            porcentajePagado === 100
+                                      ) : (
+                                        <span className="text-muted-foreground">-</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold">
+                                      {formatCurrency(transaccion.monto_neto)}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <span className="text-success font-semibold">
+                                        {formatCurrency(transaccion.monto_pagado)}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {transaccion.monto_pendiente > 0 ? (
+                                        <span className="text-destructive font-semibold">
+                                          {formatCurrency(transaccion.monto_pendiente)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground">$0</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {transaccion.tipo_pago === 'contado' ? (
+                                        <Badge variant="secondary">Contado</Badge>
+                                      ) : transaccion.tipo_pago === 'credito' ? (
+                                        <Badge variant="outline">Crédito</Badge>
+                                      ) : (
+                                        <Badge className="bg-amber-500">Parcial</Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="capitalize">
+                                      {transaccion.metodo_pago || "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {transaccion.monto_pendiente === 0 ? (
+                                        <Badge className="bg-success">Completado</Badge>
+                                      ) : transaccion.monto_pagado > 0 ? (
+                                        <Badge className="bg-warning">En Progreso</Badge>
+                                      ) : (
+                                        <Badge variant="destructive">Sin Pagar</Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="min-w-[150px]">
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-xs">
+                                          <span>{porcentajePagado.toFixed(0)}%</span>
+                                          <span className="text-muted-foreground">
+                                            {transaccion.monto_pagado > 0 && transaccion.monto_pendiente > 0
+                                              ? 'Parcial'
+                                              : transaccion.monto_pendiente === 0
+                                                ? 'Completo'
+                                                : 'Sin pago'}
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-muted rounded-full h-2">
+                                          <div
+                                            className={`h-2 rounded-full transition-all ${porcentajePagado === 100
                                               ? 'bg-success'
                                               : porcentajePagado > 0
-                                              ? 'bg-warning'
-                                              : 'bg-destructive'
-                                          }`}
-                                          style={{ width: `${porcentajePagado}%` }}
-                                        />
+                                                ? 'bg-warning'
+                                                : 'bg-destructive'
+                                              }`}
+                                            style={{ width: `${porcentajePagado}%` }}
+                                          />
+                                        </div>
                                       </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setSelectedTransaccionId(transaccion.id);
-                                        setDetalleContableOpen(true);
-                                      }}
-                                    >
-                                      <Eye className="h-4 w-4 mr-1" />
-                                      Ver Detalle
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    );
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setSelectedTransaccionId(transaccion.id);
+                                          setDetalleContableOpen(true);
+                                        }}
+                                      >
+                                        <Eye className="h-4 w-4 mr-1" />
+                                        Ver Detalle
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
                     })()}
                   </CardContent>
                 </Card>
@@ -1396,8 +1418,8 @@ const CuentasPorCobrar = () => {
                     <CardContent>
                       <div className="text-2xl font-bold text-destructive">
                         {(analytics?.agingAnalysisDetailed || [])
-                          .filter(a => a.min >= 1)
-                          .reduce((sum, a) => sum + a.cantidad, 0)}
+                          .filter((a: any) => a.min >= 1)
+                          .reduce((sum: number, a: any) => sum + a.cantidad, 0)}
                       </div>
                     </CardContent>
                   </Card>
@@ -1438,29 +1460,29 @@ const CuentasPorCobrar = () => {
                   </Card>
                 </div>
 
-                {/* Gráfico A: Análisis de Antigüedad (Barras Verticales) */}
+                {/* Gráfico A */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Análisis de Antigüedad de Cuentas por Cobrar</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {(() => {
-                      const maxMontoAntiguedad = Math.max(...(analytics?.agingAnalysisDetailed || []).map(a => a.monto), 1);
+                      const maxMontoAntiguedad = Math.max(...(analytics?.agingAnalysisDetailed || []).map((a: any) => a.monto), 1);
                       const dominioYAntiguedad = [0, maxMontoAntiguedad * 1.2];
-                      
+
                       return (
                         <ResponsiveContainer width="100%" height={350}>
                           <BarChart data={analytics?.agingAnalysisDetailed || []}>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                            <XAxis 
-                              dataKey="rango" 
+                            <XAxis
+                              dataKey="rango"
                               stroke="hsl(var(--foreground))"
                               tick={{ fill: 'hsl(var(--foreground))' }}
                               angle={-45}
                               textAnchor="end"
                               height={100}
                             />
-                            <YAxis 
+                            <YAxis
                               domain={dominioYAntiguedad}
                               stroke="hsl(var(--foreground))"
                               tick={{ fill: 'hsl(var(--foreground))' }}
@@ -1476,9 +1498,9 @@ const CuentasPorCobrar = () => {
                               labelFormatter={(label) => `${label}`}
                             />
                             <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]}>
-                              <LabelList 
-                                dataKey="monto" 
-                                position="top" 
+                              <LabelList
+                                dataKey="monto"
+                                position="top"
                                 formatter={(value: number) => formatearConPreferenciasAnalitica(value)}
                                 style={{ fontSize: '11px', fontWeight: 'bold', fill: 'hsl(var(--foreground))' }}
                               />
@@ -1490,7 +1512,7 @@ const CuentasPorCobrar = () => {
                   </CardContent>
                 </Card>
 
-                {/* Gráfico B: Histórico de CxC (Líneas) */}
+                {/* Gráfico B */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1508,58 +1530,52 @@ const CuentasPorCobrar = () => {
                   </CardHeader>
                   <CardContent>
                     {(() => {
-                      const maxSaldoHistorico = Math.max(...(analytics?.historicoCxC || []).map(h => h.saldo), 1);
+                      const maxSaldoHistorico = Math.max(...(analytics?.historicoCxC || []).map((h: any) => h.saldo), 1);
                       const dominioYHistorico = [0, maxSaldoHistorico * 1.2];
-                      
+
                       return (
                         <ResponsiveContainer width="100%" height={350}>
-                      <LineChart data={analytics?.historicoCxC || []}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          dataKey="fecha" 
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                        />
-                        <YAxis 
-                          domain={dominioYHistorico}
-                          stroke="hsl(var(--foreground))"
-                          tick={{ fill: 'hsl(var(--foreground))' }}
-                          tickFormatter={(value) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--background))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            color: 'hsl(var(--foreground))'
-                          }}
-                          formatter={(value: number) => [
-                            `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
-                            'Saldo CxC'
-                          ]}
-                          labelStyle={{ color: 'hsl(var(--foreground))' }}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="saldo" 
-                          stroke={COLORS.primary}
-                          strokeWidth={3}
-                          dot={{ fill: COLORS.primary, r: 4 }}
-                          label={{
-                            position: 'top',
-                            fill: 'hsl(var(--foreground))',
-                            fontSize: 12,
-                            formatter: (value: number) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
-                          }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                          <LineChart data={analytics?.historicoCxC || []}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis
+                              dataKey="fecha"
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                            />
+                            <YAxis
+                              domain={dominioYHistorico}
+                              stroke="hsl(var(--foreground))"
+                              tick={{ fill: 'hsl(var(--foreground))' }}
+                              tickFormatter={(value) => `$${value.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '8px',
+                                color: 'hsl(var(--foreground))'
+                              }}
+                              formatter={(value: number) => [
+                                `$${value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+                                'Saldo CxC'
+                              ]}
+                              labelStyle={{ color: 'hsl(var(--foreground))' }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="saldo"
+                              stroke={COLORS.primary}
+                              strokeWidth={3}
+                              dot={{ fill: COLORS.primary, r: 4 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
                       );
                     })()}
                   </CardContent>
                 </Card>
 
-                {/* Gráfico C: CxC por Cliente (Barras Horizontales Apiladas) */}
+                {/* Gráfico C */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1568,13 +1584,13 @@ const CuentasPorCobrar = () => {
                         <span className="text-sm text-muted-foreground">Total Deuda:</span>
                         <Badge variant="default" className="text-lg px-3 py-1">
                           {formatearConPreferenciasAnalitica((analytics?.cxcPorClienteApilado || [])
-                            .reduce((sum, c) => sum + c.total, 0))}
+                            .reduce((sum: number, c: any) => sum + c.total, 0))}
                         </Badge>
                       </div>
                     </div>
                   </CardHeader>
+
                   <CardContent className="space-y-4">
-                    {/* Filtro de antigüedad */}
                     <div className="flex items-center gap-4">
                       <Label htmlFor="filtro-antiguedad">Filtrar por antigüedad:</Label>
                       <Select value={filtroAntiguedad} onValueChange={setFiltroAntiguedad}>
@@ -1594,38 +1610,39 @@ const CuentasPorCobrar = () => {
                     </div>
 
                     {(() => {
-                      const dataFiltradaCliente = filtroAntiguedad === "todos" 
+                      const dataFiltradaCliente = filtroAntiguedad === "todos"
                         ? (analytics?.cxcPorClienteApilado || [])
                         : (analytics?.cxcPorClienteApilado || [])
-                            .filter(c => (c as any)[filtroAntiguedad] > 0)
-                            .sort((a, b) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0));
-                      
+                          .filter((c: any) => (c as any)[filtroAntiguedad] > 0)
+                          .sort((a: any, b: any) => ((b as any)[filtroAntiguedad] || 0) - ((a as any)[filtroAntiguedad] || 0));
+
                       const maxMontoCliente = filtroAntiguedad === "todos"
-                        ? Math.max(...dataFiltradaCliente.map(c => c.total), 1)
-                        : Math.max(...dataFiltradaCliente.map(c => (c as any)[filtroAntiguedad] || 0), 1);
+                        ? Math.max(...dataFiltradaCliente.map((c: any) => c.total), 1)
+                        : Math.max(...dataFiltradaCliente.map((c: any) => (c as any)[filtroAntiguedad] || 0), 1);
+
                       const dominioXCliente = [0, maxMontoCliente * 1.2];
-                      
+
                       return (
-                        <ResponsiveContainer 
-                          width="100%" 
+                        <ResponsiveContainer
+                          width="100%"
                           height={Math.max(400, dataFiltradaCliente.length * 40)}
                         >
-                          <BarChart 
+                          <BarChart
                             data={dataFiltradaCliente}
                             layout="vertical"
                             margin={{ left: 100, right: 80 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                            <XAxis 
+                            <XAxis
                               type="number"
                               domain={dominioXCliente}
                               stroke="hsl(var(--foreground))"
                               tick={{ fill: 'hsl(var(--foreground))' }}
                               tickFormatter={(value) => formatearConPreferenciasAnalitica(value)}
                             />
-                            <YAxis 
+                            <YAxis
                               type="category"
-                              dataKey="cliente" 
+                              dataKey="cliente"
                               stroke="hsl(var(--foreground))"
                               tick={{ fill: 'hsl(var(--foreground))' }}
                               width={90}
@@ -1637,81 +1654,19 @@ const CuentasPorCobrar = () => {
                                 borderRadius: '8px',
                                 padding: '12px'
                               }}
-                              formatter={(value: number, name: string) => {
-                                const labels: Record<string, string> = {
-                                  sinVencimiento: "Sin vencimiento",
-                                  vencido1_15: "Vencido 1-15 días",
-                                  vencido16_30: "Vencido 16-30 días",
-                                  vencido31_60: "Vencido 31-60 días",
-                                  vencido61_90: "Vencido 61-90 días",
-                                  vencidoMas90: "Vencido +90 días"
-                                };
-                                return [formatearConPreferenciasAnalitica(value), labels[name] || name];
-                              }}
-                              labelFormatter={(label) => {
-                                const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
-                                return label;
-                              }}
-                              content={({ active, payload, label }) => {
-                                if (active && payload && payload.length) {
-                                  const cliente = (analytics?.cxcPorClienteApilado || []).find(c => c.cliente === label);
-                                  return (
-                                    <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                                      <div className="font-bold mb-2 pb-2 border-b border-border">{label}</div>
-                                      {payload.map((entry: any, index: number) => (
-                                        entry.value > 0 && (
-                                          <div key={index} className="flex justify-between gap-4 py-1">
-                                            <span className="flex items-center gap-2">
-                                              <div 
-                                                className="w-3 h-3 rounded-sm" 
-                                                style={{ backgroundColor: entry.color }}
-                                              />
-                                              {entry.name}:
-                                            </span>
-                                            <span className="font-medium">{formatearConPreferenciasAnalitica(entry.value)}</span>
-                                          </div>
-                                        )
-                                      ))}
-                                      <div className="flex justify-between gap-4 pt-2 mt-2 border-t border-border font-bold text-primary">
-                                        <span>TOTAL:</span>
-                                        <span>{formatearConPreferenciasAnalitica(cliente?.total || 0)}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              }}
                             />
+
                             {(() => {
-                              const barConfig = {
-                                sinVencimiento: { 
-                                  fill: "hsl(var(--chart-1))", 
-                                  name: "Sin vencimiento" 
-                                },
-                                vencido1_15: { 
-                                  fill: "hsl(var(--chart-2))", 
-                                  name: "Vencido 1-15 días" 
-                                },
-                                vencido16_30: { 
-                                  fill: "hsl(var(--chart-3))", 
-                                  name: "Vencido 16-30 días" 
-                                },
-                                vencido31_60: { 
-                                  fill: "hsl(var(--warning))", 
-                                  name: "Vencido 31-60 días" 
-                                },
-                                vencido61_90: { 
-                                  fill: "hsl(222 47% 55%)", 
-                                  name: "Vencido 61-90 días" 
-                                },
-                                vencidoMas90: { 
-                                  fill: "hsl(var(--destructive))", 
-                                  name: "Vencido +90 días" 
-                                }
+                              const barConfig: any = {
+                                sinVencimiento: { fill: "hsl(var(--chart-1))", name: "Sin vencimiento" },
+                                vencido1_15: { fill: "hsl(var(--chart-2))", name: "Vencido 1-15 días" },
+                                vencido16_30: { fill: "hsl(var(--chart-3))", name: "Vencido 16-30 días" },
+                                vencido31_60: { fill: "hsl(var(--warning))", name: "Vencido 31-60 días" },
+                                vencido61_90: { fill: "hsl(222 47% 55%)", name: "Vencido 61-90 días" },
+                                vencidoMas90: { fill: "hsl(var(--destructive))", name: "Vencido +90 días" }
                               };
 
                               return filtroAntiguedad === "todos" ? (
-                                // Modo "Todos": Mostrar todas las barras apiladas
                                 <>
                                   <Bar dataKey="sinVencimiento" stackId="a" fill={barConfig.sinVencimiento.fill} name={barConfig.sinVencimiento.name} />
                                   <Bar dataKey="vencido1_15" stackId="a" fill={barConfig.vencido1_15.fill} name={barConfig.vencido1_15.name} />
@@ -1719,11 +1674,11 @@ const CuentasPorCobrar = () => {
                                   <Bar dataKey="vencido31_60" stackId="a" fill={barConfig.vencido31_60.fill} name={barConfig.vencido31_60.name} />
                                   <Bar dataKey="vencido61_90" stackId="a" fill={barConfig.vencido61_90.fill} name={barConfig.vencido61_90.name} />
                                   <Bar dataKey="vencidoMas90" stackId="a" fill={barConfig.vencidoMas90.fill} name={barConfig.vencidoMas90.name}>
-                                    <LabelList 
+                                    <LabelList
                                       position="right"
                                       content={(props) => (
-                                        <CustomTotalLabel 
-                                          {...props} 
+                                        <CustomTotalLabel
+                                          {...props}
                                           filtroAntiguedad={filtroAntiguedad}
                                           dataFiltradaCliente={dataFiltradaCliente}
                                           formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
@@ -1733,17 +1688,16 @@ const CuentasPorCobrar = () => {
                                   </Bar>
                                 </>
                               ) : (
-                                // Modo filtro específico: Mostrar SOLO la barra correspondiente
-                                <Bar 
-                                  dataKey={filtroAntiguedad} 
-                                  fill={barConfig[filtroAntiguedad as keyof typeof barConfig].fill} 
-                                  name={barConfig[filtroAntiguedad as keyof typeof barConfig].name}
+                                <Bar
+                                  dataKey={filtroAntiguedad}
+                                  fill={barConfig[filtroAntiguedad]?.fill || COLORS.primary}
+                                  name={barConfig[filtroAntiguedad]?.name || filtroAntiguedad}
                                 >
-                                  <LabelList 
+                                  <LabelList
                                     position="right"
                                     content={(props) => (
-                                      <CustomTotalLabel 
-                                        {...props} 
+                                      <CustomTotalLabel
+                                        {...props}
                                         filtroAntiguedad={filtroAntiguedad}
                                         dataFiltradaCliente={dataFiltradaCliente}
                                         formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
@@ -1760,20 +1714,17 @@ const CuentasPorCobrar = () => {
                   </CardContent>
                 </Card>
 
-                {/* Gráfico D: Vencimientos por Cliente (Barras Verticales) */}
+                {/* Gráfico D */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>Vencimientos por Cliente</CardTitle>
-                      <Select 
-                        value={selectedCliente} 
-                        onValueChange={setSelectedCliente}
-                      >
+                      <Select value={selectedCliente} onValueChange={setSelectedCliente}>
                         <SelectTrigger className="w-[300px]">
                           <SelectValue placeholder="Selecciona un cliente" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(analytics?.cxcPorClienteApilado || []).map((cliente) => (
+                          {(analytics?.cxcPorClienteApilado || []).map((cliente: any) => (
                             <SelectItem key={cliente.cliente} value={cliente.cliente}>
                               {cliente.cliente} - {formatCurrency(cliente.total)}
                             </SelectItem>
@@ -1785,13 +1736,13 @@ const CuentasPorCobrar = () => {
                   <CardContent>
                     {selectedCliente ? (
                       <ResponsiveContainer width="100%" height={350}>
-                        <BarChart 
+                        <BarChart
                           data={(() => {
                             const clienteData = (analytics?.cxcPorClienteApilado || []).find(
-                              c => c.cliente === selectedCliente
+                              (c: any) => c.cliente === selectedCliente
                             );
                             if (!clienteData) return [];
-                            
+
                             return [
                               { rango: 'Sin vencimiento', monto: clienteData.sinVencimiento || 0 },
                               { rango: 'Vencido 1-15 días', monto: clienteData.vencido1_15 || 0 },
@@ -1803,15 +1754,15 @@ const CuentasPorCobrar = () => {
                           })()}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis 
-                            dataKey="rango" 
+                          <XAxis
+                            dataKey="rango"
                             stroke="hsl(var(--foreground))"
                             tick={{ fill: 'hsl(var(--foreground))' }}
                             angle={-45}
                             textAnchor="end"
                             height={100}
                           />
-                          <YAxis 
+                          <YAxis
                             stroke="hsl(var(--foreground))"
                             tick={{ fill: 'hsl(var(--foreground))' }}
                             tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
@@ -1825,15 +1776,10 @@ const CuentasPorCobrar = () => {
                             formatter={(value: number) => [formatCurrency(value), 'Monto']}
                             labelFormatter={(label) => `${label}`}
                           />
-                          <Bar 
-                            dataKey="monto" 
-                            fill={COLORS.primary} 
+                          <Bar
+                            dataKey="monto"
+                            fill={COLORS.primary}
                             radius={[8, 8, 0, 0]}
-                            label={{
-                              position: 'top',
-                              fill: 'hsl(var(--foreground))',
-                              formatter: (value: number) => formatCurrency(value)
-                            }}
                           />
                         </BarChart>
                       </ResponsiveContainer>
@@ -1881,7 +1827,6 @@ const CuentasPorCobrar = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Información del Asiento */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Información del Asiento</CardTitle>
@@ -1895,7 +1840,7 @@ const CuentasPorCobrar = () => {
                     <div>
                       <Label className="text-muted-foreground">Fecha</Label>
                       <p className="font-medium">
-                        {format(new Date(asientosContables.fecha), "dd 'de' MMMM, yyyy", { locale: es })}
+                        {safeFormatDate(asientosContables.fecha, "dd 'de' MMMM, yyyy", { locale: es })}
                       </p>
                     </div>
                   </div>
@@ -1906,7 +1851,6 @@ const CuentasPorCobrar = () => {
                 </CardContent>
               </Card>
 
-              {/* Detalle de Movimientos Contables */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Movimientos Contables (Debe y Haber)</CardTitle>
@@ -1926,25 +1870,27 @@ const CuentasPorCobrar = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {asientosContables.detalle_asientos?.map((detalle: any) => (
-                        <TableRow key={detalle.id}>
+                      {asientosContables.detalle_asientos?.map((detalle: any, idx: number) => (
+                        <TableRow key={detalle.id ?? `${detalle.cuenta_codigo}-${idx}`}>
                           <TableCell>
                             <div>
                               <p className="font-mono text-sm font-semibold">
-                                {detalle.cuentas?.codigo}
+                                {detalle.cuentas?.codigo ?? detalle.cuenta_codigo ?? "-"}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {detalle.cuentas?.nombre}
+                                {detalle.cuentas?.nombre ?? detalle.cuenta_nombre ?? "-"}
                               </p>
-                              <Badge variant="outline" className="mt-1 text-xs">
-                                {detalle.cuentas?.grupo}
-                              </Badge>
+                              {detalle.cuentas?.grupo && (
+                                <Badge variant="outline" className="mt-1 text-xs">
+                                  {detalle.cuentas?.grupo}
+                                </Badge>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
                             {detalle.subcuentas ? (
                               <Badge variant="secondary" className="text-xs">
-                                {detalle.subcuentas.nombre}
+                                {detalle.subcuentas.nombre ?? detalle.subcuentas.name ?? "-"}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>
@@ -1976,7 +1922,6 @@ const CuentasPorCobrar = () => {
                     </TableBody>
                   </Table>
 
-                  {/* Totales */}
                   <div className="mt-4 pt-4 border-t space-y-2">
                     <div className="flex justify-between items-center font-semibold">
                       <span>Total Debe:</span>
@@ -2010,11 +1955,11 @@ const CuentasPorCobrar = () => {
                       (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
                       (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
                     ) < 0.01 && (
-                      <div className="flex items-center gap-2 text-success text-sm mt-2">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>El asiento está balanceado correctamente</span>
-                      </div>
-                    )}
+                        <div className="flex items-center gap-2 text-success text-sm mt-2">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>El asiento está balanceado correctamente</span>
+                        </div>
+                      )}
                   </div>
                 </CardContent>
               </Card>
@@ -2031,13 +1976,13 @@ const CuentasPorCobrar = () => {
             <DialogDescription>
               {selectedCuenta && (
                 <>
-                  Cliente: {selectedCuenta.cliente_nombre}<br/>
+                  Cliente: {selectedCuenta.cliente_nombre}<br />
                   Monto pendiente: ${(selectedCuenta.monto_pendiente || 0).toLocaleString()}
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="metodo-pago">Método de Pago</Label>
@@ -2087,16 +2032,16 @@ const CuentasPorCobrar = () => {
             )}
 
             <div className="flex gap-2 pt-4">
-              <Button 
+              <Button
                 onClick={handleRegistrarPago}
                 disabled={registrarPagoMutation.isPending || !montoPago || !metodoPago}
                 className="flex-1"
               >
                 {registrarPagoMutation.isPending ? "Procesando..." : "Registrar Pago"}
               </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setPagoDialogOpen(false)}
                 disabled={registrarPagoMutation.isPending}
               >
@@ -2106,7 +2051,7 @@ const CuentasPorCobrar = () => {
           </div>
         </DialogContent>
       </Dialog>
-      
+
       {/* Diálogo de Historial de Pagos */}
       <Dialog open={historialPagosOpen} onOpenChange={setHistorialPagosOpen}>
         <DialogContent className="max-w-3xl">
@@ -2114,19 +2059,19 @@ const CuentasPorCobrar = () => {
             <DialogTitle>Historial de Pagos</DialogTitle>
             <DialogDescription>
               {selectedFacturaId && (() => {
-                const factura = filteredCuentas.find(c => c.id === selectedFacturaId);
+                const factura = filteredCuentas.find((c: any) => c.id === selectedFacturaId);
                 return factura ? (
                   <>
-                    Cliente: {factura.cliente_nombre || 'Sin especificar'}<br/>
-                    Descripción: {factura.descripcion}<br/>
-                    Monto Total: {formatCurrency(factura.monto_total)}<br/>
+                    Cliente: {factura.cliente_nombre || 'Sin especificar'}<br />
+                    Descripción: {factura.descripcion}<br />
+                    Monto Total: {formatCurrency(factura.monto_total)}<br />
                     Monto Pendiente: {formatCurrency(factura.monto_pendiente || 0)}
                   </>
                 ) : null;
               })()}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 pt-4">
             {loadingHistorial ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -2143,8 +2088,8 @@ const CuentasPorCobrar = () => {
               <div className="space-y-4">
                 <div className="grid gap-3">
                   {historialPagos.map((pago: any, index: number) => (
-                    <div 
-                      key={pago.id} 
+                    <div
+                      key={pago.id}
                       className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-start justify-between">
@@ -2158,11 +2103,11 @@ const CuentasPorCobrar = () => {
                                 {formatCurrency(pago.monto)}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {format(new Date(pago.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                                {safeFormatDate(pago.fecha, "dd 'de' MMMM 'de' yyyy", { locale: es })}
                               </div>
                             </div>
                           </div>
-                          
+
                           <div className="pl-11 space-y-1">
                             <div className="flex items-center gap-2 text-sm">
                               <span className="text-muted-foreground">Método:</span>
@@ -2175,15 +2120,15 @@ const CuentasPorCobrar = () => {
                                 </Badge>
                               )}
                             </div>
-                            
+
                             {pago.descripcion && (
                               <div className="text-sm text-muted-foreground">
                                 {pago.descripcion}
                               </div>
                             )}
-                            
+
                             <div className="text-xs text-muted-foreground pt-1">
-                              Registrado: {format(new Date(pago.created_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                              Registrado: {safeFormatDate(pago.created_at, "dd/MM/yyyy HH:mm", { locale: es })}
                             </div>
                           </div>
                         </div>
@@ -2191,8 +2136,7 @@ const CuentasPorCobrar = () => {
                     </div>
                   ))}
                 </div>
-                
-                {/* Resumen */}
+
                 <div className="border-t pt-4 mt-4">
                   <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                     <div className="flex justify-between items-center">
@@ -2202,17 +2146,17 @@ const CuentasPorCobrar = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Monto total pagado:</span>
                       <span className="text-lg font-bold text-success">
-                        {formatCurrency(historialPagos.reduce((sum: number, p: any) => sum + p.monto, 0))}
+                        {formatCurrency(historialPagos.reduce((sum: number, p: any) => sum + (Number(p.monto) || 0), 0))}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
             )}
-            
+
             <div className="flex justify-end pt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setHistorialPagosOpen(false)}
               >
                 Cerrar
