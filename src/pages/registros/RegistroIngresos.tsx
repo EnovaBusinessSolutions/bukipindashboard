@@ -1669,7 +1669,15 @@ let descuento = 0; // Inicializar variable de descuento
 
 if (selectedIncomeType === 'precargados' && selectedProducts.length > 0) {
   const firstProduct = productosServicios.find(p => p.id === selectedProducts[0].id);
-  subcuentaToSend = firstProduct?.subcuenta_id || null;
+
+  const subRef =
+    (firstProduct as any)?.subcuentaId ??
+    (firstProduct as any)?.subcuenta_id ??
+    (firstProduct as any)?.subcuentaCodigo ??
+    (firstProduct as any)?.subcuenta_codigo ??
+    null;
+
+  subcuentaToSend = subRef ? String(subRef) : null;
 
   const subtotalSinDescuento = selectedProducts.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
   const descuentoTotal = selectedProducts.reduce((sum, p) => sum + p.descuento, 0);
@@ -1814,6 +1822,7 @@ costoPersonalizado:
             montoDescuento: descuento,
             cuentaPrincipalCodigo: selectedIncomeType === 'otros' ? '4102' : '4001',
             subcuentaId: subcuentaToSend || undefined,
+            subcuenta_id: subcuentaToSend || undefined,
             metodoPago: paymentMethod,
             tipoPago: paymentStatus,
             montoPagado: montoPagado,
