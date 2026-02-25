@@ -115,6 +115,24 @@ const CustomTotalLabel = (props: any) => {
 const CuentasPorCobrar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("lista");
+    // ✅ NUEVO: “sub-vista” estilo CxP (menú vs detalle)
+  const [bucket, setBucket] = useState<null | "1003" | "1009">(null);
+
+  // ✅ NUEVO: clasificador (sin backend) para separar 1003 vs 1009
+  const isDeudores1009 = (tx: any) => {
+    const tipo = String(tx?.tipo_ingreso ?? tx?.tipoIngreso ?? "").trim().toLowerCase();
+    const cuenta = String(
+      tx?.cuenta_principal_codigo ??
+        tx?.cuentaPrincipalCodigo ??
+        tx?.cuenta_codigo ??
+        tx?.cuentaCodigo ??
+        ""
+    ).trim();
+
+    // Regla: “Otros ingresos” (4102) => 1009
+    return tipo === "otros" || cuenta === "4102";
+  };
+  const bucketKeyOf = (tx: any): "1003" | "1009" => (isDeudores1009(tx) ? "1009" : "1003");
   const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
   const [selectedCuenta, setSelectedCuenta] = useState<any>(null);
   const [montoPago, setMontoPago] = useState("");
@@ -393,6 +411,12 @@ const CuentasPorCobrar = () => {
     return cuentas;
   })();
 
+    // ✅ NUEVO: cuando el usuario entra a un bloque, solo mostramos ese “bucket”
+  const filteredCuentasBucket = useMemo(() => {
+    if (!bucket) return filteredCuentas;
+    return filteredCuentas.filter((c: any) => bucketKeyOf(c) === bucket);
+  }, [bucket, filteredCuentas]);
+
   const totalPorCobrar = filteredCuentas.reduce((sum: number, cuenta: any) => sum + (cuenta.monto_pendiente || 0), 0);
   const vencidas = filteredCuentas.filter((cuenta: any) =>
     cuenta.fecha_vencimiento && safeDate(cuenta.fecha_vencimiento) && safeDate(cuenta.fecha_vencimiento)!.getTime() < new Date().getTime()
@@ -468,7 +492,7 @@ const CuentasPorCobrar = () => {
       };
     }>();
 
-    filteredCuentas.forEach((cuenta: any) => {
+        filteredCuentasBucket.forEach((cuenta: any) => {
       const clienteKey = cuenta.cliente_nombre || "Sin cliente asignado";
 
       if (!grupos.has(clienteKey)) {
@@ -595,182 +619,282 @@ const CuentasPorCobrar = () => {
               </Card>
             </div>
 
-            {/* Filtros */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Search className="h-5 w-5" />
-                  Filtrar Cuentas
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Búsqueda general */}
-                  <div className="lg:col-span-2">
-                    <Label htmlFor="busqueda-general" className="mb-2 block">Búsqueda General</Label>
-                    <Input
-                      id="busqueda-general"
-                      placeholder="Buscar por cliente, descripción, teléfono, email o RFC..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
+                        {/* ✅ NUEVO: Menú por cuenta (estilo CxP) */}
+            {bucket === null && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card
+                  className="cursor-pointer hover:shadow-md transition-shadow border-primary/20"
+                  onClick={() => { setExpandedClientes(new Set()); setBucket("1003"); }}
+                >
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                    <div>
+                      <CardTitle className="text-lg">1003 - Cuentas por Cobrar Clientes</CardTitle>
+                      <CardDescription>Facturas pendientes de clientes</CardDescription>
+                    </div>
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-3xl font-bold">{formatCurrency(
+                      filteredCuentas.filter((c: any) => bucketKeyOf(c) === "1003")
+                        .reduce((sum: number, c: any) => sum + (c.monto_pendiente || 0), 0)
+                    )}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Facturas pendientes:{" "}
+                      <span className="font-semibold text-foreground">
+                        {filteredCuentas.filter((c: any) => bucketKeyOf(c) === "1003" && (c.monto_pendiente || 0) > 0).length}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Clientes:{" "}
+                      <span className="font-semibold text-foreground">
+                        {Array.from(new Set(
+                          filteredCuentas
+                            .filter((c: any) => bucketKeyOf(c) === "1003")
+                            .map((c: any) => c.cliente_nombre || "Sin nombre")
+                        )).length}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  {/* Filtro por cliente */}
-                  <div>
-                    <Label htmlFor="filtro-cliente" className="mb-2 block">Cliente</Label>
-                    <Select value={filtroCliente} onValueChange={setFiltroCliente}>
-                      <SelectTrigger id="filtro-cliente" className="bg-background">
-                        <SelectValue placeholder="Todos los clientes" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background z-50">
-                        <SelectItem value="todos">Todos los clientes</SelectItem>
-                        {Array.from(new Set((cuentasPorCobrar || [])
-                          .map((c: any) => c.cliente_nombre)
-                          .filter(Boolean)))
-                          .sort()
-                          .map((cliente) => (
-                            <SelectItem key={cliente} value={cliente!}>
-                              {cliente}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <Card
+                  className="cursor-pointer hover:shadow-md transition-shadow border-primary/20"
+                  onClick={() => { setExpandedClientes(new Set()); setBucket("1009"); }}
+                >
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                    <div>
+                      <CardTitle className="text-lg">1009 - Deudores Diversos</CardTitle>
+                      <CardDescription>Pendientes de “Otros ingresos” (4102)</CardDescription>
+                    </div>
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-3xl font-bold">{formatCurrency(
+                      filteredCuentas.filter((c: any) => bucketKeyOf(c) === "1009")
+                        .reduce((sum: number, c: any) => sum + (c.monto_pendiente || 0), 0)
+                    )}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Registros pendientes:{" "}
+                      <span className="font-semibold text-foreground">
+                        {filteredCuentas.filter((c: any) => bucketKeyOf(c) === "1009" && (c.monto_pendiente || 0) > 0).length}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Deudores:{" "}
+                      <span className="font-semibold text-foreground">
+                        {Array.from(new Set(
+                          filteredCuentas
+                            .filter((c: any) => bucketKeyOf(c) === "1009")
+                            .map((c: any) => c.cliente_nombre || "Sin nombre")
+                        )).length}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-                  {/* Filtro por estado */}
-                  <div>
-                    <Label htmlFor="filtro-estado" className="mb-2 block">Estado</Label>
-                    <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                      <SelectTrigger id="filtro-estado" className="bg-background">
-                        <SelectValue placeholder="Todos los estados" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background z-50">
-                        <SelectItem value="todos">Todos los estados</SelectItem>
-                        <SelectItem value="vencida">Vencida</SelectItem>
-                        <SelectItem value="porVencer">Por vencer</SelectItem>
-                        <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
-                        <SelectItem value="cobrado">Cobrado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Ordenar por monto */}
-                  <div className="lg:col-span-2">
-                    <Label htmlFor="orden-monto" className="mb-2 block">Ordenar por Monto</Label>
-                    <Select value={ordenMonto} onValueChange={setOrdenMonto}>
-                      <SelectTrigger id="orden-monto" className="bg-background">
-                        <SelectValue placeholder="Sin ordenar" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background z-50">
-                        <SelectItem value="ninguno">Sin ordenar</SelectItem>
-                        <SelectItem value="menorMayor">Menor a Mayor</SelectItem>
-                        <SelectItem value="mayorMenor">Mayor a Menor</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Botón para limpiar filtros */}
-                  <div className="lg:col-span-2 flex items-end">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSearchTerm("");
-                        setFiltroCliente("todos");
-                        setFiltroEstado("todos");
-                        setOrdenMonto("ninguno");
-                      }}
-                      className="w-full"
-                    >
-                      Limpiar Filtros
-                    </Button>
-                  </div>
+                        {bucket !== null && (
+              <div className="flex items-center gap-3">
+                <Button variant="outline" onClick={() => setBucket(null)}>
+                  ← Regresar al menú
+                </Button>
+                <div className="text-sm text-muted-foreground">
+                  /{" "}
+                  <span className="font-semibold text-foreground">
+                    {bucket === "1003"
+                      ? "1003 - Cuentas por Cobrar Clientes"
+                      : "1009 - Deudores Diversos"}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            )}
 
-            {/* Tabla de Cuentas por Cobrar */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Listado de Cuentas por Cobrar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {cuentasAgrupadasPorCliente.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No se encontraron cuentas por cobrar.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[50px]"></TableHead>
-                          <TableHead>Cliente</TableHead>
-                          <TableHead>Información de Contacto</TableHead>
-                          <TableHead>Total Pendiente</TableHead>
-                          <TableHead>Facturas</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {cuentasAgrupadasPorCliente.map((grupo) => (
-                          <>
-                            <TableRow
-                              key={`cliente-${grupo.cliente}`}
-                              className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
-                              onClick={() => toggleClienteExpansion(grupo.cliente)}
-                            >
-                              <TableCell>
-                                {expandedClientes.has(grupo.cliente) ? (
-                                  <ChevronDown className="w-5 h-5" />
-                                ) : (
-                                  <ChevronRight className="w-5 h-5" />
-                                )}
-                              </TableCell>
-                              <TableCell className="font-semibold">
-                                {grupo.cliente}
-                              </TableCell>
-                              <TableCell className="min-w-[200px]">
-                                <div className="space-y-1">
-                                  {grupo.contacto.telefono && (
-                                    <div className="text-sm">📞 {grupo.contacto.telefono}</div>
-                                  )}
-                                  {grupo.contacto.email && (
-                                    <div className="text-sm">📧 {grupo.contacto.email}</div>
-                                  )}
-                                  {grupo.contacto.rfc && (
-                                    <div className="text-sm">🆔 {grupo.contacto.rfc}</div>
-                                  )}
-                                  {!grupo.contacto.telefono && !grupo.contacto.email && !grupo.contacto.rfc && (
-                                    <span className="text-muted-foreground text-sm">Sin información de contacto</span>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="text-lg font-bold text-primary">
-                                    {formatCurrency(grupo.totalPendiente)}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    Total: {formatCurrency(grupo.totalOriginal)}
-                                  </div>
-                                  {grupo.totalPagado > 0 && (
-                                    <div className="text-sm text-success">
-                                      Pagado: {formatCurrency(grupo.totalPagado)}
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">
-                                  {grupo.facturas.length} {grupo.facturas.length === 1 ? 'factura' : 'facturas'}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
 
-                            {expandedClientes.has(grupo.cliente) && grupo.facturas.map((cuenta) => (
-                              <TableRow key={cuenta.id} className="bg-background">
-                                <TableCell></TableCell>
-                                <TableCell colSpan={5}>
+
+  {bucket !== null && (
+  <div className="flex items-center gap-3"> ... </div>
+)}
+
+            {bucket !== null && (
+  <>
+    {/* Filtros */}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          Filtrar Cuentas
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Búsqueda general */}
+          <div className="lg:col-span-2">
+            <Label htmlFor="busqueda-general" className="mb-2 block">Búsqueda General</Label>
+            <Input
+              id="busqueda-general"
+              placeholder="Buscar por cliente, descripción, teléfono, email o RFC..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {/* Filtro por cliente */}
+          <div>
+            <Label htmlFor="filtro-cliente" className="mb-2 block">Cliente</Label>
+            <Select value={filtroCliente} onValueChange={setFiltroCliente}>
+              <SelectTrigger id="filtro-cliente" className="bg-background">
+                <SelectValue placeholder="Todos los clientes" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="todos">Todos los clientes</SelectItem>
+                {Array.from(new Set((cuentasPorCobrar || [])
+                  .map((c: any) => c.cliente_nombre)
+                  .filter(Boolean)))
+                  .sort()
+                  .map((cliente) => (
+                    <SelectItem key={cliente} value={cliente!}>
+                      {cliente}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Filtro por estado */}
+          <div>
+            <Label htmlFor="filtro-estado" className="mb-2 block">Estado</Label>
+            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+              <SelectTrigger id="filtro-estado" className="bg-background">
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="todos">Todos los estados</SelectItem>
+                <SelectItem value="vencida">Vencida</SelectItem>
+                <SelectItem value="porVencer">Por vencer</SelectItem>
+                <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
+                <SelectItem value="cobrado">Cobrado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Ordenar por monto */}
+          <div className="lg:col-span-2">
+            <Label htmlFor="orden-monto" className="mb-2 block">Ordenar por Monto</Label>
+            <Select value={ordenMonto} onValueChange={setOrdenMonto}>
+              <SelectTrigger id="orden-monto" className="bg-background">
+                <SelectValue placeholder="Sin ordenar" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="ninguno">Sin ordenar</SelectItem>
+                <SelectItem value="menorMayor">Menor a Mayor</SelectItem>
+                <SelectItem value="mayorMenor">Mayor a Menor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Botón para limpiar filtros */}
+          <div className="lg:col-span-2 flex items-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchTerm("");
+                setFiltroCliente("todos");
+                setFiltroEstado("todos");
+                setOrdenMonto("ninguno");
+              }}
+              className="w-full"
+            >
+              Limpiar Filtros
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Tabla de Cuentas por Cobrar */}
+    <Card>
+      <CardHeader>
+        <CardTitle>Listado de Cuentas por Cobrar</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {cuentasAgrupadasPorCliente.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No se encontraron cuentas por cobrar.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Información de Contacto</TableHead>
+                  <TableHead>Total Pendiente</TableHead>
+                  <TableHead>Facturas</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cuentasAgrupadasPorCliente.map((grupo) => (
+                  <>
+                    <TableRow
+                      key={`cliente-${grupo.cliente}`}
+                      className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
+                      onClick={() => toggleClienteExpansion(grupo.cliente)}
+                    >
+                      <TableCell>
+                        {expandedClientes.has(grupo.cliente) ? (
+                          <ChevronDown className="w-5 h-5" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {grupo.cliente}
+                      </TableCell>
+                      <TableCell className="min-w-[200px]">
+                        <div className="space-y-1">
+                          {grupo.contacto.telefono && (
+                            <div className="text-sm">📞 {grupo.contacto.telefono}</div>
+                          )}
+                          {grupo.contacto.email && (
+                            <div className="text-sm">📧 {grupo.contacto.email}</div>
+                          )}
+                          {grupo.contacto.rfc && (
+                            <div className="text-sm">🆔 {grupo.contacto.rfc}</div>
+                          )}
+                          {!grupo.contacto.telefono && !grupo.contacto.email && !grupo.contacto.rfc && (
+                            <span className="text-muted-foreground text-sm">Sin información de contacto</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="text-lg font-bold text-primary">
+                            {formatCurrency(grupo.totalPendiente)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Total: {formatCurrency(grupo.totalOriginal)}
+                          </div>
+                          {grupo.totalPagado > 0 && (
+                            <div className="text-sm text-success">
+                              Pagado: {formatCurrency(grupo.totalPagado)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {grupo.facturas.length} {grupo.facturas.length === 1 ? 'factura' : 'facturas'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+
+                    {expandedClientes.has(grupo.cliente) && grupo.facturas.map((cuenta) => (
+                      <TableRow key={cuenta.id} className="bg-background">
+                        <TableCell></TableCell>
+                        <TableCell colSpan={5}>
+
                                   <div className="pl-4 border-l-2 border-primary/30 ml-4">
                                     <div className="grid grid-cols-12 gap-4 items-center">
                                       <div className="col-span-3">
@@ -891,17 +1015,19 @@ const CuentasPorCobrar = () => {
                                       </div>
                                     </div>
                                   </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                                 </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </>
+)}
           </TabsContent>
 
           {/* Tab 2: Resumen de Transacciones */}
