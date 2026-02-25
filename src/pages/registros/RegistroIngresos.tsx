@@ -4112,152 +4112,181 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
                                       </TabsList>
 
                                       {/* TAB 1: Información General */}
-                                      <TabsContent value="general" className="mt-4 space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                          <div>
-                                            <h4 className="font-semibold text-sm">Información General</h4>
-                                            <div className="space-y-1 text-sm">
-                                              <p>
-                                                <span className="font-medium">Descripción:</span>{" "}
-                                                {transaccion.descripcion}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Tipo:</span>{" "}
-                                                {transaccion.tipo_ingreso}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Método de Pago:</span>{" "}
-                                                {transaccion.metodo_pago || "N/A"}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Tipo de Pago:</span>{" "}
-                                                {transaccion.tipo_pago}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Fecha:</span>{" "}
-                                                {(() => {
-                                                  const raw =
-                                                    transaccion.fecha_fixed ??
-                                                    transaccion.fecha ??
-                                                    transaccion.created_at;
+<TabsContent value="general" className="mt-4 space-y-4">
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <h4 className="font-semibold text-sm">Información General</h4>
+      <div className="space-y-1 text-sm">
+        <p>
+          <span className="font-medium">Descripción:</span>{" "}
+          {transaccion.descripcion}
+        </p>
+        <p>
+          <span className="font-medium">Tipo:</span>{" "}
+          {transaccion.tipo_ingreso}
+        </p>
+        <p>
+          <span className="font-medium">Método de Pago:</span>{" "}
+          {transaccion.metodo_pago || "N/A"}
+        </p>
+        <p>
+          <span className="font-medium">Tipo de Pago:</span>{" "}
+          {transaccion.tipo_pago}
+        </p>
+        <p>
+          <span className="font-medium">Fecha:</span>{" "}
+          {(() => {
+            const raw =
+              (transaccion as any).fecha_fixed ??
+              (transaccion as any).fecha ??
+              (transaccion as any).created_at;
 
-                                                  try {
-                                                    return new Date(raw).toLocaleString("es-ES", {
-                                                      day: "2-digit",
-                                                      month: "2-digit",
-                                                      year: "numeric",
-                                                      hour: "2-digit",
-                                                      minute: "2-digit",
-                                                    });
-                                                  } catch {
-                                                    return String(raw || "");
-                                                  }
-                                                })()}
-                                              </p>
-                                            </div>
-                                          </div>
+            try {
+              return new Date(raw).toLocaleString("es-ES", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+            } catch {
+              return String(raw || "");
+            }
+          })()}
+        </p>
+      </div>
+    </div>
 
-                                          <div>
-                                            <h4 className="font-semibold text-sm">Montos</h4>
-                                            <div className="space-y-1 text-sm">
-                                              <p>
-                                                <span className="font-medium">Total:</span> $
-                                                {formatMonto(transaccion.monto_total)}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Descuento:</span> $
-                                                {formatMonto(transaccion.monto_descuento)}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Neto:</span> $
-                                                {formatMonto(transaccion.monto_neto)}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Pagado:</span> $
-                                                {formatMonto((transaccion as any).monto_pagado || 0)}
-                                              </p>
-                                              <p>
-                                                <span className="font-medium">Pendiente:</span> $
-                                                {formatMonto((transaccion as any).monto_pendiente || 0)}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </div>
+    <div>
+      <h4 className="font-semibold text-sm">Montos</h4>
+      <div className="space-y-1 text-sm">
+        <p>
+          <span className="font-medium">Total:</span> $
+          {formatMonto((transaccion as any).monto_total)}
+        </p>
+        <p>
+          <span className="font-medium">Descuento:</span> $
+          {formatMonto((transaccion as any).monto_descuento)}
+        </p>
+        <p>
+          <span className="font-medium">Neto:</span> $
+          {formatMonto((transaccion as any).monto_neto)}
+        </p>
+        <p>
+          <span className="font-medium">Pagado:</span> $
+          {formatMonto((transaccion as any).monto_pagado || 0)}
+        </p>
+        <p>
+          <span className="font-medium">Pendiente:</span> $
+          {formatMonto((transaccion as any).monto_pendiente || 0)}
+        </p>
+      </div>
+    </div>
+  </div>
 
-                                        {((transaccion as any).cliente_nombre ||
-                                          (transaccion as any).cliente_telefono ||
-                                          (transaccion as any).cliente_email) && (
-                                          <div>
-                                            <h4 className="font-semibold text-sm mb-2">
-                                              Información del Cliente
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                              {(transaccion as any).cliente_nombre && (
-                                                <p>
-                                                  <span className="font-medium">Nombre:</span>{" "}
-                                                  {(transaccion as any).cliente_nombre}
-                                                </p>
-                                              )}
-                                              {(transaccion as any).cliente_telefono && (
-                                                <p>
-                                                  <span className="font-medium">Teléfono:</span>{" "}
-                                                  {(transaccion as any).cliente_telefono}
-                                                </p>
-                                              )}
-                                              {(transaccion as any).cliente_email && (
-                                                <p>
-                                                  <span className="font-medium">Email:</span>{" "}
-                                                  {(transaccion as any).cliente_email}
-                                                </p>
-                                              )}
-                                              {(transaccion as any).cliente_rfc && (
-                                                <p>
-                                                  <span className="font-medium">RFC:</span>{" "}
-                                                  {(transaccion as any).cliente_rfc}
-                                                </p>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
+  {((transaccion as any).cliente_nombre ||
+    (transaccion as any).cliente_telefono ||
+    (transaccion as any).cliente_email) && (
+    <div>
+      <h4 className="font-semibold text-sm mb-2">
+        Información del Cliente
+      </h4>
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        {(transaccion as any).cliente_nombre && (
+          <p>
+            <span className="font-medium">Nombre:</span>{" "}
+            {(transaccion as any).cliente_nombre}
+          </p>
+        )}
+        {(transaccion as any).cliente_telefono && (
+          <p>
+            <span className="font-medium">Teléfono:</span>{" "}
+            {(transaccion as any).cliente_telefono}
+          </p>
+        )}
+        {(transaccion as any).cliente_email && (
+          <p>
+            <span className="font-medium">Email:</span>{" "}
+            {(transaccion as any).cliente_email}
+          </p>
+        )}
+        {(transaccion as any).cliente_rfc && (
+          <p>
+            <span className="font-medium">RFC:</span>{" "}
+            {(transaccion as any).cliente_rfc}
+          </p>
+        )}
+      </div>
+    </div>
+  )}
 
-                                        <div>
-                                          <h4 className="font-semibold text-sm mb-2">
-                                            Información Contable
-                                          </h4>
-                                          <div className="text-sm space-y-1">
-                                            <p>
-                                              <span className="font-medium">Cuenta Principal:</span>{" "}
-                                              {transaccion.cuenta_principal ??
-                                                `${transaccion.cuenta_principal_codigo}`}
-                                            </p>
+  <div>
+    <h4 className="font-semibold text-sm mb-2">
+      Información Contable
+    </h4>
 
-                                            {subIdStr ? (
-                                              <p>
-                                                <span className="font-medium">Subcuenta:</span>{" "}
-                                                {subNombreFinal
-                                                  ? `${subCodigoDirecto ? `${subCodigoDirecto} - ` : ""}${subNombreFinal}`
-                                                  : subCodigoDirecto
-                                                    ? subCodigoDirecto
-                                                    : "Subcuenta no encontrada"}
-                                              </p>
-                                            ) : (
-                                              <p>
-                                                <span className="font-medium">Subcuenta:</span> Sin
-                                                subcuenta asignada
-                                              </p>
-                                            )}
-                                          </div>
-                                        </div>
+    {(() => {
+      // ✅ Cuenta principal (robusta)
+      const cuentaPrincipalLabel =
+        (transaccion as any).cuenta_principal ||
+        ((transaccion as any).cuenta_principal_codigo
+          ? String((transaccion as any).cuenta_principal_codigo)
+          : "");
 
-                                        {(transaccion as any).comentarios && (
-                                          <div>
-                                            <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
-                                            <div className="p-3 bg-muted rounded-md">
-                                              <p className="text-sm">{(transaccion as any).comentarios}</p>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </TabsContent>
+      // ✅ Subcuenta (E2E robusta, SIN depender de resolveSubcuentaLabel)
+      const subDisplay = String((transaccion as any).subcuenta ?? "").trim();
+
+      const subCod =
+        String(
+          (transaccion as any).subcuentaCodigo ??
+            (transaccion as any).subcuenta_codigo ??
+            ""
+        ).trim() || "";
+
+      const subNom =
+        String(
+          (transaccion as any).subcuentaNombre ??
+            (transaccion as any).subcuenta_nombre ??
+            ""
+        ).trim() || "";
+
+      // Prioridad:
+      // 1) display ya armado por backend (ej. "4001-03 - INIT DEF")
+      // 2) codigo + nombre del backend
+      // 3) tus variables locales subCodigoDirecto/subNombreFinal (ya calculadas arriba)
+      // 4) solo codigo
+      const subLabel =
+        subDisplay ||
+        (subCod || subNom ? (subCod ? `${subCod} - ${subNom || "Subcuenta"}` : subNom) : "") ||
+        (subNombreFinal
+          ? `${subCodigoDirecto ? `${subCodigoDirecto} - ` : ""}${subNombreFinal}`
+          : subCodigoDirecto || "");
+
+      return (
+        <div className="text-sm space-y-1">
+          <p>
+            <span className="font-medium">Cuenta Principal:</span>{" "}
+            {cuentaPrincipalLabel || "Sin cuenta"}
+          </p>
+
+          <p>
+            <span className="font-medium">Subcuenta:</span>{" "}
+            {subLabel || "Sin subcuenta asignada"}
+          </p>
+        </div>
+      );
+    })()}
+  </div>
+
+  {(transaccion as any).comentarios && (
+    <div>
+      <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
+      <div className="p-3 bg-muted rounded-md">
+        <p className="text-sm">{(transaccion as any).comentarios}</p>
+      </div>
+    </div>
+  )}
+</TabsContent>
 
                                       {/* TAB 2: Registros Contables */}
                                       <TabsContent value="contable" className="mt-4">
