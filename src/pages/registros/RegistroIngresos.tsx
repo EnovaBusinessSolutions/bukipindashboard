@@ -3591,11 +3591,16 @@ case "otros":
               <SelectContent>
                 <SelectItem value="todas">Todas</SelectItem>
                 <SelectItem value="sin-subcuenta">Sin subcuenta</SelectItem>
-                {subcuentas.map((sub) => (
-                  <SelectItem key={String(sub.id)} value={String(sub.id)}>
-                    {sub.nombre}
-                  </SelectItem>
-                ))}
+
+                {/* ✅ MOD: robusto id/_id (solo esto) */}
+                {subcuentas.map((sub: any) => {
+                  const sid = String(sub?.id ?? sub?._id ?? "").trim();
+                  return (
+                    <SelectItem key={sid} value={sid}>
+                      {sub?.nombre}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -3618,18 +3623,136 @@ case "otros":
           </Button>
 
           <div className="text-right">
-  {(() => {
-    // 1) Asientos directos -> transacciones
+            {(() => {
+              // 1) Asientos directos -> transacciones
+              const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
+                const detalleIngreso = asiento.detalle_asientos.find(
+                  (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
+                );
+
+                return {
+                  created_at: asiento.fecha,
+                  fecha: asiento.fecha,
+                  fecha_fixed: asiento.fecha,
+                  tipo_ingreso: "asiento_directo",
+                  cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
+                  subcuenta_id:
+                    (detalleIngreso as any)?.subcuenta_id ??
+                    (detalleIngreso as any)?.subcuentaId ??
+                    (detalleIngreso as any)?.subcuenta ??
+                    null,
+                  subcuentaId:
+                    (detalleIngreso as any)?.subcuentaId ??
+                    (detalleIngreso as any)?.subcuenta_id ??
+                    (detalleIngreso as any)?.subcuenta ??
+                    null,
+
+                  // Montos
+                  monto_total: Number(detalleIngreso?.haber) || 0,
+                  monto_neto: Number(detalleIngreso?.haber) || 0,
+                  monto_descuento: 0,
+                };
+              });
+
+              // 2) Normalizar + combinar
+              const todasLasTransaccionesRaw = [
+                ...(transacciones ?? []),
+                ...(asientosComoTransacciones ?? []),
+              ];
+              const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
+
+              // 3) Filtrar (UNA sola vez)
+              const filtered = todasLasTransacciones.filter((t: any) => {
+                const dt = t.fecha_fixed ?? t.fecha ?? t.created_at;
+                const fechaMatch = matchRangoFechas(dt);
+
+                const tipoMatch =
+                  !filtroTipoIngreso ||
+                  filtroTipoIngreso === "todos" ||
+                  t.tipo_ingreso === filtroTipoIngreso;
+
+                const cuentaMatch =
+                  !filtroCuenta ||
+                  filtroCuenta === "todas" ||
+                  String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
+
+                const subRef =
+                  t.subcuenta_id ??
+                  t.subcuentaId ??
+                  t.subcuenta ??
+                  t.subcuentaCodigo ??
+                  t.subcuenta_codigo ??
+                  null;
+
+                const subIdStr = subRef ? String(subRef) : "";
+
+                const subcuentaMatch =
+                  !filtroSubcuenta ||
+                  filtroSubcuenta === "todas" ||
+                  (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
+                  subIdStr === String(filtroSubcuenta);
+
+                return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
+              });
+
+              // 4) Sumas
+              const total = filtered.reduce(
+                (sum: number, t: any) => sum + Number(t.monto_total || 0),
+                0
+              );
+              const descuento = filtered.reduce(
+                (sum: number, t: any) => sum + Number(t.monto_descuento || 0),
+                0
+              );
+
+              // Neto: usa tu misma lógica (si tienes netas por getMetricValue, úsala; si no, monto_neto)
+              const neto = filtered.reduce(
+                (sum: number, t: any) =>
+                  sum + Number(getMetricValue(t, "netas") ?? t.monto_neto ?? 0),
+                0
+              );
+
+              return (
+                <>
+                  <p className="text-sm text-muted-foreground">Resultados: {filtered.length}</p>
+
+                  <p className="text-lg font-bold text-primary">Total: ${formatMonto(total)}</p>
+
+                  <p className="text-sm font-medium text-red-600">
+                    Descuento: -${formatMonto(descuento)}
+                  </p>
+
+                  <p className="text-sm font-medium text-green-600">
+                    Ingreso: ${formatMonto(neto)}
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {loadingTransacciones ? (
+  <div className="text-center py-8 text-muted-foreground">Cargando transacciones...</div>
+) : (
+  (() => {
+    // Transformar asientos directos a formato de transacción
     const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
       const detalleIngreso = asiento.detalle_asientos.find(
         (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
       );
 
       return {
-        created_at: asiento.fecha,
-        fecha: asiento.fecha,
-        fecha_fixed: asiento.fecha,
+        id: asiento.id ?? asiento._id,
+        descripcion: asiento.descripcion,
+        monto_total: Number(detalleIngreso?.haber) || 0,
+        monto_neto: Number(detalleIngreso?.haber) || 0,
+        monto_descuento: 0,
+        monto_pagado: Number(detalleIngreso?.haber) || 0,
+        monto_pendiente: 0,
         tipo_ingreso: "asiento_directo",
+        metodo_pago: "N/A",
+        tipo_pago: "contado",
         cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
         subcuenta_id:
           (detalleIngreso as any)?.subcuenta_id ??
@@ -3641,23 +3764,23 @@ case "otros":
           (detalleIngreso as any)?.subcuenta_id ??
           (detalleIngreso as any)?.subcuenta ??
           null,
-
-        // Montos
-        monto_total: Number(detalleIngreso?.haber) || 0,
-        monto_neto: Number(detalleIngreso?.haber) || 0,
-        monto_descuento: 0,
+        // ✅ importante: fecha consistente para UI y filtros
+        created_at: asiento.fecha,
+        fecha: asiento.fecha,
+        fecha_fixed: asiento.fecha,
+        asiento_fecha: asiento.fecha,
+        es_asiento_directo: true,
+        estado: "activo",
       };
     });
 
-    // 2) Normalizar + combinar
-    const todasLasTransaccionesRaw = [
-      ...(transacciones ?? []),
-      ...(asientosComoTransacciones ?? []),
+    // Combinar transacciones normales + asientos directos
+    const todasLasTransacciones = [
+      ...transaccionesNorm,
+      ...asientosComoTransacciones.map(normalizeTx),
     ];
-    const todasLasTransacciones = todasLasTransaccionesRaw.map(normalizeTx);
 
-    // 3) Filtrar (UNA sola vez)
-    const filtered = todasLasTransacciones.filter((t: any) => {
+    const transaccionesFiltradas = todasLasTransacciones.filter((t: any) => {
       const dt = t.fecha_fixed ?? t.fecha ?? t.created_at;
       const fechaMatch = matchRangoFechas(dt);
 
@@ -3690,603 +3813,477 @@ case "otros":
       return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
     });
 
-    // 4) Sumas
-    const total = filtered.reduce((sum: number, t: any) => sum + Number(t.monto_total || 0), 0);
-    const descuento = filtered.reduce(
-      (sum: number, t: any) => sum + Number(t.monto_descuento || 0),
-      0
-    );
+    // Agrupar transacciones: filtrar reversiones y asociarlas con sus originales
+    const transaccionesAgrupadas = transaccionesFiltradas
+      .filter((t: any) => !String(t.descripcion || "").includes("CANCELACIÓN:"))
+      .map((transaccion: any) => {
+        const esCancelada = transaccion.estado === "cancelado";
+        let transaccionReversion = null;
 
-    // Neto: usa tu misma lógica (si tienes netas por getMetricValue, úsala; si no, monto_neto)
-    const neto = filtered.reduce(
-      (sum: number, t: any) => sum + Number(getMetricValue(t, "netas") ?? t.monto_neto ?? 0),
-      0
-    );
+        if (esCancelada && transaccion.transaccion_cancelacion_id) {
+          transaccionReversion = transaccionesNorm.find(
+            (t: any) => t.id === transaccion.transaccion_cancelacion_id
+          );
+        }
 
-    return (
-      <>
-        <p className="text-sm text-muted-foreground">Resultados: {filtered.length}</p>
+        return { ...transaccion, esCancelada, transaccionReversion };
+      });
 
-        <p className="text-lg font-bold text-primary">
-          Total: ${formatMonto(total)}
-        </p>
+    const totalItems = transaccionesAgrupadas.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 
-        <p className="text-sm font-medium text-red-600">
-          Descuento: -${formatMonto(descuento)}
-        </p>
+    const safePage = Math.min(Math.max(pageResumen, 1), totalPages);
+    const startIndex = (safePage - 1) * PAGE_SIZE;
+    const endIndex = Math.min(startIndex + PAGE_SIZE, totalItems);
 
-        <p className="text-sm font-medium text-green-600">
-          Ingreso: ${formatMonto(neto)}
-        </p>
-      </>
-    );
-  })()}
-</div>
-        </div>
+    const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex);
+
+    return transaccionesAgrupadas.length === 0 ? (
+      <div className="text-center py-8 text-muted-foreground">
+        No hay transacciones que coincidan con los filtros
       </div>
+    ) : (
+      <div className="space-y-4">
+        {/* Encabezado */}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="text-sm font-medium text-muted-foreground">
+            Mostrando {transaccionesPaginadas.length} de {transaccionesAgrupadas.length} transacción(es)
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Tip: da clic en el ícono 📄 para ver “Información general” y “Registro contable”
+          </div>
+        </div>
 
-      {loadingTransacciones ? (
-        <div className="text-center py-8 text-muted-foreground">Cargando transacciones...</div>
-      ) : (() => {
-          // Transformar asientos directos a formato de transacción
-          const asientosComoTransacciones = asientosIngresosDirectos.map((asiento) => {
-            const detalleIngreso = asiento.detalle_asientos.find(
-              (d: any) => String(d.cuenta_codigo || "").startsWith("4") && Number(d.haber) > 0
-            );
+        {/* Tabla */}
+        <div className="border rounded-lg overflow-hidden bg-background">
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60">
+                <tr>
+                  <th className="text-left p-3 font-medium whitespace-nowrap">Fecha</th>
+                  <th className="text-left p-3 font-medium min-w-[320px]">Descripción</th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Tipo</th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">Cuenta</th>
+                  <th className="text-right p-3 font-medium whitespace-nowrap">Total</th>
+                  <th className="text-right p-3 font-medium whitespace-nowrap hidden md:table-cell">Ingreso</th>
+                  <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Estado</th>
+                  <th className="text-right p-3 font-medium whitespace-nowrap">Acciones</th>
+                </tr>
+              </thead>
 
-            return {
-              id: asiento.id ?? asiento._id,
-              descripcion: asiento.descripcion,
-              monto_total: Number(detalleIngreso?.haber) || 0,
-              monto_neto: Number(detalleIngreso?.haber) || 0,
-              monto_descuento: 0,
-              monto_pagado: Number(detalleIngreso?.haber) || 0,
-              monto_pendiente: 0,
-              tipo_ingreso: "asiento_directo",
-              metodo_pago: "N/A",
-              tipo_pago: "contado",
-              cuenta_principal_codigo: detalleIngreso?.cuenta_codigo || "",
-              subcuenta_id:
-                (detalleIngreso as any)?.subcuenta_id ??
-                (detalleIngreso as any)?.subcuentaId ??
-                (detalleIngreso as any)?.subcuenta ??
-                null,
-              subcuentaId:
-                (detalleIngreso as any)?.subcuentaId ??
-                (detalleIngreso as any)?.subcuenta_id ??
-                (detalleIngreso as any)?.subcuenta ??
-                null,
-              // ✅ importante: fecha consistente para UI y filtros
-              created_at: asiento.fecha,
-              fecha: asiento.fecha,
-              fecha_fixed: asiento.fecha,
-              asiento_fecha: asiento.fecha,
-              es_asiento_directo: true,
-              estado: "activo",
-            };
-          });
+              <tbody>
+                {transaccionesPaginadas.map((item: any) => {
+                  const transaccion = item;
+                  const esCancelada = item.esCancelada;
+                  const esReversion = false;
 
-          // Combinar transacciones normales + asientos directos
-          const todasLasTransacciones = [
-            ...transaccionesNorm,
-            ...asientosComoTransacciones.map(normalizeTx),
-          ];
+                  const rawFecha =
+                    transaccion.fecha_fixed ?? transaccion.fecha ?? transaccion.created_at;
 
-          const transaccionesFiltradas = todasLasTransacciones.filter((t: any) => {
-            const dt = t.fecha_fixed ?? t.fecha ?? t.created_at;
-            const fechaMatch = matchRangoFechas(dt);
+                  const fechaStr = (() => {
+                    try {
+                      return new Date(rawFecha).toLocaleString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                    } catch {
+                      return String(rawFecha || "");
+                    }
+                  })();
 
-            const tipoMatch =
-              !filtroTipoIngreso ||
-              filtroTipoIngreso === "todos" ||
-              t.tipo_ingreso === filtroTipoIngreso;
+                  const netoRow = Number(getMetricValue(transaccion, "netas") || 0);
 
-            const cuentaMatch =
-              !filtroCuenta ||
-              filtroCuenta === "todas" ||
-              String(t.cuenta_principal_codigo || "") === String(filtroCuenta);
+                  // -----------------------------
+                  // ✅ Subcuenta (robusta: id/_id/codigo + fallback)
+                  // -----------------------------
+                  const subRefRaw =
+                    (transaccion as any).subcuenta_id ??
+                    (transaccion as any).subcuentaId ??
+                    (transaccion as any).subcuenta ??
+                    (transaccion as any).subcuentaCodigo ??
+                    (transaccion as any).subcuenta_codigo ??
+                    null;
 
-            const subRef =
-              t.subcuenta_id ??
-              t.subcuentaId ??
-              t.subcuenta ??
-              t.subcuentaCodigo ??
-              t.subcuenta_codigo ??
-              null;
+                  const subIdStr = subRefRaw ? String(subRefRaw).trim() : "";
 
-            const subIdStr = subRef ? String(subRef) : "";
+                  // Directo desde la tx (si ya viene enriquecida)
+                  const subNombreDirecto =
+                    (transaccion as any).subcuentaNombre ??
+                    (transaccion as any).subcuenta_nombre ??
+                    null;
 
-            const subcuentaMatch =
-              !filtroSubcuenta ||
-              filtroSubcuenta === "todas" ||
-              (filtroSubcuenta === "sin-subcuenta" && !subIdStr) ||
-              subIdStr === String(filtroSubcuenta);
+                  const subCodigoDirecto =
+                    (transaccion as any).subcuentaCodigo ??
+                    (transaccion as any).subcuenta_codigo ??
+                    null;
 
-            return fechaMatch && tipoMatch && cuentaMatch && subcuentaMatch;
-          });
+                  // Lookup robusto contra subcuentas[] (id o _id, y fallback por codigo)
+                  const subInfoLookup = (() => {
+                    if (!subIdStr) return null;
 
-          // Agrupar transacciones: filtrar reversiones y asociarlas con sus originales
-          const transaccionesAgrupadas = transaccionesFiltradas
-            .filter((t: any) => !String(t.descripcion || "").includes("CANCELACIÓN:"))
-            .map((transaccion: any) => {
-              const esCancelada = transaccion.estado === "cancelado";
-              let transaccionReversion = null;
+                    const sById = subcuentas.find((x: any) => {
+                      const id = String(x?.id ?? x?._id ?? "").trim();
+                      return id && id === subIdStr;
+                    });
+                    if (sById) return sById;
 
-              if (esCancelada && transaccion.transaccion_cancelacion_id) {
-                transaccionReversion = transaccionesNorm.find(
-                  (t: any) => t.id === transaccion.transaccion_cancelacion_id
-                );
-              }
+                    const sByCode = subcuentas.find((x: any) => {
+                      const code = String(x?.codigo ?? x?.code ?? "").trim();
+                      return code && code === subIdStr;
+                    });
 
-              return { ...transaccion, esCancelada, transaccionReversion };
-            });
+                    return sByCode || null;
+                  })();
 
-          const totalItems = transaccionesAgrupadas.length;
-          const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+                  const subNombreLookup = subInfoLookup ? (subInfoLookup as any).nombre ?? null : null;
+                  const subCodigoLookup = subInfoLookup ? (subInfoLookup as any).codigo ?? null : null;
 
-const safePage = Math.min(Math.max(pageResumen, 1), totalPages);
-const startIndex = (safePage - 1) * PAGE_SIZE;
-const endIndex = Math.min(startIndex + PAGE_SIZE, totalItems);
+                  const subNombreFinal = subNombreDirecto ?? subNombreLookup;
+                  const subCodigoFinal = subCodigoDirecto ?? subCodigoLookup;
 
-const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex);
-  
+                  // ✅ Label final para mostrar
+                  const subLabelFinal =
+                    String((transaccion as any).subcuenta ?? "").trim() ||
+                    (subNombreFinal
+                      ? `${subCodigoFinal ? `${subCodigoFinal} - ` : ""}${subNombreFinal}`
+                      : subCodigoFinal
+                        ? String(subCodigoFinal)
+                        : "");
 
-          return transaccionesAgrupadas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay transacciones que coincidan con los filtros
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Encabezado */}
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Mostrando {transaccionesPaginadas.length} de {transaccionesAgrupadas.length} transacción(es)
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Tip: da clic en el ícono 📄 para ver “Información general” y “Registro contable”
-                </div>
-              </div>
+                  return (
+                    <tr
+                      key={transaccion.id}
+                      className={`border-t hover:bg-muted/30 ${
+                        esCancelada ? "bg-red-50/60 dark:bg-red-950/20" : ""
+                      }`}
+                    >
+                      <td className="p-3 whitespace-nowrap text-muted-foreground">{fechaStr}</td>
 
-              {/* Tabla */}
-              <div className="border rounded-lg overflow-hidden bg-background">
-                <div className="overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/60">
-                      <tr>
-                        <th className="text-left p-3 font-medium whitespace-nowrap">Fecha</th>
-                        <th className="text-left p-3 font-medium min-w-[320px]">Descripción</th>
-                        <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Tipo</th>
-                        <th className="text-left p-3 font-medium whitespace-nowrap hidden lg:table-cell">Cuenta</th>
-                        <th className="text-right p-3 font-medium whitespace-nowrap">Total</th>
-                        <th className="text-right p-3 font-medium whitespace-nowrap hidden md:table-cell">Ingreso</th>
-                        <th className="text-left p-3 font-medium whitespace-nowrap hidden md:table-cell">Estado</th>
-                        <th className="text-right p-3 font-medium whitespace-nowrap">Acciones</th>
-                      </tr>
-                    </thead>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{transaccion.descripcion}</span>
 
-                    <tbody>
-                      {transaccionesPaginadas.map((item: any) => {
-                        const transaccion = item;
-                        const esCancelada = item.esCancelada;
-                        const esReversion = false;
+                          {(transaccion as any).es_asiento_directo && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200">
+                              📋 Asiento Directo
+                            </span>
+                          )}
 
-                        const rawFecha =
-                          transaccion.fecha_fixed ?? transaccion.fecha ?? transaccion.created_at;
+                          {esCancelada && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+                              ❌ Cancelada
+                            </span>
+                          )}
 
-                        const fechaStr = (() => {
-                          try {
-                            return new Date(rawFecha).toLocaleString("es-ES", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            });
-                          } catch {
-                            return String(rawFecha || "");
-                          }
-                        })();
+                          {esReversion && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200">
+                              ↩️ Reversión
+                            </span>
+                          )}
+                        </div>
 
-                        const netoRow = Number(getMetricValue(transaccion, "netas") || 0);
+                        <div className="text-xs text-muted-foreground mt-1">
+                          <span className="capitalize">{transaccion.metodo_pago || "N/A"}</span>{" "}
+                          •{" "}
+                          <span className="capitalize">{transaccion.tipo_pago || "N/A"}</span>
 
-                        const subRefRaw =
-                          (transaccion as any).subcuenta_id ??
-                          (transaccion as any).subcuentaId ??
-                          (transaccion as any).subcuenta ??
-                          (transaccion as any).subcuentaCodigo ??
-                          (transaccion as any).subcuenta_codigo ??
-                          null;
+                          {subLabelFinal ? (
+                            <>
+                              {" "}
+                              •{" "}
+                              <span className="text-muted-foreground">
+                                Subcuenta: {subLabelFinal || "Subcuenta no encontrada"}
+                              </span>
+                            </>
+                          ) : null}
+                        </div>
 
-                        const subIdStr = subRefRaw ? String(subRefRaw) : "";
+                        {(transaccion as any).comentarios && (
+                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-xs">
+                            <span className="font-medium text-blue-700 dark:text-blue-300">💬 </span>
+                            <span className="text-blue-600 dark:text-blue-400">
+                              {String((transaccion as any).comentarios).length > 80
+                                ? `${String((transaccion as any).comentarios).substring(0, 80)}...`
+                                : String((transaccion as any).comentarios)}
+                            </span>
+                          </div>
+                        )}
 
-                        const subNombreDirecto =
-                          (transaccion as any).subcuentaNombre ??
-                          (transaccion as any).subcuenta_nombre ??
-                          null;
-
-                        const subCodigoDirecto =
-                          (transaccion as any).subcuentaCodigo ??
-                          (transaccion as any).subcuenta_codigo ??
-                          null;
-
-                        const subNombreLookup = (() => {
-                          if (!subIdStr) return null;
-                          const s = subcuentas.find((x) => String(x.id) === String(subIdStr));
-                          return s?.nombre ?? null;
-                        })();
-
-                        const subNombreFinal = subNombreDirecto ?? subNombreLookup;
-
-                        return (
-                          <tr
-                            key={transaccion.id}
-                            className={`border-t hover:bg-muted/30 ${
-                              esCancelada ? "bg-red-50/60 dark:bg-red-950/20" : ""
-                            }`}
-                          >
-                            <td className="p-3 whitespace-nowrap text-muted-foreground">{fechaStr}</td>
-
-                            <td className="p-3">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium">{transaccion.descripcion}</span>
-
-                                {(transaccion as any).es_asiento_directo && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200">
-                                    📋 Asiento Directo
-                                  </span>
+                        {/* Motivo de cancelación y reversión (si aplica) */}
+                        {esCancelada && (transaccion as any).motivo_cancelacion && (
+                          <div className="mt-3 space-y-2">
+                            <div className="p-3 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
+                              <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
+                                📋 Motivo de cancelación:
+                              </p>
+                              <p className="text-xs text-red-600 dark:text-red-400">
+                                {(transaccion as any).motivo_cancelacion}
+                              </p>
+                              <p className="text-xs text-red-500 dark:text-red-500 mt-1">
+                                Cancelada el:{" "}
+                                {new Date((transaccion as any).fecha_cancelacion).toLocaleDateString(
+                                  "es-ES",
+                                  {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
                                 )}
+                              </p>
+                            </div>
 
-                                {esCancelada && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
-                                    ❌ Cancelada
-                                  </span>
-                                )}
-
-                                {esReversion && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200">
-                                    ↩️ Reversión
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="text-xs text-muted-foreground mt-1">
-                                <span className="capitalize">{transaccion.metodo_pago || "N/A"}</span>{" "}
-                                •{" "}
-                                <span className="capitalize">{transaccion.tipo_pago || "N/A"}</span>
-                                {subIdStr ? (
-                                  <>
-                                    {" "}
-                                    •{" "}
-                                    <span className="text-muted-foreground">
-                                      Subcuenta:{" "}
-                                      {subNombreFinal
-                                        ? `${subCodigoDirecto ? `${subCodigoDirecto} - ` : ""}${subNombreFinal}`
-                                        : subCodigoDirecto
-                                          ? subCodigoDirecto
-                                          : "Subcuenta no encontrada"}
-                                    </span>
-                                  </>
-                                ) : null}
-                              </div>
-
-                              {(transaccion as any).comentarios && (
-                                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-xs">
-                                  <span className="font-medium text-blue-700 dark:text-blue-300">
-                                    💬{" "}
-                                  </span>
-                                  <span className="text-blue-600 dark:text-blue-400">
-                                    {String((transaccion as any).comentarios).length > 80
-                                      ? `${String((transaccion as any).comentarios).substring(0, 80)}...`
-                                      : String((transaccion as any).comentarios)}
+                            {item.transaccionReversion && (
+                              <div className="p-3 bg-orange-100 dark:bg-orange-950/40 rounded-md border border-orange-300 dark:border-orange-800">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-medium text-orange-700 dark:text-orange-300">
+                                    ↩️ Asiento de Reversión Generado
                                   </span>
                                 </div>
-                              )}
+                                <div className="text-xs text-orange-600 dark:text-orange-400 space-y-1">
+                                  <p>
+                                    <span className="font-medium">Descripción:</span>{" "}
+                                    {item.transaccionReversion.descripcion}
+                                  </p>
+                                  <p>
+                                    <span className="font-medium">Monto reversado:</span> $
+                                    {formatMonto(Math.abs(item.transaccionReversion.monto_total))}
+                                  </p>
+                                  <p>
+                                    <span className="font-medium">Fecha:</span>{" "}
+                                    {(() => {
+                                      const raw =
+                                        item.transaccionReversion.fecha_fixed ??
+                                        item.transaccionReversion.fecha ??
+                                        item.transaccionReversion.created_at;
+                                      return new Date(raw).toLocaleDateString("es-ES", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      });
+                                    })()}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
 
-                              {/* Motivo de cancelación y reversión (si aplica) */}
-                              {esCancelada && (transaccion as any).motivo_cancelacion && (
-                                <div className="mt-3 space-y-2">
-                                  <div className="p-3 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
-                                    <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
-                                      📋 Motivo de cancelación:
-                                    </p>
-                                    <p className="text-xs text-red-600 dark:text-red-400">
-                                      {(transaccion as any).motivo_cancelacion}
-                                    </p>
-                                    <p className="text-xs text-red-500 dark:text-red-500 mt-1">
-                                      Cancelada el:{" "}
-                                      {new Date((transaccion as any).fecha_cancelacion).toLocaleDateString(
-                                        "es-ES",
-                                        {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          year: "numeric",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        }
-                                      )}
-                                    </p>
-                                  </div>
+                      <td className="p-3 hidden md:table-cell">
+                        <span className="capitalize">{transaccion.tipo_ingreso}</span>
+                      </td>
 
-                                  {item.transaccionReversion && (
-                                    <div className="p-3 bg-orange-100 dark:bg-orange-950/40 rounded-md border border-orange-300 dark:border-orange-800">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xs font-medium text-orange-700 dark:text-orange-300">
-                                          ↩️ Asiento de Reversión Generado
-                                        </span>
-                                      </div>
-                                      <div className="text-xs text-orange-600 dark:text-orange-400 space-y-1">
+                      <td className="p-3 hidden lg:table-cell">
+                        {transaccion.cuenta_principal_codigo || "-"}
+                      </td>
+
+                      <td className="p-3 text-right font-bold text-primary whitespace-nowrap">
+                        ${formatMonto(transaccion.monto_total)}
+                        {transaccion.monto_descuento > 0 && (
+                          <div className="text-xs text-red-600 font-medium">
+                            -${formatMonto(transaccion.monto_descuento)} desc.
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-right hidden md:table-cell whitespace-nowrap">
+                        <span className="font-medium text-green-600">${formatMonto(netoRow)}</span>
+                      </td>
+
+                      <td className="p-3 hidden md:table-cell">
+                        {esCancelada ? (
+                          <span className="text-red-600 font-medium">Cancelada</span>
+                        ) : (
+                          <span className="text-muted-foreground">Activa</span>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-2 justify-end">
+                          <Dialog
+                            onOpenChange={(open) => {
+                              if (open) {
+                                const txId = String(
+                                  (transaccion as any)._id ?? (transaccion as any).id ?? ""
+                                );
+                                loadAsientosContables(txId);
+                              } else {
+                                setCurrentAsientos(null);
+                              }
+                            }}
+                          >
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-8 px-2">
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+
+                            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>Detalles de la Transacción</DialogTitle>
+                                <DialogDescription>
+                                  Información completa y asientos contables en balanza
+                                </DialogDescription>
+                              </DialogHeader>
+
+                              <Tabs defaultValue="general" className="w-full">
+                                <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger value="general">Información General</TabsTrigger>
+                                  <TabsTrigger value="contable">Registros Contables</TabsTrigger>
+                                </TabsList>
+
+                                {/* TAB 1: Información General */}
+                                <TabsContent value="general" className="mt-4 space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <h4 className="font-semibold text-sm">Información General</h4>
+                                      <div className="space-y-1 text-sm">
                                         <p>
                                           <span className="font-medium">Descripción:</span>{" "}
-                                          {item.transaccionReversion.descripcion}
+                                          {transaccion.descripcion}
                                         </p>
                                         <p>
-                                          <span className="font-medium">Monto reversado:</span> $
-                                          {formatMonto(Math.abs(item.transaccionReversion.monto_total))}
+                                          <span className="font-medium">Tipo:</span>{" "}
+                                          {transaccion.tipo_ingreso}
+                                        </p>
+                                        <p>
+                                          <span className="font-medium">Método de Pago:</span>{" "}
+                                          {transaccion.metodo_pago || "N/A"}
+                                        </p>
+                                        <p>
+                                          <span className="font-medium">Tipo de Pago:</span>{" "}
+                                          {transaccion.tipo_pago}
                                         </p>
                                         <p>
                                           <span className="font-medium">Fecha:</span>{" "}
                                           {(() => {
                                             const raw =
-                                              item.transaccionReversion.fecha_fixed ??
-                                              item.transaccionReversion.fecha ??
-                                              item.transaccionReversion.created_at;
-                                            return new Date(raw).toLocaleDateString("es-ES", {
-                                              day: "2-digit",
-                                              month: "2-digit",
-                                              year: "numeric",
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                            });
+                                              (transaccion as any).fecha_fixed ??
+                                              (transaccion as any).fecha ??
+                                              (transaccion as any).created_at;
+
+                                            try {
+                                              return new Date(raw).toLocaleString("es-ES", {
+                                                day: "2-digit",
+                                                month: "2-digit",
+                                                year: "numeric",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              });
+                                            } catch {
+                                              return String(raw || "");
+                                            }
                                           })()}
                                         </p>
                                       </div>
                                     </div>
+
+                                    <div>
+                                      <h4 className="font-semibold text-sm">Montos</h4>
+                                      <div className="space-y-1 text-sm">
+                                        <p>
+                                          <span className="font-medium">Total:</span> $
+                                          {formatMonto((transaccion as any).monto_total)}
+                                        </p>
+                                        <p>
+                                          <span className="font-medium">Descuento:</span> $
+                                          {formatMonto((transaccion as any).monto_descuento)}
+                                        </p>
+                                        <p>
+                                          <span className="font-medium">Neto:</span> $
+                                          {formatMonto((transaccion as any).monto_neto)}
+                                        </p>
+                                        <p>
+                                          <span className="font-medium">Pagado:</span> $
+                                          {formatMonto((transaccion as any).monto_pagado || 0)}
+                                        </p>
+                                        <p>
+                                          <span className="font-medium">Pendiente:</span> $
+                                          {formatMonto((transaccion as any).monto_pendiente || 0)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {((transaccion as any).cliente_nombre ||
+                                    (transaccion as any).cliente_telefono ||
+                                    (transaccion as any).cliente_email) && (
+                                    <div>
+                                      <h4 className="font-semibold text-sm mb-2">
+                                        Información del Cliente
+                                      </h4>
+                                      <div className="grid grid-cols-2 gap-4 text-sm">
+                                        {(transaccion as any).cliente_nombre && (
+                                          <p>
+                                            <span className="font-medium">Nombre:</span>{" "}
+                                            {(transaccion as any).cliente_nombre}
+                                          </p>
+                                        )}
+                                        {(transaccion as any).cliente_telefono && (
+                                          <p>
+                                            <span className="font-medium">Teléfono:</span>{" "}
+                                            {(transaccion as any).cliente_telefono}
+                                          </p>
+                                        )}
+                                        {(transaccion as any).cliente_email && (
+                                          <p>
+                                            <span className="font-medium">Email:</span>{" "}
+                                            {(transaccion as any).cliente_email}
+                                          </p>
+                                        )}
+                                        {(transaccion as any).cliente_rfc && (
+                                          <p>
+                                            <span className="font-medium">RFC:</span>{" "}
+                                            {(transaccion as any).cliente_rfc}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
                                   )}
-                                </div>
-                              )}
-                            </td>
 
-                            <td className="p-3 hidden md:table-cell">
-                              <span className="capitalize">{transaccion.tipo_ingreso}</span>
-                            </td>
+                                  <div>
+                                    <h4 className="font-semibold text-sm mb-2">Información Contable</h4>
 
-                            <td className="p-3 hidden lg:table-cell">
-                              {transaccion.cuenta_principal_codigo || "-"}
-                            </td>
+                                    {(() => {
+                                      const cuentaPrincipalLabel =
+                                        (transaccion as any).cuenta_principal ||
+                                        ((transaccion as any).cuenta_principal_codigo
+                                          ? String((transaccion as any).cuenta_principal_codigo)
+                                          : "");
 
-                            <td className="p-3 text-right font-bold text-primary whitespace-nowrap">
-                              ${formatMonto(transaccion.monto_total)}
-                              {transaccion.monto_descuento > 0 && (
-                                <div className="text-xs text-red-600 font-medium">
-                                  -${formatMonto(transaccion.monto_descuento)} desc.
-                                </div>
-                              )}
-                            </td>
+                                      return (
+                                        <div className="text-sm space-y-1">
+                                          <p>
+                                            <span className="font-medium">Cuenta Principal:</span>{" "}
+                                            {cuentaPrincipalLabel || "Sin cuenta"}
+                                          </p>
 
-                            <td className="p-3 text-right hidden md:table-cell whitespace-nowrap">
-                              <span className="font-medium text-green-600">
-                                ${formatMonto(netoRow)}
-                              </span>
-                            </td>
-
-                            <td className="p-3 hidden md:table-cell">
-                              {esCancelada ? (
-                                <span className="text-red-600 font-medium">Cancelada</span>
-                              ) : (
-                                <span className="text-muted-foreground">Activa</span>
-                              )}
-                            </td>
-
-                            <td className="p-3 text-right whitespace-nowrap">
-                              <div className="inline-flex items-center gap-2 justify-end">
-                                <Dialog
-                                  onOpenChange={(open) => {
-                                    if (open) {
-                                      const txId = String(
-                                        (transaccion as any)._id ?? (transaccion as any).id ?? ""
+                                          {/* ✅ usa el MISMO subLabelFinal */}
+                                          <p>
+                                            <span className="font-medium">Subcuenta:</span>{" "}
+                                            {subLabelFinal || "Sin subcuenta asignada"}
+                                          </p>
+                                        </div>
                                       );
-                                      loadAsientosContables(txId);
-                                    } else {
-                                      setCurrentAsientos(null);
-                                    }
-                                  }}
-                                >
-                                  <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 px-2">
-                                      <FileText className="h-4 w-4" />
-                                    </Button>
-                                  </DialogTrigger>
+                                    })()}
+                                  </div>
 
-                                  <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                                    <DialogHeader>
-                                      <DialogTitle>Detalles de la Transacción</DialogTitle>
-                                      <DialogDescription>
-                                        Información completa y asientos contables en balanza
-                                      </DialogDescription>
-                                    </DialogHeader>
-
-                                    <Tabs defaultValue="general" className="w-full">
-                                      <TabsList className="grid w-full grid-cols-2">
-                                        <TabsTrigger value="general">Información General</TabsTrigger>
-                                        <TabsTrigger value="contable">Registros Contables</TabsTrigger>
-                                      </TabsList>
-
-                                      {/* TAB 1: Información General */}
-<TabsContent value="general" className="mt-4 space-y-4">
-  <div className="grid grid-cols-2 gap-4">
-    <div>
-      <h4 className="font-semibold text-sm">Información General</h4>
-      <div className="space-y-1 text-sm">
-        <p>
-          <span className="font-medium">Descripción:</span>{" "}
-          {transaccion.descripcion}
-        </p>
-        <p>
-          <span className="font-medium">Tipo:</span>{" "}
-          {transaccion.tipo_ingreso}
-        </p>
-        <p>
-          <span className="font-medium">Método de Pago:</span>{" "}
-          {transaccion.metodo_pago || "N/A"}
-        </p>
-        <p>
-          <span className="font-medium">Tipo de Pago:</span>{" "}
-          {transaccion.tipo_pago}
-        </p>
-        <p>
-          <span className="font-medium">Fecha:</span>{" "}
-          {(() => {
-            const raw =
-              (transaccion as any).fecha_fixed ??
-              (transaccion as any).fecha ??
-              (transaccion as any).created_at;
-
-            try {
-              return new Date(raw).toLocaleString("es-ES", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-            } catch {
-              return String(raw || "");
-            }
-          })()}
-        </p>
-      </div>
-    </div>
-
-    <div>
-      <h4 className="font-semibold text-sm">Montos</h4>
-      <div className="space-y-1 text-sm">
-        <p>
-          <span className="font-medium">Total:</span> $
-          {formatMonto((transaccion as any).monto_total)}
-        </p>
-        <p>
-          <span className="font-medium">Descuento:</span> $
-          {formatMonto((transaccion as any).monto_descuento)}
-        </p>
-        <p>
-          <span className="font-medium">Neto:</span> $
-          {formatMonto((transaccion as any).monto_neto)}
-        </p>
-        <p>
-          <span className="font-medium">Pagado:</span> $
-          {formatMonto((transaccion as any).monto_pagado || 0)}
-        </p>
-        <p>
-          <span className="font-medium">Pendiente:</span> $
-          {formatMonto((transaccion as any).monto_pendiente || 0)}
-        </p>
-      </div>
-    </div>
-  </div>
-
-  {((transaccion as any).cliente_nombre ||
-    (transaccion as any).cliente_telefono ||
-    (transaccion as any).cliente_email) && (
-    <div>
-      <h4 className="font-semibold text-sm mb-2">
-        Información del Cliente
-      </h4>
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        {(transaccion as any).cliente_nombre && (
-          <p>
-            <span className="font-medium">Nombre:</span>{" "}
-            {(transaccion as any).cliente_nombre}
-          </p>
-        )}
-        {(transaccion as any).cliente_telefono && (
-          <p>
-            <span className="font-medium">Teléfono:</span>{" "}
-            {(transaccion as any).cliente_telefono}
-          </p>
-        )}
-        {(transaccion as any).cliente_email && (
-          <p>
-            <span className="font-medium">Email:</span>{" "}
-            {(transaccion as any).cliente_email}
-          </p>
-        )}
-        {(transaccion as any).cliente_rfc && (
-          <p>
-            <span className="font-medium">RFC:</span>{" "}
-            {(transaccion as any).cliente_rfc}
-          </p>
-        )}
-      </div>
-    </div>
-  )}
-
-  <div>
-    <h4 className="font-semibold text-sm mb-2">
-      Información Contable
-    </h4>
-
-    {(() => {
-      // ✅ Cuenta principal (robusta)
-      const cuentaPrincipalLabel =
-        (transaccion as any).cuenta_principal ||
-        ((transaccion as any).cuenta_principal_codigo
-          ? String((transaccion as any).cuenta_principal_codigo)
-          : "");
-
-      // ✅ Subcuenta (E2E robusta, SIN depender de resolveSubcuentaLabel)
-      const subDisplay = String((transaccion as any).subcuenta ?? "").trim();
-
-      const subCod =
-        String(
-          (transaccion as any).subcuentaCodigo ??
-            (transaccion as any).subcuenta_codigo ??
-            ""
-        ).trim() || "";
-
-      const subNom =
-        String(
-          (transaccion as any).subcuentaNombre ??
-            (transaccion as any).subcuenta_nombre ??
-            ""
-        ).trim() || "";
-
-      // Prioridad:
-      // 1) display ya armado por backend (ej. "4001-03 - INIT DEF")
-      // 2) codigo + nombre del backend
-      // 3) tus variables locales subCodigoDirecto/subNombreFinal (ya calculadas arriba)
-      // 4) solo codigo
-      const subLabel =
-        subDisplay ||
-        (subCod || subNom ? (subCod ? `${subCod} - ${subNom || "Subcuenta"}` : subNom) : "") ||
-        (subNombreFinal
-          ? `${subCodigoDirecto ? `${subCodigoDirecto} - ` : ""}${subNombreFinal}`
-          : subCodigoDirecto || "");
-
-      return (
-        <div className="text-sm space-y-1">
-          <p>
-            <span className="font-medium">Cuenta Principal:</span>{" "}
-            {cuentaPrincipalLabel || "Sin cuenta"}
-          </p>
-
-          <p>
-            <span className="font-medium">Subcuenta:</span>{" "}
-            {subLabel || "Sin subcuenta asignada"}
-          </p>
-        </div>
-      );
-    })()}
-  </div>
-
-  {(transaccion as any).comentarios && (
-    <div>
-      <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
-      <div className="p-3 bg-muted rounded-md">
-        <p className="text-sm">{(transaccion as any).comentarios}</p>
-      </div>
-    </div>
-  )}
-</TabsContent>
+                                  {(transaccion as any).comentarios && (
+                                    <div>
+                                      <h4 className="font-semibold text-sm mb-2">Comentarios</h4>
+                                      <div className="p-3 bg-muted rounded-md">
+                                        <p className="text-sm">{(transaccion as any).comentarios}</p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </TabsContent>
 
                                       {/* TAB 2: Registros Contables */}
                                       <TabsContent value="contable" className="mt-4">
@@ -4445,8 +4442,9 @@ const transaccionesPaginadas = transaccionesAgrupadas.slice(startIndex, endIndex
               </div>
             </div>
           );
-        })()}
-    </CardContent>
+          })()
+)}
+</CardContent>
   </Card>
 </TabsContent>
 
