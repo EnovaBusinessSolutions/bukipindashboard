@@ -674,71 +674,135 @@ const filteredCuentasBucket = useMemo(() => {
 </div>
 
   {/* ✅ MENÚ premium 1003 / 1009 (solo cuando bucket === null) */}
-  {bucket === null && (
+{bucket === null && (
   <div className="grid gap-4 md:grid-cols-2">
+    {/* 1003 */}
     <Card
-      onClick={() => { setExpandedClientes(new Set()); setBucket("1003"); }}
-      className="group cursor-pointer overflow-hidden border border-sky-500/20 bg-gradient-to-br from-sky-600 to-slate-900 text-white shadow-sm transition-all hover:-translate-y-[1px] hover:shadow-lg"
+      onClick={() => {
+        setExpandedClientes(new Set());
+        setBucket("1003");
+      }}
+      className={[
+        // ✅ FIX SCROLL: relative + overflow-hidden contiene los fondos absolute
+        "relative overflow-hidden group cursor-pointer",
+        "border border-[#0b3a5a]/25",
+        "bg-gradient-to-br from-[#0b3a5a] via-[#072c44] to-[#051b2c]",
+        "text-white shadow-sm transition-all",
+        "hover:-translate-y-[1px] hover:shadow-lg",
+      ].join(" ")}
     >
+      {/* brillo / glow (contenido) */}
       <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100">
-        <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-sky-300/20 blur-3xl" />
-        <div className="absolute -left-24 -bottom-24 h-56 w-56 rounded-full bg-cyan-300/10 blur-3xl" />
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-cyan-200/10 blur-3xl" />
       </div>
 
       <CardHeader className="relative flex flex-row items-start justify-between space-y-0">
         <div>
-          <CardTitle className="text-lg text-white">1003 - Cuentas por Cobrar Clientes</CardTitle>
-          <CardDescription className="text-white/70">Facturas pendientes de clientes</CardDescription>
+          <CardTitle className="text-lg text-white">
+            1003 - Cuentas por Cobrar Clientes
+          </CardTitle>
+          <CardDescription className="text-white/70">
+            Facturas pendientes de clientes
+          </CardDescription>
         </div>
+
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-white/70" />
-          <span className="text-xs text-white/70 group-hover:text-white transition-colors">Ver detalle →</span>
+          <span className="text-xs text-white/70 group-hover:text-white transition-colors">
+            Ver detalle →
+          </span>
         </div>
       </CardHeader>
 
       <CardContent className="relative space-y-2">
-        <div className="text-3xl font-bold">{formatCurrency(menuTotals["1003"].total)}</div>
-        <div className="text-sm text-white/75">
-          Facturas pendientes: <span className="font-semibold text-white">{menuTotals["1003"].pendientes}</span>
+        <div className="text-3xl font-bold">
+          {formatCurrency(menuTotals["1003"].total)}
         </div>
+
         <div className="text-sm text-white/75">
-          Clientes: <span className="font-semibold text-white">{menuTotals["1003"].clientes}</span>
+          Facturas pendientes:{" "}
+          <span className="font-semibold text-white">
+            {menuTotals["1003"].pendientes}
+          </span>
         </div>
+
+        <div className="text-sm text-white/75">
+          Clientes:{" "}
+          <span className="font-semibold text-white">
+            {menuTotals["1003"].clientes}
+          </span>
+        </div>
+
         <div className="mt-3 h-px bg-white/10" />
-        <div className="text-xs text-white/60">Haz click para ver el listado y registrar pagos</div>
+        <div className="text-xs text-white/60">
+          Haz click para ver el listado y registrar pagos
+        </div>
       </CardContent>
     </Card>
 
+    {/* 1009 */}
     <Card
-      onClick={() => { setExpandedClientes(new Set()); setBucket("1009"); }}
-      className="group cursor-pointer overflow-hidden border border-indigo-500/20 bg-gradient-to-br from-indigo-600 to-slate-900 text-white shadow-sm transition-all hover:-translate-y-[1px] hover:shadow-lg"
+      onClick={() => {
+        setExpandedClientes(new Set());
+        setBucket("1009");
+      }}
+      className={[
+        // ✅ FIX SCROLL: relative + overflow-hidden contiene los fondos absolute
+        "relative overflow-hidden group cursor-pointer",
+        "border border-[#0a5560]/25",
+        "bg-gradient-to-br from-[#0a5560] via-[#08424b] to-[#052a2f]",
+        "text-white shadow-sm transition-all",
+        "hover:-translate-y-[1px] hover:shadow-lg",
+      ].join(" ")}
     >
+      {/* brillo / glow (contenido) */}
       <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100">
-        <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-indigo-300/20 blur-3xl" />
-        <div className="absolute -left-24 -bottom-24 h-56 w-56 rounded-full bg-violet-300/10 blur-3xl" />
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-emerald-200/10 blur-3xl" />
       </div>
 
       <CardHeader className="relative flex flex-row items-start justify-between space-y-0">
         <div>
-          <CardTitle className="text-lg text-white">1009 - Deudores Diversos</CardTitle>
-          <CardDescription className="text-white/70">Pendientes de “Otros ingresos” (4102)</CardDescription>
+          <CardTitle className="text-lg text-white">
+            1009 - Deudores Diversos
+          </CardTitle>
+          <CardDescription className="text-white/70">
+            Pendientes de “Otros ingresos” (4102)
+          </CardDescription>
         </div>
+
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5 text-white/70" />
-          <span className="text-xs text-white/70 group-hover:text-white transition-colors">Ver detalle →</span>
+          <span className="text-xs text-white/70 group-hover:text-white transition-colors">
+            Ver detalle →
+          </span>
         </div>
       </CardHeader>
 
       <CardContent className="relative space-y-2">
-        <div className="text-3xl font-bold">{formatCurrency(menuTotals["1009"].total)}</div>
-        <div className="text-sm text-white/75">
-          Registros pendientes: <span className="font-semibold text-white">{menuTotals["1009"].pendientes}</span>
+        <div className="text-3xl font-bold">
+          {formatCurrency(menuTotals["1009"].total)}
         </div>
+
         <div className="text-sm text-white/75">
-          Deudores: <span className="font-semibold text-white">{menuTotals["1009"].clientes}</span>
+          Registros pendientes:{" "}
+          <span className="font-semibold text-white">
+            {menuTotals["1009"].pendientes}
+          </span>
         </div>
+
+        <div className="text-sm text-white/75">
+          Deudores:{" "}
+          <span className="font-semibold text-white">
+            {menuTotals["1009"].clientes}
+          </span>
+        </div>
+
         <div className="mt-3 h-px bg-white/10" />
-        <div className="text-xs text-white/60">Haz click para ver el listado y registrar pagos</div>
+        <div className="text-xs text-white/60">
+          Haz click para ver el listado y registrar pagos
+        </div>
       </CardContent>
     </Card>
   </div>
