@@ -4267,9 +4267,9 @@ case "otros":
 
                                           {/* ✅ usa el MISMO subLabelFinal */}
                                           <p>
-                                            <span className="font-medium">Subcuenta:</span>{" "}
-                                            {subLabelFinal || "Sin subcuenta asignada"}
-                                          </p>
+  <span className="font-medium">Subcuenta:</span>{" "}
+  {subLabelFinal || "Sin subcuenta asignada"}
+</p>
                                         </div>
                                       );
                                     })()}
