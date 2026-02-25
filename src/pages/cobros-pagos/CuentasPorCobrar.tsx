@@ -260,6 +260,114 @@ const CuentasPorCobrar = () => {
     },
   });
 
+  // ===============================
+// ✅ CLIENTES (para contacto en CxC)
+// - Si la cuenta NO trae cliente_telefono/email/rfc, lo resolvemos por clienteId/clientId
+// ===============================
+const { data: clientesCatalogo } = useQuery({
+  queryKey: ["clientes-catalogo"],
+  queryFn: async () => {
+    // helper tolerante a 404
+    const tryFetchArray = async (url: string) => {
+      try {
+        const json = await apiFetch(url, { method: "GET" });
+        const arr = unwrap<any[]>(json);
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    };
+
+    // intenta endpoints comunes
+    const a = await tryFetchArray("/api/clientes");
+    if (a.length) return a;
+
+    const b = await tryFetchArray("/api/clientes?include_all=true");
+    if (b.length) return b;
+
+    const c = await tryFetchArray("/api/clients");
+    if (c.length) return c;
+
+    return [];
+  },
+});
+
+// helper: agarra cualquier variante de clienteId
+const getClienteIdAny = (row: any): string => {
+  const raw =
+    row?.clienteId ??
+    row?.cliente_id ??
+    row?.clientId ??
+    row?.client_id ??
+    row?.cliente?.id ??
+    row?.cliente?._id ??
+    null;
+
+  return raw ? String(raw) : "";
+};
+
+// index de clientes por id (Mongo: _id o id)
+const clientesById = useMemo(() => {
+  const map = new Map<string, any>();
+  (clientesCatalogo || []).forEach((c: any) => {
+    const id = String(c?._id ?? c?.id ?? "");
+    if (id) map.set(id, c);
+  });
+  return map;
+}, [clientesCatalogo]);
+
+// resolver contacto FINAL (prioridad: payload de la cuenta -> catálogo por clienteId)
+const resolveContacto = (cuenta: any) => {
+  const tel =
+    cuenta?.cliente_telefono ??
+    cuenta?.clienteTelefono ??
+    cuenta?.telefono_cliente ??
+    cuenta?.telefonoCliente ??
+    null;
+
+  const email =
+    cuenta?.cliente_email ??
+    cuenta?.clienteEmail ??
+    cuenta?.email_cliente ??
+    cuenta?.emailCliente ??
+    null;
+
+  const rfc =
+    cuenta?.cliente_rfc ??
+    cuenta?.clienteRfc ??
+    cuenta?.rfc_cliente ??
+    cuenta?.rfcCliente ??
+    null;
+
+  // si ya viene en la cuenta, úsalo
+  if (tel || email || rfc) {
+    return {
+      telefono: tel ? String(tel) : undefined,
+      email: email ? String(email) : undefined,
+      rfc: rfc ? String(rfc) : undefined,
+    };
+  }
+
+  // si no, búscalo por clienteId
+  const clienteId = getClienteIdAny(cuenta);
+  if (!clienteId) return { telefono: undefined, email: undefined, rfc: undefined };
+
+  const cli = clientesById.get(clienteId);
+  if (!cli) return { telefono: undefined, email: undefined, rfc: undefined };
+
+  // tu colección clients trae: name, email, phone (y a veces rfc/taxId)
+  const phone = cli?.phone ?? cli?.telefono ?? cli?.telefonoCliente ?? null;
+  const mail = cli?.email ?? cli?.correo ?? null;
+  const tax =
+    cli?.rfc ?? cli?.taxId ?? cli?.tax_id ?? cli?.identificacionFiscal ?? null;
+
+  return {
+    telefono: phone ? String(phone) : undefined,
+    email: mail ? String(mail) : undefined,
+    rfc: tax ? String(tax) : undefined,
+  };
+};
+
   const clientesUnicos = useMemo(() => {
     return Array.from(
       new Set(
@@ -558,20 +666,25 @@ const filteredCuentasBucket = useMemo(() => {
           totalPendiente: 0,
           totalOriginal: 0,
           totalPagado: 0,
-          contacto: {
-            telefono: (cuenta as any).cliente_telefono,
-            email: (cuenta as any).cliente_email,
-            rfc: (cuenta as any).cliente_rfc,
-          }
+          contacto: resolveContacto(cuenta),
         });
       }
 
       const grupo = grupos.get(clienteKey)!;
-      grupo.facturas.push(cuenta);
-      grupo.totalPendiente += cuenta.monto_pendiente || 0;
-      grupo.totalOriginal += cuenta.monto_total || 0;
-      grupo.totalPagado += cuenta.monto_pagado || 0;
-    });
+
+  // ✅ merge contacto (por si esta factura sí trae datos y la primera no)
+  const rc = resolveContacto(cuenta);
+  grupo.contacto = {
+    telefono: grupo.contacto.telefono ?? rc.telefono,
+    email: grupo.contacto.email ?? rc.email,
+    rfc: grupo.contacto.rfc ?? rc.rfc,
+  };
+
+  grupo.facturas.push(cuenta);
+  grupo.totalPendiente += cuenta.monto_pendiente || 0;
+  grupo.totalOriginal += cuenta.monto_total || 0;
+  grupo.totalPagado += cuenta.monto_pagado || 0;
+});
 
     return Array.from(grupos.values());
   })();
@@ -1030,23 +1143,29 @@ const filteredCuentasBucket = useMemo(() => {
 
                       <TableCell className="min-w-[200px]">
                         <div className="space-y-1">
-                          {grupo.contacto.telefono && (
-                            <div className="text-sm">📞 {grupo.contacto.telefono}</div>
-                          )}
-                          {grupo.contacto.email && (
-                            <div className="text-sm">📧 {grupo.contacto.email}</div>
-                          )}
-                          {grupo.contacto.rfc && (
-                            <div className="text-sm">🆔 {grupo.contacto.rfc}</div>
-                          )}
-                          {!grupo.contacto.telefono &&
-                            !grupo.contacto.email &&
-                            !grupo.contacto.rfc && (
-                              <span className="text-muted-foreground text-sm">
-                                Sin información de contacto
-                              </span>
-                            )}
-                        </div>
+  {grupo.contacto.telefono && (
+    <div className="text-sm flex items-center gap-2">
+      <span className="text-pink-600">📞</span>
+      <span className="font-medium">{grupo.contacto.telefono}</span>
+    </div>
+  )}
+  {grupo.contacto.email && (
+    <div className="text-sm flex items-center gap-2">
+      <span className="text-blue-600">✉️</span>
+      <span className="font-medium">{grupo.contacto.email}</span>
+    </div>
+  )}
+  {grupo.contacto.rfc && (
+    <div className="text-sm flex items-center gap-2">
+      <span className="text-purple-600">🆔</span>
+      <span className="font-medium">{grupo.contacto.rfc}</span>
+    </div>
+  )}
+
+  {!grupo.contacto.telefono && !grupo.contacto.email && !grupo.contacto.rfc && (
+    <span className="text-muted-foreground text-sm">Sin información de contacto</span>
+  )}
+</div>
                       </TableCell>
 
                       <TableCell>
