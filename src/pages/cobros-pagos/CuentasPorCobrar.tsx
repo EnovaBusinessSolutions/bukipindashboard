@@ -808,356 +808,431 @@ const filteredCuentasBucket = useMemo(() => {
   </div>
 )}
 
-  {/* ✅ Breadcrumb / regreso cuando ya estás dentro del bucket */}
-  {bucket !== null && (
-  <div className="flex items-center gap-3">
-    <Button
-      variant="outline"
-      onClick={() => { setExpandedClientes(new Set()); setBucket(null); }}
-    >
-      ← Regresar al menú
-    </Button>
-    <div className="text-sm text-muted-foreground">
-      /{" "}
-      <span className="font-semibold text-foreground">
-        {bucket === "1003" ? "1003 - Cuentas por Cobrar Clientes" : "1009 - Deudores Diversos"}
-      </span>
-    </div>
-  </div>
-)}
+  {/* ✅ Breadcrumb / regreso cuando ya estás dentro del bucket + HERO con estilo del bucket */}
+{bucket !== null && (() => {
+  const is1003 = bucket === "1003";
 
-  {/* ✅ SOLO cuando estás dentro del bucket: filtros PRO + tabla */}
-  {bucket !== null && (
-    <>
-      {/* Filtros (PRO, sin Cliente dropdown) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Filtrar Cuentas
-          </CardTitle>
-        </CardHeader>
+  const shellClass = is1003
+    ? "relative overflow-hidden rounded-xl border border-[#0b3a5a]/25 bg-gradient-to-br from-[#0b3a5a] via-[#072c44] to-[#051b2c] text-white shadow-sm"
+    : "relative overflow-hidden rounded-xl border border-[#0a5560]/25 bg-gradient-to-br from-[#0a5560] via-[#08424b] to-[#052a2f] text-white shadow-sm";
 
-        <CardContent>
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            {/* Buscar */}
-            <div className="w-full md:max-w-md">
-              <Label htmlFor="busqueda-general" className="mb-2 block text-sm">
-                Búsqueda
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="busqueda-general"
-                  className="pl-9"
-                  placeholder="Cliente, descripción, teléfono, email o RFC..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
+  const glowA = is1003 ? "bg-white/10" : "bg-white/10";
+  const glowB = is1003 ? "bg-cyan-200/10" : "bg-emerald-200/10";
 
-            {/* Estado */}
-            <div className="w-full md:w-56">
-              <Label htmlFor="filtro-estado" className="mb-2 block text-sm">
-                Estado
-              </Label>
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger id="filtro-estado" className="bg-background">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="vencida">Vencida</SelectItem>
-                  <SelectItem value="porVencer">Por vencer</SelectItem>
-                  <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
-                  <SelectItem value="cobrado">Cobrado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+  const title = is1003
+    ? "1003 - Cuentas por Cobrar Clientes"
+    : "1009 - Deudores Diversos";
 
-            {/* Orden */}
-            <div className="w-full md:w-64">
-              <Label htmlFor="orden-monto" className="mb-2 block text-sm">
-                Orden
-              </Label>
-              <Select value={ordenMonto} onValueChange={setOrdenMonto}>
-                <SelectTrigger id="orden-monto" className="bg-background">
-                  <SelectValue placeholder="Sin ordenar" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="ninguno">Por fecha</SelectItem>
-                  <SelectItem value="menorMayor">Menor a Mayor (pendiente)</SelectItem>
-                  <SelectItem value="mayorMenor">Mayor a Menor (pendiente)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+  const subtitle = is1003
+    ? "Facturas pendientes de clientes"
+    : "Pendientes de “Otros ingresos” (4102)";
 
-            {/* Limpiar */}
-            <div className="w-full md:w-auto md:pl-2">
+  const metrics = menuTotals[bucket];
+
+  return (
+    <div className={shellClass}>
+      {/* glow */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className={`absolute -right-16 -top-16 h-56 w-56 rounded-full ${glowA} blur-3xl`} />
+        <div className={`absolute -left-16 -bottom-16 h-56 w-56 rounded-full ${glowB} blur-3xl`} />
+      </div>
+
+      <div className="relative p-5 md:p-6">
+        {/* top row */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSearchTerm("");
-                  setFiltroEstado("todos");
-                  setOrdenMonto("ninguno");
+                  setExpandedClientes(new Set());
+                  setBucket(null);
                 }}
-                className="w-full md:w-auto"
+                className="border-white/25 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               >
-                Limpiar
+                ← Regresar al menú
               </Button>
+
+              <div className="text-sm text-white/70">
+                / <span className="font-semibold text-white">{title}</span>
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <h2 className="text-xl md:text-2xl font-semibold leading-tight">{title}</h2>
+              <p className="text-sm text-white/70">{subtitle}</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Tabla de Cuentas por Cobrar */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Listado de Cuentas por Cobrar</CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          {cuentasAgrupadasPorCliente.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No se encontraron cuentas por cobrar.</p>
+          {/* big number */}
+          <div className="rounded-xl border border-white/15 bg-white/10 px-4 py-3">
+            <div className="text-xs text-white/70">Total pendiente</div>
+            <div className="text-2xl md:text-3xl font-bold">
+              {formatCurrency(metrics?.total || 0)}
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]"></TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Información de Contacto</TableHead>
-                    <TableHead>Total Pendiente</TableHead>
-                    <TableHead>Facturas</TableHead>
-                  </TableRow>
-                </TableHeader>
+          </div>
+        </div>
 
-                <TableBody>
-                  {cuentasAgrupadasPorCliente.map((grupo) => (
-                    <>
-                      <TableRow
-                        key={`cliente-${grupo.cliente}`}
-                        className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
-                        onClick={() => toggleClienteExpansion(grupo.cliente)}
-                      >
-                        <TableCell>
-                          {expandedClientes.has(grupo.cliente) ? (
-                            <ChevronDown className="w-5 h-5" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5" />
+        {/* mini stats */}
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-white/15 bg-white/10 p-3">
+            <div className="text-xs text-white/70">
+              {is1003 ? "Facturas pendientes" : "Registros pendientes"}
+            </div>
+            <div className="text-lg font-semibold">{metrics?.pendientes || 0}</div>
+          </div>
+
+          <div className="rounded-lg border border-white/15 bg-white/10 p-3">
+            <div className="text-xs text-white/70">
+              {is1003 ? "Clientes" : "Deudores"}
+            </div>
+            <div className="text-lg font-semibold">{metrics?.clientes || 0}</div>
+          </div>
+
+          <div className="rounded-lg border border-white/15 bg-white/10 p-3">
+            <div className="text-xs text-white/70">Tip</div>
+            <div className="text-sm text-white/85">
+              Usa búsqueda + estado para encontrar rápido.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+})()}
+
+{/* ✅ SOLO cuando estás dentro del bucket: filtros PRO + tabla */}
+{bucket !== null && (
+  <>
+    {/* Filtros (PRO, sin Cliente dropdown) */}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          Filtrar Cuentas
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          {/* Buscar */}
+          <div className="w-full md:max-w-md">
+            <Label htmlFor="busqueda-general" className="mb-2 block text-sm">
+              Búsqueda
+            </Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="busqueda-general"
+                className="pl-9"
+                placeholder="Cliente, descripción, teléfono, email o RFC..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div className="w-full md:w-56">
+            <Label htmlFor="filtro-estado" className="mb-2 block text-sm">
+              Estado
+            </Label>
+            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+              <SelectTrigger id="filtro-estado" className="bg-background">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="vencida">Vencida</SelectItem>
+                <SelectItem value="porVencer">Por vencer</SelectItem>
+                <SelectItem value="sinVencimiento">Sin vencimiento</SelectItem>
+                <SelectItem value="cobrado">Cobrado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Orden */}
+          <div className="w-full md:w-64">
+            <Label htmlFor="orden-monto" className="mb-2 block text-sm">
+              Orden
+            </Label>
+            <Select value={ordenMonto} onValueChange={setOrdenMonto}>
+              <SelectTrigger id="orden-monto" className="bg-background">
+                <SelectValue placeholder="Sin ordenar" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="ninguno">Por fecha</SelectItem>
+                <SelectItem value="menorMayor">Menor a Mayor (pendiente)</SelectItem>
+                <SelectItem value="mayorMenor">Mayor a Menor (pendiente)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Limpiar */}
+          <div className="w-full md:w-auto md:pl-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchTerm("");
+                setFiltroEstado("todos");
+                setOrdenMonto("ninguno");
+              }}
+              className="w-full md:w-auto"
+            >
+              Limpiar
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Tabla de Cuentas por Cobrar */}
+    <Card>
+      <CardHeader>
+        <CardTitle>Listado de Cuentas por Cobrar</CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        {cuentasAgrupadasPorCliente.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">No se encontraron cuentas por cobrar.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Información de Contacto</TableHead>
+                  <TableHead>Total Pendiente</TableHead>
+                  <TableHead>Facturas</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {cuentasAgrupadasPorCliente.map((grupo) => (
+                  <>
+                    <TableRow
+                      key={`cliente-${grupo.cliente}`}
+                      className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
+                      onClick={() => toggleClienteExpansion(grupo.cliente)}
+                    >
+                      <TableCell>
+                        {expandedClientes.has(grupo.cliente) ? (
+                          <ChevronDown className="w-5 h-5" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5" />
+                        )}
+                      </TableCell>
+
+                      <TableCell className="font-semibold">{grupo.cliente}</TableCell>
+
+                      <TableCell className="min-w-[200px]">
+                        <div className="space-y-1">
+                          {grupo.contacto.telefono && (
+                            <div className="text-sm">📞 {grupo.contacto.telefono}</div>
                           )}
-                        </TableCell>
+                          {grupo.contacto.email && (
+                            <div className="text-sm">📧 {grupo.contacto.email}</div>
+                          )}
+                          {grupo.contacto.rfc && (
+                            <div className="text-sm">🆔 {grupo.contacto.rfc}</div>
+                          )}
+                          {!grupo.contacto.telefono &&
+                            !grupo.contacto.email &&
+                            !grupo.contacto.rfc && (
+                              <span className="text-muted-foreground text-sm">
+                                Sin información de contacto
+                              </span>
+                            )}
+                        </div>
+                      </TableCell>
 
-                        <TableCell className="font-semibold">{grupo.cliente}</TableCell>
-
-                        <TableCell className="min-w-[200px]">
-                          <div className="space-y-1">
-                            {grupo.contacto.telefono && (
-                              <div className="text-sm">📞 {grupo.contacto.telefono}</div>
-                            )}
-                            {grupo.contacto.email && (
-                              <div className="text-sm">📧 {grupo.contacto.email}</div>
-                            )}
-                            {grupo.contacto.rfc && (
-                              <div className="text-sm">🆔 {grupo.contacto.rfc}</div>
-                            )}
-                            {!grupo.contacto.telefono &&
-                              !grupo.contacto.email &&
-                              !grupo.contacto.rfc && (
-                                <span className="text-muted-foreground text-sm">
-                                  Sin información de contacto
-                                </span>
-                              )}
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="text-lg font-bold text-primary">
+                            {formatCurrency(grupo.totalPendiente)}
                           </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="text-lg font-bold text-primary">
-                              {formatCurrency(grupo.totalPendiente)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Total: {formatCurrency(grupo.totalOriginal)}
-                            </div>
-                            {grupo.totalPagado > 0 && (
-                              <div className="text-sm text-success">
-                                Pagado: {formatCurrency(grupo.totalPagado)}
-                              </div>
-                            )}
+                          <div className="text-sm text-muted-foreground">
+                            Total: {formatCurrency(grupo.totalOriginal)}
                           </div>
-                        </TableCell>
+                          {grupo.totalPagado > 0 && (
+                            <div className="text-sm text-success">
+                              Pagado: {formatCurrency(grupo.totalPagado)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
 
-                        <TableCell>
-                          <Badge variant="outline">
-                            {grupo.facturas.length}{" "}
-                            {grupo.facturas.length === 1 ? "factura" : "facturas"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {grupo.facturas.length}{" "}
+                          {grupo.facturas.length === 1 ? "factura" : "facturas"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
 
-                      {expandedClientes.has(grupo.cliente) &&
-                        grupo.facturas.map((cuenta) => (
-                          <TableRow key={cuenta.id} className="bg-background">
-                            <TableCell></TableCell>
-                            <TableCell colSpan={5}>
-                              <div className="pl-4 border-l-2 border-primary/30 ml-4">
-                                <div className="grid grid-cols-12 gap-4 items-center">
-                                  <div className="col-span-3">
-                                    <div className="font-medium">{cuenta.descripcion}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {safeFormatDate(cuenta.created_at, "dd/MM/yyyy", { locale: es })}
-                                    </div>
+                    {expandedClientes.has(grupo.cliente) &&
+                      grupo.facturas.map((cuenta) => (
+                        <TableRow key={cuenta.id} className="bg-background">
+                          <TableCell></TableCell>
+                          <TableCell colSpan={5}>
+                            <div className="pl-4 border-l-2 border-primary/30 ml-4">
+                              <div className="grid grid-cols-12 gap-4 items-center">
+                                <div className="col-span-3">
+                                  <div className="font-medium">{cuenta.descripcion}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {safeFormatDate(cuenta.created_at, "dd/MM/yyyy", { locale: es })}
                                   </div>
+                                </div>
 
-                                  <div className="col-span-3">
-                                    <div className="space-y-1 text-sm">
+                                <div className="col-span-3">
+                                  <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Total:</span>
+                                      <span className="font-medium">
+                                        {formatCurrency(cuenta.monto_total)}
+                                      </span>
+                                    </div>
+
+                                    {cuenta.monto_descuento && cuenta.monto_descuento > 0 && (
                                       <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Total:</span>
-                                        <span className="font-medium">
-                                          {formatCurrency(cuenta.monto_total)}
+                                        <span className="text-muted-foreground">Descuento:</span>
+                                        <span className="text-destructive">
+                                          -{formatCurrency(cuenta.monto_descuento)}
                                         </span>
                                       </div>
+                                    )}
 
-                                      {cuenta.monto_descuento && cuenta.monto_descuento > 0 && (
-                                        <div className="flex justify-between">
-                                          <span className="text-muted-foreground">Descuento:</span>
-                                          <span className="text-destructive">
-                                            -{formatCurrency(cuenta.monto_descuento)}
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {cuenta.monto_pagado > 0 && (
-                                        <div className="flex justify-between">
-                                          <span className="text-muted-foreground">Pagado:</span>
-                                          <span className="text-success">
-                                            {formatCurrency(cuenta.monto_pagado)}
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      <div className="flex justify-between border-t pt-1">
-                                        <span className="font-medium">Pendiente:</span>
-                                        <span className="font-bold text-primary">
-                                          {formatCurrency(cuenta.monto_pendiente || 0)}
+                                    {cuenta.monto_pagado > 0 && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Pagado:</span>
+                                        <span className="text-success">
+                                          {formatCurrency(cuenta.monto_pagado)}
                                         </span>
                                       </div>
+                                    )}
+
+                                    <div className="flex justify-between border-t pt-1">
+                                      <span className="font-medium">Pendiente:</span>
+                                      <span className="font-bold text-primary">
+                                        {formatCurrency(cuenta.monto_pendiente || 0)}
+                                      </span>
                                     </div>
                                   </div>
+                                </div>
 
-                                  <div className="col-span-2">
-                                    <div className="space-y-1">
-                                      <Badge
-                                        variant={
-                                          cuenta.tipo_pago === "contado"
-                                            ? "default"
-                                            : cuenta.tipo_pago === "parcial"
-                                              ? "secondary"
-                                              : "outline"
-                                        }
-                                      >
-                                        {cuenta.tipo_pago === "contado"
-                                          ? "Contado"
+                                <div className="col-span-2">
+                                  <div className="space-y-1">
+                                    <Badge
+                                      variant={
+                                        cuenta.tipo_pago === "contado"
+                                          ? "default"
                                           : cuenta.tipo_pago === "parcial"
-                                            ? "Parcial"
-                                            : "Crédito"}
-                                      </Badge>
+                                            ? "secondary"
+                                            : "outline"
+                                      }
+                                    >
+                                      {cuenta.tipo_pago === "contado"
+                                        ? "Contado"
+                                        : cuenta.tipo_pago === "parcial"
+                                          ? "Parcial"
+                                          : "Crédito"}
+                                    </Badge>
 
-                                      {cuenta.metodo_pago && (
-                                        <div className="text-xs text-muted-foreground">
-                                          {cuenta.metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta/Banco"}
-                                        </div>
-                                      )}
-                                    </div>
+                                    {cuenta.metodo_pago && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {cuenta.metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta/Banco"}
+                                      </div>
+                                    )}
                                   </div>
+                                </div>
 
-                                  <div className="col-span-2">
-                                    {cuenta.fecha_vencimiento ? (
-                                      <div className="space-y-1">
-                                        <div className="text-sm font-medium">
-                                          {safeFormatDate(cuenta.fecha_vencimiento, "dd/MM/yyyy", { locale: es })}
-                                        </div>
+                                <div className="col-span-2">
+                                  {cuenta.fecha_vencimiento ? (
+                                    <div className="space-y-1">
+                                      <div className="text-sm font-medium">
+                                        {safeFormatDate(cuenta.fecha_vencimiento, "dd/MM/yyyy", { locale: es })}
+                                      </div>
 
-                                        <div className="text-xs">
-                                          {(() => {
-                                            const today = new Date();
-                                            const dueDate = safeDate(cuenta.fecha_vencimiento);
-                                            if (!dueDate) {
-                                              return <span className="text-muted-foreground">Fecha inválida</span>;
-                                            }
+                                      <div className="text-xs">
+                                        {(() => {
+                                          const today = new Date();
+                                          const dueDate = safeDate(cuenta.fecha_vencimiento);
+                                          if (!dueDate) {
+                                            return <span className="text-muted-foreground">Fecha inválida</span>;
+                                          }
 
-                                            const diffTime = dueDate.getTime() - today.getTime();
-                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                          const diffTime = dueDate.getTime() - today.getTime();
+                                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                                            if (diffDays < 0) {
-                                              return (
-                                                <span className="text-destructive font-medium">
-                                                  Vencida hace {Math.abs(diffDays)} día(s)
-                                                </span>
-                                              );
-                                            }
-                                            if (diffDays === 0) {
-                                              return <span className="text-warning font-medium">Vence hoy</span>;
-                                            }
-                                            if (diffDays <= 7) {
-                                              return (
-                                                <span className="text-warning font-medium">
-                                                  Vence en {diffDays} día(s)
-                                                </span>
-                                              );
-                                            }
+                                          if (diffDays < 0) {
                                             return (
-                                              <span className="text-muted-foreground">
+                                              <span className="text-destructive font-medium">
+                                                Vencida hace {Math.abs(diffDays)} día(s)
+                                              </span>
+                                            );
+                                          }
+                                          if (diffDays === 0) {
+                                            return <span className="text-warning font-medium">Vence hoy</span>;
+                                          }
+                                          if (diffDays <= 7) {
+                                            return (
+                                              <span className="text-warning font-medium">
                                                 Vence en {diffDays} día(s)
                                               </span>
                                             );
-                                          })()}
-                                        </div>
-
-                                        {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente || 0)}
+                                          }
+                                          return (
+                                            <span className="text-muted-foreground">
+                                              Vence en {diffDays} día(s)
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
-                                    ) : (
-                                      <span className="text-muted-foreground text-sm">Sin fecha límite</span>
-                                    )}
-                                  </div>
 
-                                  <div className="col-span-2 flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => openHistorialPagos(cuenta.id)}
-                                      title="Ver historial de pagos"
-                                    >
-                                      <History className="w-4 h-4" />
-                                    </Button>
+                                      {getEstadoBadge(cuenta.fecha_vencimiento, cuenta.monto_pendiente || 0)}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">Sin fecha límite</span>
+                                  )}
+                                </div>
 
-                                    <Button
-                                      size="sm"
-                                      variant="default"
-                                      onClick={() => openPagoDialog(cuenta)}
-                                      disabled={cuenta.monto_pendiente <= 0}
-                                    >
-                                      Pagar
-                                    </Button>
-                                  </div>
+                                <div className="col-span-2 flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openHistorialPagos(cuenta.id)}
+                                    title="Ver historial de pagos"
+                                  >
+                                    <History className="w-4 h-4" />
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => openPagoDialog(cuenta)}
+                                    disabled={cuenta.monto_pendiente <= 0}
+                                  >
+                                    Pagar
+                                  </Button>
                                 </div>
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </>
-  )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </>
+)}
 </TabsContent>
 
           {/* Tab 2: Resumen de Transacciones */}
