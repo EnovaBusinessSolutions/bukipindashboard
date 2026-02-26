@@ -68,6 +68,45 @@ type Props = {
   setIsCancelDialogOpen: (v: boolean) => void;
 };
 
+function isDateOnlyYMD(v: any) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "").trim());
+}
+
+/**
+ * ✅ Resolver FECHA LÍMITE / VENCIMIENTO E2E
+ * - soporta camelCase + snake_case + aliases legacy
+ * - devuelve YYYY-MM-DD o null
+ */
+function resolveFechaVencimientoYMD(tx: any): string | null {
+  const raw =
+    tx?.fecha_vencimiento ??
+    tx?.fechaVencimiento ??
+    tx?.fecha_limite ??
+    tx?.fechaLimite ??
+    tx?.dueDate ??
+    tx?.due_date ??
+    tx?.vencimiento ??
+    tx?.fechaVence ??
+    tx?.fecha_vence ??
+    null;
+
+  if (!raw) return null;
+
+  // si ya viene YYYY-MM-DD
+  const s = String(raw).trim();
+  if (isDateOnlyYMD(s)) return s;
+
+  // si viene ISO / Date
+  try {
+    const d = raw instanceof Date ? raw : new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    // 👇 usamos recorte ISO (estable) a YMD
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+
 export default function TabResumenVentas(props: Props) {
   const {
     transacciones,
@@ -223,6 +262,9 @@ export default function TabResumenVentas(props: Props) {
                     monto_total: Number(detalleIngreso?.haber) || 0,
                     monto_neto: Number(detalleIngreso?.haber) || 0,
                     monto_descuento: 0,
+                    // ✅ asiento_directo no trae vencimiento
+                    fecha_vencimiento: null,
+                    fechaVencimiento: null,
                   };
                 });
 
@@ -327,6 +369,9 @@ export default function TabResumenVentas(props: Props) {
                 asiento_fecha: asiento.fecha,
                 es_asiento_directo: true,
                 estado: "activo",
+                // ✅ asiento_directo no trae vencimiento
+                fecha_vencimiento: null,
+                fechaVencimiento: null,
               };
             });
 
@@ -448,6 +493,9 @@ export default function TabResumenVentas(props: Props) {
 
                           const netoRow = Number(getMetricValue(transaccion, "netas") || 0);
 
+                          // ✅ Fecha límite / vencimiento (E2E)
+                          const fechaVencYMD = resolveFechaVencimientoYMD(transaccion);
+
                           // Subcuenta robusta
                           const subRefRaw =
                             (transaccion as any).subcuenta_id ??
@@ -542,6 +590,17 @@ export default function TabResumenVentas(props: Props) {
                                       •{" "}
                                       <span className="text-muted-foreground">
                                         Subcuenta: {subLabelFinal || "Subcuenta no encontrada"}
+                                      </span>
+                                    </>
+                                  ) : null}
+
+                                  {/* ✅ opcional: mini hint de vencimiento en la lista (muy pro) */}
+                                  {fechaVencYMD ? (
+                                    <>
+                                      {" "}
+                                      •{" "}
+                                      <span className="text-muted-foreground">
+                                        Fecha límite: {fechaVencYMD}
                                       </span>
                                     </>
                                   ) : null}
@@ -698,6 +757,7 @@ export default function TabResumenVentas(props: Props) {
                                                   <span className="font-medium">Tipo de Pago:</span>{" "}
                                                   {transaccion.tipo_pago}
                                                 </p>
+
                                                 <p>
                                                   <span className="font-medium">Fecha:</span>{" "}
                                                   {(() => {
@@ -717,6 +777,12 @@ export default function TabResumenVentas(props: Props) {
                                                       return String(raw || "");
                                                     }
                                                   })()}
+                                                </p>
+
+                                                {/* ✅ FECHA LÍMITE (E2E) */}
+                                                <p>
+                                                  <span className="font-medium">Fecha límite:</span>{" "}
+                                                  {resolveFechaVencimientoYMD(transaccion) || "—"}
                                                 </p>
                                               </div>
                                             </div>

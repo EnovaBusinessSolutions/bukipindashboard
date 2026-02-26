@@ -196,6 +196,17 @@ const normalizeTx = (tx: any) => {
   // Para tu parseDateSafe (YYYY-MM-DD), si viene ISO lo recortamos a 10 chars
   const created_at = rawDateStr ? rawDateStr.slice(0, 10) : tx.created_at;
 
+    // ✅ fecha límite / vencimiento (para CxC / UI)
+  const fecha_vencimiento =
+    tx.fecha_vencimiento ??
+    tx.fechaVencimiento ??
+    tx.fecha_limite ??
+    tx.fechaLimite ??
+    tx.dueDate ??
+    null;
+
+  const fechaVencimiento = fecha_vencimiento ? String(fecha_vencimiento).slice(0, 10) : null;
+
   // números (muchos vienen camelCase en tu backend actual)
   const monto_total = toNum(tx.monto_total ?? tx.montoTotal ?? tx.total ?? tx.monto_total);
   const monto_descuento = toNum(tx.monto_descuento ?? tx.montoDescuento ?? tx.descuento);
@@ -221,6 +232,10 @@ const normalizeTx = (tx: any) => {
     // fechas (dejamos ambas)
     created_at: tx.created_at ?? created_at,
     fecha: tx.fecha ?? rawDateStr,
+
+        // fecha límite (dejamos ambas)
+    fecha_vencimiento: tx.fecha_vencimiento ?? fechaVencimiento,
+    fechaVencimiento: tx.fechaVencimiento ?? fechaVencimiento,
 
     // tipos (dejamos ambas)
     tipo_ingreso,
@@ -1636,6 +1651,11 @@ if (!Array.isArray(detalles) || detalles.length === 0) {
     await processIngreso();
   };
 
+const dueYMD =
+  fechaVencimiento && String(fechaVencimiento).trim()
+    ? String(fechaVencimiento).trim().slice(0, 10)
+    : null;
+
   // Función separada para procesar el ingreso
   const processIngreso = async () => {
     setIsSubmitting(true);
@@ -1773,7 +1793,8 @@ const neto = Math.max(0, Number((montoTotalDerived - descuento).toFixed(2)));
               clienteEmail: clienteEmail.trim() || null,
               clienteRFC: clienteRFC.trim() || null,
               clienteId: clienteId,
-              fechaVencimiento: fechaVencimiento || null,
+              fechaVencimiento: dueYMD,
+              fecha_vencimiento: dueYMD,
               comentarios: comentarios.trim() || null,
               // ✅ Campos canónicos para que el backend NO caiga en qty=1
 productId: producto.id,
@@ -1836,7 +1857,8 @@ costoPersonalizado:
             clienteEmail: clienteEmail.trim() || null,
             clienteRFC: clienteRFC.trim() || null,
             clienteId: clienteId,
-            fechaVencimiento: fechaVencimiento || null,
+            fechaVencimiento: dueYMD,
+            fecha_vencimiento: dueYMD,
             comentarios: comentarios.trim() || null,
             // Datos adicionales para inventario (flujo antiguo, no debería llegar aquí)
             ...(selectedIncomeType === "inventariados" && selectedInventoryProduct
