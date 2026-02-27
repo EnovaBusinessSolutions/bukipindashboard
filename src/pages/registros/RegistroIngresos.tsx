@@ -197,15 +197,27 @@ const normalizeTx = (tx: any) => {
   const created_at = rawDateStr ? rawDateStr.slice(0, 10) : tx.created_at;
 
     // ✅ fecha límite / vencimiento (para CxC / UI)
-  const fecha_vencimiento =
-    tx.fecha_vencimiento ??
-    tx.fechaVencimiento ??
-    tx.fecha_limite ??
-    tx.fechaLimite ??
-    tx.dueDate ??
-    null;
+// IMPORTANTE: ignorar "" (string vacío) además de null/undefined
+const pickNonEmpty = (...vals: any[]) => {
+  for (const v of vals) {
+    if (v === null || v === undefined) continue;
+    const s = String(v).trim();
+    if (s) return s; // solo si no está vacío
+  }
+  return null;
+};
 
-  const fechaVencimiento = fecha_vencimiento ? String(fecha_vencimiento).slice(0, 10) : null;
+const fechaLimiteRaw = pickNonEmpty(
+  tx.fechaLimite,
+  tx.fecha_limite,
+  tx.fecha_vencimiento,
+  tx.fechaVencimiento,
+  tx.dueDate,
+  tx.due_date
+);
+
+// Para UI: YYYY-MM-DD (estable)
+const fechaLimiteYMD = fechaLimiteRaw ? String(fechaLimiteRaw).slice(0, 10) : null;
 
   // números (muchos vienen camelCase en tu backend actual)
   const monto_total = toNum(tx.monto_total ?? tx.montoTotal ?? tx.total ?? tx.monto_total);
@@ -234,8 +246,13 @@ const normalizeTx = (tx: any) => {
     fecha: tx.fecha ?? rawDateStr,
 
         // fecha límite (dejamos ambas)
-    fecha_vencimiento: tx.fecha_vencimiento ?? fechaVencimiento,
-    fechaVencimiento: tx.fechaVencimiento ?? fechaVencimiento,
+    // ✅ canónico en UI: siempre disponible si existe en cualquier alias
+    fechaLimite: tx.fechaLimite ?? fechaLimiteRaw,
+    fecha_limite: tx.fecha_limite ?? fechaLimiteRaw,
+
+    // ✅ compat para tu UI actual (modal/resumen)
+    fecha_vencimiento: fechaLimiteYMD,
+    fechaVencimiento: fechaLimiteYMD,
 
     // tipos (dejamos ambas)
     tipo_ingreso,
