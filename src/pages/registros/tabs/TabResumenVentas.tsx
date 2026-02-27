@@ -107,6 +107,11 @@ function resolveFechaVencimientoYMD(tx: any): string | null {
   }
 }
 
+// Helper: ID robusto
+function getTxIdAny(tx: any): string {
+  return String(tx?._id ?? tx?.id ?? tx?.incomeId ?? tx?.transaccionId ?? "").trim();
+}
+
 export default function TabResumenVentas(props: Props) {
   const {
     transacciones,
@@ -144,6 +149,31 @@ export default function TabResumenVentas(props: Props) {
     setTransaccionACancelar,
     setIsCancelDialogOpen,
   } = props;
+
+  /**
+   * ✅ FIX E2E (Fecha límite):
+   * A veces `transaccionesNorm` viene “recortada” por `normalizeTx` (upstream) y no incluye `fechaLimite`.
+   * Como en Mongo sí está guardada, acá construimos un lookup de la lista RAW `transacciones`
+   * para poder resolver `fechaLimite/fecha_vencimiento` aunque el objeto normalizado no lo traiga.
+   */
+  const rawTxById = React.useMemo(() => {
+    const m = new Map<string, any>();
+    for (const t of transacciones ?? []) {
+      const id = getTxIdAny(t);
+      if (id) m.set(id, t);
+    }
+    return m;
+  }, [transacciones]);
+
+  const mergeRawForDueDate = React.useCallback(
+    (tx: any) => {
+      const id = getTxIdAny(tx);
+      const raw = id ? rawTxById.get(id) : null;
+      // Preferimos el shape normalizado para UI, pero “inyectamos” cualquier llave faltante desde raw (como fechaLimite)
+      return raw ? { ...raw, ...tx } : tx;
+    },
+    [rawTxById]
+  );
 
   return (
     <Card>
@@ -493,8 +523,9 @@ export default function TabResumenVentas(props: Props) {
 
                           const netoRow = Number(getMetricValue(transaccion, "netas") || 0);
 
-                          // ✅ Fecha límite / vencimiento (E2E)
-                          const fechaVencYMD = resolveFechaVencimientoYMD(transaccion);
+                          // ✅ Fecha límite / vencimiento (E2E) — usando RAW fallback
+                          const txForDueDate = mergeRawForDueDate(transaccion);
+                          const fechaVencYMD = resolveFechaVencimientoYMD(txForDueDate);
 
                           // Subcuenta robusta
                           const subRefRaw =
@@ -594,7 +625,7 @@ export default function TabResumenVentas(props: Props) {
                                     </>
                                   ) : null}
 
-                                  {/* ✅ opcional: mini hint de vencimiento en la lista (muy pro) */}
+                                  {/* ✅ mini hint de vencimiento */}
                                   {fechaVencYMD ? (
                                     <>
                                       {" "}
@@ -779,10 +810,10 @@ export default function TabResumenVentas(props: Props) {
                                                   })()}
                                                 </p>
 
-                                                {/* ✅ FECHA LÍMITE (E2E) */}
+                                                {/* ✅ FECHA LÍMITE (E2E) — usando RAW fallback */}
                                                 <p>
                                                   <span className="font-medium">Fecha límite:</span>{" "}
-                                                  {resolveFechaVencimientoYMD(transaccion) || "—"}
+                                                  {resolveFechaVencimientoYMD(mergeRawForDueDate(transaccion)) || "—"}
                                                 </p>
                                               </div>
                                             </div>
@@ -858,6 +889,58 @@ export default function TabResumenVentas(props: Props) {
                                                   ? String((transaccion as any).cuenta_principal_codigo)
                                                   : "");
 
+                                              // Subcuenta robusta (mismo algoritmo del row)
+                                              const subRefRaw2 =
+                                                (transaccion as any).subcuenta_id ??
+                                                (transaccion as any).subcuentaId ??
+                                                (transaccion as any).subcuenta ??
+                                                (transaccion as any).subcuentaCodigo ??
+                                                (transaccion as any).subcuenta_codigo ??
+                                                null;
+
+                                              const subIdStr2 = subRefRaw2 ? String(subRefRaw2).trim() : "";
+
+                                              const subNombreDirecto2 =
+                                                (transaccion as any).subcuentaNombre ??
+                                                (transaccion as any).subcuenta_nombre ??
+                                                null;
+
+                                              const subCodigoDirecto2 =
+                                                (transaccion as any).subcuentaCodigo ??
+                                                (transaccion as any).subcuenta_codigo ??
+                                                null;
+
+                                              const subInfoLookup2 = (() => {
+                                                if (!subIdStr2) return null;
+
+                                                const sById = subcuentas.find((x: any) => {
+                                                  const id = String(x?.id ?? x?._id ?? "").trim();
+                                                  return id && id === subIdStr2;
+                                                });
+                                                if (sById) return sById;
+
+                                                const sByCode = subcuentas.find((x: any) => {
+                                                  const code = String(x?.codigo ?? x?.code ?? "").trim();
+                                                  return code && code === subIdStr2;
+                                                });
+
+                                                return sByCode || null;
+                                              })();
+
+                                              const subNombreLookup2 = subInfoLookup2 ? (subInfoLookup2 as any).nombre ?? null : null;
+                                              const subCodigoLookup2 = subInfoLookup2 ? (subInfoLookup2 as any).codigo ?? null : null;
+
+                                              const subNombreFinal2 = subNombreDirecto2 ?? subNombreLookup2;
+                                              const subCodigoFinal2 = subCodigoDirecto2 ?? subCodigoLookup2;
+
+                                              const subLabelFinal2 =
+                                                String((transaccion as any).subcuenta ?? "").trim() ||
+                                                (subNombreFinal2
+                                                  ? `${subCodigoFinal2 ? `${subCodigoFinal2} - ` : ""}${subNombreFinal2}`
+                                                  : subCodigoFinal2
+                                                    ? String(subCodigoFinal2)
+                                                    : "");
+
                                               return (
                                                 <div className="text-sm space-y-1">
                                                   <p>
@@ -866,7 +949,7 @@ export default function TabResumenVentas(props: Props) {
                                                   </p>
                                                   <p>
                                                     <span className="font-medium">Subcuenta:</span>{" "}
-                                                    {subLabelFinal || "Sin subcuenta asignada"}
+                                                    {subLabelFinal2 || "Sin subcuenta asignada"}
                                                   </p>
                                                 </div>
                                               );
@@ -884,7 +967,9 @@ export default function TabResumenVentas(props: Props) {
                                         </TabsContent>
 
                                         <TabsContent value="contable" className="mt-4">
-                                          <h4 className="font-semibold text-sm mb-3">Asientos en Balanza de Comprobación</h4>
+                                          <h4 className="font-semibold text-sm mb-3">
+                                            Asientos en Balanza de Comprobación
+                                          </h4>
 
                                           {loadingAsientos ? (
                                             <div className="text-center py-8 text-muted-foreground">
@@ -943,7 +1028,9 @@ export default function TabResumenVentas(props: Props) {
                                                     ))}
 
                                                     <tr className="border-t-2 bg-muted/50 font-bold">
-                                                      <td colSpan={2} className="p-3 text-sm">TOTALES</td>
+                                                      <td colSpan={2} className="p-3 text-sm">
+                                                        TOTALES
+                                                      </td>
                                                       <td className="p-3 text-sm text-right">
                                                         ${formatMonto(
                                                           currentAsientos.detalles?.reduce(
@@ -966,7 +1053,9 @@ export default function TabResumenVentas(props: Props) {
                                               </div>
 
                                               <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md text-sm">
-                                                <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">💡 Información</p>
+                                                <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                                  💡 Información
+                                                </p>
                                                 <p className="text-blue-600 dark:text-blue-400">
                                                   Este asiento contable refleja cómo esta transacción afecta a las diferentes
                                                   cuentas en la balanza de comprobación y posteriormente en los estados financieros.
