@@ -87,6 +87,48 @@ function safeFormatDate(value: any, fmt: string, opts?: any): string {
   }
 }
 
+// ✅ helpers: resolver robusto de fecha límite/vencimiento (para CxC)
+function safeStr(v: any) {
+  const s = typeof v === "string" ? v : v == null ? "" : String(v);
+  return s.trim();
+}
+
+function parseToYYYYMMDD(v: any): string {
+  const s = safeStr(v);
+  if (!s) return "";
+
+  // ya viene YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // ISO / Date parseable
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return "";
+}
+
+function resolveFechaVencimiento(row: any): string {
+  const candidates = [
+    row?.fecha_vencimiento,
+    row?.fechaVencimiento,
+    row?.fechaLimite,
+    row?.fecha_limite,
+    row?.dueDate,
+    row?.due_date,
+  ];
+
+  for (const c of candidates) {
+    const ymd = parseToYYYYMMDD(c);
+    if (ymd) return ymd;
+  }
+  return "";
+}
+
 // Componente personalizado para mostrar el total a la derecha de las barras apiladas
 const CustomTotalLabel = (props: any) => {
   const { x, y, width, height, index, filtroAntiguedad, dataFiltradaCliente, formatearConPreferenciasAnalitica } = props;
@@ -119,7 +161,7 @@ const CustomTotalLabel = (props: any) => {
 const CuentasPorCobrar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("lista");
-    // ✅ NUEVO: “sub-vista” estilo CxP (menú vs detalle)
+  // ✅ NUEVO: “sub-vista” estilo CxP (menú vs detalle)
   const [bucket, setBucket] = useState<null | "1003" | "1009">(null);
 
   // ✅ NUEVO: clasificador (sin backend) para separar 1003 vs 1009
@@ -241,7 +283,7 @@ const CuentasPorCobrar = () => {
       const activos = await tryFetchArray("/api/cxc/ventas-activos?pendientes=1");
       if (activos.length) results.push(...activos);
 
-      // normalización mínima: asegurar keys esperadas y evitar fechas inválidas
+      // ✅ normalización robusta: asegurar keys esperadas + FECHA VENCIMIENTO canónica
       return (results || []).map((r: any) => {
         const id = String(r.id ?? r._id ?? "");
         const created_at = r.created_at ?? r.createdAt ?? r.fecha ?? r.asiento_fecha ?? null;
@@ -252,6 +294,9 @@ const CuentasPorCobrar = () => {
           r.monto_pendiente ?? r.montoPendiente ?? Math.max(0, monto_total - monto_pagado)
         ) || 0;
 
+        // ✅ FIX: Canonizar fecha_vencimiento (la UI solo lee esta key)
+        const fecha_vencimiento = resolveFechaVencimiento(r);
+
         return {
           ...r,
           id,
@@ -259,118 +304,122 @@ const CuentasPorCobrar = () => {
           monto_total,
           monto_pagado,
           monto_pendiente,
+
+          // ✅ CANÓNICO PARA UI CxC
+          fecha_vencimiento: fecha_vencimiento || null,
+          fechaVencimiento: fecha_vencimiento || null,
         };
       });
     },
   });
 
   // ===============================
-// ✅ CLIENTES (para contacto en CxC)
-// - Si la cuenta NO trae cliente_telefono/email/rfc, lo resolvemos por clienteId/clientId
-// ===============================
-const { data: clientesCatalogo } = useQuery({
-  queryKey: ["clientes-catalogo"],
-  queryFn: async () => {
-    // helper tolerante a 404
-    const tryFetchArray = async (url: string) => {
-      try {
-        const json = await apiFetch(url, { method: "GET" });
-        const arr = unwrap<any[]>(json);
-        return Array.isArray(arr) ? arr : [];
-      } catch {
-        return [];
-      }
-    };
+  // ✅ CLIENTES (para contacto en CxC)
+  // - Si la cuenta NO trae cliente_telefono/email/rfc, lo resolvemos por clienteId/clientId
+  // ===============================
+  const { data: clientesCatalogo } = useQuery({
+    queryKey: ["clientes-catalogo"],
+    queryFn: async () => {
+      // helper tolerante a 404
+      const tryFetchArray = async (url: string) => {
+        try {
+          const json = await apiFetch(url, { method: "GET" });
+          const arr = unwrap<any[]>(json);
+          return Array.isArray(arr) ? arr : [];
+        } catch {
+          return [];
+        }
+      };
 
-    // intenta endpoints comunes
-    const a = await tryFetchArray("/api/clientes");
-    if (a.length) return a;
+      // intenta endpoints comunes
+      const a = await tryFetchArray("/api/clientes");
+      if (a.length) return a;
 
-    const b = await tryFetchArray("/api/clientes?include_all=true");
-    if (b.length) return b;
+      const b = await tryFetchArray("/api/clientes?include_all=true");
+      if (b.length) return b;
 
-    const c = await tryFetchArray("/api/clients");
-    if (c.length) return c;
+      const c = await tryFetchArray("/api/clients");
+      if (c.length) return c;
 
-    return [];
-  },
-});
-
-// helper: agarra cualquier variante de clienteId
-const getClienteIdAny = (row: any): string => {
-  const raw =
-    row?.clienteId ??
-    row?.cliente_id ??
-    row?.clientId ??
-    row?.client_id ??
-    row?.cliente?.id ??
-    row?.cliente?._id ??
-    null;
-
-  return raw ? String(raw) : "";
-};
-
-// index de clientes por id (Mongo: _id o id)
-const clientesById = useMemo(() => {
-  const map = new Map<string, any>();
-  (clientesCatalogo || []).forEach((c: any) => {
-    const id = String(c?._id ?? c?.id ?? "");
-    if (id) map.set(id, c);
+      return [];
+    },
   });
-  return map;
-}, [clientesCatalogo]);
 
-// resolver contacto FINAL (prioridad: payload de la cuenta -> catálogo por clienteId)
-const resolveContacto = (cuenta: any) => {
-  const tel =
-    cuenta?.cliente_telefono ??
-    cuenta?.clienteTelefono ??
-    cuenta?.telefono_cliente ??
-    cuenta?.telefonoCliente ??
-    null;
+  // helper: agarra cualquier variante de clienteId
+  const getClienteIdAny = (row: any): string => {
+    const raw =
+      row?.clienteId ??
+      row?.cliente_id ??
+      row?.clientId ??
+      row?.client_id ??
+      row?.cliente?.id ??
+      row?.cliente?._id ??
+      null;
 
-  const email =
-    cuenta?.cliente_email ??
-    cuenta?.clienteEmail ??
-    cuenta?.email_cliente ??
-    cuenta?.emailCliente ??
-    null;
-
-  const rfc =
-    cuenta?.cliente_rfc ??
-    cuenta?.clienteRfc ??
-    cuenta?.rfc_cliente ??
-    cuenta?.rfcCliente ??
-    null;
-
-  // si ya viene en la cuenta, úsalo
-  if (tel || email || rfc) {
-    return {
-      telefono: tel ? String(tel) : undefined,
-      email: email ? String(email) : undefined,
-      rfc: rfc ? String(rfc) : undefined,
-    };
-  }
-
-  // si no, búscalo por clienteId
-  const clienteId = getClienteIdAny(cuenta);
-  if (!clienteId) return { telefono: undefined, email: undefined, rfc: undefined };
-
-  const cli = clientesById.get(clienteId);
-  if (!cli) return { telefono: undefined, email: undefined, rfc: undefined };
-
-  // tu colección clients trae: name, email, phone (y a veces rfc/taxId)
-  const phone = cli?.phone ?? cli?.telefono ?? cli?.telefonoCliente ?? null;
-  const mail = cli?.email ?? cli?.correo ?? null;
-  const tax =
-    cli?.rfc ?? cli?.taxId ?? cli?.tax_id ?? cli?.identificacionFiscal ?? null;
-
-  return {
-    telefono: phone ? String(phone) : undefined,
-    email: mail ? String(mail) : undefined,
-    rfc: tax ? String(tax) : undefined,
+    return raw ? String(raw) : "";
   };
-};
+
+  // index de clientes por id (Mongo: _id o id)
+  const clientesById = useMemo(() => {
+    const map = new Map<string, any>();
+    (clientesCatalogo || []).forEach((c: any) => {
+      const id = String(c?._id ?? c?.id ?? "");
+      if (id) map.set(id, c);
+    });
+    return map;
+  }, [clientesCatalogo]);
+
+  // resolver contacto FINAL (prioridad: payload de la cuenta -> catálogo por clienteId)
+  const resolveContacto = (cuenta: any) => {
+    const tel =
+      cuenta?.cliente_telefono ??
+      cuenta?.clienteTelefono ??
+      cuenta?.telefono_cliente ??
+      cuenta?.telefonoCliente ??
+      null;
+
+    const email =
+      cuenta?.cliente_email ??
+      cuenta?.clienteEmail ??
+      cuenta?.email_cliente ??
+      cuenta?.emailCliente ??
+      null;
+
+    const rfc =
+      cuenta?.cliente_rfc ??
+      cuenta?.clienteRfc ??
+      cuenta?.rfc_cliente ??
+      cuenta?.rfcCliente ??
+      null;
+
+    // si ya viene en la cuenta, úsalo
+    if (tel || email || rfc) {
+      return {
+        telefono: tel ? String(tel) : undefined,
+        email: email ? String(email) : undefined,
+        rfc: rfc ? String(rfc) : undefined,
+      };
+    }
+
+    // si no, búscalo por clienteId
+    const clienteId = getClienteIdAny(cuenta);
+    if (!clienteId) return { telefono: undefined, email: undefined, rfc: undefined };
+
+    const cli = clientesById.get(clienteId);
+    if (!cli) return { telefono: undefined, email: undefined, rfc: undefined };
+
+    // tu colección clients trae: name, email, phone (y a veces rfc/taxId)
+    const phone = cli?.phone ?? cli?.telefono ?? cli?.telefonoCliente ?? null;
+    const mail = cli?.email ?? cli?.correo ?? null;
+    const tax =
+      cli?.rfc ?? cli?.taxId ?? cli?.tax_id ?? cli?.identificacionFiscal ?? null;
+
+    return {
+      telefono: phone ? String(phone) : undefined,
+      email: mail ? String(mail) : undefined,
+      rfc: tax ? String(tax) : undefined,
+    };
+  };
 
   const clientesUnicos = useMemo(() => {
     return Array.from(
@@ -482,117 +531,114 @@ const resolveContacto = (cuenta: any) => {
     },
   });
 
-
+  // ===============================
+  // ✅ BASE (NO filtros) → NO toca highlights
+  // ===============================
+  const baseCuentas = useMemo(() => (Array.isArray(cuentasPorCobrar) ? cuentasPorCobrar : []), [cuentasPorCobrar]);
 
   // ===============================
-// ✅ BASE (NO filtros) → NO toca highlights
-// ===============================
-const baseCuentas = useMemo(() => (Array.isArray(cuentasPorCobrar) ? cuentasPorCobrar : []), [cuentasPorCobrar]);
+  // ✅ HIGHLIGHTS (SIEMPRE desde baseCuentas)
+  // ===============================
+  const highlights = useMemo(() => {
+    const totalPorCobrarBase = baseCuentas.reduce((sum: number, c: any) => sum + (Number(c?.monto_pendiente) || 0), 0);
 
-// ===============================
-// ✅ HIGHLIGHTS (SIEMPRE desde baseCuentas)
-// ===============================
-const highlights = useMemo(() => {
-  const totalPorCobrarBase = baseCuentas.reduce((sum: number, c: any) => sum + (Number(c?.monto_pendiente) || 0), 0);
-
-  const hoy = new Date();
-  const vencidasBase = baseCuentas.filter((c: any) => {
-    const fv = c?.fecha_vencimiento ? safeDate(c.fecha_vencimiento) : null;
-    return fv && fv.getTime() < hoy.getTime() && (Number(c?.monto_pendiente) || 0) > 0;
-  }).length;
-
-  const porVencerBase = baseCuentas.filter((c: any) => {
-    const fv = c?.fecha_vencimiento ? safeDate(c.fecha_vencimiento) : null;
-    return fv && fv.getTime() >= hoy.getTime() && (Number(c?.monto_pendiente) || 0) > 0;
-  }).length;
-
-  return {
-    totalPorCobrar: totalPorCobrarBase,
-    vencidas: vencidasBase,
-    porVencer: porVencerBase,
-    totalCuentas: baseCuentas.length,
-  };
-}, [baseCuentas]);
-
-// ===============================
-// ✅ TOTALES DEL MENÚ 1003/1009 (SIEMPRE desde baseCuentas)
-// ===============================
-const menuTotals = useMemo(() => {
-  const sumBucket = (key: "1003" | "1009") =>
-    baseCuentas
-      .filter((c: any) => bucketKeyOf(c) === key)
-      .reduce((sum: number, c: any) => sum + (Number(c?.monto_pendiente) || 0), 0);
-
-  const countPend = (key: "1003" | "1009") =>
-    baseCuentas.filter((c: any) => bucketKeyOf(c) === key && (Number(c?.monto_pendiente) || 0) > 0).length;
-
-  const countClientes = (key: "1003" | "1009") =>
-    Array.from(
-      new Set(
-        baseCuentas
-          .filter((c: any) => bucketKeyOf(c) === key)
-          .map((c: any) => c?.cliente_nombre || "Sin nombre")
-      )
-    ).length;
-
-  return {
-    "1003": { total: sumBucket("1003"), pendientes: countPend("1003"), clientes: countClientes("1003") },
-    "1009": { total: sumBucket("1009"), pendientes: countPend("1009"), clientes: countClientes("1009") },
-  };
-}, [baseCuentas]);
-
-// ===============================
-// ✅ FILTROS (SOLO afectan listado, NO highlights)
-// (sin filtro de Cliente)
-// ===============================
-const filteredCuentas = useMemo(() => {
-  let cuentas = baseCuentas;
-
-  // búsqueda
-  const s = (searchTerm || "").toLowerCase().trim();
-  if (s) {
-    cuentas = cuentas.filter((c: any) => {
-      return (
-        String(c?.cliente_nombre || "").toLowerCase().includes(s) ||
-        String(c?.descripcion || "").toLowerCase().includes(s) ||
-        String(c?.cliente_telefono || "").toLowerCase().includes(s) ||
-        String(c?.cliente_email || "").toLowerCase().includes(s) ||
-        String(c?.cliente_rfc || "").toLowerCase().includes(s)
-      );
-    });
-  }
-
-  // estado
-  if (filtroEstado !== "todos") {
     const hoy = new Date();
-    cuentas = cuentas.filter((c: any) => {
-      const pendiente = Number(c?.monto_pendiente) || 0;
+    const vencidasBase = baseCuentas.filter((c: any) => {
       const fv = c?.fecha_vencimiento ? safeDate(c.fecha_vencimiento) : null;
+      return fv && fv.getTime() < hoy.getTime() && (Number(c?.monto_pendiente) || 0) > 0;
+    }).length;
 
-      if (filtroEstado === "vencida") return !!fv && fv.getTime() < hoy.getTime() && pendiente > 0;
-      if (filtroEstado === "porVencer") return !!fv && fv.getTime() >= hoy.getTime() && pendiente > 0;
-      if (filtroEstado === "sinVencimiento") return !fv && pendiente > 0;
-      if (filtroEstado === "cobrado") return pendiente === 0;
-      return true;
-    });
-  }
+    const porVencerBase = baseCuentas.filter((c: any) => {
+      const fv = c?.fecha_vencimiento ? safeDate(c.fecha_vencimiento) : null;
+      return fv && fv.getTime() >= hoy.getTime() && (Number(c?.monto_pendiente) || 0) > 0;
+    }).length;
 
-  // orden
-  if (ordenMonto === "menorMayor") {
-    cuentas = [...cuentas].sort((a: any, b: any) => (Number(a?.monto_pendiente) || 0) - (Number(b?.monto_pendiente) || 0));
-  } else if (ordenMonto === "mayorMenor") {
-    cuentas = [...cuentas].sort((a: any, b: any) => (Number(b?.monto_pendiente) || 0) - (Number(a?.monto_pendiente) || 0));
-  }
+    return {
+      totalPorCobrar: totalPorCobrarBase,
+      vencidas: vencidasBase,
+      porVencer: porVencerBase,
+      totalCuentas: baseCuentas.length,
+    };
+  }, [baseCuentas]);
 
-  return cuentas;
-}, [baseCuentas, searchTerm, filtroEstado, ordenMonto]);
+  // ===============================
+  // ✅ TOTALES DEL MENÚ 1003/1009 (SIEMPRE desde baseCuentas)
+  // ===============================
+  const menuTotals = useMemo(() => {
+    const sumBucket = (key: "1003" | "1009") =>
+      baseCuentas
+        .filter((c: any) => bucketKeyOf(c) === key)
+        .reduce((sum: number, c: any) => sum + (Number(c?.monto_pendiente) || 0), 0);
 
-// bucket aplicado al listado
-const filteredCuentasBucket = useMemo(() => {
-  if (!bucket) return filteredCuentas;
-  return filteredCuentas.filter((c: any) => bucketKeyOf(c) === bucket);
-}, [bucket, filteredCuentas]);
+    const countPend = (key: "1003" | "1009") =>
+      baseCuentas.filter((c: any) => bucketKeyOf(c) === key && (Number(c?.monto_pendiente) || 0) > 0).length;
 
+    const countClientes = (key: "1003" | "1009") =>
+      Array.from(
+        new Set(
+          baseCuentas
+            .filter((c: any) => bucketKeyOf(c) === key)
+            .map((c: any) => c?.cliente_nombre || "Sin nombre")
+        )
+      ).length;
+
+    return {
+      "1003": { total: sumBucket("1003"), pendientes: countPend("1003"), clientes: countClientes("1003") },
+      "1009": { total: sumBucket("1009"), pendientes: countPend("1009"), clientes: countClientes("1009") },
+    };
+  }, [baseCuentas]);
+
+  // ===============================
+  // ✅ FILTROS (SOLO afectan listado, NO highlights)
+  // (sin filtro de Cliente)
+  // ===============================
+  const filteredCuentas = useMemo(() => {
+    let cuentas = baseCuentas;
+
+    // búsqueda
+    const s = (searchTerm || "").toLowerCase().trim();
+    if (s) {
+      cuentas = cuentas.filter((c: any) => {
+        return (
+          String(c?.cliente_nombre || "").toLowerCase().includes(s) ||
+          String(c?.descripcion || "").toLowerCase().includes(s) ||
+          String(c?.cliente_telefono || "").toLowerCase().includes(s) ||
+          String(c?.cliente_email || "").toLowerCase().includes(s) ||
+          String(c?.cliente_rfc || "").toLowerCase().includes(s)
+        );
+      });
+    }
+
+    // estado
+    if (filtroEstado !== "todos") {
+      const hoy = new Date();
+      cuentas = cuentas.filter((c: any) => {
+        const pendiente = Number(c?.monto_pendiente) || 0;
+        const fv = c?.fecha_vencimiento ? safeDate(c.fecha_vencimiento) : null;
+
+        if (filtroEstado === "vencida") return !!fv && fv.getTime() < hoy.getTime() && pendiente > 0;
+        if (filtroEstado === "porVencer") return !!fv && fv.getTime() >= hoy.getTime() && pendiente > 0;
+        if (filtroEstado === "sinVencimiento") return !fv && pendiente > 0;
+        if (filtroEstado === "cobrado") return pendiente === 0;
+        return true;
+      });
+    }
+
+    // orden
+    if (ordenMonto === "menorMayor") {
+      cuentas = [...cuentas].sort((a: any, b: any) => (Number(a?.monto_pendiente) || 0) - (Number(b?.monto_pendiente) || 0));
+    } else if (ordenMonto === "mayorMenor") {
+      cuentas = [...cuentas].sort((a: any, b: any) => (Number(b?.monto_pendiente) || 0) - (Number(a?.monto_pendiente) || 0));
+    }
+
+    return cuentas;
+  }, [baseCuentas, searchTerm, filtroEstado, ordenMonto]);
+
+  // bucket aplicado al listado
+  const filteredCuentasBucket = useMemo(() => {
+    if (!bucket) return filteredCuentas;
+    return filteredCuentas.filter((c: any) => bucketKeyOf(c) === bucket);
+  }, [bucket, filteredCuentas]);
 
   const openPagoDialog = (cuenta: any) => {
     setSelectedCuenta(cuenta);
@@ -660,7 +706,7 @@ const filteredCuentasBucket = useMemo(() => {
       };
     }>();
 
-        filteredCuentasBucket.forEach((cuenta: any) => {
+    filteredCuentasBucket.forEach((cuenta: any) => {
       const clienteKey = cuenta.cliente_nombre || "Sin cliente asignado";
 
       if (!grupos.has(clienteKey)) {
@@ -676,19 +722,19 @@ const filteredCuentasBucket = useMemo(() => {
 
       const grupo = grupos.get(clienteKey)!;
 
-  // ✅ merge contacto (por si esta factura sí trae datos y la primera no)
-  const rc = resolveContacto(cuenta);
-  grupo.contacto = {
-    telefono: grupo.contacto.telefono ?? rc.telefono,
-    email: grupo.contacto.email ?? rc.email,
-    rfc: grupo.contacto.rfc ?? rc.rfc,
-  };
+      // ✅ merge contacto (por si esta factura sí trae datos y la primera no)
+      const rc = resolveContacto(cuenta);
+      grupo.contacto = {
+        telefono: grupo.contacto.telefono ?? rc.telefono,
+        email: grupo.contacto.email ?? rc.email,
+        rfc: grupo.contacto.rfc ?? rc.rfc,
+      };
 
-  grupo.facturas.push(cuenta);
-  grupo.totalPendiente += cuenta.monto_pendiente || 0;
-  grupo.totalOriginal += cuenta.monto_total || 0;
-  grupo.totalPagado += cuenta.monto_pagado || 0;
-});
+      grupo.facturas.push(cuenta);
+      grupo.totalPendiente += cuenta.monto_pendiente || 0;
+      grupo.totalOriginal += cuenta.monto_total || 0;
+      grupo.totalPagado += cuenta.monto_pagado || 0;
+    });
 
     return Array.from(grupos.values());
   })();
@@ -746,93 +792,93 @@ const filteredCuentasBucket = useMemo(() => {
           </TabsList>
 
           {/* Tab 1: Lista de Cuentas */}
-<TabsContent value="lista" className="space-y-6">
-  <PanelListaCuentas
-    bucket={bucket}
-    setBucket={setBucket}
-    menuTotals={menuTotals}
-    highlights={highlights}
-    cuentasAgrupadasPorCliente={cuentasAgrupadasPorCliente}
-    expandedClientes={expandedClientes}
-    setExpandedClientes={setExpandedClientes}
-    toggleClienteExpansion={toggleClienteExpansion}
-    searchTerm={searchTerm}
-    setSearchTerm={setSearchTerm}
-    filtroEstado={filtroEstado}
-    setFiltroEstado={setFiltroEstado}
-    ordenMonto={ordenMonto}
-    setOrdenMonto={setOrdenMonto}
-    formatCurrency={formatCurrency}
-    safeDate={safeDate}
-    safeFormatDate={safeFormatDate}
-    getEstadoBadge={getEstadoBadge}
-    openHistorialPagos={openHistorialPagos}
-    openPagoDialog={openPagoDialog}
-  />
-</TabsContent>
+          <TabsContent value="lista" className="space-y-6">
+            <PanelListaCuentas
+              bucket={bucket}
+              setBucket={setBucket}
+              menuTotals={menuTotals}
+              highlights={highlights}
+              cuentasAgrupadasPorCliente={cuentasAgrupadasPorCliente}
+              expandedClientes={expandedClientes}
+              setExpandedClientes={setExpandedClientes}
+              toggleClienteExpansion={toggleClienteExpansion}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              filtroEstado={filtroEstado}
+              setFiltroEstado={setFiltroEstado}
+              ordenMonto={ordenMonto}
+              setOrdenMonto={setOrdenMonto}
+              formatCurrency={formatCurrency}
+              safeDate={safeDate}
+              safeFormatDate={safeFormatDate}
+              getEstadoBadge={getEstadoBadge}
+              openHistorialPagos={openHistorialPagos}
+              openPagoDialog={openPagoDialog}
+            />
+          </TabsContent>
 
           {/* Tab 2: Resumen de Transacciones */}
           <TabsContent value="transacciones" className="space-y-6">
-  <PanelResumenTransacciones
-    loadingTransacciones={loadingTransacciones}
-    todasTransacciones={todasTransacciones || []}
-    filtroMesTransaccion={filtroMesTransaccion}
-    setFiltroMesTransaccion={setFiltroMesTransaccion}
-    filtroAnoTransaccion={filtroAnoTransaccion}
-    setFiltroAnoTransaccion={setFiltroAnoTransaccion}
-    filtroEstadoTransaccion={filtroEstadoTransaccion}
-    setFiltroEstadoTransaccion={setFiltroEstadoTransaccion}
-    filtroMetodoPago={filtroMetodoPago}
-    setFiltroMetodoPago={setFiltroMetodoPago}
-    filtroTipoIngreso={filtroTipoIngreso}
-    setFiltroTipoIngreso={setFiltroTipoIngreso}
-    filtroClienteTransaccion={filtroClienteTransaccion}
-    setFiltroClienteTransaccion={setFiltroClienteTransaccion}
-    ordenMontoTransaccion={ordenMontoTransaccion}
-    setOrdenMontoTransaccion={setOrdenMontoTransaccion}
-    safeDate={safeDate}
-    safeFormatDate={safeFormatDate}
-    formatCurrency={formatCurrency}
-    onOpenDetalleContable={(id) => {
-      setSelectedTransaccionId(id);
-      setDetalleContableOpen(true);
-    }}
-    onResetFiltros={() => {
-      setFiltroMesTransaccion("todos");
-      setFiltroAnoTransaccion("todos");
-      setFiltroEstadoTransaccion("todos");
-      setFiltroMetodoPago("todos");
-      setFiltroTipoIngreso("todos");
-      setFiltroClienteTransaccion("todos");
-      setOrdenMontoTransaccion("ninguno");
-    }}
-  />
-</TabsContent>
+            <PanelResumenTransacciones
+              loadingTransacciones={loadingTransacciones}
+              todasTransacciones={todasTransacciones || []}
+              filtroMesTransaccion={filtroMesTransaccion}
+              setFiltroMesTransaccion={setFiltroMesTransaccion}
+              filtroAnoTransaccion={filtroAnoTransaccion}
+              setFiltroAnoTransaccion={setFiltroAnoTransaccion}
+              filtroEstadoTransaccion={filtroEstadoTransaccion}
+              setFiltroEstadoTransaccion={setFiltroEstadoTransaccion}
+              filtroMetodoPago={filtroMetodoPago}
+              setFiltroMetodoPago={setFiltroMetodoPago}
+              filtroTipoIngreso={filtroTipoIngreso}
+              setFiltroTipoIngreso={setFiltroTipoIngreso}
+              filtroClienteTransaccion={filtroClienteTransaccion}
+              setFiltroClienteTransaccion={setFiltroClienteTransaccion}
+              ordenMontoTransaccion={ordenMontoTransaccion}
+              setOrdenMontoTransaccion={setOrdenMontoTransaccion}
+              safeDate={safeDate}
+              safeFormatDate={safeFormatDate}
+              formatCurrency={formatCurrency}
+              onOpenDetalleContable={(id) => {
+                setSelectedTransaccionId(id);
+                setDetalleContableOpen(true);
+              }}
+              onResetFiltros={() => {
+                setFiltroMesTransaccion("todos");
+                setFiltroAnoTransaccion("todos");
+                setFiltroEstadoTransaccion("todos");
+                setFiltroMetodoPago("todos");
+                setFiltroTipoIngreso("todos");
+                setFiltroClienteTransaccion("todos");
+                setOrdenMontoTransaccion("ninguno");
+              }}
+            />
+          </TabsContent>
 
           {/* Tab 3: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
-  <PanelAnaliticasCxC
-    loadingAnalytics={loadingAnalytics}
-    analytics={analytics}
-    clientesUnicos={clientesUnicos}
-    filtroClienteAnalitica={filtroClienteAnalitica}
-    setFiltroClienteAnalitica={setFiltroClienteAnalitica}
-    periodoCxC={periodoCxC}
-    setPeriodoCxC={setPeriodoCxC}
-    filtroAntiguedad={filtroAntiguedad}
-    setFiltroAntiguedad={setFiltroAntiguedad}
-    selectedCliente={selectedCliente}
-    setSelectedCliente={setSelectedCliente}
-    formatoNumerosAnalitica={formatoNumerosAnalitica}
-    setFormatoNumerosAnalitica={setFormatoNumerosAnalitica}
-    decimalesAnalitica={decimalesAnalitica}
-    setDecimalesAnalitica={setDecimalesAnalitica}
-    formatCurrency={formatCurrency}
-    formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
-    COLORS={COLORS}
-    CustomTotalLabel={CustomTotalLabel}
-  />
-</TabsContent>
+            <PanelAnaliticasCxC
+              loadingAnalytics={loadingAnalytics}
+              analytics={analytics}
+              clientesUnicos={clientesUnicos}
+              filtroClienteAnalitica={filtroClienteAnalitica}
+              setFiltroClienteAnalitica={setFiltroClienteAnalitica}
+              periodoCxC={periodoCxC}
+              setPeriodoCxC={setPeriodoCxC}
+              filtroAntiguedad={filtroAntiguedad}
+              setFiltroAntiguedad={setFiltroAntiguedad}
+              selectedCliente={selectedCliente}
+              setSelectedCliente={setSelectedCliente}
+              formatoNumerosAnalitica={formatoNumerosAnalitica}
+              setFormatoNumerosAnalitica={setFormatoNumerosAnalitica}
+              decimalesAnalitica={decimalesAnalitica}
+              setDecimalesAnalitica={setDecimalesAnalitica}
+              formatCurrency={formatCurrency}
+              formatearConPreferenciasAnalitica={formatearConPreferenciasAnalitica}
+              COLORS={COLORS}
+              CustomTotalLabel={CustomTotalLabel}
+            />
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -990,11 +1036,11 @@ const filteredCuentasBucket = useMemo(() => {
                       (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
                       (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
                     ) < 0.01 && (
-                        <div className="flex items-center gap-2 text-success text-sm mt-2">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span>El asiento está balanceado correctamente</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-success text-sm mt-2">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>El asiento está balanceado correctamente</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
