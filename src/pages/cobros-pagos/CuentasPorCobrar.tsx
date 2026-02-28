@@ -249,9 +249,6 @@ const CuentasPorCobrar = () => {
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorCobrar(periodoCxC, filtroClienteAnalitica);
 
   // ✅ FIX E2E: No depender de /api/cxc/ventas-activos (puede no existir en backend)
-  // - intentamos /api/cxc/detalle?pendientes=1 (nuevo)
-  // - fallback /api/cxc/ingresos?pendientes=1 (compat)
-  // - intentamos /api/cxc/ventas-activos?pendientes=1 solo si existe (si da 404 se ignora)
   const { data: cuentasPorCobrar, isLoading: loadingDetalles } = useQuery({
     queryKey: ["cuentas-por-cobrar-detalle"],
     queryFn: async () => {
@@ -264,26 +261,21 @@ const CuentasPorCobrar = () => {
           const arr = unwrap<any[]>(json);
           return Array.isArray(arr) ? arr : [];
         } catch (e: any) {
-          // si el backend responde 404 para una ruta, NO rompemos la pantalla
           return [];
         }
       };
 
-      // 1) principal recomendado
       const base = await tryFetchArray("/api/cxc/detalle?pendientes=1");
       if (base.length) results.push(...base);
 
-      // 2) compat (por si aún no montan /detalle)
       if (!results.length) {
         const compat = await tryFetchArray("/api/cxc/ingresos?pendientes=1");
         if (compat.length) results.push(...compat);
       }
 
-      // 3) ventas activos (solo si existe; si 404 lo ignoramos)
       const activos = await tryFetchArray("/api/cxc/ventas-activos?pendientes=1");
       if (activos.length) results.push(...activos);
 
-      // ✅ normalización robusta: asegurar keys esperadas + FECHA VENCIMIENTO canónica
       return (results || []).map((r: any) => {
         const id = String(r.id ?? r._id ?? "");
         const created_at = r.created_at ?? r.createdAt ?? r.fecha ?? r.asiento_fecha ?? null;
@@ -294,7 +286,6 @@ const CuentasPorCobrar = () => {
           r.monto_pendiente ?? r.montoPendiente ?? Math.max(0, monto_total - monto_pagado)
         ) || 0;
 
-        // ✅ FIX: Canonizar fecha_vencimiento (la UI solo lee esta key)
         const fecha_vencimiento = resolveFechaVencimiento(r);
 
         return {
@@ -304,8 +295,6 @@ const CuentasPorCobrar = () => {
           monto_total,
           monto_pagado,
           monto_pendiente,
-
-          // ✅ CANÓNICO PARA UI CxC
           fecha_vencimiento: fecha_vencimiento || null,
           fechaVencimiento: fecha_vencimiento || null,
         };
@@ -315,12 +304,10 @@ const CuentasPorCobrar = () => {
 
   // ===============================
   // ✅ CLIENTES (para contacto en CxC)
-  // - Si la cuenta NO trae cliente_telefono/email/rfc, lo resolvemos por clienteId/clientId
   // ===============================
   const { data: clientesCatalogo } = useQuery({
     queryKey: ["clientes-catalogo"],
     queryFn: async () => {
-      // helper tolerante a 404
       const tryFetchArray = async (url: string) => {
         try {
           const json = await apiFetch(url, { method: "GET" });
@@ -331,7 +318,6 @@ const CuentasPorCobrar = () => {
         }
       };
 
-      // intenta endpoints comunes
       const a = await tryFetchArray("/api/clientes");
       if (a.length) return a;
 
@@ -345,7 +331,6 @@ const CuentasPorCobrar = () => {
     },
   });
 
-  // helper: agarra cualquier variante de clienteId
   const getClienteIdAny = (row: any): string => {
     const raw =
       row?.clienteId ??
@@ -359,7 +344,6 @@ const CuentasPorCobrar = () => {
     return raw ? String(raw) : "";
   };
 
-  // index de clientes por id (Mongo: _id o id)
   const clientesById = useMemo(() => {
     const map = new Map<string, any>();
     (clientesCatalogo || []).forEach((c: any) => {
@@ -369,7 +353,6 @@ const CuentasPorCobrar = () => {
     return map;
   }, [clientesCatalogo]);
 
-  // resolver contacto FINAL (prioridad: payload de la cuenta -> catálogo por clienteId)
   const resolveContacto = (cuenta: any) => {
     const tel =
       cuenta?.cliente_telefono ??
@@ -392,7 +375,6 @@ const CuentasPorCobrar = () => {
       cuenta?.rfcCliente ??
       null;
 
-    // si ya viene en la cuenta, úsalo
     if (tel || email || rfc) {
       return {
         telefono: tel ? String(tel) : undefined,
@@ -401,14 +383,12 @@ const CuentasPorCobrar = () => {
       };
     }
 
-    // si no, búscalo por clienteId
     const clienteId = getClienteIdAny(cuenta);
     if (!clienteId) return { telefono: undefined, email: undefined, rfc: undefined };
 
     const cli = clientesById.get(clienteId);
     if (!cli) return { telefono: undefined, email: undefined, rfc: undefined };
 
-    // tu colección clients trae: name, email, phone (y a veces rfc/taxId)
     const phone = cli?.phone ?? cli?.telefono ?? cli?.telefonoCliente ?? null;
     const mail = cli?.email ?? cli?.correo ?? null;
     const tax =
@@ -506,14 +486,32 @@ const CuentasPorCobrar = () => {
       metodo: string;
       tipoRegistro: "ingreso" | "venta_activo";
     }) => {
+      const payload = {
+        // ✅ canónico
+        cuentaId,
+
+        // ✅ aliases para compat total backend
+        ingresoId: cuentaId,
+        ingreso_id: cuentaId,
+        referencia_id: cuentaId,
+        referenciaId: cuentaId,
+        transaccionId: cuentaId,
+        transaccion_id: cuentaId,
+
+        monto,
+
+        // ✅ método (ambos naming)
+        metodo_pago: metodo,
+        metodoPago: metodo,
+
+        // ✅ tipo (ambos naming)
+        tipoRegistro,
+        referencia_tipo: tipoRegistro,
+      };
+
       const json = await apiFetch("/api/cuentas-por-cobrar/registrar-pago", {
         method: "POST",
-        body: JSON.stringify({
-          cuentaId,
-          monto,
-          metodo_pago: metodo,
-          tipoRegistro,
-        }),
+        body: JSON.stringify(payload),
       });
 
       return unwrap<any>(json);
@@ -527,7 +525,12 @@ const CuentasPorCobrar = () => {
       resetPagoForm();
     },
     onError: (error: any) => {
-      toast.error("Error al registrar el pago: " + (error?.message || "Error desconocido"));
+      const msg =
+        error?.message ||
+        error?.response?.data?.message ||
+        error?.data?.message ||
+        "Error desconocido";
+      toast.error("Error al registrar el pago: " + msg);
     },
   });
 
@@ -590,12 +593,10 @@ const CuentasPorCobrar = () => {
 
   // ===============================
   // ✅ FILTROS (SOLO afectan listado, NO highlights)
-  // (sin filtro de Cliente)
   // ===============================
   const filteredCuentas = useMemo(() => {
     let cuentas = baseCuentas;
 
-    // búsqueda
     const s = (searchTerm || "").toLowerCase().trim();
     if (s) {
       cuentas = cuentas.filter((c: any) => {
@@ -609,7 +610,6 @@ const CuentasPorCobrar = () => {
       });
     }
 
-    // estado
     if (filtroEstado !== "todos") {
       const hoy = new Date();
       cuentas = cuentas.filter((c: any) => {
@@ -624,7 +624,6 @@ const CuentasPorCobrar = () => {
       });
     }
 
-    // orden
     if (ordenMonto === "menorMayor") {
       cuentas = [...cuentas].sort((a: any, b: any) => (Number(a?.monto_pendiente) || 0) - (Number(b?.monto_pendiente) || 0));
     } else if (ordenMonto === "mayorMenor") {
@@ -634,7 +633,6 @@ const CuentasPorCobrar = () => {
     return cuentas;
   }, [baseCuentas, searchTerm, filtroEstado, ordenMonto]);
 
-  // bucket aplicado al listado
   const filteredCuentasBucket = useMemo(() => {
     if (!bucket) return filteredCuentas;
     return filteredCuentas.filter((c: any) => bucketKeyOf(c) === bucket);
@@ -670,7 +668,8 @@ const CuentasPorCobrar = () => {
       return;
     }
 
-    const tipoRegistro = selectedCuenta.tipo_ingreso === 'venta_activo' ? 'venta_activo' : 'ingreso';
+    const tipoRegistro: "ingreso" | "venta_activo" =
+      selectedCuenta?.tipo_ingreso === "venta_activo" ? "venta_activo" : "ingreso";
 
     registrarPagoMutation.mutate({
       cuentaId: selectedCuenta.id,
@@ -722,7 +721,6 @@ const CuentasPorCobrar = () => {
 
       const grupo = grupos.get(clienteKey)!;
 
-      // ✅ merge contacto (por si esta factura sí trae datos y la primera no)
       const rc = resolveContacto(cuenta);
       grupo.contacto = {
         telefono: grupo.contacto.telefono ?? rc.telefono,
