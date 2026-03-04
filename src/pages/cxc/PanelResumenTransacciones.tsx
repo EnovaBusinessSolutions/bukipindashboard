@@ -70,9 +70,11 @@ export default function PanelResumenTransacciones({
 
   const total = todasTransacciones?.length || 0;
 
-  const pagadas = (todasTransacciones || []).filter((t: any) => t.monto_pendiente === 0).length || 0;
-  const parciales = (todasTransacciones || []).filter((t: any) => t.monto_pendiente > 0 && t.monto_pagado > 0).length || 0;
-  const sinPagar = (todasTransacciones || []).filter((t: any) => t.monto_pagado === 0 && t.monto_pendiente > 0).length || 0;
+  const pagadas = (todasTransacciones || []).filter((t: any) => (t.monto_pendiente ?? 0) === 0).length || 0;
+  const parciales =
+    (todasTransacciones || []).filter((t: any) => (t.monto_pendiente ?? 0) > 0 && (t.monto_pagado ?? 0) > 0).length || 0;
+  const sinPagar =
+    (todasTransacciones || []).filter((t: any) => (t.monto_pagado ?? 0) === 0 && (t.monto_pendiente ?? 0) > 0).length || 0;
 
   let transaccionesFiltradas = todasTransacciones || [];
 
@@ -104,9 +106,11 @@ export default function PanelResumenTransacciones({
 
   if (filtroEstadoTransaccion !== "todos") {
     transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => {
-      if (filtroEstadoTransaccion === "completado") return t.monto_pendiente === 0;
-      if (filtroEstadoTransaccion === "enProgreso") return t.monto_pendiente > 0 && t.monto_pagado > 0;
-      if (filtroEstadoTransaccion === "sinPagar") return t.monto_pagado === 0 && t.monto_pendiente > 0;
+      const pend = t.monto_pendiente ?? 0;
+      const pag = t.monto_pagado ?? 0;
+      if (filtroEstadoTransaccion === "completado") return pend === 0;
+      if (filtroEstadoTransaccion === "enProgreso") return pend > 0 && pag > 0;
+      if (filtroEstadoTransaccion === "sinPagar") return pag === 0 && pend > 0;
       return true;
     });
   }
@@ -115,16 +119,17 @@ export default function PanelResumenTransacciones({
     transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => t.metodo_pago === filtroMetodoPago);
   }
 
+  // ✅ Ajuste: ordenar por Monto Total (lo que se muestra en la tabla)
   if (ordenMontoTransaccion === "menorMayor") {
-    transaccionesFiltradas = [...transaccionesFiltradas].sort((a: any, b: any) => (a.monto_neto || 0) - (b.monto_neto || 0));
+    transaccionesFiltradas = [...transaccionesFiltradas].sort((a: any, b: any) => (a.monto_total || 0) - (b.monto_total || 0));
   } else if (ordenMontoTransaccion === "mayorMenor") {
-    transaccionesFiltradas = [...transaccionesFiltradas].sort((a: any, b: any) => (b.monto_neto || 0) - (a.monto_neto || 0));
+    transaccionesFiltradas = [...transaccionesFiltradas].sort((a: any, b: any) => (b.monto_total || 0) - (a.monto_total || 0));
   }
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="border-muted/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Transacciones</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -134,7 +139,7 @@ export default function PanelResumenTransacciones({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-muted/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completamente Pagadas</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-success" />
@@ -144,7 +149,7 @@ export default function PanelResumenTransacciones({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-muted/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pagos Parciales</CardTitle>
             <Clock className="h-4 w-4 text-warning" />
@@ -154,7 +159,7 @@ export default function PanelResumenTransacciones({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-muted/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Sin Pagar</CardTitle>
             <AlertCircle className="h-4 w-4 text-destructive" />
@@ -165,7 +170,7 @@ export default function PanelResumenTransacciones({
         </Card>
       </div>
 
-      <Card>
+      <Card className="border-muted/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
@@ -178,9 +183,11 @@ export default function PanelResumenTransacciones({
 
         <CardContent className="space-y-6">
           {/* filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-muted/40 rounded-xl border border-muted/60">
             <div>
-              <Label htmlFor="filtro-mes-transaccion" className="mb-2 block">Mes</Label>
+              <Label htmlFor="filtro-mes-transaccion" className="mb-2 block">
+                Mes
+              </Label>
               <Select value={filtroMesTransaccion} onValueChange={setFiltroMesTransaccion}>
                 <SelectTrigger id="filtro-mes-transaccion" className="bg-background">
                   <SelectValue placeholder="Todos los meses" />
@@ -204,16 +211,22 @@ export default function PanelResumenTransacciones({
             </div>
 
             <div>
-              <Label htmlFor="filtro-ano-transaccion" className="mb-2 block">Año</Label>
+              <Label htmlFor="filtro-ano-transaccion" className="mb-2 block">
+                Año
+              </Label>
               <Select value={filtroAnoTransaccion} onValueChange={setFiltroAnoTransaccion}>
                 <SelectTrigger id="filtro-ano-transaccion" className="bg-background">
                   <SelectValue placeholder="Todos los años" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="todos">Todos los años</SelectItem>
-                  {Array.from(new Set((todasTransacciones || [])
-                    .map((t: any) => safeDate(t.created_at)?.getFullYear())
-                    .filter((y: any) => typeof y === "number")))
+                  {Array.from(
+                    new Set(
+                      (todasTransacciones || [])
+                        .map((t: any) => safeDate(t.created_at)?.getFullYear())
+                        .filter((y: any) => typeof y === "number"),
+                    ),
+                  )
                     .sort((a: any, b: any) => b - a)
                     .map((year: any) => (
                       <SelectItem key={year} value={year.toString()}>
@@ -225,16 +238,16 @@ export default function PanelResumenTransacciones({
             </div>
 
             <div>
-              <Label htmlFor="filtro-cliente-transaccion" className="mb-2 block">Cliente</Label>
+              <Label htmlFor="filtro-cliente-transaccion" className="mb-2 block">
+                Cliente
+              </Label>
               <Select value={filtroClienteTransaccion} onValueChange={setFiltroClienteTransaccion}>
                 <SelectTrigger id="filtro-cliente-transaccion" className="bg-background">
                   <SelectValue placeholder="Todos los clientes" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="todos">Todos los clientes</SelectItem>
-                  {Array.from(new Set((todasTransacciones || [])
-                    .map((t: any) => t.cliente_nombre)
-                    .filter(Boolean)))
+                  {Array.from(new Set((todasTransacciones || []).map((t: any) => t.cliente_nombre).filter(Boolean)))
                     .sort()
                     .map((cliente: any) => (
                       <SelectItem key={cliente} value={cliente!}>
@@ -246,7 +259,9 @@ export default function PanelResumenTransacciones({
             </div>
 
             <div>
-              <Label htmlFor="filtro-tipo-ingreso" className="mb-2 block">Tipo de Ingreso</Label>
+              <Label htmlFor="filtro-tipo-ingreso" className="mb-2 block">
+                Tipo de Ingreso
+              </Label>
               <Select value={filtroTipoIngreso} onValueChange={setFiltroTipoIngreso}>
                 <SelectTrigger id="filtro-tipo-ingreso" className="bg-background">
                   <SelectValue placeholder="Todos los tipos" />
@@ -254,6 +269,7 @@ export default function PanelResumenTransacciones({
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="todos">Todos los tipos</SelectItem>
                   {Array.from(new Set((todasTransacciones || []).map((t: any) => t.tipo_ingreso)))
+                    .filter(Boolean)
                     .sort()
                     .map((tipo: any) => (
                       <SelectItem key={tipo} value={tipo}>
@@ -265,7 +281,9 @@ export default function PanelResumenTransacciones({
             </div>
 
             <div>
-              <Label htmlFor="filtro-estado-transaccion" className="mb-2 block">Estado</Label>
+              <Label htmlFor="filtro-estado-transaccion" className="mb-2 block">
+                Estado
+              </Label>
               <Select value={filtroEstadoTransaccion} onValueChange={setFiltroEstadoTransaccion}>
                 <SelectTrigger id="filtro-estado-transaccion" className="bg-background">
                   <SelectValue placeholder="Todos los estados" />
@@ -280,16 +298,16 @@ export default function PanelResumenTransacciones({
             </div>
 
             <div>
-              <Label htmlFor="filtro-metodo-pago" className="mb-2 block">Método de Pago</Label>
+              <Label htmlFor="filtro-metodo-pago" className="mb-2 block">
+                Método de Pago
+              </Label>
               <Select value={filtroMetodoPago} onValueChange={setFiltroMetodoPago}>
                 <SelectTrigger id="filtro-metodo-pago" className="bg-background">
                   <SelectValue placeholder="Todos los métodos" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="todos">Todos los métodos</SelectItem>
-                  {Array.from(new Set((todasTransacciones || [])
-                    .map((t: any) => t.metodo_pago)
-                    .filter(Boolean)))
+                  {Array.from(new Set((todasTransacciones || []).map((t: any) => t.metodo_pago).filter(Boolean)))
                     .sort()
                     .map((metodo: any) => (
                       <SelectItem key={metodo} value={metodo!}>
@@ -301,7 +319,9 @@ export default function PanelResumenTransacciones({
             </div>
 
             <div>
-              <Label htmlFor="orden-monto-transaccion" className="mb-2 block">Ordenar por Monto</Label>
+              <Label htmlFor="orden-monto-transaccion" className="mb-2 block">
+                Ordenar por Monto
+              </Label>
               <Select value={ordenMontoTransaccion} onValueChange={setOrdenMontoTransaccion}>
                 <SelectTrigger id="orden-monto-transaccion" className="bg-background">
                   <SelectValue placeholder="Sin ordenar" />
@@ -323,7 +343,7 @@ export default function PanelResumenTransacciones({
 
           {/* tabla */}
           {!transaccionesFiltradas || transaccionesFiltradas.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-10 border border-dashed rounded-xl">
               <p className="text-muted-foreground">
                 {todasTransacciones && todasTransacciones.length > 0
                   ? "No se encontraron transacciones con los filtros seleccionados."
@@ -331,105 +351,57 @@ export default function PanelResumenTransacciones({
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-xl border border-muted/60">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha Creación</TableHead>
-                    <TableHead>Cliente</TableHead>
+                  <TableRow className="bg-muted/40">
+                    <TableHead className="whitespace-nowrap">Fecha Creación</TableHead>
+                    <TableHead className="whitespace-nowrap">Cliente</TableHead>
                     <TableHead>Descripción</TableHead>
-                    <TableHead>Tipo Ingreso</TableHead>
-                    <TableHead className="text-right">Monto Total</TableHead>
-                    <TableHead className="text-right">Descuento</TableHead>
-                    <TableHead className="text-right">Monto Neto</TableHead>
-                    <TableHead className="text-right">Pagado</TableHead>
-                    <TableHead className="text-right">Pendiente</TableHead>
-                    <TableHead>Tipo Pago</TableHead>
-                    <TableHead>Método Pago</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Progreso</TableHead>
-                    <TableHead className="text-center">Detalle Contable</TableHead>
+                    <TableHead className="whitespace-nowrap">Tipo Ingreso</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Monto Total</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Pagado</TableHead>
+                    <TableHead className="whitespace-nowrap">Método Pago</TableHead>
+                    <TableHead className="text-center whitespace-nowrap">Detalle Contable</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {transaccionesFiltradas.map((transaccion: any) => {
-                    const porcentajePagado = transaccion.monto_neto > 0
-                      ? (transaccion.monto_pagado / transaccion.monto_neto) * 100
-                      : 0;
-
                     return (
-                      <TableRow key={transaccion.id}>
-                        <TableCell className="font-medium">
+                      <TableRow key={transaccion.id} className="hover:bg-muted/30">
+                        <TableCell className="font-medium whitespace-nowrap">
                           {safeFormatDate(transaccion.created_at, "dd MMM yyyy HH:mm", { locale: es })}
                         </TableCell>
-                        <TableCell>{transaccion.cliente_nombre || "Sin especificar"}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{transaccion.descripcion}</TableCell>
+
+                        <TableCell className="whitespace-nowrap">
+                          {transaccion.cliente_nombre || "Sin especificar"}
+                        </TableCell>
+
+                        <TableCell className="max-w-[340px] truncate">
+                          {transaccion.descripcion}
+                        </TableCell>
+
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">{transaccion.tipo_ingreso}</Badge>
+                          <Badge variant="outline" className="capitalize">
+                            {transaccion.tipo_ingreso}
+                          </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(transaccion.monto_total)}</TableCell>
-                        <TableCell className="text-right">
-                          {transaccion.monto_descuento > 0 ? (
-                            <span className="text-destructive">-{formatCurrency(transaccion.monto_descuento)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
+
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {formatCurrency(transaccion.monto_total || 0)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatCurrency(transaccion.monto_neto)}</TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-success font-semibold">{formatCurrency(transaccion.monto_pagado)}</span>
+
+                        <TableCell className="text-right tabular-nums">
+                          <span className="text-success font-semibold">
+                            {formatCurrency(transaccion.monto_pagado || 0)}
+                          </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          {transaccion.monto_pendiente > 0 ? (
-                            <span className="text-destructive font-semibold">{formatCurrency(transaccion.monto_pendiente)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">$0</span>
-                          )}
+
+                        <TableCell className="capitalize whitespace-nowrap">
+                          {transaccion.metodo_pago || "-"}
                         </TableCell>
-                        <TableCell>
-                          {transaccion.tipo_pago === 'contado' ? (
-                            <Badge variant="secondary">Contado</Badge>
-                          ) : transaccion.tipo_pago === 'credito' ? (
-                            <Badge variant="outline">Crédito</Badge>
-                          ) : (
-                            <Badge className="bg-amber-500">Parcial</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="capitalize">{transaccion.metodo_pago || "-"}</TableCell>
-                        <TableCell>
-                          {transaccion.monto_pendiente === 0 ? (
-                            <Badge className="bg-success">Completado</Badge>
-                          ) : transaccion.monto_pagado > 0 ? (
-                            <Badge className="bg-warning">En Progreso</Badge>
-                          ) : (
-                            <Badge variant="destructive">Sin Pagar</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="min-w-[150px]">
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span>{porcentajePagado.toFixed(0)}%</span>
-                              <span className="text-muted-foreground">
-                                {transaccion.monto_pagado > 0 && transaccion.monto_pendiente > 0
-                                  ? 'Parcial'
-                                  : transaccion.monto_pendiente === 0
-                                    ? 'Completo'
-                                    : 'Sin pago'}
-                              </span>
-                            </div>
-                            <div className="w-full bg-muted rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full transition-all ${porcentajePagado === 100
-                                  ? 'bg-success'
-                                  : porcentajePagado > 0
-                                    ? 'bg-warning'
-                                    : 'bg-destructive'
-                                  }`}
-                                style={{ width: `${porcentajePagado}%` }}
-                              />
-                            </div>
-                          </div>
-                        </TableCell>
+
                         <TableCell className="text-center">
                           <Button
                             variant="outline"
