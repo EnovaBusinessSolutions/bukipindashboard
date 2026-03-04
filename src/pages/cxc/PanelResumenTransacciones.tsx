@@ -68,6 +68,10 @@ export default function PanelResumenTransacciones({
     );
   }
 
+  // ✅ helper local: obtener fecha real de registro (mismo criterio que Registro de Ingresos)
+  const getFechaRegistroAny = (t: any) =>
+    t?.fecha ?? t?.fecha_fixed ?? t?.createdAt ?? t?.created_at ?? t?.created ?? t?.fecha_ymd ?? null;
+
   const total = todasTransacciones?.length || 0;
 
   const pagadas = (todasTransacciones || []).filter((t: any) => (t.monto_pendiente ?? 0) === 0).length || 0;
@@ -80,7 +84,7 @@ export default function PanelResumenTransacciones({
 
   if (filtroMesTransaccion !== "todos") {
     transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => {
-      const d = safeDate(t.created_at);
+      const d = safeDate(getFechaRegistroAny(t));
       if (!d) return false;
       const mes = d.getMonth() + 1;
       return mes === parseInt(filtroMesTransaccion);
@@ -89,7 +93,7 @@ export default function PanelResumenTransacciones({
 
   if (filtroAnoTransaccion !== "todos") {
     transaccionesFiltradas = transaccionesFiltradas.filter((t: any) => {
-      const d = safeDate(t.created_at);
+      const d = safeDate(getFechaRegistroAny(t));
       if (!d) return false;
       const ano = d.getFullYear();
       return ano === parseInt(filtroAnoTransaccion);
@@ -223,7 +227,7 @@ export default function PanelResumenTransacciones({
                   {Array.from(
                     new Set(
                       (todasTransacciones || [])
-                        .map((t: any) => safeDate(t.created_at)?.getFullYear())
+                        .map((t: any) => safeDate(getFechaRegistroAny(t))?.getFullYear())
                         .filter((y: any) => typeof y === "number"),
                     ),
                   )
@@ -355,7 +359,7 @@ export default function PanelResumenTransacciones({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40">
-                    <TableHead className="whitespace-nowrap">Fecha Creación</TableHead>
+                    <TableHead className="whitespace-nowrap">Fecha Registro</TableHead>
                     <TableHead className="whitespace-nowrap">Cliente</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead className="whitespace-nowrap">Tipo Ingreso</TableHead>
@@ -368,19 +372,19 @@ export default function PanelResumenTransacciones({
 
                 <TableBody>
                   {transaccionesFiltradas.map((transaccion: any) => {
+                    const fechaRegistro = getFechaRegistroAny(transaccion);
+
                     return (
                       <TableRow key={transaccion.id} className="hover:bg-muted/30">
                         <TableCell className="font-medium whitespace-nowrap">
-                          {safeFormatDate(transaccion.created_at, "dd MMM yyyy HH:mm", { locale: es })}
+                          {safeFormatDate(fechaRegistro, "dd MMM yyyy HH:mm", { locale: es })}
                         </TableCell>
 
                         <TableCell className="whitespace-nowrap">
                           {transaccion.cliente_nombre || "Sin especificar"}
                         </TableCell>
 
-                        <TableCell className="max-w-[340px] truncate">
-                          {transaccion.descripcion}
-                        </TableCell>
+                        <TableCell className="max-w-[340px] truncate">{transaccion.descripcion}</TableCell>
 
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
@@ -398,16 +402,10 @@ export default function PanelResumenTransacciones({
                           </span>
                         </TableCell>
 
-                        <TableCell className="capitalize whitespace-nowrap">
-                          {transaccion.metodo_pago || "-"}
-                        </TableCell>
+                        <TableCell className="capitalize whitespace-nowrap">{transaccion.metodo_pago || "-"}</TableCell>
 
                         <TableCell className="text-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onOpenDetalleContable(transaccion.id)}
-                          >
+                          <Button variant="outline" size="sm" onClick={() => onOpenDetalleContable(transaccion.id)}>
                             <Eye className="h-4 w-4 mr-1" />
                             Ver Detalle
                           </Button>
