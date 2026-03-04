@@ -63,6 +63,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
   loadingAnalytics,
   analytics,
 
+  // ✅ se mantienen en Props por compat, pero ya no se usan en UI
   clientesUnicos,
   filtroClienteAnalitica,
   setFiltroClienteAnalitica,
@@ -79,6 +80,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
   formatoNumerosAnalitica,
   setFormatoNumerosAnalitica,
 
+  // ✅ se mantienen en Props por compat, pero ya no se usan en UI
   decimalesAnalitica,
   setDecimalesAnalitica,
 
@@ -110,27 +112,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
 
   return (
     <>
-      {/* Filtro de Cliente para Analíticas */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-4">
-            <Label className="text-sm font-medium whitespace-nowrap">Filtrar por Cliente:</Label>
-            <Select value={filtroClienteAnalitica} onValueChange={setFiltroClienteAnalitica}>
-              <SelectTrigger className="w-[300px]">
-                <SelectValue placeholder="Todos los clientes" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                <SelectItem value="todos">Todos los clientes</SelectItem>
-                {(clientesUnicos || []).map((cliente) => (
-                  <SelectItem key={cliente} value={cliente}>
-                    {cliente}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* ✅ ELIMINADO: Filtro de Cliente para Analíticas (no se usa) */}
 
       {/* KPIs Principales */}
       <div className="grid gap-4 md:grid-cols-5">
@@ -140,7 +122,9 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(Number(analytics.totalPendiente || 0))}</div>
+            <div className="text-2xl font-bold">
+              {formatCurrency(Number(analytics.totalPendiente || 0))}
+            </div>
           </CardContent>
         </Card>
 
@@ -186,6 +170,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
             <Settings className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
 
+          {/* ✅ SOLO Escala (Decimales eliminado) */}
           <CardContent className="space-y-2">
             <div className="space-y-1">
               <Label className="text-xs">Escala</Label>
@@ -200,23 +185,6 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                   <SelectItem value="normal">Normal</SelectItem>
                   <SelectItem value="miles">Miles (K)</SelectItem>
                   <SelectItem value="millones">Millones (M)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">Decimales</Label>
-              <Select
-                value={String(decimalesAnalitica)}
-                onValueChange={(v) => setDecimalesAnalitica(parseInt(v) as 0 | 1 | 2)}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="0">0</SelectItem>
-                  <SelectItem value="1">1</SelectItem>
-                  <SelectItem value="2">2</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -312,9 +280,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                     domain={dominioY}
                     stroke="hsl(var(--foreground))"
                     tick={{ fill: "hsl(var(--foreground))" }}
-                    tickFormatter={(value) =>
-                      `$${Number(value).toLocaleString("es-MX", { maximumFractionDigits: 0 })}`
-                    }
+                    tickFormatter={(value) => formatearConPreferenciasAnalitica(Number(value))}
                   />
                   <Tooltip
                     contentStyle={{
@@ -323,19 +289,10 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                       borderRadius: "8px",
                       color: "hsl(var(--foreground))",
                     }}
-                    formatter={(value: any) => [
-                      `$${Number(value).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
-                      "Saldo CxC",
-                    ]}
+                    formatter={(value: any) => [formatearConPreferenciasAnalitica(Number(value)), "Saldo CxC"]}
                     labelStyle={{ color: "hsl(var(--foreground))" }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="saldo"
-                    stroke={COLORS.primary}
-                    strokeWidth={3}
-                    dot={{ fill: COLORS.primary, r: 4 }}
-                  />
+                  <Line type="monotone" dataKey="saldo" stroke={COLORS.primary} strokeWidth={3} dot={{ fill: COLORS.primary, r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             );
@@ -386,7 +343,10 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                 ? base
                 : base
                     .filter((c: any) => Number((c as any)[filtroAntiguedad] || 0) > 0)
-                    .sort((a: any, b: any) => Number((b as any)[filtroAntiguedad] || 0) - Number((a as any)[filtroAntiguedad] || 0));
+                    .sort(
+                      (a: any, b: any) =>
+                        Number((b as any)[filtroAntiguedad] || 0) - Number((a as any)[filtroAntiguedad] || 0)
+                    );
 
             const maxMontoCliente =
               filtroAntiguedad === "todos"
@@ -415,13 +375,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                     tick={{ fill: "hsl(var(--foreground))" }}
                     tickFormatter={(value) => formatearConPreferenciasAnalitica(Number(value))}
                   />
-                  <YAxis
-                    type="category"
-                    dataKey="cliente"
-                    stroke="hsl(var(--foreground))"
-                    tick={{ fill: "hsl(var(--foreground))" }}
-                    width={90}
-                  />
+                  <YAxis type="category" dataKey="cliente" stroke="hsl(var(--foreground))" tick={{ fill: "hsl(var(--foreground))" }} width={90} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--background))",
@@ -453,11 +407,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                       </Bar>
                     </>
                   ) : (
-                    <Bar
-                      dataKey={filtroAntiguedad}
-                      fill={barConfig[filtroAntiguedad]?.fill || COLORS.primary}
-                      name={barConfig[filtroAntiguedad]?.name || filtroAntiguedad}
-                    >
+                    <Bar dataKey={filtroAntiguedad} fill={barConfig[filtroAntiguedad]?.fill || COLORS.primary} name={barConfig[filtroAntiguedad]?.name || filtroAntiguedad}>
                       <LabelList
                         position="right"
                         content={(props) => (
@@ -528,7 +478,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                 <YAxis
                   stroke="hsl(var(--foreground))"
                   tick={{ fill: "hsl(var(--foreground))" }}
-                  tickFormatter={(value) => `$${(Number(value) / 1000).toFixed(0)}k`}
+                  tickFormatter={(value) => formatearConPreferenciasAnalitica(Number(value))}
                 />
                 <Tooltip
                   contentStyle={{
@@ -536,7 +486,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "8px",
                   }}
-                  formatter={(value: any) => [formatCurrency(Number(value)), "Monto"]}
+                  formatter={(value: any) => [formatearConPreferenciasAnalitica(Number(value)), "Monto"]}
                   labelFormatter={(label) => `${label}`}
                 />
                 <Bar dataKey="monto" fill={COLORS.primary} radius={[8, 8, 0, 0]} />
@@ -546,9 +496,7 @@ const PanelAnaliticasCxC: React.FC<Props> = ({
             <div className="flex items-center justify-center h-[350px]">
               <div className="text-center space-y-2">
                 <User className="h-12 w-12 mx-auto text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  Selecciona un cliente para ver el desglose de sus vencimientos
-                </p>
+                <p className="text-muted-foreground">Selecciona un cliente para ver el desglose de sus vencimientos</p>
               </div>
             </div>
           )}
