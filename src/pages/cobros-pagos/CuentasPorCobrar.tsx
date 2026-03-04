@@ -12,45 +12,8 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Search,
-  Calendar,
-  DollarSign,
-  User,
-  AlertCircle,
-  BarChart3,
-  TrendingUp,
-  Users,
-  Clock,
-  Target,
-  CheckCircle2,
-  FileText,
-  Eye,
-  ChevronDown,
-  ChevronRight,
-  History,
-  Settings
-} from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  LabelList
-} from "recharts";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { BarChart3, TrendingUp, User, CheckCircle2, FileText, Eye, History } from "lucide-react";
 import { useAnalyticsCuentasPorCobrar } from "@/hooks/useAnalyticsCuentasPorCobrar";
 import { formatCurrency } from "@/lib/utils";
 
@@ -64,7 +27,7 @@ const COLORS = {
   accent: "hsl(var(--chart-3))",
   destructive: "hsl(var(--destructive))",
   warning: "hsl(var(--warning))",
-  success: "hsl(var(--success))"
+  success: "hsl(var(--success))",
 };
 
 type ApiEnvelope<T> = { ok?: boolean; data?: T; message?: string; error?: any } | T;
@@ -131,14 +94,13 @@ function resolveFechaVencimiento(row: any): string {
 
 // Componente personalizado para mostrar el total a la derecha de las barras apiladas
 const CustomTotalLabel = (props: any) => {
-  const { x, y, width, height, index, filtroAntiguedad, dataFiltradaCliente, formatearConPreferenciasAnalitica } = props;
+  const { x, y, width, height, index, filtroAntiguedad, dataFiltradaCliente, formatearConPreferenciasAnalitica } =
+    props;
 
   if (!dataFiltradaCliente || !dataFiltradaCliente[index]) return null;
 
   const cliente = dataFiltradaCliente[index];
-  const total = filtroAntiguedad === "todos"
-    ? cliente.total
-    : cliente[filtroAntiguedad] || 0;
+  const total = filtroAntiguedad === "todos" ? cliente.total : cliente[filtroAntiguedad] || 0;
 
   const labelX = x + width + 8;
   const labelY = y + height / 2;
@@ -161,10 +123,10 @@ const CustomTotalLabel = (props: any) => {
 const CuentasPorCobrar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("lista");
-  // ✅ NUEVO: “sub-vista” estilo CxP (menú vs detalle)
+  // ✅ “sub-vista” estilo CxP (menú vs detalle)
   const [bucket, setBucket] = useState<null | "1003" | "1009">(null);
 
-  // ✅ NUEVO: clasificador (sin backend) para separar 1003 vs 1009
+  // ✅ clasificador (sin backend) para separar 1003 vs 1009 (para el panel de lista)
   const isDeudores1009 = (tx: any) => {
     const tipo = String(tx?.tipo_ingreso ?? tx?.tipoIngreso ?? "").trim().toLowerCase();
     const cuenta = String(
@@ -179,6 +141,7 @@ const CuentasPorCobrar = () => {
     return tipo === "otros" || cuenta === "4102";
   };
   const bucketKeyOf = (tx: any): "1003" | "1009" => (isDeudores1009(tx) ? "1009" : "1003");
+
   const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
   const [selectedCuenta, setSelectedCuenta] = useState<any>(null);
   const [montoPago, setMontoPago] = useState("");
@@ -187,7 +150,6 @@ const CuentasPorCobrar = () => {
   const [periodoCxC, setPeriodoCxC] = useState<"mensual" | "anual">("mensual");
   const [filtroClienteAnalitica, setFiltroClienteAnalitica] = useState<string>("todos");
   const [selectedCliente, setSelectedCliente] = useState<string>("");
-  const [filtroCliente, setFiltroCliente] = useState<string>("todos");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
   const [ordenMonto, setOrdenMonto] = useState<string>("ninguno");
 
@@ -210,35 +172,36 @@ const CuentasPorCobrar = () => {
   const [selectedFacturaId, setSelectedFacturaId] = useState<string | null>(null);
 
   // Estados para formato de números en analíticas
-  const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<'normal' | 'miles' | 'millones'>('normal');
+  const [formatoNumerosAnalitica, setFormatoNumerosAnalitica] = useState<"normal" | "miles" | "millones">("normal");
   const [decimalesAnalitica, setDecimalesAnalitica] = useState<0 | 1 | 2>(2);
 
   // Función para formatear números según preferencias del usuario
   const formatearConPreferenciasAnalitica = (valor: number) => {
     let valorFormateado = valor;
-    let sufijo = '';
+    let sufijo = "";
 
-    if (formatoNumerosAnalitica === 'miles') {
+    if (formatoNumerosAnalitica === "miles") {
       valorFormateado = valor / 1000;
-      sufijo = 'K';
-    } else if (formatoNumerosAnalitica === 'millones') {
+      sufijo = "K";
+    } else if (formatoNumerosAnalitica === "millones") {
       valorFormateado = valor / 1000000;
-      sufijo = 'M';
+      sufijo = "M";
     }
 
-    return `$${valorFormateado.toLocaleString('en-US', {
+    return `$${valorFormateado.toLocaleString("en-US", {
       minimumFractionDigits: decimalesAnalitica,
-      maximumFractionDigits: decimalesAnalitica
+      maximumFractionDigits: decimalesAnalitica,
     })}${sufijo}`;
   };
 
   const queryClient = useQueryClient();
 
   // ✅ TRANSACCIONES INGRESOS (historial completo)
+  // ✅ E2E: SOLO las que tengan asiento con 1003/1009 (CxC real) usando only_ar=1
   const { data: todasTransacciones, isLoading: loadingTransacciones } = useQuery({
-    queryKey: ["todas-transacciones-ingresos"],
+    queryKey: ["todas-transacciones-ingresos", "only_ar"],
     queryFn: async () => {
-      const json = await apiFetch("/api/transacciones/ingresos?include_all=true&order=created_at_desc", {
+      const json = await apiFetch("/api/transacciones/ingresos?include_all=true&order=created_at_desc&only_ar=1", {
         method: "GET",
       });
       return unwrap<any[]>(json) || [];
@@ -260,7 +223,7 @@ const CuentasPorCobrar = () => {
           const json = await apiFetch(url, { method: "GET" });
           const arr = unwrap<any[]>(json);
           return Array.isArray(arr) ? arr : [];
-        } catch (e: any) {
+        } catch {
           return [];
         }
       };
@@ -391,8 +354,7 @@ const CuentasPorCobrar = () => {
 
     const phone = cli?.phone ?? cli?.telefono ?? cli?.telefonoCliente ?? null;
     const mail = cli?.email ?? cli?.correo ?? null;
-    const tax =
-      cli?.rfc ?? cli?.taxId ?? cli?.tax_id ?? cli?.identificacionFiscal ?? null;
+    const tax = cli?.rfc ?? cli?.taxId ?? cli?.tax_id ?? cli?.identificacionFiscal ?? null;
 
     return {
       telefono: phone ? String(phone) : undefined,
@@ -403,11 +365,7 @@ const CuentasPorCobrar = () => {
 
   const clientesUnicos = useMemo(() => {
     return Array.from(
-      new Set(
-        (cuentasPorCobrar || [])
-          ?.map((c: any) => c.cliente_nombre || 'Sin nombre')
-          .filter(Boolean)
-      )
+      new Set((cuentasPorCobrar || [])?.map((c: any) => c.cliente_nombre || "Sin nombre").filter(Boolean))
     ).sort();
   }, [cuentasPorCobrar]);
 
@@ -415,10 +373,9 @@ const CuentasPorCobrar = () => {
     queryKey: ["asientos-contables-transaccion", selectedTransaccionId],
     queryFn: async () => {
       if (!selectedTransaccionId) return null;
-      const json = await apiFetch(
-        `/api/asientos/by-transaccion-ingreso/${encodeURIComponent(selectedTransaccionId)}`,
-        { method: "GET" }
-      );
+      const json = await apiFetch(`/api/asientos/by-transaccion-ingreso/${encodeURIComponent(selectedTransaccionId)}`, {
+        method: "GET",
+      });
       return unwrap<any>(json) ?? null;
     },
     enabled: !!selectedTransaccionId && detalleContableOpen,
@@ -441,37 +398,36 @@ const CuentasPorCobrar = () => {
       });
 
       // ✅ FIX E2E: si YA hay pagos reales, NO inyectamos "Pago inicial"
-if ((pagos || []).length > 0) return pagos || [];
+      if ((pagos || []).length > 0) return pagos || [];
 
-// ✅ Solo si NO hay pagos reales, hacemos fallback al pago inicial desde la transacción
-const trxJson = await apiFetch(
-  `/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`,
-  { method: "GET" }
-);
-const transaccion = unwrap<any>(trxJson);
+      // ✅ Solo si NO hay pagos reales, hacemos fallback al pago inicial desde la transacción
+      const trxJson = await apiFetch(`/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`, {
+        method: "GET",
+      });
+      const transaccion = unwrap<any>(trxJson);
 
-if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
-  const created = transaccion.created_at ?? transaccion.createdAt ?? null;
+      if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
+        const created = transaccion.created_at ?? transaccion.createdAt ?? null;
 
-  const pagoInicial = {
-    id: `inicial-${selectedFacturaId}`,
-    user_id: transaccion.user_id,
-    tipo_transaccion: "cobro",
-    referencia_id: selectedFacturaId,
-    referencia_tabla: "transacciones_ingresos",
-    monto: transaccion.monto_pagado,
-    metodo_pago: transaccion.metodo_pago,
-    fecha: safeDate(created)?.toISOString().split("T")[0] ?? new Date().toISOString().split("T")[0],
-    descripcion: `Pago inicial - ${transaccion.descripcion}`,
-    created_at: created,
-    updated_at: created,
-    _es_pago_inicial: true,
-  };
+        const pagoInicial = {
+          id: `inicial-${selectedFacturaId}`,
+          user_id: transaccion.user_id,
+          tipo_transaccion: "cobro",
+          referencia_id: selectedFacturaId,
+          referencia_tabla: "transacciones_ingresos",
+          monto: transaccion.monto_pagado,
+          metodo_pago: transaccion.metodo_pago,
+          fecha: safeDate(created)?.toISOString().split("T")[0] ?? new Date().toISOString().split("T")[0],
+          descripcion: `Pago inicial - ${transaccion.descripcion}`,
+          created_at: created,
+          updated_at: created,
+          _es_pago_inicial: true,
+        };
 
-  return [pagoInicial];
-}
+        return [pagoInicial];
+      }
 
-return [];
+      return [];
     },
     enabled: !!selectedFacturaId && historialPagosOpen,
   });
@@ -521,17 +477,13 @@ return [];
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-cobrar-detalle"] });
       queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-cobrar"] });
-      queryClient.invalidateQueries({ queryKey: ["todas-transacciones-ingresos"] });
+      queryClient.invalidateQueries({ queryKey: ["todas-transacciones-ingresos", "only_ar"] });
       toast.success("Pago registrado exitosamente");
       setPagoDialogOpen(false);
       resetPagoForm();
     },
     onError: (error: any) => {
-      const msg =
-        error?.message ||
-        error?.response?.data?.message ||
-        error?.data?.message ||
-        "Error desconocido";
+      const msg = error?.message || error?.response?.data?.message || error?.data?.message || "Error desconocido";
       toast.error("Error al registrar el pago: " + msg);
     },
   });
@@ -539,13 +491,19 @@ return [];
   // ===============================
   // ✅ BASE (NO filtros) → NO toca highlights
   // ===============================
-  const baseCuentas = useMemo(() => (Array.isArray(cuentasPorCobrar) ? cuentasPorCobrar : []), [cuentasPorCobrar]);
+  const baseCuentas = useMemo(
+    () => (Array.isArray(cuentasPorCobrar) ? cuentasPorCobrar : []),
+    [cuentasPorCobrar]
+  );
 
   // ===============================
   // ✅ HIGHLIGHTS (SIEMPRE desde baseCuentas)
   // ===============================
   const highlights = useMemo(() => {
-    const totalPorCobrarBase = baseCuentas.reduce((sum: number, c: any) => sum + (Number(c?.monto_pendiente) || 0), 0);
+    const totalPorCobrarBase = baseCuentas.reduce(
+      (sum: number, c: any) => sum + (Number(c?.monto_pendiente) || 0),
+      0
+    );
 
     const hoy = new Date();
     const vencidasBase = baseCuentas.filter((c: any) => {
@@ -627,9 +585,13 @@ return [];
     }
 
     if (ordenMonto === "menorMayor") {
-      cuentas = [...cuentas].sort((a: any, b: any) => (Number(a?.monto_pendiente) || 0) - (Number(b?.monto_pendiente) || 0));
+      cuentas = [...cuentas].sort(
+        (a: any, b: any) => (Number(a?.monto_pendiente) || 0) - (Number(b?.monto_pendiente) || 0)
+      );
     } else if (ordenMonto === "mayorMenor") {
-      cuentas = [...cuentas].sort((a: any, b: any) => (Number(b?.monto_pendiente) || 0) - (Number(a?.monto_pendiente) || 0));
+      cuentas = [...cuentas].sort(
+        (a: any, b: any) => (Number(b?.monto_pendiente) || 0) - (Number(a?.monto_pendiente) || 0)
+      );
     }
 
     return cuentas;
@@ -670,14 +632,13 @@ return [];
       return;
     }
 
-    const tipoRegistro: "ingreso" | "venta_activo" =
-      selectedCuenta?.tipo_ingreso === "venta_activo" ? "venta_activo" : "ingreso";
+    const tipoRegistro: "ingreso" | "venta_activo" = selectedCuenta?.tipo_ingreso === "venta_activo" ? "venta_activo" : "ingreso";
 
     registrarPagoMutation.mutate({
       cuentaId: selectedCuenta.id,
       monto,
       metodo: metodoPago,
-      tipoRegistro
+      tipoRegistro,
     });
   };
 
@@ -694,18 +655,17 @@ return [];
   };
 
   const cuentasAgrupadasPorCliente = (() => {
-    const grupos = new Map<string, {
-      cliente: string;
-      facturas: any[];
-      totalPendiente: number;
-      totalOriginal: number;
-      totalPagado: number;
-      contacto: {
-        telefono?: string;
-        email?: string;
-        rfc?: string;
-      };
-    }>();
+    const grupos = new Map<
+      string,
+      {
+        cliente: string;
+        facturas: any[];
+        totalPendiente: number;
+        totalOriginal: number;
+        totalPagado: number;
+        contacto: { telefono?: string; email?: string; rfc?: string };
+      }
+    >();
 
     filteredCuentasBucket.forEach((cuenta: any) => {
       const clienteKey = cuenta.cliente_nombre || "Sin cliente asignado";
@@ -768,9 +728,7 @@ return [];
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Cuentas por Cobrar</h1>
-            <p className="text-muted-foreground">
-              Gestiona y da seguimiento a las cuentas pendientes de cobro
-            </p>
+            <p className="text-muted-foreground">Gestiona y da seguimiento a las cuentas pendientes de cobro</p>
           </div>
         </div>
 
@@ -890,9 +848,7 @@ return [];
               <FileText className="h-5 w-5" />
               Detalle Contable - Asiento Generado
             </DialogTitle>
-            <DialogDescription>
-              Consulta las cuentas afectadas en la balanza de comprobación
-            </DialogDescription>
+            <DialogDescription>Consulta las cuentas afectadas en la balanza de comprobación</DialogDescription>
           </DialogHeader>
 
           {loadingAsientos ? (
@@ -902,9 +858,7 @@ return [];
           ) : !asientosContables ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No se encontró asiento contable para esta transacción.</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                El asiento puede no haberse generado automáticamente.
-              </p>
+              <p className="text-sm text-muted-foreground mt-2">El asiento puede no haberse generado automáticamente.</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -935,9 +889,7 @@ return [];
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Movimientos Contables (Debe y Haber)</CardTitle>
-                  <CardDescription>
-                    Cuentas afectadas en la balanza de comprobación
-                  </CardDescription>
+                  <CardDescription>Cuentas afectadas en la balanza de comprobación</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -982,18 +934,14 @@ return [];
                           </TableCell>
                           <TableCell className="text-right">
                             {detalle.debe > 0 ? (
-                              <span className="font-semibold text-primary">
-                                {formatCurrency(detalle.debe)}
-                              </span>
+                              <span className="font-semibold text-primary">{formatCurrency(detalle.debe)}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
                             {detalle.haber > 0 ? (
-                              <span className="font-semibold text-secondary">
-                                {formatCurrency(detalle.haber)}
-                              </span>
+                              <span className="font-semibold text-secondary">{formatCurrency(detalle.haber)}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
@@ -1007,34 +955,46 @@ return [];
                     <div className="flex justify-between items-center font-semibold">
                       <span>Total Debe:</span>
                       <span className="text-primary">
-                        {formatCurrency(asientosContables.detalle_asientos
-                          ?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0)}
+                        {formatCurrency(
+                          asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) ||
+                            0
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between items-center font-semibold">
                       <span>Total Haber:</span>
                       <span className="text-secondary">
-                        {formatCurrency(asientosContables.detalle_asientos
-                          ?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)}
+                        {formatCurrency(
+                          asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) ||
+                            0
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between items-center font-bold text-lg pt-2 border-t">
                       <span>Diferencia (Debe - Haber):</span>
-                      <span className={
-                        Math.abs(
-                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
-                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
-                        ) < 0.01 ? 'text-success' : 'text-destructive'
-                      }>
-                        {formatCurrency((
-                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
-                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
-                        ))}
+                      <span
+                        className={
+                          Math.abs(
+                            (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) ||
+                              0) -
+                              (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) ||
+                                0)
+                          ) < 0.01
+                            ? "text-success"
+                            : "text-destructive"
+                        }
+                      >
+                        {formatCurrency(
+                          (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) ||
+                            0) -
+                            (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) ||
+                              0)
+                        )}
                       </span>
                     </div>
                     {Math.abs(
                       (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0) || 0) -
-                      (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
+                        (asientosContables.detalle_asientos?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0) || 0)
                     ) < 0.01 && (
                       <div className="flex items-center gap-2 text-success text-sm mt-2">
                         <CheckCircle2 className="h-4 w-4" />
@@ -1057,7 +1017,8 @@ return [];
             <DialogDescription>
               {selectedCuenta && (
                 <>
-                  Cliente: {selectedCuenta.cliente_nombre}<br />
+                  Cliente: {selectedCuenta.cliente_nombre}
+                  <br />
                   Monto pendiente: ${(selectedCuenta.monto_pendiente || 0).toLocaleString()}
                 </>
               )}
@@ -1103,11 +1064,16 @@ return [];
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Monto a pagar:</span>
-                  <span className="font-medium text-primary">${parseFloat(montoPago || "0").toLocaleString()}</span>
+                  <span className="font-medium text-primary">
+                    ${parseFloat(montoPago || "0").toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm font-semibold pt-1 border-t">
                   <span>Quedará pendiente:</span>
-                  <span>${Math.max(0, (selectedCuenta.monto_pendiente || 0) - parseFloat(montoPago || "0")).toLocaleString()}</span>
+                  <span>
+                    $
+                    {Math.max(0, (selectedCuenta.monto_pendiente || 0) - parseFloat(montoPago || "0")).toLocaleString()}
+                  </span>
                 </div>
               </div>
             )}
@@ -1139,25 +1105,27 @@ return [];
           <DialogHeader>
             <DialogTitle>Historial de Pagos</DialogTitle>
             <DialogDescription>
-              {selectedFacturaId && (() => {
-                const factura = filteredCuentas.find((c: any) => c.id === selectedFacturaId);
-                return factura ? (
-                  <>
-                    Cliente: {factura.cliente_nombre || 'Sin especificar'}<br />
-                    Descripción: {factura.descripcion}<br />
-                    Monto Total: {formatCurrency(factura.monto_total)}<br />
-                    Monto Pendiente: {formatCurrency(factura.monto_pendiente || 0)}
-                  </>
-                ) : null;
-              })()}
+              {selectedFacturaId &&
+                (() => {
+                  const factura = filteredCuentas.find((c: any) => c.id === selectedFacturaId);
+                  return factura ? (
+                    <>
+                      Cliente: {factura.cliente_nombre || "Sin especificar"}
+                      <br />
+                      Descripción: {factura.descripcion}
+                      <br />
+                      Monto Total: {formatCurrency(factura.monto_total)}
+                      <br />
+                      Monto Pendiente: {formatCurrency(factura.monto_pendiente || 0)}
+                    </>
+                  ) : null;
+                })()}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-4">
             {loadingHistorial ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Cargando historial...
-              </div>
+              <div className="text-center py-8 text-muted-foreground">Cargando historial...</div>
             ) : !historialPagos || historialPagos.length === 0 ? (
               <div className="text-center py-8">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
@@ -1169,10 +1137,7 @@ return [];
               <div className="space-y-4">
                 <div className="grid gap-3">
                   {historialPagos.map((pago: any, index: number) => (
-                    <div
-                      key={pago.id}
-                      className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
-                    >
+                    <div key={pago.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="space-y-2 flex-1">
                           <div className="flex items-center gap-3">
@@ -1180,9 +1145,7 @@ return [];
                               {historialPagos.length - index}
                             </div>
                             <div>
-                              <div className="font-semibold text-lg">
-                                {formatCurrency(pago.monto)}
-                              </div>
+                              <div className="font-semibold text-lg">{formatCurrency(pago.monto)}</div>
                               <div className="text-sm text-muted-foreground">
                                 {safeFormatDate(pago.fecha, "dd 'de' MMMM 'de' yyyy", { locale: es })}
                               </div>
@@ -1193,7 +1156,7 @@ return [];
                             <div className="flex items-center gap-2 text-sm">
                               <span className="text-muted-foreground">Método:</span>
                               <Badge variant="outline">
-                                {pago.metodo_pago === 'efectivo' ? '💵 Efectivo' : '💳 Tarjeta/Banco'}
+                                {pago.metodo_pago === "efectivo" ? "💵 Efectivo" : "💳 Tarjeta/Banco"}
                               </Badge>
                               {pago._es_pago_inicial && (
                                 <Badge variant="secondary" className="ml-2">
@@ -1202,11 +1165,7 @@ return [];
                               )}
                             </div>
 
-                            {pago.descripcion && (
-                              <div className="text-sm text-muted-foreground">
-                                {pago.descripcion}
-                              </div>
-                            )}
+                            {pago.descripcion && <div className="text-sm text-muted-foreground">{pago.descripcion}</div>}
 
                             <div className="text-xs text-muted-foreground pt-1">
                               Registrado: {safeFormatDate(pago.created_at, "dd/MM/yyyy HH:mm", { locale: es })}
@@ -1227,7 +1186,9 @@ return [];
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Monto total pagado:</span>
                       <span className="text-lg font-bold text-success">
-                        {formatCurrency(historialPagos.reduce((sum: number, p: any) => sum + (Number(p.monto) || 0), 0))}
+                        {formatCurrency(
+                          historialPagos.reduce((sum: number, p: any) => sum + (Number(p.monto) || 0), 0)
+                        )}
                       </span>
                     </div>
                   </div>
@@ -1236,10 +1197,7 @@ return [];
             )}
 
             <div className="flex justify-end pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setHistorialPagosOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setHistorialPagosOpen(false)}>
                 Cerrar
               </Button>
             </div>
