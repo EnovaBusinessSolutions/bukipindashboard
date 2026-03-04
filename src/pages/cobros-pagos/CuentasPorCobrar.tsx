@@ -440,36 +440,38 @@ const CuentasPorCobrar = () => {
         return db - da;
       });
 
-      const tienePagoInicial = pagos?.some((p) => String(p?.descripcion || "").includes("Pago inicial"));
+      // ✅ FIX E2E: si YA hay pagos reales, NO inyectamos "Pago inicial"
+if ((pagos || []).length > 0) return pagos || [];
 
-      if (!tienePagoInicial) {
-        const trxJson = await apiFetch(`/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`, {
-          method: "GET",
-        });
-        const transaccion = unwrap<any>(trxJson);
+// ✅ Solo si NO hay pagos reales, hacemos fallback al pago inicial desde la transacción
+const trxJson = await apiFetch(
+  `/api/transacciones/ingresos/${encodeURIComponent(selectedFacturaId)}`,
+  { method: "GET" }
+);
+const transaccion = unwrap<any>(trxJson);
 
-        if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
-          const created = transaccion.created_at ?? transaccion.createdAt ?? null;
-          const pagoInicial = {
-            id: `inicial-${selectedFacturaId}`,
-            user_id: transaccion.user_id,
-            tipo_transaccion: "cobro",
-            referencia_id: selectedFacturaId,
-            referencia_tabla: "transacciones_ingresos",
-            monto: transaccion.monto_pagado,
-            metodo_pago: transaccion.metodo_pago,
-            fecha: safeDate(created)?.toISOString().split("T")[0] ?? new Date().toISOString().split("T")[0],
-            descripcion: `Pago inicial - ${transaccion.descripcion}`,
-            created_at: created,
-            updated_at: created,
-            _es_pago_inicial: true,
-          };
+if (transaccion && Number(transaccion.monto_pagado || 0) > 0) {
+  const created = transaccion.created_at ?? transaccion.createdAt ?? null;
 
-          return [pagoInicial, ...(pagos || [])];
-        }
-      }
+  const pagoInicial = {
+    id: `inicial-${selectedFacturaId}`,
+    user_id: transaccion.user_id,
+    tipo_transaccion: "cobro",
+    referencia_id: selectedFacturaId,
+    referencia_tabla: "transacciones_ingresos",
+    monto: transaccion.monto_pagado,
+    metodo_pago: transaccion.metodo_pago,
+    fecha: safeDate(created)?.toISOString().split("T")[0] ?? new Date().toISOString().split("T")[0],
+    descripcion: `Pago inicial - ${transaccion.descripcion}`,
+    created_at: created,
+    updated_at: created,
+    _es_pago_inicial: true,
+  };
 
-      return pagos || [];
+  return [pagoInicial];
+}
+
+return [];
     },
     enabled: !!selectedFacturaId && historialPagosOpen,
   });
