@@ -123,39 +123,48 @@ const RegistroProductos = () => {
   const [errorProductosBase, setErrorProductosBase] = useState<string | null>(null);
 
   const loadProductosBase = async () => {
-    try {
-      setLoadingProductosBase(true);
-      setErrorProductosBase(null);
+  try {
+    setLoadingProductosBase(true);
+    setErrorProductosBase(null);
 
-      // Inventario: cuenta 1005 (según tu sistema)
-      const json = await apiFetch("/api/productos?cuenta_codigo=1005&limit=2000", {
-        method: "GET",
-      });
+    // Intentos (algunos backends solo aceptan inventario=true)
+    const tries = [
+      "/api/productos?cuenta_codigo=1005&limit=2000",
+      "/api/productos?inventario=1&limit=2000",
+      "/api/productos?inventario=true&limit=2000",
+    ];
 
-      const data = normalize<any>(json);
-      const arr = Array.isArray(data) ? data : [];
+    let arr: any[] = [];
 
-      setProductosBase(
-        arr.map((p: any) => ({
-          id: String(p.id ?? p._id),
-          nombre: String(p.nombre ?? p.name ?? ""),
-          descripcion: p.descripcion ?? p.description ?? "",
-          precio: typeof p.precio === "number" ? p.precio : Number(p.precio || 0),
-          cuentaCodigo: p.cuentaCodigo ?? p.accountCode ?? null,
-          subcuentaId: p.subcuentaId ? String(p.subcuentaId) : null,
-          activo: typeof p.activo === "boolean" ? p.activo : true,
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
-        }))
-      );
-    } catch (e: any) {
-      console.error(e);
-      setErrorProductosBase(e?.message || "Error cargando productos");
-      setProductosBase([]);
-    } finally {
-      setLoadingProductosBase(false);
+    for (const url of tries) {
+      try {
+        const json = await apiFetch(url, { method: "GET" });
+        arr = asArray<any>(json);
+        if (arr.length) break;
+      } catch (_) {}
     }
-  };
+
+    setProductosBase(
+      arr.map((p: any) => ({
+        id: String(p.id ?? p._id ?? ""),
+        nombre: String(p.nombre ?? p.name ?? ""),
+        descripcion: p.descripcion ?? p.description ?? "",
+        precio: typeof p.precio === "number" ? p.precio : Number(p.precio || p.costoCompra || p.costo_compra || 0),
+        cuentaCodigo: p.cuentaCodigo ?? p.accountCode ?? p.cuenta_codigo ?? null,
+        subcuentaId: p.subcuentaId ? String(p.subcuentaId) : p.subcuenta_id ? String(p.subcuenta_id) : null,
+        activo: typeof p.activo === "boolean" ? p.activo : true,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      }))
+    );
+  } catch (e: any) {
+    console.error(e);
+    setErrorProductosBase(e?.message || "Error cargando productos");
+    setProductosBase([]);
+  } finally {
+    setLoadingProductosBase(false);
+  }
+};
 
   // Cargar catálogo base cuando entras a “Producto existente”
   useEffect(() => {
@@ -176,18 +185,20 @@ const RegistroProductos = () => {
 
   // ✅ Lista final para UI (base + enrich)
   const productosParaSeleccion = useMemo<ProductoInventarioUI[]>(() => {
-    const base = productosBase || [];
-    if (!base.length) return [];
+  const base = productosBase || [];
+  const invArr = (productosInventario || []) as any[];
 
+  // ✅ Caso A: SI hay base → base + enrich (tu lógica actual)
+  if (base.length > 0) {
     return base
       .filter((p) => p?.activo !== false)
       .map((p) => {
         const inv = inventarioById.get(String(p.id));
 
-        // Fallback por nombre si el hook trae cosas sin ids alineados (opcional)
+        // Fallback por nombre si ids no alinean
         const invByName =
-          !inv && productosInventario
-            ? (productosInventario as any[]).find((x) => String(x?.nombre || "").trim() === String(p.nombre || "").trim())
+          !inv && invArr.length
+            ? invArr.find((x) => String(x?.nombre || "").trim() === String(p.nombre || "").trim())
             : null;
 
         const src = inv || invByName || null;
@@ -196,11 +207,9 @@ const RegistroProductos = () => {
         const costo_unitario =
           typeof src?.costo_unitario === "number"
             ? src.costo_unitario
-            : typeof src?.precio === "number"
-              ? src.precio
-              : typeof p.precio === "number"
-                ? p.precio
-                : 0;
+            : typeof p.precio === "number"
+              ? p.precio
+              : 0;
 
         return {
           id: String(p.id),
@@ -208,21 +217,41 @@ const RegistroProductos = () => {
           descripcion: p.descripcion || "",
           cuentaCodigo: p.cuentaCodigo ?? null,
 
-          // UI
           imagen_url: src?.imagen_url ?? null,
           subcuenta_id: src?.subcuenta_id ?? (p.subcuentaId ? String(p.subcuentaId) : null),
           precio_venta: typeof src?.precio_venta === "number" ? src.precio_venta : 0,
 
-          // Inventario
           cantidad_stock,
           costo_unitario,
 
-          // compat
           subcuentaId: p.subcuentaId ?? null,
           precioVenta: typeof src?.precio_venta === "number" ? src.precio_venta : 0,
         };
       });
-  }, [productosBase, inventarioById, productosInventario]);
+  }
+
+  // ✅ Caso B: NO hay base pero SÍ hay inventario con movimientos → úsalo como LISTA
+  if (invArr.length > 0) {
+    return invArr.map((p) => ({
+      id: String(p?.id ?? p?._id ?? ""),
+      nombre: String(p?.nombre ?? p?.name ?? "Producto"),
+      descripcion: p?.descripcion ?? p?.description ?? "",
+      cuentaCodigo: p?.cuenta_codigo ?? p?.cuentaCodigo ?? "1005",
+
+      imagen_url: p?.imagen_url ?? null,
+      subcuenta_id: p?.subcuenta_id ?? p?.subcuentaId ?? null,
+      precio_venta: typeof p?.precio_venta === "number" ? p.precio_venta : 0,
+
+      cantidad_stock: Number(p?.cantidad_stock ?? p?.stock ?? 0) || 0,
+      costo_unitario: typeof p?.costo_unitario === "number" ? p.costo_unitario : 0,
+
+      subcuentaId: p?.subcuentaId ?? null,
+      precioVenta: typeof p?.precio_venta === "number" ? p.precio_venta : 0,
+    }));
+  }
+
+  return [];
+}, [productosBase, inventarioById, productosInventario]);
 
   const filteredProductos = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -368,6 +397,26 @@ const RegistroProductos = () => {
     });
     return normalize(json);
   }
+
+  function asArray<T = any>(json: any): T[] {
+  const j: any = json;
+
+  if (Array.isArray(j?.data)) return j.data;
+  if (Array.isArray(j?.data?.items)) return j.data.items;
+  if (Array.isArray(j?.data?.productos)) return j.data.productos;
+  if (Array.isArray(j?.data?.products)) return j.data.products;
+  if (Array.isArray(j?.data?.result)) return j.data.result;
+  if (Array.isArray(j?.data?.results)) return j.data.results;
+
+  if (Array.isArray(j)) return j;
+  if (Array.isArray(j?.items)) return j.items;
+  if (Array.isArray(j?.productos)) return j.productos;
+  if (Array.isArray(j?.products)) return j.products;
+  if (Array.isArray(j?.result)) return j.result;
+  if (Array.isArray(j?.results)) return j.results;
+
+  return [];
+}
 
   const onSubmit = async (data: ProductoForm) => {
     // Si parcial/pendiente -> proveedor obligatorio
@@ -629,7 +678,7 @@ const RegistroProductos = () => {
 
   // Paso 2: seleccionar producto existente
   if (flowStep === "select_existing") {
-    const isLoadingList = loadingProductosBase;
+    const isLoadingList = loadingProductosBase || loadingInventario;
     const showError = !!errorProductosBase;
 
     return (
