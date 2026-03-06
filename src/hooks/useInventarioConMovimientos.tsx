@@ -1,3 +1,4 @@
+// dashboard-src/src/hooks/useInventarioConMovimientos.tsx
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
@@ -65,6 +66,11 @@ function asArray<T = any>(json: ApiEnvelope<any>): T[] {
   // {ok:true, data:{movimientos:[...]}}
   if (Array.isArray(j?.data?.movimientos)) return j.data.movimientos as T[];
 
+  // ✅ extras comunes (productos)
+  if (Array.isArray(j?.data?.productos)) return j.data.productos as T[];
+  if (Array.isArray(j?.data?.products)) return j.data.products as T[];
+  if (Array.isArray(j?.data?.result)) return j.data.result as T[];
+
   // array directo
   if (Array.isArray(j)) return j as T[];
 
@@ -73,6 +79,11 @@ function asArray<T = any>(json: ApiEnvelope<any>): T[] {
 
   // {movimientos:[...]}
   if (Array.isArray(j?.movimientos)) return j.movimientos as T[];
+
+  // ✅ extras directos
+  if (Array.isArray(j?.productos)) return j.productos as T[];
+  if (Array.isArray(j?.products)) return j.products as T[];
+  if (Array.isArray(j?.result)) return j.result as T[];
 
   return [];
 }
@@ -320,14 +331,18 @@ function isActiveMovimiento(m: any): boolean {
   return false;
 }
 
-/** Trae productos inventariados (preferir inventario=1; fallback cuenta 1005) */
+/** Trae productos inventariados (preferir inventario=1/true; fallback cuenta 1005) */
 async function fetchProductosInventario() {
-  // ✅ 1) preferido: inventario=1 (tu consola mostró que este es el flujo real)
-  try {
-    const json = await apiFetch(`/api/productos?inventario=1`, { method: "GET" });
-    const arr = asArray<any>(json);
-    if (arr.length) return arr;
-  } catch (_) {}
+  // ✅ 1) preferidos: inventario=1 e inventario=true (muchos backends solo aceptan "true")
+  const tries = ["/api/productos?inventario=1", "/api/productos?inventario=true"];
+
+  for (const url of tries) {
+    try {
+      const json = await apiFetch(url, { method: "GET" });
+      const arr = asArray<any>(json);
+      if (arr.length) return arr;
+    } catch (_) {}
+  }
 
   // ✅ 2) fallback: cuenta_codigo=1005 (si tu backend lo soporta)
   try {
@@ -369,7 +384,7 @@ async function fetchMovimientosInventario() {
     if (arr.length) return arr;
   } catch (_) {}
 
-  // ✅ 3) fallback legacy por tipo (tu versión previa)
+  // ✅ 3) fallback legacy por tipo
   const tipos: Array<"compra" | "venta" | "ajuste"> = ["compra", "venta", "ajuste"];
   const out: any[] = [];
 
@@ -404,6 +419,7 @@ export const useInventarioConMovimientos = () => {
           cuentaCodigo: getCuentaCodigo(p),
           activo: getActivo(p),
         }))
+        // ojo: tu filtro permite 1005 o vacío (legacy). Lo dejamos igual para no romper.
         .filter((p) => p.id && (p.cuentaCodigo === "1005" || !p.cuentaCodigo) && p.activo !== false)
         .map((p) => p.raw);
 
@@ -447,8 +463,48 @@ export const useInventarioConMovimientos = () => {
         movimientosPorProducto.set(k, arr);
       }
 
+      // ✅ 3.5) FALLBACK E2E: si productos viene vacío pero hay movimientos,
+      // crear "productos base" desde lo poblado en el movimiento (product/producto)
+      let productosBase: any[] = productos;
+
+      if (productosBase.length === 0 && movimientos.length > 0) {
+        const byId = new Map<string, any>();
+
+        for (const m of movimientos) {
+          const pid = getMovProductoId(m);
+          if (!pid) continue;
+
+          const embedded =
+            m?.product ??
+            m?.producto ??
+            (m?.productId && typeof m.productId === "object" ? m.productId : null) ??
+            (m?.productoId && typeof m.productoId === "object" ? m.productoId : null) ??
+            null;
+
+          if (embedded && typeof embedded === "object") {
+            const eid = String((embedded as any)?._id ?? (embedded as any)?.id ?? pid);
+            byId.set(pid, {
+              ...embedded,
+              _id: (embedded as any)?._id ?? eid,
+              id: (embedded as any)?.id ?? eid,
+            });
+          } else {
+            // placeholder mínimo para que se vea en UI (y métricas se calculan igual)
+            byId.set(pid, {
+              _id: pid,
+              id: pid,
+              nombre: "Producto",
+              cuenta_codigo: "1005",
+              activo: true,
+            });
+          }
+        }
+
+        productosBase = Array.from(byId.values());
+      }
+
       // 4) Calcular métricas por producto
-      const productosConMetricas: ProductoInventario[] = productos.map((producto: any) => {
+      const productosConMetricas: ProductoInventario[] = productosBase.map((producto: any) => {
         const productoId = getId(producto);
         const movimientosProducto = movimientosPorProducto.get(productoId) || [];
 
