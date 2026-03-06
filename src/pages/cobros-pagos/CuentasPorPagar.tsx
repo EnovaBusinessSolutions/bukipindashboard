@@ -141,6 +141,7 @@ const CuentasPorPagar = () => {
   const [filtroAnoTransaccion, setFiltroAnoTransaccion] = useState<string>("todos");
   const [filtroProveedorTransaccion, setFiltroProveedorTransaccion] = useState<string>("todos");
   const [filtroTipoEgreso, setFiltroTipoEgreso] = useState<string>("todos");
+  const [filtroCuentaTransaccion, setFiltroCuentaTransaccion] = useState<string>("todos");
   const [filtroEstadoTransaccion, setFiltroEstadoTransaccion] = useState<string>("todos");
   const [filtroMetodoPago, setFiltroMetodoPago] = useState<string>("todos");
   const [ordenMontoTransaccion, setOrdenMontoTransaccion] = useState<string>("ninguno");
@@ -353,6 +354,13 @@ const CuentasPorPagar = () => {
   const totalFacturas = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalFacturas, 0) || 0;
   const totalPendiente = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalPendiente, 0) || 0;
 
+  // ✅ Desglose (Documento)
+const saldoAcreedores = tiposCxP?.find((t) => t.id === "acreedores")?.totalPendiente || 0;
+const saldoProveedores =
+  (tiposCxP || [])
+    .filter((t) => t.id !== "acreedores")
+    .reduce((sum, t) => sum + (t.totalPendiente || 0), 0) || 0;
+
   const todasFacturas =
     tiposCxP?.flatMap((tipo) => tipo.proveedores.flatMap((prov) => prov.facturas)) || [];
 
@@ -391,6 +399,18 @@ const CuentasPorPagar = () => {
       resultado = resultado.filter((t) => t.tipo === filtroTipoEgreso);
     }
 
+    // ✅ Filtro Cuenta (Documento): Proveedores vs Acreedores Diversos
+if (filtroCuentaTransaccion !== "todos") {
+  const tipoLower = (x: string) => String(x || "").toLowerCase().trim();
+
+  if (filtroCuentaTransaccion === "proveedores") {
+    // Proveedores = todo menos "Acreedores Diversos"
+    resultado = resultado.filter((t) => tipoLower(t.tipo) !== "acreedores diversos");
+  } else if (filtroCuentaTransaccion === "acreedores") {
+    resultado = resultado.filter((t) => tipoLower(t.tipo) === "acreedores diversos");
+  }
+}
+
     if (filtroEstadoTransaccion !== "todos") {
       if (filtroEstadoTransaccion === "completado") {
         resultado = resultado.filter((t) => t.monto_pendiente === 0 && t.fuente !== "pago_cxp");
@@ -422,6 +442,7 @@ const CuentasPorPagar = () => {
     filtroAnoTransaccion,
     filtroProveedorTransaccion,
     filtroTipoEgreso,
+    filtroCuentaTransaccion,
     filtroEstadoTransaccion,
     filtroMetodoPago,
     ordenMontoTransaccion,
@@ -449,6 +470,7 @@ const CuentasPorPagar = () => {
     setFiltroAnoTransaccion("todos");
     setFiltroProveedorTransaccion("todos");
     setFiltroTipoEgreso("todos");
+    setFiltroCuentaTransaccion("todos");
     setFiltroEstadoTransaccion("todos");
     setFiltroMetodoPago("todos");
     setOrdenMontoTransaccion("ninguno");
@@ -534,9 +556,20 @@ const CuentasPorPagar = () => {
                   <CardTitle className="text-sm font-medium">Total por Pagar</CardTitle>
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatCurrency(totalPendiente)}</div>
-                </CardContent>
+                <CardContent className="space-y-2">
+  <div className="text-2xl font-bold">{formatCurrency(totalPendiente)}</div>
+
+  <div className="text-xs text-muted-foreground space-y-1">
+    <div className="flex items-center justify-between">
+      <span>Proveedores</span>
+      <span className="font-medium text-foreground">{formatCurrency(saldoProveedores)}</span>
+    </div>
+    <div className="flex items-center justify-between">
+      <span>Acreedores diversos</span>
+      <span className="font-medium text-foreground">{formatCurrency(saldoAcreedores)}</span>
+    </div>
+  </div>
+</CardContent>
               </Card>
 
               <Card>
@@ -973,6 +1006,21 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
+                  {/* Cuenta (Documento) */}
+<div className="space-y-2">
+  <label className="text-sm font-medium">Cuenta</label>
+  <Select value={filtroCuentaTransaccion} onValueChange={setFiltroCuentaTransaccion}>
+    <SelectTrigger>
+      <SelectValue placeholder="Todas" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="todos">Todas</SelectItem>
+      <SelectItem value="proveedores">Proveedores</SelectItem>
+      <SelectItem value="acreedores">Acreedores diversos</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
+
                   {/* Estado */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Estado</label>
@@ -999,7 +1047,7 @@ const CuentasPorPagar = () => {
                       <SelectContent>
                         <SelectItem value="todos">Todos los métodos</SelectItem>
                         <SelectItem value="efectivo">Efectivo</SelectItem>
-                        <SelectItem value="transferencia">Transferencia</SelectItem>
+                        <SelectItem value="bancos">Transferencia / Bancos</SelectItem>
                         <SelectItem value="tarjeta">Tarjeta</SelectItem>
                         <SelectItem value="-">No especificado</SelectItem>
                       </SelectContent>

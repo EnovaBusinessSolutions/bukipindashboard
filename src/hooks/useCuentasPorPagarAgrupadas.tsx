@@ -14,13 +14,16 @@ export interface FacturaCxP {
   metodo_pago: string | null;
   estado: string;
   tipo_transaccion: "egreso" | "capex";
+
   // Info del proveedor
   proveedor_nombre: string | null;
   proveedor_email: string | null;
   proveedor_telefono: string | null;
   proveedor_rfc: string | null;
+
   // Campos extra opcionales para clasificar
   tipo_egreso?: string | null;
+  subtipo_egreso?: string | null;
   cuenta_codigo?: string | null;
 }
 
@@ -48,90 +51,205 @@ export interface TipoCxP {
 
 type AnyJson = any;
 
+function toNum(v: any, def = 0) {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : def;
+}
+
+function safeStr(v: any, def = "") {
+  if (v === undefined || v === null) return def;
+  return String(v);
+}
+
+function pickId(x: any) {
+  return safeStr(x?.id || x?._id || "");
+}
+
+function pickCreatedAt(x: any) {
+  return safeStr(x?.created_at || x?.createdAt || x?.fecha || x?.date || new Date().toISOString());
+}
+
+function pickFechaVencimiento(x: any) {
+  const v =
+    x?.fecha_vencimiento ??
+    x?.fechaVencimiento ??
+    x?.fechaLimite ??
+    x?.fecha_limite ??
+    x?.dueDate ??
+    null;
+
+  const s = safeStr(v, "").trim();
+  return s ? s : null;
+}
+
+function pickMetodoPago(x: any) {
+  const v = x?.metodo_pago ?? x?.metodoPago ?? x?.metodo ?? null;
+  const s = safeStr(v, "").trim();
+  return s ? s : null;
+}
+
+function normalizeTipoPago(x: any) {
+  const s = safeStr(x?.tipo_pago ?? x?.tipoPago ?? "").toLowerCase().trim();
+  if (!s) return "";
+  if (["contado", "total", "pago_total"].includes(s)) return "contado";
+  if (["credito", "crédito"].includes(s)) return "credito";
+  if (["parcial", "parciales"].includes(s)) return "parcial";
+  return s;
+}
+
+function normalizeEstado(x: any) {
+  const s = safeStr(x?.estado ?? x?.status ?? "activo").toLowerCase().trim();
+  return s || "activo";
+}
+
+function pickTipoEgreso(x: any) {
+  return safeStr(x?.tipo_egreso ?? x?.tipoEgreso ?? x?.tipo ?? "").toLowerCase().trim() || null;
+}
+
+function pickSubtipoEgreso(x: any) {
+  return (
+    safeStr(x?.subtipo_egreso ?? x?.subtipoEgreso ?? x?.subtipo ?? "").toLowerCase().trim() || null
+  );
+}
+
+function pickCuentaCodigo(x: any) {
+  return safeStr(x?.cuenta_codigo ?? x?.cuentaCodigo ?? "").trim() || null;
+}
+
+// ✅ Fetch tolerante: si endpoint falla, devolvemos []
+async function safeGetArray(url: string): Promise<any[]> {
+  try {
+    const json: AnyJson = await apiFetch(url, { method: "GET" });
+    const raw = (json?.data ?? json ?? []) as AnyJson[];
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+// ✅ Regla correcta Acreedores:
+// En tu backend “Otros gastos” se identifica por subtipo_egreso = "otros_gastos"
+// NO por cuenta 2003 en ExpenseTransaction (esa vive en JournalEntry)
+function isAcreedoresDiversos(egreso: any) {
+  const subtipo = pickSubtipoEgreso(egreso);
+  const tipo = pickTipoEgreso(egreso);
+
+  // señales fuertes
+  if (subtipo === "otros_gastos") return true;
+  if (tipo === "otro") return true;
+
+  // señales suaves (por si el FE manda algo raro)
+  if (safeStr(subtipo).includes("otros")) return true;
+
+  return false;
+}
+
+function isCompraInventario(egreso: any) {
+  const tipo = pickTipoEgreso(egreso);
+  const subtipo = pickSubtipoEgreso(egreso);
+  const cuenta = pickCuentaCodigo(egreso);
+
+  // heurísticas existentes
+  if (tipo === "compra_inventario") return true;
+  if (tipo === "costo") return true;
+
+  // por si viene subtipo específico
+  if (safeStr(subtipo).includes("invent")) return true;
+
+  // si tu sistema usa alguna cuenta específica para compras inventario (ajusta si aplica)
+  if (cuenta === "5002") return true;
+
+  return false;
+}
+
 export const useCuentasPorPagarAgrupadas = () => {
   return useQuery<TipoCxP[]>({
     queryKey: ["cuentas-por-pagar-agrupadas"],
     queryFn: async () => {
       /**
-       * Endpoints esperados:
-       * - GET /api/transacciones/egresos?estado=activo&pendiente_gt=0
-       * - GET /api/inversiones/capex?pendiente_gt=0
+       * Endpoints que usa HOY la UI:
+       * - Egresos pendientes: /api/transacciones/egresos?estado=activo&pendiente_gt=0
+       * - CAPEX pendientes: /api/inversiones/capex?pendiente_gt=0
        *
-       * Respuesta puede ser:
-       *  - array directo
-       *  - { ok:true, data:[...] }
+       * ⚠️ Nota: si alguno no existe, devolvemos [] para que el panel NO reviente.
        */
 
-      const egresosJson: AnyJson = await apiFetch(
-        "/api/transacciones/egresos?estado=activo&pendiente_gt=0",
-        { method: "GET" }
-      );
-      const egresosRaw = (egresosJson?.data ?? egresosJson ?? []) as AnyJson[];
+      const egresosRaw = await safeGetArray("/api/transacciones/egresos?estado=activo&pendiente_gt=0");
+      const inversionesRaw = await safeGetArray("/api/inversiones/capex?pendiente_gt=0");
 
-      const inversionesJson: AnyJson = await apiFetch(
-        "/api/inversiones/capex?pendiente_gt=0",
-        { method: "GET" }
-      );
-      const inversionesRaw = (inversionesJson?.data ?? inversionesJson ?? []) as AnyJson[];
-
-      // 3. Clasificar egresos por tipo
+      // Clasificar egresos por tipo
       const egresosInventario: FacturaCxP[] = [];
       const egresosOperativos: FacturaCxP[] = [];
       const egresosAcreedores: FacturaCxP[] = [];
 
       egresosRaw.forEach((egreso) => {
+        const tipoPago = normalizeTipoPago(egreso);
+        const montoTotal = toNum(egreso?.monto_total ?? egreso?.montoTotal ?? egreso?.total, 0);
+        const montoPagado = toNum(egreso?.monto_pagado ?? egreso?.montoPagado, 0);
+        const montoPendiente = toNum(egreso?.monto_pendiente ?? egreso?.montoPendiente, 0);
+
         const factura: FacturaCxP = {
-          id: egreso.id,
-          descripcion: egreso.descripcion,
-          monto_total: Number(egreso.monto_total || 0),
-          monto_pagado: Number(egreso.monto_pagado || 0),
-          monto_pendiente: Number(egreso.monto_pendiente || 0),
-          fecha_vencimiento: egreso.fecha_vencimiento ?? null,
-          created_at: egreso.created_at,
-          tipo_pago: egreso.tipo_pago,
-          metodo_pago: egreso.metodo_pago ?? null,
-          estado: egreso.estado,
+          id: pickId(egreso),
+          descripcion: safeStr(egreso?.descripcion ?? egreso?.concepto ?? egreso?.concept ?? ""),
+          monto_total: montoTotal,
+          monto_pagado: montoPagado,
+          monto_pendiente: montoPendiente,
+          fecha_vencimiento: pickFechaVencimiento(egreso),
+          created_at: pickCreatedAt(egreso),
+          tipo_pago: tipoPago,
+          metodo_pago: pickMetodoPago(egreso),
+          estado: normalizeEstado(egreso),
           tipo_transaccion: "egreso",
-          proveedor_nombre: egreso.proveedor_nombre ?? null,
-          proveedor_email: egreso.proveedor_email ?? null,
-          proveedor_telefono: egreso.proveedor_telefono ?? null,
-          proveedor_rfc: egreso.proveedor_rfc ?? null,
-          tipo_egreso: egreso.tipo_egreso ?? null,
-          cuenta_codigo: egreso.cuenta_codigo ?? null,
+
+          proveedor_nombre: egreso?.proveedor_nombre ?? egreso?.proveedorNombre ?? null,
+          proveedor_email: egreso?.proveedor_email ?? egreso?.proveedorEmail ?? null,
+          proveedor_telefono: egreso?.proveedor_telefono ?? egreso?.proveedorTelefono ?? null,
+          proveedor_rfc: egreso?.proveedor_rfc ?? egreso?.proveedorRfc ?? null,
+
+          tipo_egreso: pickTipoEgreso(egreso),
+          subtipo_egreso: pickSubtipoEgreso(egreso),
+          cuenta_codigo: pickCuentaCodigo(egreso),
         };
 
-        // Clasificar por tipo
-        if (egreso.tipo_egreso === "compra_inventario" || egreso.tipo_egreso === "costo") {
-          egresosInventario.push(factura);
-        } else if (egreso.cuenta_codigo === "2003") {
-          // Acreedores diversos (cuenta 2003)
+        // ✅ Solo nos interesan pendientes (por si el endpoint manda más)
+        // Crédito/parcial con saldo > 0
+        const isPendiente = (factura.monto_pendiente ?? 0) > 0 && ["credito", "parcial"].includes(factura.tipo_pago);
+        if (!isPendiente) return;
+
+        // Clasificación por reglas del cliente
+        if (isAcreedoresDiversos(egreso)) {
           egresosAcreedores.push(factura);
+        } else if (isCompraInventario(egreso)) {
+          egresosInventario.push(factura);
         } else {
           egresosOperativos.push(factura);
         }
       });
 
-      // 4. Convertir inversiones CAPEX a formato de factura
-      const inversionesCapex: FacturaCxP[] =
-        (inversionesRaw || []).map((inv) => ({
-          id: inv.id,
-          descripcion: inv.descripcion || inv.producto_nombre,
-          monto_total: Number(inv.valor_total || 0),
-          monto_pagado: Number(inv.monto_pagado || 0),
-          monto_pendiente: Number(inv.monto_pendiente || 0),
-          fecha_vencimiento: inv.fecha_vencimiento ?? null,
-          created_at: inv.created_at,
-          tipo_pago: inv.tipo_pago,
-          metodo_pago: inv.metodo_pago ?? null,
-          estado: inv.estado,
+      // Convertir inversiones CAPEX a formato de factura
+      const inversionesCapex: FacturaCxP[] = (inversionesRaw || []).map((inv) => {
+        const tipoPago = normalizeTipoPago(inv);
+        return {
+          id: pickId(inv),
+          descripcion: safeStr(inv?.descripcion || inv?.producto_nombre || "CAPEX"),
+          monto_total: toNum(inv?.valor_total ?? inv?.monto_total ?? inv?.total, 0),
+          monto_pagado: toNum(inv?.monto_pagado ?? inv?.montoPagado, 0),
+          monto_pendiente: toNum(inv?.monto_pendiente ?? inv?.montoPendiente, 0),
+          fecha_vencimiento: pickFechaVencimiento(inv),
+          created_at: pickCreatedAt(inv),
+          tipo_pago: tipoPago,
+          metodo_pago: pickMetodoPago(inv),
+          estado: normalizeEstado(inv),
           tipo_transaccion: "capex",
-          proveedor_nombre: inv.proveedor_nombre ?? null,
-          proveedor_email: inv.proveedor_email ?? null,
-          proveedor_telefono: inv.proveedor_telefono ?? null,
-          proveedor_rfc: inv.proveedor_rfc ?? null,
-        })) || [];
 
-      // 5. Función para agrupar facturas por proveedor
+          proveedor_nombre: inv?.proveedor_nombre ?? inv?.proveedorNombre ?? null,
+          proveedor_email: inv?.proveedor_email ?? inv?.proveedorEmail ?? null,
+          proveedor_telefono: inv?.proveedor_telefono ?? inv?.proveedorTelefono ?? null,
+          proveedor_rfc: inv?.proveedor_rfc ?? inv?.proveedorRfc ?? null,
+        };
+      });
+
+      // Agrupar facturas por proveedor
       const agruparPorProveedor = (facturas: FacturaCxP[]): ProveedorAgrupado[] => {
         const proveedoresMap = new Map<string, ProveedorAgrupado>();
 
@@ -151,23 +269,20 @@ export const useCuentasPorPagarAgrupadas = () => {
           }
 
           const proveedor = proveedoresMap.get(nombreProveedor)!;
-          proveedor.totalPendiente += Number(factura.monto_pendiente || 0);
+          proveedor.totalPendiente += toNum(factura.monto_pendiente, 0);
           proveedor.totalFacturas += 1;
           proveedor.facturas.push(factura);
         });
 
-        return Array.from(proveedoresMap.values()).sort(
-          (a, b) => b.totalPendiente - a.totalPendiente
-        );
+        return Array.from(proveedoresMap.values()).sort((a, b) => b.totalPendiente - a.totalPendiente);
       };
 
-      // Helpers para totales únicos (evitar contar null como proveedor real)
       const countUniqueProviders = (items: FacturaCxP[]) => {
         const s = new Set((items || []).map((f) => f.proveedor_nombre || "Sin proveedor"));
         return s.size;
       };
 
-      // 6. Crear los 4 tipos de CxP
+      // Crear los 4 tipos de CxP (SIEMPRE presentes)
       const tipos: TipoCxP[] = [
         {
           id: "inventario",
@@ -175,7 +290,7 @@ export const useCuentasPorPagarAgrupadas = () => {
           descripcion: "Compras de mercancía y productos",
           icon: Package,
           color: "hsl(var(--chart-1))",
-          totalPendiente: egresosInventario.reduce((sum, f) => sum + f.monto_pendiente, 0),
+          totalPendiente: egresosInventario.reduce((sum, f) => sum + toNum(f.monto_pendiente, 0), 0),
           totalFacturas: egresosInventario.length,
           totalProveedores: countUniqueProviders(egresosInventario),
           proveedores: agruparPorProveedor(egresosInventario),
@@ -186,18 +301,18 @@ export const useCuentasPorPagarAgrupadas = () => {
           descripcion: "Inversiones en activos fijos",
           icon: Building2,
           color: "hsl(var(--chart-2))",
-          totalPendiente: inversionesCapex.reduce((sum, f) => sum + f.monto_pendiente, 0),
-          totalFacturas: inversionesCapex.length,
-          totalProveedores: countUniqueProviders(inversionesCapex),
-          proveedores: agruparPorProveedor(inversionesCapex),
+          totalPendiente: inversionesCapex.reduce((sum, f) => sum + toNum(f.monto_pendiente, 0), 0),
+          totalFacturas: inversionesCapex.filter((f) => toNum(f.monto_pendiente, 0) > 0).length,
+          totalProveedores: countUniqueProviders(inversionesCapex.filter((f) => toNum(f.monto_pendiente, 0) > 0)),
+          proveedores: agruparPorProveedor(inversionesCapex.filter((f) => toNum(f.monto_pendiente, 0) > 0)),
         },
         {
           id: "operativos",
-          nombre: "Gastos Operativos",
-          descripcion: "Gastos operativos del negocio",
+          nombre: "Egresos Operativos",
+          descripcion: "Egresos operativos del negocio",
           icon: Receipt,
           color: "hsl(var(--chart-3))",
-          totalPendiente: egresosOperativos.reduce((sum, f) => sum + f.monto_pendiente, 0),
+          totalPendiente: egresosOperativos.reduce((sum, f) => sum + toNum(f.monto_pendiente, 0), 0),
           totalFacturas: egresosOperativos.length,
           totalProveedores: countUniqueProviders(egresosOperativos),
           proveedores: agruparPorProveedor(egresosOperativos),
@@ -208,7 +323,7 @@ export const useCuentasPorPagarAgrupadas = () => {
           descripcion: "Otras cuentas por pagar",
           icon: Users,
           color: "hsl(var(--chart-4))",
-          totalPendiente: egresosAcreedores.reduce((sum, f) => sum + f.monto_pendiente, 0),
+          totalPendiente: egresosAcreedores.reduce((sum, f) => sum + toNum(f.monto_pendiente, 0), 0),
           totalFacturas: egresosAcreedores.length,
           totalProveedores: countUniqueProviders(egresosAcreedores),
           proveedores: agruparPorProveedor(egresosAcreedores),
