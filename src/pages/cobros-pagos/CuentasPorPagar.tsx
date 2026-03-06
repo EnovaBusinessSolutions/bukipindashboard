@@ -13,14 +13,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
   Search,
@@ -42,9 +35,11 @@ import {
   X,
   Banknote,
   ArrowLeft,
+  Users,
+  Layers,
 } from "lucide-react";
 
-import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
+import { useCuentasPorPagarAgrupadas, FacturaCxP, TipoCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
 import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -122,12 +117,18 @@ type PagoHistorial = {
   es_pago_inicial?: boolean;
 };
 
+type TipoMenuProveedores = "inventario" | "capex" | "operativos";
+
 const CuentasPorPagar = () => {
   // Estados principales
   const [activeTab, setActiveTab] = useState("lista");
   const [tipoSeleccionado, setTipoSeleccionado] = useState<string | null>(null);
   const [expandedProveedores, setExpandedProveedores] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
+
+  // ✅ Nuevo: selector para el bloque “Acreedores” (3 opciones)
+  const [selectorAcreedoresOpen, setSelectorAcreedoresOpen] = useState(false);
+  const [selectorAcreedoresTipo, setSelectorAcreedoresTipo] = useState<TipoMenuProveedores>("operativos");
 
   // Estados de dialogs
   const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
@@ -153,7 +154,6 @@ const CuentasPorPagar = () => {
   const [formatoNumerosAnalitica] = useState<"normal" | "miles" | "millones">("normal");
   const [decimalesAnalitica] = useState<0 | 1 | 2>(2);
 
-  
   const { data: tiposCxP, isLoading } = useCuentasPorPagarAgrupadas();
   const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
   const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
@@ -161,11 +161,10 @@ const CuentasPorPagar = () => {
 
   const queryClient = useQueryClient();
 
-  // ✅ Query para todas las transacciones (incluye pagadas) — ahora viene del backend ya normalizado
+  // ✅ Query para todas las transacciones (incluye pagadas)
   const { data: todasTransaccionesCxP, isLoading: loadingTransaccionesCxP } = useQuery({
     queryKey: ["todas-transacciones-cxp"],
     queryFn: async () => {
-      // Backend recomendado: GET /api/cxp/transacciones
       return await apiJson<TransaccionCxP[]>("/api/cxp/transacciones");
     },
   });
@@ -175,9 +174,6 @@ const CuentasPorPagar = () => {
     queryKey: ["asiento-contable-cxp", selectedTransaccionId, fuenteTransaccion],
     queryFn: async () => {
       if (!selectedTransaccionId || !fuenteTransaccion) return null;
-
-      // Backend recomendado:
-      // GET /api/asientos/by-transaccion?source=egreso|capex|pago_cxp&id=...
       return await apiJson<AsientoContable | null>(
         `/api/asientos/by-transaccion?source=${encodeURIComponent(fuenteTransaccion)}&id=${encodeURIComponent(
           selectedTransaccionId
@@ -187,18 +183,12 @@ const CuentasPorPagar = () => {
     enabled: !!selectedTransaccionId && !!fuenteTransaccion && detalleContableOpen,
   });
 
- 
   const { data: historialPagos } = useQuery({
     queryKey: ["historial-pagos-cxp", selectedFactura?.id],
     queryFn: async () => {
       if (!selectedFactura) return [];
-
-      // Backend recomendado:
-      // GET /api/cxp/facturas/:id/pagos?source=egreso|capex
-      // Devuelve lista ya mezclada (incluye anticipo si aplica)
       return await apiJson<PagoHistorial[]>(
         `/api/cxp/facturas/${encodeURIComponent(selectedFactura.id)}/pagos?source=${encodeURIComponent(
-          
           selectedFactura.tipo_transaccion
         )}`
       );
@@ -206,7 +196,7 @@ const CuentasPorPagar = () => {
     enabled: !!selectedFactura && historialDialogOpen,
   });
 
-  // ✅ Mutación para registrar pago (1 solo request al backend)
+  // ✅ Mutación para registrar pago
   const registrarPagoMutation = useMutation({
     mutationFn: async ({
       facturaId,
@@ -219,15 +209,6 @@ const CuentasPorPagar = () => {
       metodo: string;
       tipo: "egreso" | "capex";
     }) => {
-      // Backend recomendado:
-      // POST /api/cxp/pagos
-      // body: { facturaId, source: "egreso"|"capex", monto, metodo }
-      // Backend:
-      // - valida owner/usuario
-      // - valida saldo (opcional)
-      // - actualiza la factura (monto_pendiente/monto_pagado/tipo_pago)
-      // - inserta transacción pago
-      // - crea asiento contable + detalles
       return await apiJson<{ ok: true }>("/api/cxp/pagos", {
         method: "POST",
         body: JSON.stringify({
@@ -258,7 +239,43 @@ const CuentasPorPagar = () => {
     },
   });
 
+  // Helpers: acceso por id
+  const getTipo = (id: string) => (tiposCxP || []).find((t) => t.id === id) || null;
+
+  const tipoInventario = getTipo("inventario");
+  const tipoCapex = getTipo("capex");
+  const tipoOperativos = getTipo("operativos");
+  const tipoAcreedoresDiversos = getTipo("acreedores"); // 2003
+
+  // ✅ Agrupación “Acreedores” (Proveedores): inventario + capex + operativos
+  const facturasProveedores = useMemo(() => {
+    const a = tipoInventario?.proveedores?.flatMap((p) => p.facturas) || [];
+    const b = tipoCapex?.proveedores?.flatMap((p) => p.facturas) || [];
+    const c = tipoOperativos?.proveedores?.flatMap((p) => p.facturas) || [];
+    return [...a, ...b, ...c];
+  }, [tipoInventario, tipoCapex, tipoOperativos]);
+
+  const proveedoresProveedoresCount = useMemo(() => {
+    const s = new Set((facturasProveedores || []).map((f) => f.proveedor_nombre || "Sin proveedor"));
+    return s.size;
+  }, [facturasProveedores]);
+
+  const totalProveedoresPendiente =
+    (tipoInventario?.totalPendiente || 0) + (tipoCapex?.totalPendiente || 0) + (tipoOperativos?.totalPendiente || 0);
+
+  const totalProveedoresFacturas = facturasProveedores.length;
+
+  // ✅ Desglose KPI “Total por pagar” (Documento)
+  const saldoAcreedores = tipoAcreedoresDiversos?.totalPendiente || 0;
+  const saldoProveedores = totalProveedoresPendiente;
+
   // Handlers
+  const resetVistaLista = () => {
+    setTipoSeleccionado(null);
+    setExpandedProveedores(new Set());
+    setSearchTerm("");
+  };
+
   const toggleProveedor = (nombreProveedor: string) => {
     const newSet = new Set(expandedProveedores);
     if (newSet.has(nombreProveedor)) newSet.delete(nombreProveedor);
@@ -301,7 +318,6 @@ const CuentasPorPagar = () => {
       return;
     }
 
-    // ✅ Validación de saldo disponible usando hook (sin recalcular desde asientos aquí)
     if (metodoPago === "efectivo") {
       const disponible = saldos?.efectivo || 0;
       if (monto > disponible) {
@@ -322,7 +338,6 @@ const CuentasPorPagar = () => {
       facturaId: selectedFactura.id,
       monto,
       metodo: metodoPago,
-      
       tipo: selectedFactura.tipo_transaccion,
     });
   };
@@ -337,7 +352,7 @@ const CuentasPorPagar = () => {
     return <Badge variant="default">Por vencer</Badge>;
   };
 
-  // Obtener tipo seleccionado
+  // Obtener tipo seleccionado (para vista detalle)
   const tipoActual = tiposCxP?.find((t) => t.id === tipoSeleccionado);
 
   // Filtrar proveedores por búsqueda
@@ -354,24 +369,11 @@ const CuentasPorPagar = () => {
   const totalFacturas = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalFacturas, 0) || 0;
   const totalPendiente = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalPendiente, 0) || 0;
 
-  // ✅ Desglose (Documento)
-const saldoAcreedores = tiposCxP?.find((t) => t.id === "acreedores")?.totalPendiente || 0;
-const saldoProveedores =
-  (tiposCxP || [])
-    .filter((t) => t.id !== "acreedores")
-    .reduce((sum, t) => sum + (t.totalPendiente || 0), 0) || 0;
-
-  const todasFacturas =
-    tiposCxP?.flatMap((tipo) => tipo.proveedores.flatMap((prov) => prov.facturas)) || [];
+  const todasFacturas = tiposCxP?.flatMap((tipo) => tipo.proveedores.flatMap((prov) => prov.facturas)) || [];
 
   const hoy = new Date();
-  const totalVencidas = todasFacturas.filter(
-    (f) => f.fecha_vencimiento && new Date(f.fecha_vencimiento) < hoy
-  ).length;
-
-  const totalPorVencer = todasFacturas.filter(
-    (f) => f.fecha_vencimiento && new Date(f.fecha_vencimiento) >= hoy
-  ).length;
+  const totalVencidas = todasFacturas.filter((f) => f.fecha_vencimiento && new Date(f.fecha_vencimiento) < hoy).length;
+  const totalPorVencer = todasFacturas.filter((f) => f.fecha_vencimiento && new Date(f.fecha_vencimiento) >= hoy).length;
 
   // Filtros para Resumen de Transacciones
   const transaccionesFiltradas = useMemo(() => {
@@ -380,15 +382,11 @@ const saldoProveedores =
     let resultado = [...todasTransaccionesCxP];
 
     if (filtroMesTransaccion !== "todos") {
-      resultado = resultado.filter(
-        (t) => new Date(t.created_at).getMonth() + 1 === parseInt(filtroMesTransaccion)
-      );
+      resultado = resultado.filter((t) => new Date(t.created_at).getMonth() + 1 === parseInt(filtroMesTransaccion));
     }
 
     if (filtroAnoTransaccion !== "todos") {
-      resultado = resultado.filter(
-        (t) => new Date(t.created_at).getFullYear() === parseInt(filtroAnoTransaccion)
-      );
+      resultado = resultado.filter((t) => new Date(t.created_at).getFullYear() === parseInt(filtroAnoTransaccion));
     }
 
     if (filtroProveedorTransaccion !== "todos") {
@@ -400,28 +398,22 @@ const saldoProveedores =
     }
 
     // ✅ Filtro Cuenta (Documento): Proveedores vs Acreedores Diversos
-if (filtroCuentaTransaccion !== "todos") {
-  const tipoLower = (x: string) => String(x || "").toLowerCase().trim();
-
-  if (filtroCuentaTransaccion === "proveedores") {
-    // Proveedores = todo menos "Acreedores Diversos"
-    resultado = resultado.filter((t) => tipoLower(t.tipo) !== "acreedores diversos");
-  } else if (filtroCuentaTransaccion === "acreedores") {
-    resultado = resultado.filter((t) => tipoLower(t.tipo) === "acreedores diversos");
-  }
-}
+    if (filtroCuentaTransaccion !== "todos") {
+      const tipoLower = (x: string) => String(x || "").toLowerCase().trim();
+      if (filtroCuentaTransaccion === "proveedores") {
+        resultado = resultado.filter((t) => tipoLower(t.tipo) !== "acreedores diversos");
+      } else if (filtroCuentaTransaccion === "acreedores") {
+        resultado = resultado.filter((t) => tipoLower(t.tipo) === "acreedores diversos");
+      }
+    }
 
     if (filtroEstadoTransaccion !== "todos") {
       if (filtroEstadoTransaccion === "completado") {
         resultado = resultado.filter((t) => t.monto_pendiente === 0 && t.fuente !== "pago_cxp");
       } else if (filtroEstadoTransaccion === "enProgreso") {
-        resultado = resultado.filter(
-          (t) => t.monto_pendiente > 0 && t.monto_pagado > 0 && t.fuente !== "pago_cxp"
-        );
+        resultado = resultado.filter((t) => t.monto_pendiente > 0 && t.monto_pagado > 0 && t.fuente !== "pago_cxp");
       } else if (filtroEstadoTransaccion === "sinPagar") {
-        resultado = resultado.filter(
-          (t) => t.monto_pagado === 0 && t.monto_pendiente > 0 && t.fuente !== "pago_cxp"
-        );
+        resultado = resultado.filter((t) => t.monto_pagado === 0 && t.monto_pendiente > 0 && t.fuente !== "pago_cxp");
       }
     }
 
@@ -487,6 +479,24 @@ if (filtroCuentaTransaccion !== "todos") {
     return (transaccion.monto_pagado / transaccion.monto_total) * 100;
   };
 
+  const openSelectorAcreedores = () => {
+    setSelectorAcreedoresOpen(true);
+  };
+
+  const confirmarSelectorAcreedores = () => {
+    const nextId: TipoMenuProveedores = selectorAcreedoresTipo || "operativos";
+    setSelectorAcreedoresOpen(false);
+    setTipoSeleccionado(nextId);
+    setExpandedProveedores(new Set());
+    setSearchTerm("");
+  };
+
+  const abrirAcreedoresDiversos = () => {
+    setTipoSeleccionado("acreedores");
+    setExpandedProveedores(new Set());
+    setSearchTerm("");
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 overflow-auto p-6">
@@ -504,9 +514,7 @@ if (filtroCuentaTransaccion !== "todos") {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Cuentas por Pagar</h1>
-            <p className="text-muted-foreground">
-              Gestiona y da seguimiento a las cuentas pendientes de pago
-            </p>
+            <p className="text-muted-foreground">Gestiona y da seguimiento a las cuentas pendientes de pago</p>
           </div>
         </div>
 
@@ -532,15 +540,7 @@ if (filtroCuentaTransaccion !== "todos") {
             {/* Botón de regreso al menú principal */}
             {tipoSeleccionado && (
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setTipoSeleccionado(null);
-                    setExpandedProveedores(new Set());
-                    setSearchTerm("");
-                  }}
-                  className="flex items-center gap-2"
-                >
+                <Button variant="outline" onClick={resetVistaLista} className="flex items-center gap-2">
                   <ArrowLeft className="h-4 w-4" />
                   Regresar al menú
                 </Button>
@@ -556,20 +556,21 @@ if (filtroCuentaTransaccion !== "todos") {
                   <CardTitle className="text-sm font-medium">Total por Pagar</CardTitle>
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
-                <CardContent className="space-y-2">
-  <div className="text-2xl font-bold">{formatCurrency(totalPendiente)}</div>
 
-  <div className="text-xs text-muted-foreground space-y-1">
-    <div className="flex items-center justify-between">
-      <span>Proveedores</span>
-      <span className="font-medium text-foreground">{formatCurrency(saldoProveedores)}</span>
-    </div>
-    <div className="flex items-center justify-between">
-      <span>Acreedores diversos</span>
-      <span className="font-medium text-foreground">{formatCurrency(saldoAcreedores)}</span>
-    </div>
-  </div>
-</CardContent>
+                <CardContent className="space-y-2">
+                  <div className="text-2xl font-bold">{formatCurrency(totalPendiente)}</div>
+
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span>Proveedores</span>
+                      <span className="font-medium text-foreground">{formatCurrency(saldoProveedores)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Acreedores diversos</span>
+                      <span className="font-medium text-foreground">{formatCurrency(saldoAcreedores)}</span>
+                    </div>
+                  </div>
+                </CardContent>
               </Card>
 
               <Card>
@@ -603,44 +604,149 @@ if (filtroCuentaTransaccion !== "todos") {
               </Card>
             </div>
 
-            {/* Vista Nivel 1: Cards de Tipos */}
+            {/* ✅ VISTA NIVEL 1 (NUEVA): 2 BLOQUES GRANDES como CxC */}
             {!tipoSeleccionado && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {tiposCxP?.map((tipo) => {
-                  const Icon = tipo.icon;
-                  return (
-                    <Card
-                      key={tipo.id}
-                      className="cursor-pointer hover:border-primary transition-colors"
-                      onClick={() => setTipoSeleccionado(tipo.id)}
-                    >
-                      <CardHeader>
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg" style={{ backgroundColor: `${tipo.color}15` }}>
-                            <Icon className="h-6 w-6" style={{ color: tipo.color }} />
-                          </div>
-                          <CardTitle className="text-base">{tipo.nombre}</CardTitle>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Bloque 1: Acreedores (agrupa inventario+capex+operativos) */}
+                <Card
+                  className={cn(
+                    "cursor-pointer overflow-hidden border-0",
+                    "bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white",
+                    "shadow-lg shadow-slate-900/10 hover:shadow-xl hover:shadow-slate-900/20 transition-all"
+                  )}
+                  onClick={openSelectorAcreedores}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <CardTitle className="text-xl font-semibold tracking-tight">Acreedores</CardTitle>
+                        <CardDescription className="text-slate-200">
+                          Compras de inventario, CAPEX y egresos operativos
+                        </CardDescription>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-xl bg-white/10 p-2">
+                          <Layers className="h-5 w-5 text-white" />
                         </div>
-                        <CardDescription className="text-xs">{tipo.descripcion}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="text-3xl font-bold">{formatCurrency(tipo.totalPendiente)}</div>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                          <div className="flex items-center justify-between">
-                            <span>Facturas pendientes</span>
-                            <Badge variant="secondary">{tipo.totalFacturas}</Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span>Proveedores</span>
-                            <Badge variant="outline">{tipo.totalProveedores}</Badge>
-                          </div>
+                        <span className="text-sm text-slate-200">Ver detalle →</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4">
+                    <div className="text-4xl font-bold">{formatCurrency(totalProveedoresPendiente)}</div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="rounded-xl bg-white/5 p-3 border border-white/10">
+                        <div className="text-slate-200">Facturas pendientes</div>
+                        <div className="text-lg font-semibold">{totalProveedoresFacturas}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/5 p-3 border border-white/10">
+                        <div className="text-slate-200">Proveedores</div>
+                        <div className="text-lg font-semibold">{proveedoresProveedoresCount}</div>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-slate-300">
+                      Haz click para seleccionar qué tipo de acreedor deseas analizar.
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Bloque 2: Acreedores Diversos (2003) */}
+                <Card
+                  className={cn(
+                    "cursor-pointer overflow-hidden border-0",
+                    "bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-900 text-white",
+                    "shadow-lg shadow-emerald-900/10 hover:shadow-xl hover:shadow-emerald-900/20 transition-all"
+                  )}
+                  onClick={abrirAcreedoresDiversos}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <CardTitle className="text-xl font-semibold tracking-tight">Acreedores Diversos</CardTitle>
+                        <CardDescription className="text-emerald-100">
+                          Otras cuentas por pagar (cuenta 2003)
+                        </CardDescription>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-xl bg-white/10 p-2">
+                          <Users className="h-5 w-5 text-white" />
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                        <span className="text-sm text-emerald-100">Ver detalle →</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4">
+                    <div className="text-4xl font-bold">{formatCurrency(tipoAcreedoresDiversos?.totalPendiente || 0)}</div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="rounded-xl bg-white/5 p-3 border border-white/10">
+                        <div className="text-emerald-100">Facturas pendientes</div>
+                        <div className="text-lg font-semibold">{tipoAcreedoresDiversos?.totalFacturas || 0}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/5 p-3 border border-white/10">
+                        <div className="text-emerald-100">Proveedores</div>
+                        <div className="text-lg font-semibold">{tipoAcreedoresDiversos?.totalProveedores || 0}</div>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-emerald-100">
+                      Haz click para ver el listado y registrar pagos.
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
+
+            {/* ✅ Selector de “Acreedores” (3 opciones) */}
+            <Dialog open={selectorAcreedoresOpen} onOpenChange={setSelectorAcreedoresOpen}>
+              <DialogContent className="max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Selecciona qué deseas analizar</DialogTitle>
+                  <DialogDescription>
+                    Dentro de <span className="font-medium">Acreedores</span>, elige una categoría para ver el listado.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Tipo de acreedor</Label>
+                    <Select value={selectorAcreedoresTipo} onValueChange={(v) => setSelectorAcreedoresTipo(v as any)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una opción" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inventario">
+                          Compras de Inventario — {formatCurrency(tipoInventario?.totalPendiente || 0)}
+                        </SelectItem>
+                        <SelectItem value="capex">
+                          Inversiones CAPEX — {formatCurrency(tipoCapex?.totalPendiente || 0)}
+                        </SelectItem>
+                        <SelectItem value="operativos">
+                          Egresos Operativos — {formatCurrency(tipoOperativos?.totalPendiente || 0)}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <div className="text-xs text-muted-foreground">
+                      Tip: Puedes regresar al menú principal con “Regresar al menú”.
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setSelectorAcreedoresOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={confirmarSelectorAcreedores}>Continuar</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Vista Nivel 2 y 3: Lista de Proveedores y Facturas */}
             {tipoSeleccionado && tipoActual && (
@@ -652,7 +758,7 @@ if (filtroCuentaTransaccion !== "todos") {
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg" style={{ backgroundColor: `${tipoActual.color}15` }}>
                           {(() => {
-                            const Icon = tipoActual.icon;
+                            const Icon = tipoActual.icon as any;
                             return <Icon className="h-6 w-6" style={{ color: tipoActual.color }} />;
                           })()}
                         </div>
@@ -696,6 +802,7 @@ if (filtroCuentaTransaccion !== "todos") {
                         <TableHead className="text-center">Facturas</TableHead>
                       </TableRow>
                     </TableHeader>
+
                     <TableBody>
                       {proveedoresFiltrados.length === 0 ? (
                         <TableRow>
@@ -705,10 +812,9 @@ if (filtroCuentaTransaccion !== "todos") {
                         </TableRow>
                       ) : (
                         proveedoresFiltrados.map((proveedor) => (
-                          <>
+                          <tbody key={proveedor.nombre}>
                             {/* Fila del Proveedor */}
                             <TableRow
-                              key={proveedor.nombre}
                               className="cursor-pointer hover:bg-muted/50"
                               onClick={() => toggleProveedor(proveedor.nombre)}
                             >
@@ -719,12 +825,12 @@ if (filtroCuentaTransaccion !== "todos") {
                                   <ChevronRight className="h-4 w-4" />
                                 )}
                               </TableCell>
+
                               <TableCell>
                                 <div className="font-medium">{proveedor.nombre}</div>
-                                {proveedor.rfc && (
-                                  <div className="text-sm text-muted-foreground">RFC: {proveedor.rfc}</div>
-                                )}
+                                {proveedor.rfc && <div className="text-sm text-muted-foreground">RFC: {proveedor.rfc}</div>}
                               </TableCell>
+
                               <TableCell>
                                 <div className="space-y-1 text-sm">
                                   {proveedor.email && (
@@ -741,13 +847,14 @@ if (filtroCuentaTransaccion !== "todos") {
                                   )}
                                 </div>
                               </TableCell>
+
                               <TableCell className="text-right">
                                 <div className="font-bold">{formatCurrency(proveedor.totalPendiente)}</div>
                               </TableCell>
+
                               <TableCell className="text-center">
                                 <Badge variant="secondary">
-                                  {proveedor.totalFacturas}{" "}
-                                  {proveedor.totalFacturas === 1 ? "factura" : "facturas"}
+                                  {proveedor.totalFacturas} {proveedor.totalFacturas === 1 ? "factura" : "facturas"}
                                 </Badge>
                               </TableCell>
                             </TableRow>
@@ -772,6 +879,7 @@ if (filtroCuentaTransaccion !== "todos") {
                                                     locale: es,
                                                   })}
                                                 </div>
+
                                                 {factura.fecha_vencimiento && (
                                                   <div className="flex items-center gap-1">
                                                     <Clock className="h-3 w-3" />
@@ -792,15 +900,11 @@ if (filtroCuentaTransaccion !== "todos") {
                                             </div>
                                             <div>
                                               <span className="text-muted-foreground">Pagado: </span>
-                                              <span className="font-medium text-success">
-                                                {formatCurrency(factura.monto_pagado)}
-                                              </span>
+                                              <span className="font-medium text-success">{formatCurrency(factura.monto_pagado)}</span>
                                             </div>
                                             <div>
                                               <span className="text-muted-foreground">Pendiente: </span>
-                                              <span className="font-bold text-destructive">
-                                                {formatCurrency(factura.monto_pendiente)}
-                                              </span>
+                                              <span className="font-bold text-destructive">{formatCurrency(factura.monto_pendiente)}</span>
                                             </div>
                                             <div>{getEstadoBadge(factura.fecha_vencimiento, factura.monto_pendiente)}</div>
                                           </div>
@@ -818,6 +922,7 @@ if (filtroCuentaTransaccion !== "todos") {
                                             <History className="h-4 w-4 mr-2" />
                                             Historial
                                           </Button>
+
                                           <Button
                                             size="sm"
                                             onClick={(e) => {
@@ -835,7 +940,7 @@ if (filtroCuentaTransaccion !== "todos") {
                                   </TableCell>
                                 </TableRow>
                               ))}
-                          </>
+                          </tbody>
                         ))
                       )}
                     </TableBody>
@@ -867,8 +972,7 @@ if (filtroCuentaTransaccion !== "todos") {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
-                    {todasTransaccionesCxP?.filter((t) => t.monto_pendiente === 0 && t.fuente !== "pago_cxp").length ||
-                      0}
+                    {todasTransaccionesCxP?.filter((t) => t.monto_pendiente === 0 && t.fuente !== "pago_cxp").length || 0}
                   </div>
                   <p className="text-xs text-muted-foreground">Facturas completadas</p>
                 </CardContent>
@@ -929,6 +1033,7 @@ if (filtroCuentaTransaccion !== "todos") {
               <CardHeader>
                 <CardTitle>Filtros</CardTitle>
               </CardHeader>
+
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Mes */}
@@ -1007,19 +1112,19 @@ if (filtroCuentaTransaccion !== "todos") {
                   </div>
 
                   {/* Cuenta (Documento) */}
-<div className="space-y-2">
-  <label className="text-sm font-medium">Cuenta</label>
-  <Select value={filtroCuentaTransaccion} onValueChange={setFiltroCuentaTransaccion}>
-    <SelectTrigger>
-      <SelectValue placeholder="Todas" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="todos">Todas</SelectItem>
-      <SelectItem value="proveedores">Proveedores</SelectItem>
-      <SelectItem value="acreedores">Acreedores diversos</SelectItem>
-    </SelectContent>
-  </Select>
-</div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Cuenta</label>
+                    <Select value={filtroCuentaTransaccion} onValueChange={setFiltroCuentaTransaccion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas</SelectItem>
+                        <SelectItem value="proveedores">Proveedores</SelectItem>
+                        <SelectItem value="acreedores">Acreedores diversos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
                   {/* Estado */}
                   <div className="space-y-2">
@@ -1115,6 +1220,7 @@ if (filtroCuentaTransaccion !== "todos") {
                           <TableHead className="text-center">Detalle</TableHead>
                         </TableRow>
                       </TableHeader>
+
                       <TableBody>
                         {transaccionesFiltradas.map((transaccion) => {
                           const estado = getEstadoTransaccion(transaccion);
@@ -1151,18 +1257,10 @@ if (filtroCuentaTransaccion !== "todos") {
                               <TableCell>
                                 <Badge
                                   variant={
-                                    estado === "completado"
-                                      ? "default"
-                                      : estado === "enProgreso"
-                                      ? "secondary"
-                                      : "destructive"
+                                    estado === "completado" ? "default" : estado === "enProgreso" ? "secondary" : "destructive"
                                   }
                                 >
-                                  {estado === "completado"
-                                    ? "Completado"
-                                    : estado === "enProgreso"
-                                    ? "En Progreso"
-                                    : "Sin Pagar"}
+                                  {estado === "completado" ? "Completado" : estado === "enProgreso" ? "En Progreso" : "Sin Pagar"}
                                 </Badge>
                               </TableCell>
                               <TableCell>
@@ -1206,9 +1304,7 @@ if (filtroCuentaTransaccion !== "todos") {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Registrar Pago</DialogTitle>
-              <DialogDescription>
-                Registra un pago para {selectedFactura?.proveedor_nombre || "este proveedor"}
-              </DialogDescription>
+              <DialogDescription>Registra un pago para {selectedFactura?.proveedor_nombre || "este proveedor"}</DialogDescription>
             </DialogHeader>
 
             {selectedFactura && (
@@ -1337,10 +1433,12 @@ if (filtroCuentaTransaccion !== "todos") {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">
-                            {format(new Date(pago.fecha), "d 'de' MMMM, yyyy", { locale: es })}
-                          </span>
-                          {pago.es_pago_inicial && <Badge variant="secondary" className="ml-2">Anticipo</Badge>}
+                          <span className="text-sm">{format(new Date(pago.fecha), "d 'de' MMMM, yyyy", { locale: es })}</span>
+                          {pago.es_pago_inicial && (
+                            <Badge variant="secondary" className="ml-2">
+                              Anticipo
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -1387,9 +1485,7 @@ if (filtroCuentaTransaccion !== "todos") {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Fecha</p>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(asientoContable.fecha), "dd MMM yyyy", { locale: es })}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{format(new Date(asientoContable.fecha), "dd MMM yyyy", { locale: es })}</p>
                   </div>
                 </div>
 
@@ -1413,26 +1509,21 @@ if (filtroCuentaTransaccion !== "todos") {
                           <TableCell>
                             <div>
                               <p className="font-medium">{detalle.cuenta_codigo}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {detalle.cuentas?.nombre || detalle.descripcion}
-                              </p>
+                              <p className="text-sm text-muted-foreground">{detalle.cuentas?.nombre || detalle.descripcion}</p>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">{detalle.debe > 0 ? formatCurrency(detalle.debe) : "-"}</TableCell>
                           <TableCell className="text-right">{detalle.haber > 0 ? formatCurrency(detalle.haber) : "-"}</TableCell>
                         </TableRow>
                       ))}
+
                       <TableRow className="font-bold bg-muted/50">
                         <TableCell>Total</TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(
-                            asientoContable.detalle_asientos?.reduce((sum, d) => sum + (d.debe || 0), 0) || 0
-                          )}
+                          {formatCurrency(asientoContable.detalle_asientos?.reduce((sum, d) => sum + (d.debe || 0), 0) || 0)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(
-                            asientoContable.detalle_asientos?.reduce((sum, d) => sum + (d.haber || 0), 0) || 0
-                          )}
+                          {formatCurrency(asientoContable.detalle_asientos?.reduce((sum, d) => sum + (d.haber || 0), 0) || 0)}
                         </TableCell>
                       </TableRow>
                     </TableBody>
