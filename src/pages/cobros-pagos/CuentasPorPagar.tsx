@@ -1,5 +1,10 @@
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
@@ -37,16 +38,18 @@ import {
   ArrowLeft,
   Users,
   Layers,
+  Boxes,
+  Landmark,
+  BriefcaseBusiness,
+  Info,
 } from "lucide-react";
 
-import { useCuentasPorPagarAgrupadas, FacturaCxP, TipoCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
-import { useAnalyticsCuentasPorPagar, useCuentasPorPagarDetalle } from "@/hooks/useAnalyticsCuentasPorPagar";
+import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { formatCurrency, cn } from "@/lib/utils";
 import AnalyticasCxP from "@/components/CuentasPorPagar/AnalyticasCxP";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-/** ✅ Helper E2E: fetch con cookies + normalización {data} */
+/** Fetch helper */
 async function apiJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...options,
@@ -73,23 +76,17 @@ type TransaccionCxP = {
   id: string;
   created_at: string;
   fecha: string | null;
-
   proveedor_nombre: string;
   descripcion: string;
-
   tipo: string;
   subtipo: string;
-
   monto_total: number;
   monto_pagado: number;
   monto_pendiente: number;
-
   tipo_pago: string;
   metodo_pago: string;
-
   fecha_vencimiento: string | null;
   estado: string;
-
   fuente: FuenteTransaccion;
 };
 
@@ -118,26 +115,23 @@ type PagoHistorial = {
 };
 
 type TipoMenuProveedores = "inventario" | "capex" | "operativos";
+type EstadoFiltroLista = "todos" | "conSaldo" | "pagados" | "vencidos";
+type OrdenLista = "monto_desc" | "monto_asc" | "nombre_asc" | "nombre_desc";
 
 const CuentasPorPagar = () => {
-  // Estados principales
   const [activeTab, setActiveTab] = useState("lista");
   const [tipoSeleccionado, setTipoSeleccionado] = useState<string | null>(null);
   const [expandedProveedores, setExpandedProveedores] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
-
-  // ✅ Nuevo: selector para el bloque “Acreedores” (3 opciones)
   const [selectorAcreedoresOpen, setSelectorAcreedoresOpen] = useState(false);
   const [selectorAcreedoresTipo, setSelectorAcreedoresTipo] = useState<TipoMenuProveedores>("operativos");
 
-  // Estados de dialogs
   const [pagoDialogOpen, setPagoDialogOpen] = useState(false);
   const [selectedFactura, setSelectedFactura] = useState<FacturaCxP | null>(null);
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
   const [historialDialogOpen, setHistorialDialogOpen] = useState(false);
 
-  // Estados para Resumen de Transacciones
   const [filtroMesTransaccion, setFiltroMesTransaccion] = useState<string>("todos");
   const [filtroAnoTransaccion, setFiltroAnoTransaccion] = useState<string>("todos");
   const [filtroProveedorTransaccion, setFiltroProveedorTransaccion] = useState<string>("todos");
@@ -150,18 +144,15 @@ const CuentasPorPagar = () => {
   const [selectedTransaccionId, setSelectedTransaccionId] = useState<string | null>(null);
   const [fuenteTransaccion, setFuenteTransaccion] = useState<FuenteTransaccion | null>(null);
 
-  // Estados para analíticas (los dejas igual aunque no se usen en UI aquí)
-  const [formatoNumerosAnalitica] = useState<"normal" | "miles" | "millones">("normal");
-  const [decimalesAnalitica] = useState<0 | 1 | 2>(2);
+  // filtros estilo CxC para Lista
+  const [estadoFiltroLista, setEstadoFiltroLista] = useState<EstadoFiltroLista>("todos");
+  const [ordenLista, setOrdenLista] = useState<OrdenLista>("monto_desc");
 
   const { data: tiposCxP, isLoading } = useCuentasPorPagarAgrupadas();
-  const { data: analytics, isLoading: loadingAnalytics } = useAnalyticsCuentasPorPagar();
-  const { data: detalles, isLoading: loadingDetalles } = useCuentasPorPagarDetalle();
   const { data: saldos } = useSaldosDisponibles();
 
   const queryClient = useQueryClient();
 
-  // ✅ Query para todas las transacciones (incluye pagadas)
   const { data: todasTransaccionesCxP, isLoading: loadingTransaccionesCxP } = useQuery({
     queryKey: ["todas-transacciones-cxp"],
     queryFn: async () => {
@@ -169,7 +160,6 @@ const CuentasPorPagar = () => {
     },
   });
 
-  // ✅ Query para asiento contable
   const { data: asientoContable, isLoading: loadingAsiento } = useQuery({
     queryKey: ["asiento-contable-cxp", selectedTransaccionId, fuenteTransaccion],
     queryFn: async () => {
@@ -196,7 +186,6 @@ const CuentasPorPagar = () => {
     enabled: !!selectedFactura && historialDialogOpen,
   });
 
-  // ✅ Mutación para registrar pago
   const registrarPagoMutation = useMutation({
     mutationFn: async ({
       facturaId,
@@ -222,9 +211,6 @@ const CuentasPorPagar = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
       queryClient.invalidateQueries({ queryKey: ["todas-transacciones-cxp"] });
-      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar"] });
-      queryClient.invalidateQueries({ queryKey: ["analytics-cuentas-por-pagar-consolidadas"] });
-      queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-detalle"] });
       queryClient.invalidateQueries({ queryKey: ["historial-pagos-cxp"] });
       queryClient.invalidateQueries({ queryKey: ["saldos-disponibles"] });
       queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
@@ -239,15 +225,13 @@ const CuentasPorPagar = () => {
     },
   });
 
-  // Helpers: acceso por id
   const getTipo = (id: string) => (tiposCxP || []).find((t) => t.id === id) || null;
 
   const tipoInventario = getTipo("inventario");
   const tipoCapex = getTipo("capex");
   const tipoOperativos = getTipo("operativos");
-  const tipoAcreedoresDiversos = getTipo("acreedores"); // 2003
+  const tipoAcreedoresDiversos = getTipo("acreedores");
 
-  // ✅ Agrupación “Acreedores” (Proveedores): inventario + capex + operativos
   const facturasProveedores = useMemo(() => {
     const a = tipoInventario?.proveedores?.flatMap((p) => p.facturas) || [];
     const b = tipoCapex?.proveedores?.flatMap((p) => p.facturas) || [];
@@ -264,16 +248,15 @@ const CuentasPorPagar = () => {
     (tipoInventario?.totalPendiente || 0) + (tipoCapex?.totalPendiente || 0) + (tipoOperativos?.totalPendiente || 0);
 
   const totalProveedoresFacturas = facturasProveedores.length;
-
-  // ✅ Desglose KPI “Total por pagar” (Documento)
   const saldoAcreedores = tipoAcreedoresDiversos?.totalPendiente || 0;
   const saldoProveedores = totalProveedoresPendiente;
 
-  // Handlers
   const resetVistaLista = () => {
     setTipoSeleccionado(null);
     setExpandedProveedores(new Set());
     setSearchTerm("");
+    setEstadoFiltroLista("todos");
+    setOrdenLista("monto_desc");
   };
 
   const toggleProveedor = (nombreProveedor: string) => {
@@ -348,34 +331,86 @@ const CuentasPorPagar = () => {
 
     const fechaVence = new Date(fechaVencimiento);
     const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    fechaVence.setHours(0, 0, 0, 0);
+
     if (fechaVence < hoy) return <Badge variant="destructive">Vencida</Badge>;
     return <Badge variant="default">Por vencer</Badge>;
   };
 
-  // Obtener tipo seleccionado (para vista detalle)
   const tipoActual = tiposCxP?.find((t) => t.id === tipoSeleccionado);
 
-  // Filtrar proveedores por búsqueda
-  const proveedoresFiltrados =
-    tipoActual?.proveedores.filter(
-      (prov) =>
-        prov.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        prov.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        prov.telefono?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        prov.rfc?.toLowerCase().includes(searchTerm.toLowerCase())
-    ) || [];
+  const proveedoresFiltrados = useMemo(() => {
+    const base = tipoActual?.proveedores || [];
+    let resultado = [...base];
 
-  // Calcular KPIs generales
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim();
+      resultado = resultado.filter(
+        (prov) =>
+          prov.nombre.toLowerCase().includes(q) ||
+          prov.email?.toLowerCase().includes(q) ||
+          prov.telefono?.toLowerCase().includes(q) ||
+          prov.rfc?.toLowerCase().includes(q)
+      );
+    }
+
+    if (estadoFiltroLista === "conSaldo") {
+      resultado = resultado.filter((prov) => (prov.totalPendiente || 0) > 0);
+    } else if (estadoFiltroLista === "pagados") {
+      resultado = resultado.filter((prov) => (prov.totalPendiente || 0) <= 0);
+    } else if (estadoFiltroLista === "vencidos") {
+      resultado = resultado.filter((prov) =>
+        prov.facturas?.some((f) => {
+          if (!f.fecha_vencimiento || (f.monto_pendiente || 0) <= 0) return false;
+          const vence = new Date(f.fecha_vencimiento);
+          const hoy = new Date();
+          vence.setHours(0, 0, 0, 0);
+          hoy.setHours(0, 0, 0, 0);
+          return vence < hoy;
+        })
+      );
+    }
+
+    resultado.sort((a, b) => {
+      switch (ordenLista) {
+        case "monto_asc":
+          return (a.totalPendiente || 0) - (b.totalPendiente || 0);
+        case "nombre_asc":
+          return a.nombre.localeCompare(b.nombre);
+        case "nombre_desc":
+          return b.nombre.localeCompare(a.nombre);
+        case "monto_desc":
+        default:
+          return (b.totalPendiente || 0) - (a.totalPendiente || 0);
+      }
+    });
+
+    return resultado;
+  }, [tipoActual, searchTerm, estadoFiltroLista, ordenLista]);
+
   const totalFacturas = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalFacturas, 0) || 0;
   const totalPendiente = tiposCxP?.reduce((sum, tipo) => sum + tipo.totalPendiente, 0) || 0;
 
   const todasFacturas = tiposCxP?.flatMap((tipo) => tipo.proveedores.flatMap((prov) => prov.facturas)) || [];
 
   const hoy = new Date();
-  const totalVencidas = todasFacturas.filter((f) => f.fecha_vencimiento && new Date(f.fecha_vencimiento) < hoy).length;
-  const totalPorVencer = todasFacturas.filter((f) => f.fecha_vencimiento && new Date(f.fecha_vencimiento) >= hoy).length;
+  hoy.setHours(0, 0, 0, 0);
 
-  // Filtros para Resumen de Transacciones
+  const totalVencidas = todasFacturas.filter((f) => {
+    if (!f.fecha_vencimiento || (f.monto_pendiente || 0) <= 0) return false;
+    const vence = new Date(f.fecha_vencimiento);
+    vence.setHours(0, 0, 0, 0);
+    return vence < hoy;
+  }).length;
+
+  const totalPorVencer = todasFacturas.filter((f) => {
+    if (!f.fecha_vencimiento || (f.monto_pendiente || 0) <= 0) return false;
+    const vence = new Date(f.fecha_vencimiento);
+    vence.setHours(0, 0, 0, 0);
+    return vence >= hoy;
+  }).length;
+
   const transaccionesFiltradas = useMemo(() => {
     if (!todasTransaccionesCxP) return [];
 
@@ -397,7 +432,6 @@ const CuentasPorPagar = () => {
       resultado = resultado.filter((t) => t.tipo === filtroTipoEgreso);
     }
 
-    // ✅ Filtro Cuenta (Documento): Proveedores vs Acreedores Diversos
     if (filtroCuentaTransaccion !== "todos") {
       const tipoLower = (x: string) => String(x || "").toLowerCase().trim();
       if (filtroCuentaTransaccion === "proveedores") {
@@ -440,7 +474,6 @@ const CuentasPorPagar = () => {
     ordenMontoTransaccion,
   ]);
 
-  // Listas únicas para filtros
   const proveedoresUnicos = useMemo(() => {
     if (!todasTransaccionesCxP) return [];
     const nombres = new Set(todasTransaccionesCxP.map((t) => t.proveedor_nombre));
@@ -489,12 +522,100 @@ const CuentasPorPagar = () => {
     setTipoSeleccionado(nextId);
     setExpandedProveedores(new Set());
     setSearchTerm("");
+    setEstadoFiltroLista("todos");
+    setOrdenLista("monto_desc");
   };
 
   const abrirAcreedoresDiversos = () => {
     setTipoSeleccionado("acreedores");
     setExpandedProveedores(new Set());
     setSearchTerm("");
+    setEstadoFiltroLista("todos");
+    setOrdenLista("monto_desc");
+  };
+
+  const heroConfig = useMemo(() => {
+    switch (tipoSeleccionado) {
+      case "inventario":
+        return {
+          breadcrumb: "/ Acreedores / Compras de Inventario",
+          title: "Compras de Inventario",
+          subtitle: "Facturas pendientes por compras de mercancía y productos",
+          amountLabel: "Total pendiente",
+          gradient: "from-sky-950 via-slate-900 to-blue-950",
+          panelBg: "bg-white/10 border-white/10",
+          textSoft: "text-sky-100",
+          Icon: Boxes,
+        };
+      case "capex":
+        return {
+          breadcrumb: "/ Acreedores / Inversiones CAPEX",
+          title: "Inversiones CAPEX",
+          subtitle: "Adquisiciones de activos e inversiones de capital pendientes de pago",
+          amountLabel: "Total pendiente",
+          gradient: "from-violet-950 via-slate-900 to-indigo-950",
+          panelBg: "bg-white/10 border-white/10",
+          textSoft: "text-violet-100",
+          Icon: Landmark,
+        };
+      case "operativos":
+        return {
+          breadcrumb: "/ Acreedores / Gastos Operativos",
+          title: "Gastos Operativos",
+          subtitle: "Compromisos pendientes relacionados con operación y funcionamiento",
+          amountLabel: "Total pendiente",
+          gradient: "from-slate-950 via-slate-900 to-slate-800",
+          panelBg: "bg-white/10 border-white/10",
+          textSoft: "text-slate-200",
+          Icon: BriefcaseBusiness,
+        };
+      case "acreedores":
+        return {
+          breadcrumb: "/ 2003 - Acreedores Diversos",
+          title: "Acreedores Diversos",
+          subtitle: "Otras cuentas por pagar registradas en la cuenta 2003",
+          amountLabel: "Total pendiente",
+          gradient: "from-emerald-950 via-teal-900 to-cyan-950",
+          panelBg: "bg-white/10 border-white/10",
+          textSoft: "text-emerald-100",
+          Icon: Users,
+        };
+      default:
+        return null;
+    }
+  }, [tipoSeleccionado]);
+
+  const metricasVistaActual = useMemo(() => {
+    if (!tipoActual) {
+      return {
+        pendientes: 0,
+        vencidas: 0,
+        proveedores: 0,
+      };
+    }
+
+    const facturas = tipoActual.proveedores.flatMap((p) => p.facturas);
+
+    const vencidas = facturas.filter((f) => {
+      if (!f.fecha_vencimiento || (f.monto_pendiente || 0) <= 0) return false;
+      const vence = new Date(f.fecha_vencimiento);
+      const ahora = new Date();
+      vence.setHours(0, 0, 0, 0);
+      ahora.setHours(0, 0, 0, 0);
+      return vence < ahora;
+    }).length;
+
+    return {
+      pendientes: tipoActual.totalFacturas || 0,
+      vencidas,
+      proveedores: tipoActual.totalProveedores || 0,
+    };
+  }, [tipoActual]);
+
+  const limpiarFiltrosLista = () => {
+    setSearchTerm("");
+    setEstadoFiltroLista("todos");
+    setOrdenLista("monto_desc");
   };
 
   if (isLoading) {
@@ -510,7 +631,6 @@ const CuentasPorPagar = () => {
   return (
     <div className="flex-1 overflow-auto p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Cuentas por Pagar</h1>
@@ -518,7 +638,6 @@ const CuentasPorPagar = () => {
           </div>
         </div>
 
-        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="lista" className="flex items-center gap-2">
@@ -535,21 +654,17 @@ const CuentasPorPagar = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Tab: Lista de Cuentas */}
           <TabsContent value="lista" className="space-y-6">
-            {/* Botón de regreso al menú principal */}
             {tipoSeleccionado && (
               <div className="flex items-center gap-3">
                 <Button variant="outline" onClick={resetVistaLista} className="flex items-center gap-2">
                   <ArrowLeft className="h-4 w-4" />
                   Regresar al menú
                 </Button>
-
-                <span className="text-sm text-muted-foreground">/ {tipoActual?.nombre}</span>
+                <span className="text-sm text-muted-foreground">{heroConfig?.breadcrumb}</span>
               </div>
             )}
 
-            {/* KPIs Generales */}
             <div className="grid gap-4 md:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -604,10 +719,8 @@ const CuentasPorPagar = () => {
               </Card>
             </div>
 
-            {/* ✅ VISTA NIVEL 1 (NUEVA): 2 BLOQUES GRANDES como CxC */}
             {!tipoSeleccionado && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Bloque 1: Acreedores (agrupa inventario+capex+operativos) */}
                 <Card
                   className={cn(
                     "cursor-pointer overflow-hidden border-0",
@@ -649,12 +762,11 @@ const CuentasPorPagar = () => {
                     </div>
 
                     <div className="text-xs text-slate-300">
-                      Haz click para seleccionar qué tipo de acreedor deseas analizar.
+                      Haz click para seleccionar inventario, CAPEX u operativos.
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Bloque 2: Acreedores Diversos (2003) */}
                 <Card
                   className={cn(
                     "cursor-pointer overflow-hidden border-0",
@@ -668,7 +780,7 @@ const CuentasPorPagar = () => {
                       <div className="space-y-1">
                         <CardTitle className="text-xl font-semibold tracking-tight">Acreedores Diversos</CardTitle>
                         <CardDescription className="text-emerald-100">
-                          Otras cuentas por pagar (cuenta 2003)
+                          Otras cuentas por pagar registradas en la cuenta 2003
                         </CardDescription>
                       </div>
 
@@ -703,7 +815,6 @@ const CuentasPorPagar = () => {
               </div>
             )}
 
-            {/* ✅ Selector de “Acreedores” (3 opciones) */}
             <Dialog open={selectorAcreedoresOpen} onOpenChange={setSelectorAcreedoresOpen}>
               <DialogContent className="max-w-xl">
                 <DialogHeader>
@@ -716,7 +827,7 @@ const CuentasPorPagar = () => {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Tipo de acreedor</Label>
-                    <Select value={selectorAcreedoresTipo} onValueChange={(v) => setSelectorAcreedoresTipo(v as any)}>
+                    <Select value={selectorAcreedoresTipo} onValueChange={(v) => setSelectorAcreedoresTipo(v as TipoMenuProveedores)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona una opción" />
                       </SelectTrigger>
@@ -748,211 +859,326 @@ const CuentasPorPagar = () => {
               </DialogContent>
             </Dialog>
 
-            {/* Vista Nivel 2 y 3: Lista de Proveedores y Facturas */}
-            {tipoSeleccionado && tipoActual && (
-              <div className="space-y-6">
-                {/* Card de resumen del tipo seleccionado */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg" style={{ backgroundColor: `${tipoActual.color}15` }}>
-                          {(() => {
-                            const Icon = tipoActual.icon as any;
-                            return <Icon className="h-6 w-6" style={{ color: tipoActual.color }} />;
-                          })()}
+            {tipoSeleccionado && tipoActual && heroConfig && (
+              <div className="space-y-5">
+                <Card className={cn("overflow-hidden border-0 text-white shadow-xl", `bg-gradient-to-r ${heroConfig.gradient}`)}>
+                  <CardContent className="p-5 md:p-6">
+                    <div className="flex flex-col gap-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                              variant="outline"
+                              onClick={resetVistaLista}
+                              className="border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                            >
+                              <ArrowLeft className="mr-2 h-4 w-4" />
+                              Regresar al menú
+                            </Button>
+
+                            <span className={cn("text-sm font-medium", heroConfig.textSoft)}>{heroConfig.breadcrumb}</span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{heroConfig.title}</h2>
+                            <p className={cn("text-sm md:text-base", heroConfig.textSoft)}>{heroConfig.subtitle}</p>
+                          </div>
                         </div>
-                        <div>
-                          <CardTitle>{tipoActual.nombre}</CardTitle>
-                          <CardDescription>{tipoActual.descripcion}</CardDescription>
+
+                        <div className={cn("rounded-2xl border px-4 py-3 min-w-[180px] lg:min-w-[210px]", heroConfig.panelBg)}>
+                          <div className={cn("text-sm", heroConfig.textSoft)}>{heroConfig.amountLabel}</div>
+                          <div className="text-3xl font-bold">{formatCurrency(tipoActual.totalPendiente || 0)}</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold">{formatCurrency(tipoActual.totalPendiente)}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {tipoActual.totalFacturas} facturas • {tipoActual.totalProveedores} proveedores
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className={cn("rounded-2xl border p-4", heroConfig.panelBg)}>
+                          <div className={cn("text-xs uppercase tracking-wide", heroConfig.textSoft)}>Registros pendientes</div>
+                          <div className="mt-1 text-2xl font-semibold">{metricasVistaActual.pendientes}</div>
+                        </div>
+
+                        <div className={cn("rounded-2xl border p-4", heroConfig.panelBg)}>
+                          <div className={cn("text-xs uppercase tracking-wide", heroConfig.textSoft)}>
+                            {tipoSeleccionado === "acreedores" ? "Acreedores" : "Proveedores"}
+                          </div>
+                          <div className="mt-1 text-2xl font-semibold">{metricasVistaActual.proveedores}</div>
+                        </div>
+
+                        <div className={cn("rounded-2xl border p-4", heroConfig.panelBg)}>
+                          <div className={cn("text-xs uppercase tracking-wide", heroConfig.textSoft)}>Tip</div>
+                          <div className="mt-1 text-sm leading-relaxed text-white">
+                            Usa búsqueda + estado para encontrar rápido y registrar pagos sin perder contexto.
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </CardHeader>
+                  </CardContent>
                 </Card>
 
-                {/* Barra de búsqueda */}
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar proveedor por nombre, email, teléfono o RFC..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                {/* Tabla de Proveedores */}
                 <Card>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[50px]"></TableHead>
-                        <TableHead>Proveedor</TableHead>
-                        <TableHead>Información de Contacto</TableHead>
-                        <TableHead className="text-right">Total Pendiente</TableHead>
-                        <TableHead className="text-center">Facturas</TableHead>
-                      </TableRow>
-                    </TableHeader>
+                  <CardContent className="p-5">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Search className="h-5 w-5 text-muted-foreground" />
+                        <h3 className="text-2xl font-semibold tracking-tight">Filtrar Cuentas</h3>
+                      </div>
 
-                    <TableBody>
-                      {proveedoresFiltrados.length === 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div className="md:col-span-5 space-y-2">
+                          <Label>Búsqueda</Label>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="Proveedor, descripción, teléfono, email o RFC..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="pl-9"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-3 space-y-2">
+                          <Label>Estado</Label>
+                          <Select value={estadoFiltroLista} onValueChange={(v) => setEstadoFiltroLista(v as EstadoFiltroLista)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Todos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="todos">Todos</SelectItem>
+                              <SelectItem value="conSaldo">Con saldo pendiente</SelectItem>
+                              <SelectItem value="vencidos">Con facturas vencidas</SelectItem>
+                              <SelectItem value="pagados">Total pagado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="md:col-span-3 space-y-2">
+                          <Label>Orden</Label>
+                          <Select value={ordenLista} onValueChange={(v) => setOrdenLista(v as OrdenLista)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Ordenar" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="monto_desc">Mayor saldo</SelectItem>
+                              <SelectItem value="monto_asc">Menor saldo</SelectItem>
+                              <SelectItem value="nombre_asc">Nombre A-Z</SelectItem>
+                              <SelectItem value="nombre_desc">Nombre Z-A</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="md:col-span-1">
+                          <Button variant="outline" className="w-full" onClick={limpiarFiltrosLista}>
+                            Limpiar
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-3xl tracking-tight">
+                      {tipoSeleccionado === "acreedores" ? "Listado de Acreedores Diversos" : "Listado de Proveedores"}
+                    </CardTitle>
+                  </CardHeader>
+
+                  <CardContent className="pt-0">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            No se encontraron proveedores
-                          </TableCell>
+                          <TableHead className="w-[52px]"></TableHead>
+                          <TableHead>
+                            {tipoSeleccionado === "acreedores" ? "Acreedor" : "Proveedor"}
+                          </TableHead>
+                          <TableHead>Información de Contacto</TableHead>
+                          <TableHead className="text-right">Total Pendiente</TableHead>
+                          <TableHead className="text-center">Facturas</TableHead>
                         </TableRow>
-                      ) : (
-                        proveedoresFiltrados.map((proveedor) => (
-                          <tbody key={proveedor.nombre}>
-                            {/* Fila del Proveedor */}
-                            <TableRow
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => toggleProveedor(proveedor.nombre)}
-                            >
-                              <TableCell>
-                                {expandedProveedores.has(proveedor.nombre) ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                              </TableCell>
+                      </TableHeader>
 
-                              <TableCell>
-                                <div className="font-medium">{proveedor.nombre}</div>
-                                {proveedor.rfc && <div className="text-sm text-muted-foreground">RFC: {proveedor.rfc}</div>}
-                              </TableCell>
-
-                              <TableCell>
-                                <div className="space-y-1 text-sm">
-                                  {proveedor.email && (
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                      <Mail className="h-3 w-3" />
-                                      {proveedor.email}
-                                    </div>
+                      <TableBody>
+                        {proveedoresFiltrados.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                              No se encontraron cuentas por pagar.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          proveedoresFiltrados.map((proveedor) => (
+                            <>
+                              <TableRow
+                                key={`prov-${proveedor.nombre}`}
+                                className="cursor-pointer hover:bg-muted/40"
+                                onClick={() => toggleProveedor(proveedor.nombre)}
+                              >
+                                <TableCell>
+                                  {expandedProveedores.has(proveedor.nombre) ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
                                   )}
-                                  {proveedor.telefono && (
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                      <Phone className="h-3 w-3" />
-                                      {proveedor.telefono}
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
+                                </TableCell>
 
-                              <TableCell className="text-right">
-                                <div className="font-bold">{formatCurrency(proveedor.totalPendiente)}</div>
-                              </TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <div className="font-semibold">{proveedor.nombre}</div>
+                                    {proveedor.rfc && <div className="text-sm text-muted-foreground">RFC: {proveedor.rfc}</div>}
+                                  </div>
+                                </TableCell>
 
-                              <TableCell className="text-center">
-                                <Badge variant="secondary">
-                                  {proveedor.totalFacturas} {proveedor.totalFacturas === 1 ? "factura" : "facturas"}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
+                                <TableCell>
+                                  <div className="space-y-1 text-sm">
+                                    {proveedor.telefono && (
+                                      <div className="flex items-center gap-2 text-muted-foreground">
+                                        <Phone className="h-3.5 w-3.5" />
+                                        {proveedor.telefono}
+                                      </div>
+                                    )}
+                                    {proveedor.email && (
+                                      <div className="flex items-center gap-2 text-muted-foreground">
+                                        <Mail className="h-3.5 w-3.5" />
+                                        {proveedor.email}
+                                      </div>
+                                    )}
+                                    {!proveedor.email && !proveedor.telefono && (
+                                      <div className="text-sm text-muted-foreground">Sin información de contacto</div>
+                                    )}
+                                  </div>
+                                </TableCell>
 
-                            {/* Facturas Expandidas */}
-                            {expandedProveedores.has(proveedor.nombre) &&
-                              proveedor.facturas.map((factura) => (
-                                <TableRow key={factura.id} className="bg-muted/30">
-                                  <TableCell></TableCell>
-                                  <TableCell colSpan={4}>
-                                    <div className="pl-8 py-2">
-                                      <div className="flex items-start justify-between gap-4">
-                                        <div className="flex-1 space-y-2">
-                                          <div className="flex items-start gap-3">
-                                            <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
-                                            <div className="flex-1">
-                                              <div className="font-medium">{factura.descripcion}</div>
-                                              <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                                                <div className="flex items-center gap-1">
-                                                  <Calendar className="h-3 w-3" />
-                                                  {format(new Date(factura.created_at), "d 'de' MMMM, yyyy", {
-                                                    locale: es,
-                                                  })}
+                                <TableCell className="text-right">
+                                  <div className="font-bold text-lg">{formatCurrency(proveedor.totalPendiente || 0)}</div>
+                                </TableCell>
+
+                                <TableCell className="text-center">
+                                  <Badge variant="secondary">
+                                    {proveedor.totalFacturas} {proveedor.totalFacturas === 1 ? "factura" : "facturas"}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+
+                              {expandedProveedores.has(proveedor.nombre) &&
+                                proveedor.facturas.map((factura) => {
+                                  const porcentajePagado =
+                                    factura.monto_total > 0 ? (factura.monto_pagado / factura.monto_total) * 100 : 0;
+
+                                  return (
+                                    <TableRow key={factura.id} className="bg-muted/25">
+                                      <TableCell></TableCell>
+                                      <TableCell colSpan={4}>
+                                        <div className="pl-4 md:pl-8 py-3">
+                                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                            <div className="flex-1 space-y-3">
+                                              <div className="flex items-start gap-3">
+                                                <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                                <div className="space-y-1">
+                                                  <div className="font-medium">{factura.descripcion}</div>
+
+                                                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                                    <div className="flex items-center gap-1">
+                                                      <Calendar className="h-3.5 w-3.5" />
+                                                      {format(new Date(factura.created_at), "d 'de' MMMM, yyyy", {
+                                                        locale: es,
+                                                      })}
+                                                    </div>
+
+                                                    {factura.fecha_vencimiento && (
+                                                      <div className="flex items-center gap-1">
+                                                        <Clock className="h-3.5 w-3.5" />
+                                                        Vence:{" "}
+                                                        {format(new Date(factura.fecha_vencimiento), "d 'de' MMMM, yyyy", {
+                                                          locale: es,
+                                                        })}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pl-0 md:pl-8">
+                                                <div className="rounded-xl border bg-background p-3">
+                                                  <div className="text-xs text-muted-foreground">Total</div>
+                                                  <div className="font-semibold">{formatCurrency(factura.monto_total)}</div>
                                                 </div>
 
-                                                {factura.fecha_vencimiento && (
-                                                  <div className="flex items-center gap-1">
-                                                    <Clock className="h-3 w-3" />
-                                                    Vence:{" "}
-                                                    {format(new Date(factura.fecha_vencimiento), "d 'de' MMMM, yyyy", {
-                                                      locale: es,
-                                                    })}
+                                                <div className="rounded-xl border bg-background p-3">
+                                                  <div className="text-xs text-muted-foreground">Pagado</div>
+                                                  <div className="font-semibold text-green-600">
+                                                    {formatCurrency(factura.monto_pagado)}
                                                   </div>
-                                                )}
+                                                </div>
+
+                                                <div className="rounded-xl border bg-background p-3">
+                                                  <div className="text-xs text-muted-foreground">Pendiente</div>
+                                                  <div className="font-semibold text-destructive">
+                                                    {formatCurrency(factura.monto_pendiente)}
+                                                  </div>
+                                                </div>
+
+                                                <div className="rounded-xl border bg-background p-3 flex items-center justify-between gap-2">
+                                                  <div>
+                                                    <div className="text-xs text-muted-foreground">Estado</div>
+                                                    <div className="mt-1">
+                                                      {getEstadoBadge(factura.fecha_vencimiento, factura.monto_pendiente)}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              <div className="pl-0 md:pl-8 space-y-2">
+                                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                  <span>Progreso de pago</span>
+                                                  <span>{porcentajePagado.toFixed(0)}%</span>
+                                                </div>
+                                                <Progress value={porcentajePagado} className="h-2" />
                                               </div>
                                             </div>
-                                          </div>
 
-                                          <div className="flex items-center gap-6 text-sm pl-8">
-                                            <div>
-                                              <span className="text-muted-foreground">Total: </span>
-                                              <span className="font-medium">{formatCurrency(factura.monto_total)}</span>
+                                            <div className="flex flex-wrap gap-2 xl:pl-4">
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openHistorialDialog(factura);
+                                                }}
+                                              >
+                                                <History className="h-4 w-4 mr-2" />
+                                                Historial
+                                              </Button>
+
+                                              <Button
+                                                size="sm"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openPagoDialog(factura);
+                                                }}
+                                                disabled={factura.monto_pendiente <= 0}
+                                              >
+                                                <CreditCard className="h-4 w-4 mr-2" />
+                                                Pagar
+                                              </Button>
                                             </div>
-                                            <div>
-                                              <span className="text-muted-foreground">Pagado: </span>
-                                              <span className="font-medium text-success">{formatCurrency(factura.monto_pagado)}</span>
-                                            </div>
-                                            <div>
-                                              <span className="text-muted-foreground">Pendiente: </span>
-                                              <span className="font-bold text-destructive">{formatCurrency(factura.monto_pendiente)}</span>
-                                            </div>
-                                            <div>{getEstadoBadge(factura.fecha_vencimiento, factura.monto_pendiente)}</div>
                                           </div>
                                         </div>
-
-                                        <div className="flex gap-2">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openHistorialDialog(factura);
-                                            }}
-                                          >
-                                            <History className="h-4 w-4 mr-2" />
-                                            Historial
-                                          </Button>
-
-                                          <Button
-                                            size="sm"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openPagoDialog(factura);
-                                            }}
-                                            disabled={factura.monto_pendiente <= 0}
-                                          >
-                                            <CreditCard className="h-4 w-4 mr-2" />
-                                            Pagar
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                          </tbody>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
                 </Card>
               </div>
             )}
           </TabsContent>
 
-          {/* Tab: Resumen de Transacciones */}
           <TabsContent value="transacciones" className="space-y-6">
-            {/* KPIs de Transacciones */}
             <div className="grid gap-4 md:grid-cols-5">
               <Card className="bg-card/50 backdrop-blur">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1028,7 +1254,6 @@ const CuentasPorPagar = () => {
               </Card>
             </div>
 
-            {/* Filtros */}
             <Card>
               <CardHeader>
                 <CardTitle>Filtros</CardTitle>
@@ -1036,7 +1261,6 @@ const CuentasPorPagar = () => {
 
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Mes */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Mes</label>
                     <Select value={filtroMesTransaccion} onValueChange={setFiltroMesTransaccion}>
@@ -1054,7 +1278,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Año */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Año</label>
                     <Select value={filtroAnoTransaccion} onValueChange={setFiltroAnoTransaccion}>
@@ -1075,7 +1298,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Proveedor */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Proveedor</label>
                     <Select value={filtroProveedorTransaccion} onValueChange={setFiltroProveedorTransaccion}>
@@ -1093,7 +1315,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Tipo */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Tipo</label>
                     <Select value={filtroTipoEgreso} onValueChange={setFiltroTipoEgreso}>
@@ -1111,7 +1332,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Cuenta (Documento) */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Cuenta</label>
                     <Select value={filtroCuentaTransaccion} onValueChange={setFiltroCuentaTransaccion}>
@@ -1126,7 +1346,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Estado */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Estado</label>
                     <Select value={filtroEstadoTransaccion} onValueChange={setFiltroEstadoTransaccion}>
@@ -1142,7 +1361,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Método de Pago */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Método de Pago</label>
                     <Select value={filtroMetodoPago} onValueChange={setFiltroMetodoPago}>
@@ -1159,7 +1377,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Ordenar */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Ordenar por Monto</label>
                     <Select value={ordenMontoTransaccion} onValueChange={setOrdenMontoTransaccion}>
@@ -1174,7 +1391,6 @@ const CuentasPorPagar = () => {
                     </Select>
                   </div>
 
-                  {/* Botón Limpiar */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">&nbsp;</label>
                     <Button variant="outline" className="w-full" onClick={limpiarFiltrosTransacciones}>
@@ -1186,7 +1402,6 @@ const CuentasPorPagar = () => {
               </CardContent>
             </Card>
 
-            {/* Tabla de Transacciones */}
             <Card>
               <CardHeader>
                 <CardTitle>Transacciones ({transaccionesFiltradas.length})</CardTitle>
@@ -1293,13 +1508,11 @@ const CuentasPorPagar = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab: Analíticas */}
           <TabsContent value="analiticas" className="space-y-6">
             <AnalyticasCxP />
           </TabsContent>
         </Tabs>
 
-        {/* Dialog: Registrar Pago */}
         <Dialog open={pagoDialogOpen} onOpenChange={setPagoDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -1316,7 +1529,7 @@ const CuentasPorPagar = () => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Pagado:</span>
-                    <span className="font-medium text-success">{formatCurrency(selectedFactura.monto_pagado)}</span>
+                    <span className="font-medium text-green-600">{formatCurrency(selectedFactura.monto_pagado)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Pendiente:</span>
@@ -1339,7 +1552,6 @@ const CuentasPorPagar = () => {
                 <div className="space-y-2">
                   <Label>Método de pago</Label>
                   <RadioGroup value={metodoPago} onValueChange={setMetodoPago} className="space-y-2">
-                    {/* Opción Efectivo */}
                     <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
                       <div className="flex items-center gap-3">
                         <RadioGroupItem value="efectivo" id="efectivo" />
@@ -1358,7 +1570,6 @@ const CuentasPorPagar = () => {
                       </span>
                     </div>
 
-                    {/* Opción Transferencia/Bancos */}
                     <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
                       <div className="flex items-center gap-3">
                         <RadioGroupItem value="transferencia" id="transferencia" />
@@ -1398,7 +1609,6 @@ const CuentasPorPagar = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog: Historial de Pagos */}
         <Dialog open={historialDialogOpen} onOpenChange={setHistorialDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -1407,7 +1617,6 @@ const CuentasPorPagar = () => {
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Resumen */}
               {selectedFactura && (
                 <div className="p-4 bg-muted rounded-lg grid grid-cols-3 gap-4 text-sm">
                   <div>
@@ -1425,7 +1634,6 @@ const CuentasPorPagar = () => {
                 </div>
               )}
 
-              {/* Lista de pagos */}
               {historialPagos && historialPagos.length > 0 ? (
                 <div className="space-y-2">
                   {historialPagos.map((pago, index) => (
@@ -1461,7 +1669,6 @@ const CuentasPorPagar = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog: Detalle Contable */}
         <Dialog open={detalleContableOpen} onOpenChange={setDetalleContableOpen}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
@@ -1485,7 +1692,9 @@ const CuentasPorPagar = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Fecha</p>
-                    <p className="text-sm text-muted-foreground">{format(new Date(asientoContable.fecha), "dd MMM yyyy", { locale: es })}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(asientoContable.fecha), "dd MMM yyyy", { locale: es })}
+                    </p>
                   </div>
                 </div>
 
