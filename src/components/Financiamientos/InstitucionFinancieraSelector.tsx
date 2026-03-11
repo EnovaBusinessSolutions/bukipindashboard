@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Check, ChevronsUpDown, Plus, Upload, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +15,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,10 +34,35 @@ interface InstitucionFinancieraSelectorProps {
   onChange: (id: string, nombre: string) => void;
 }
 
-/**
- * ✅ Ajusta si tu backend usa otra ruta
- */
-const UPLOAD_ENDPOINT = "/api/uploads/logo"; // + ?folder=instituciones
+type NewInstitutionForm = {
+  nombre: string;
+  alias: string;
+  tipo: string;
+  categoria: string;
+  codigo: string;
+  descripcion: string;
+  telefono: string;
+  email: string;
+  sitio_web: string;
+  contacto_nombre: string;
+  contacto_puesto: string;
+  notas: string;
+};
+
+const INITIAL_FORM: NewInstitutionForm = {
+  nombre: "",
+  alias: "",
+  tipo: "banco",
+  categoria: "financiero",
+  codigo: "",
+  descripcion: "",
+  telefono: "",
+  email: "",
+  sitio_web: "",
+  contacto_nombre: "",
+  contacto_puesto: "",
+  notas: "",
+};
 
 export default function InstitucionFinancieraSelector({
   value,
@@ -38,135 +70,22 @@ export default function InstitucionFinancieraSelector({
 }: InstitucionFinancieraSelectorProps) {
   const [open, setOpen] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
-
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [formData, setFormData] = useState<NewInstitutionForm>(INITIAL_FORM);
 
   const { instituciones, crearInstitucion } = useInstitucionesFinancieras();
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
-    nombre: "",
-    logo_url: "",
-    ejecutivo_nombre: "",
-    ejecutivo_telefono: "",
-    ejecutivo_email: "",
-    telefono_principal: "",
-    email_principal: "",
-    direccion: "",
-    ciudad: "",
-    estado: "",
-    codigo_postal: "",
-    sitio_web: "",
-    notas: "",
-  });
-
-  const selectedInstitucion = instituciones.find((inst) => inst.id === value);
+  const selectedInstitucion = useMemo(() => {
+    return instituciones.find((inst) => inst.id === value);
+  }, [instituciones, value]);
 
   const resetForm = () => {
-    setFormData({
-      nombre: "",
-      logo_url: "",
-      ejecutivo_nombre: "",
-      ejecutivo_telefono: "",
-      ejecutivo_email: "",
-      telefono_principal: "",
-      email_principal: "",
-      direccion: "",
-      ciudad: "",
-      estado: "",
-      codigo_postal: "",
-      sitio_web: "",
-      notas: "",
-    });
-    setLogoFile(null);
-    setLogoPreview(null);
+    setFormData(INITIAL_FORM);
   };
 
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validar tamaño (máx 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      toast({
-        title: "❌ Archivo muy grande",
-        description: "El logo debe pesar menos de 2MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validar tipo
-    if (!file.type.startsWith("image/")) {
-      toast({
-        title: "❌ Tipo de archivo inválido",
-        description: "Solo se permiten imágenes",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLogoFile(file);
-
-    // Preview local
-    const reader = new FileReader();
-    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  /**
-   * ✅ Upload al backend (multipart)
-   * Backend debe devolver: { ok:true, url:"..." } (o payload directo {url})
-   */
-  const uploadLogo = async (): Promise<string | null> => {
-    if (!logoFile) return formData.logo_url || null;
-
-    try {
-      setUploading(true);
-
-      const fd = new FormData();
-      fd.append("file", logoFile);
-
-      const res = await fetch(`${UPLOAD_ENDPOINT}?folder=instituciones`, {
-        method: "POST",
-        credentials: "include",
-        body: fd,
-      });
-
-      const text = await res.text();
-      let json: any = null;
-      try {
-        json = text ? JSON.parse(text) : null;
-      } catch {
-        // ignore
-      }
-
-      if (!res.ok) {
-        const msg = json?.error || json?.message || `Error HTTP ${res.status}`;
-        throw new Error(msg);
-      }
-
-      const url = json?.url || json?.data?.url;
-      if (!url) throw new Error("El backend no devolvió la URL del archivo subido.");
-
-      toast({
-        title: "✅ Logo subido",
-        description: "El logo se ha guardado correctamente",
-      });
-
-      return url;
-    } catch (error: any) {
-      toast({
-        title: "❌ Error al subir logo",
-        description: error?.message || "Error inesperado",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setUploading(false);
-    }
+  const closeDialog = () => {
+    setShowNewDialog(false);
+    resetForm();
   };
 
   const handleCreate = async () => {
@@ -180,23 +99,24 @@ export default function InstitucionFinancieraSelector({
     }
 
     try {
-      let logoUrl = formData.logo_url;
-
-      if (logoFile) {
-        const uploadedUrl = await uploadLogo();
-        if (uploadedUrl) logoUrl = uploadedUrl;
-      }
-
-      // Importante: mutateAsync NO soporta "onSuccess" como 2do parámetro en React Query v4.
-      // Mejor: capturar el retorno del backend (tu hook debe retornar la institución creada).
       const nuevaInstitucion = await crearInstitucion.mutateAsync({
-        ...formData,
-        logo_url: logoUrl,
+        nombre: formData.nombre.trim(),
+        alias: formData.alias.trim(),
+        tipo: formData.tipo,
+        categoria: formData.categoria,
+        codigo: formData.codigo.trim(),
+        descripcion: formData.descripcion.trim(),
+        telefono: formData.telefono.trim(),
+        email: formData.email.trim(),
+        sitio_web: formData.sitio_web.trim(),
+        contacto_nombre: formData.contacto_nombre.trim(),
+        contacto_puesto: formData.contacto_puesto.trim(),
+        notas: formData.notas.trim(),
       });
 
       onChange(nuevaInstitucion.id, nuevaInstitucion.nombre);
-      setShowNewDialog(false);
-      resetForm();
+      closeDialog();
+      setOpen(false);
     } catch (error: any) {
       toast({
         title: "❌ Error al crear institución",
@@ -217,33 +137,42 @@ export default function InstitucionFinancieraSelector({
             className="w-full justify-between"
           >
             {selectedInstitucion ? (
-              <div className="flex items-center gap-2">
-                {selectedInstitucion.logo_url && (
-                  <Avatar className="h-5 w-5">
-                    <AvatarImage src={selectedInstitucion.logo_url} />
+              <div className="flex items-center gap-2 min-w-0">
+                {selectedInstitucion.logo_url ? (
+                  <Avatar className="h-5 w-5 shrink-0">
+                    <AvatarImage src={selectedInstitucion.logo_url || undefined} />
+                    <AvatarFallback className="text-xs">
+                      {selectedInstitucion.nombre?.[0] || "I"}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <Avatar className="h-5 w-5 shrink-0">
                     <AvatarFallback className="text-xs">
                       {selectedInstitucion.nombre?.[0] || "I"}
                     </AvatarFallback>
                   </Avatar>
                 )}
-                <span>{selectedInstitucion.nombre}</span>
+
+                <span className="truncate">{selectedInstitucion.nombre}</span>
               </div>
             ) : (
               "Seleccionar institución..."
             )}
+
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
 
-        <PopoverContent className="w-full p-0">
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
           <Command>
             <CommandInput placeholder="Buscar institución..." />
             <CommandEmpty>No se encontró la institución.</CommandEmpty>
+
             <CommandGroup>
               {instituciones.map((institucion) => (
                 <CommandItem
                   key={institucion.id}
-                  value={institucion.nombre}
+                  value={`${institucion.nombre} ${institucion.alias || ""} ${institucion.codigo || ""}`}
                   onSelect={() => {
                     onChange(institucion.id, institucion.nombre);
                     setOpen(false);
@@ -255,16 +184,31 @@ export default function InstitucionFinancieraSelector({
                       value === institucion.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <div className="flex items-center gap-2">
-                    {institucion.logo_url && (
-                      <Avatar className="h-6 w-6">
-                        <AvatarImage src={institucion.logo_url} />
+
+                  <div className="flex items-center gap-2 min-w-0">
+                    {institucion.logo_url ? (
+                      <Avatar className="h-6 w-6 shrink-0">
+                        <AvatarImage src={institucion.logo_url || undefined} />
+                        <AvatarFallback className="text-xs">
+                          {institucion.nombre?.[0] || "I"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <Avatar className="h-6 w-6 shrink-0">
                         <AvatarFallback className="text-xs">
                           {institucion.nombre?.[0] || "I"}
                         </AvatarFallback>
                       </Avatar>
                     )}
-                    <span>{institucion.nombre}</span>
+
+                    <div className="min-w-0">
+                      <div className="truncate">{institucion.nombre}</div>
+                      {(institucion.tipo || institucion.codigo) && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {[institucion.tipo, institucion.codigo].filter(Boolean).join(" • ")}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CommandItem>
               ))}
@@ -296,169 +240,111 @@ export default function InstitucionFinancieraSelector({
           <DialogHeader>
             <DialogTitle>Nueva Institución Financiera</DialogTitle>
             <DialogDescription>
-              Registra los datos de la institución financiera
+              Registra los datos básicos de la institución financiera
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre de la Institución *</Label>
-              <Input
-                id="nombre"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Ej: BBVA Bancomer"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Logo de la Institución</Label>
-
-              {logoPreview && (
-                <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
-                  <img
-                    src={logoPreview}
-                    alt="Preview"
-                    className="w-full h-full object-contain"
-                  />
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-6 w-6"
-                    onClick={() => {
-                      setLogoFile(null);
-                      setLogoPreview(null);
-                      setFormData({ ...formData, logo_url: "" });
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-
-              {!logoPreview && (
-                <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
-                  <label className="cursor-pointer">
-                    <Upload className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-1">
-                      <span className="font-semibold text-primary">Click para subir</span> o arrastra aquí
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      PNG, JPG, SVG (máx. 2MB)
-                    </p>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleLogoSelect}
-                      disabled={uploading}
-                    />
-                  </label>
-                </div>
-              )}
-
-              <div className="pt-2">
-                <Label htmlFor="logo_url" className="text-xs text-muted-foreground">
-                  O ingresa una URL directamente
-                </Label>
-                <Input
-                  id="logo_url"
-                  value={formData.logo_url}
-                  onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                  placeholder="https://ejemplo.com/logo.png"
-                  disabled={!!logoFile || uploading}
-                />
-              </div>
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="ejecutivo_nombre">Nombre del Ejecutivo</Label>
+                <Label htmlFor="nombre">Nombre de la Institución *</Label>
                 <Input
-                  id="ejecutivo_nombre"
-                  value={formData.ejecutivo_nombre}
-                  onChange={(e) => setFormData({ ...formData, ejecutivo_nombre: e.target.value })}
-                  placeholder="Nombre completo"
+                  id="nombre"
+                  value={formData.nombre}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, nombre: e.target.value }))
+                  }
+                  placeholder="Ej: BBVA"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="ejecutivo_telefono">Teléfono del Ejecutivo</Label>
-                <Input
-                  id="ejecutivo_telefono"
-                  value={formData.ejecutivo_telefono}
-                  onChange={(e) => setFormData({ ...formData, ejecutivo_telefono: e.target.value })}
-                  placeholder="(555) 123-4567"
-                />
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ejecutivo_email">Email del Ejecutivo</Label>
-              <Input
-                id="ejecutivo_email"
-                type="email"
-                value={formData.ejecutivo_email}
-                onChange={(e) => setFormData({ ...formData, ejecutivo_email: e.target.value })}
-                placeholder="ejecutivo@banco.com"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="telefono_principal">Teléfono Principal</Label>
+                <Label htmlFor="alias">Alias</Label>
                 <Input
-                  id="telefono_principal"
-                  value={formData.telefono_principal}
-                  onChange={(e) => setFormData({ ...formData, telefono_principal: e.target.value })}
-                  placeholder="(555) 000-0000"
+                  id="alias"
+                  value={formData.alias}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, alias: e.target.value }))
+                  }
+                  placeholder="Ej: BBVA Empresas"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email_principal">Email Principal</Label>
-                <Input
-                  id="email_principal"
-                  type="email"
-                  value={formData.email_principal}
-                  onChange={(e) => setFormData({ ...formData, email_principal: e.target.value })}
-                  placeholder="info@banco.com"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="direccion">Dirección</Label>
-              <Input
-                id="direccion"
-                value={formData.direccion}
-                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                placeholder="Calle, número, colonia"
-              />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
+                <Label htmlFor="tipo">Tipo</Label>
                 <Input
-                  id="ciudad"
-                  value={formData.ciudad}
-                  onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
+                  id="tipo"
+                  value={formData.tipo}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, tipo: e.target.value }))
+                  }
+                  placeholder="banco"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="estado">Estado</Label>
+                <Label htmlFor="categoria">Categoría</Label>
                 <Input
-                  id="estado"
-                  value={formData.estado}
-                  onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                  id="categoria"
+                  value={formData.categoria}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, categoria: e.target.value }))
+                  }
+                  placeholder="financiero"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="codigo_postal">Código Postal</Label>
+                <Label htmlFor="codigo">Código</Label>
                 <Input
-                  id="codigo_postal"
-                  value={formData.codigo_postal}
-                  onChange={(e) => setFormData({ ...formData, codigo_postal: e.target.value })}
+                  id="codigo"
+                  value={formData.codigo}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, codigo: e.target.value }))
+                  }
+                  placeholder="BBVA"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="descripcion">Descripción</Label>
+              <Textarea
+                id="descripcion"
+                value={formData.descripcion}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, descripcion: e.target.value }))
+                }
+                placeholder="Información general de la institución..."
+                rows={2}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="telefono">Teléfono</Label>
+                <Input
+                  id="telefono"
+                  value={formData.telefono}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, telefono: e.target.value }))
+                  }
+                  placeholder="(555) 000-0000"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  placeholder="info@institucion.com"
                 />
               </div>
             </div>
@@ -468,9 +354,37 @@ export default function InstitucionFinancieraSelector({
               <Input
                 id="sitio_web"
                 value={formData.sitio_web}
-                onChange={(e) => setFormData({ ...formData, sitio_web: e.target.value })}
-                placeholder="https://www.banco.com"
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, sitio_web: e.target.value }))
+                }
+                placeholder="https://www.institucion.com"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contacto_nombre">Contacto</Label>
+                <Input
+                  id="contacto_nombre"
+                  value={formData.contacto_nombre}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, contacto_nombre: e.target.value }))
+                  }
+                  placeholder="Nombre del ejecutivo o contacto"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contacto_puesto">Puesto</Label>
+                <Input
+                  id="contacto_puesto"
+                  value={formData.contacto_puesto}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, contacto_puesto: e.target.value }))
+                  }
+                  placeholder="Ej: Ejecutivo PyME"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -478,27 +392,21 @@ export default function InstitucionFinancieraSelector({
               <Textarea
                 id="notas"
                 value={formData.notas}
-                onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, notas: e.target.value }))
+                }
                 placeholder="Información adicional..."
                 rows={3}
               />
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowNewDialog(false)}>
+              <Button variant="outline" onClick={closeDialog}>
                 Cancelar
               </Button>
-              <Button onClick={handleCreate} disabled={uploading || crearInstitucion.isPending}>
-                {uploading ? (
-                  <>
-                    <Upload className="mr-2 h-4 w-4 animate-spin" />
-                    Subiendo logo...
-                  </>
-                ) : crearInstitucion.isPending ? (
-                  "Creando..."
-                ) : (
-                  "Crear Institución"
-                )}
+
+              <Button onClick={handleCreate} disabled={crearInstitucion.isPending}>
+                {crearInstitucion.isPending ? "Creando..." : "Crear Institución"}
               </Button>
             </div>
           </div>

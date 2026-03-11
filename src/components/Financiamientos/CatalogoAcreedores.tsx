@@ -21,26 +21,69 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Trash2, Plus, Search, User, Phone, Mail, Upload } from "lucide-react";
+import { Building2, Edit, Trash2, Plus, Search, User, Phone, Mail } from "lucide-react";
 import { useInstitucionesFinancieras, InstitucionFinanciera } from "@/hooks/useInstitucionesFinancieras";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
-/**
- * ✅ Ajusta estas rutas si tu backend usa otras
- */
 const FINANCIAMIENTOS_ENDPOINT = "/api/financiamientos";
-const UPLOAD_ENDPOINT = "/api/uploads/logo"; // + ?folder=instituciones
 
 type Financiamiento = {
   id: string;
+  _id?: string;
   nombre: string;
-  estado: string; // "activo" | ...
-  monto_total: number;
-  tasa_interes: number;
+  tipo?: string;
+  tipo_credito?: string;
+  estatus?: string;
+  estado?: string;
+  institucion?: string;
+  institucion_id?: string | null;
+  institucionId?: string | null;
+  institucion_financiera?: string;
   institucion_financiera_id?: string | null;
-  saldo_actual: number;
-  tipo_credito: string;
+  monto_original?: number;
+  montoOriginal?: number;
+  linea_credito?: number;
+  lineaCredito?: number;
+  monto_total?: number;
+  saldo_total_actual?: number;
+  saldoTotalActual?: number;
+  saldo_capital_actual?: number;
+  saldoCapitalActual?: number;
+  saldo_actual?: number;
+  tasa_interes_anual?: number;
+  tasaInteresAnual?: number;
+  tasa_interes?: number;
+};
+
+type FormState = {
+  nombre: string;
+  alias: string;
+  tipo: string;
+  categoria: string;
+  codigo: string;
+  descripcion: string;
+  telefono: string;
+  email: string;
+  sitio_web: string;
+  contacto_nombre: string;
+  contacto_puesto: string;
+  notas: string;
+};
+
+const INITIAL_FORM: FormState = {
+  nombre: "",
+  alias: "",
+  tipo: "banco",
+  categoria: "financiero",
+  codigo: "",
+  descripcion: "",
+  telefono: "",
+  email: "",
+  sitio_web: "",
+  contacto_nombre: "",
+  contacto_puesto: "",
+  notas: "",
 };
 
 async function apiJSON<T>(url: string, init?: RequestInit): Promise<T> {
@@ -65,9 +108,55 @@ async function apiJSON<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(msg);
   }
 
-  // Normaliza: {ok:true,data:...} o payload directo
   return (json?.data ?? json) as T;
 }
+
+const toNum = (v: unknown, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+
+const getFinStatus = (f: Financiamiento) => String(f.estatus || f.estado || "").toLowerCase();
+
+const getFinTipo = (f: Financiamiento) => {
+  const raw = String(f.tipo || f.tipo_credito || "").toLowerCase();
+  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa") return "tarjeta_corporativa";
+  if (raw === "linea_credito" || raw === "revolvente") return "revolvente";
+  if (raw === "credito_simple" || raw === "simple" || raw === "prestamo") return "simple";
+  return raw || "otro";
+};
+
+const getFinTipoLabel = (f: Financiamiento) => {
+  const tipo = getFinTipo(f);
+  if (tipo === "simple") return "Crédito Simple";
+  if (tipo === "revolvente") return "Crédito Revolvente";
+  if (tipo === "tarjeta_corporativa") return "Tarjeta Corporativa";
+  return "Financiamiento";
+};
+
+const getFinInstitucionId = (f: Financiamiento) =>
+  String(
+    f.institucion_id ||
+      f.institucionId ||
+      f.institucion_financiera_id ||
+      f.institucion ||
+      f.institucion_financiera ||
+      ""
+  );
+
+const getFinMontoBase = (f: Financiamiento) => {
+  const tipo = getFinTipo(f);
+  if (tipo === "revolvente" || tipo === "tarjeta_corporativa") {
+    return toNum(f.linea_credito ?? f.lineaCredito ?? f.monto_total, 0);
+  }
+  return toNum(f.monto_original ?? f.montoOriginal ?? f.monto_total, 0);
+};
+
+const getFinSaldo = (f: Financiamiento) =>
+  toNum(f.saldo_total_actual ?? f.saldoTotalActual ?? f.saldo_capital_actual ?? f.saldoCapitalActual ?? f.saldo_actual, 0);
+
+const getFinTasa = (f: Financiamiento) =>
+  toNum(f.tasa_interes_anual ?? f.tasaInteresAnual ?? f.tasa_interes, 0);
 
 export default function CatalogoAcreedores() {
   const { instituciones, crearInstitucion, actualizarInstitucion, eliminarInstitucion } =
@@ -77,30 +166,10 @@ export default function CatalogoAcreedores() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingInstitucion, setEditingInstitucion] = useState<InstitucionFinanciera | null>(null);
   const [selectedInstitucion, setSelectedInstitucion] = useState<InstitucionFinanciera | null>(null);
-
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [formData, setFormData] = useState<FormState>(INITIAL_FORM);
 
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
-    nombre: "",
-    logo_url: "",
-    ejecutivo_nombre: "",
-    ejecutivo_telefono: "",
-    ejecutivo_email: "",
-    telefono_principal: "",
-    email_principal: "",
-    direccion: "",
-    ciudad: "",
-    estado: "",
-    codigo_postal: "",
-    sitio_web: "",
-    notas: "",
-  });
-
- 
   const { data: financiamientos = [], isLoading: isLoadingFin } = useQuery({
     queryKey: ["financiamientos-por-institucion"],
     queryFn: async () => {
@@ -108,152 +177,69 @@ export default function CatalogoAcreedores() {
     },
   });
 
-  // Calcular métricas
   const institucionesActivas = instituciones.length;
-  const creditosActivos = financiamientos.filter((f) => f.estado === "activo").length || 0;
-
+  const creditosActivos = financiamientos.filter((f) => getFinStatus(f) === "activo").length || 0;
   const montoTotalFinanciado =
-    financiamientos.reduce((acc, f) => acc + (Number(f.monto_total) || 0), 0) || 0;
+    financiamientos.reduce((acc, f) => acc + getFinMontoBase(f), 0) || 0;
 
   const tasaPromedio =
     financiamientos.length > 0
-      ? financiamientos.reduce((acc, f) => acc + (Number(f.tasa_interes) || 0), 0) /
-        financiamientos.length
+      ? financiamientos.reduce((acc, f) => acc + getFinTasa(f), 0) / financiamientos.length
       : 0;
 
   const institucionesFiltradas = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return instituciones;
-    return instituciones.filter((inst) => inst.nombre.toLowerCase().includes(term));
+    return instituciones.filter((inst) => {
+      const haystack = [
+        inst.nombre,
+        inst.alias,
+        inst.codigo,
+        inst.contacto_nombre,
+        inst.telefono,
+        inst.email,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
   }, [instituciones, searchTerm]);
+
+  const resetForm = () => {
+    setFormData(INITIAL_FORM);
+  };
 
   const handleOpenDialog = (institucion?: InstitucionFinanciera) => {
     if (institucion) {
       setEditingInstitucion(institucion);
       setFormData({
-        nombre: institucion.nombre,
-        logo_url: institucion.logo_url || "",
-        ejecutivo_nombre: institucion.ejecutivo_nombre || "",
-        ejecutivo_telefono: institucion.ejecutivo_telefono || "",
-        ejecutivo_email: institucion.ejecutivo_email || "",
-        telefono_principal: institucion.telefono_principal || "",
-        email_principal: institucion.email_principal || "",
-        direccion: institucion.direccion || "",
-        ciudad: institucion.ciudad || "",
-        estado: institucion.estado || "",
-        codigo_postal: institucion.codigo_postal || "",
-        sitio_web: institucion.sitio_web || "",
+        nombre: institucion.nombre || "",
+        alias: institucion.alias || "",
+        tipo: institucion.tipo || "banco",
+        categoria: institucion.categoria || "financiero",
+        codigo: institucion.codigo || "",
+        descripcion: institucion.descripcion || "",
+        telefono: institucion.telefono || institucion.telefono_principal || "",
+        email: institucion.email || institucion.email_principal || "",
+        sitio_web: institucion.sitio_web || institucion.sitioWeb || "",
+        contacto_nombre:
+          institucion.contacto_nombre ||
+          institucion.contactoNombre ||
+          institucion.ejecutivo_nombre ||
+          "",
+        contacto_puesto:
+          institucion.contacto_puesto ||
+          institucion.contactoPuesto ||
+          "",
         notas: institucion.notas || "",
       });
-      setLogoFile(null);
-      setLogoPreview(institucion.logo_url || null);
     } else {
       setEditingInstitucion(null);
-      setFormData({
-        nombre: "",
-        logo_url: "",
-        ejecutivo_nombre: "",
-        ejecutivo_telefono: "",
-        ejecutivo_email: "",
-        telefono_principal: "",
-        email_principal: "",
-        direccion: "",
-        ciudad: "",
-        estado: "",
-        codigo_postal: "",
-        sitio_web: "",
-        notas: "",
-      });
-      setLogoFile(null);
-      setLogoPreview(null);
+      resetForm();
     }
     setShowDialog(true);
-  };
-
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validar tamaño (máx 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      toast({
-        title: "❌ Archivo muy grande",
-        description: "El logo debe pesar menos de 2MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validar tipo
-    if (!file.type.startsWith("image/")) {
-      toast({
-        title: "❌ Tipo de archivo inválido",
-        description: "Solo se permiten imágenes",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLogoFile(file);
-
-    // Preview local
-    const reader = new FileReader();
-    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  /**
-   * ✅ Upload al backend (multipart)
-   * Backend debe regresar: { ok:true, url:"https://..." }
-   * (o payload directo {url})
-   */
-  const uploadLogo = async (): Promise<string | null> => {
-    if (!logoFile) return formData.logo_url || null;
-
-    try {
-      setUploading(true);
-
-      const fd = new FormData();
-      fd.append("file", logoFile);
-
-      const res = await fetch(`${UPLOAD_ENDPOINT}?folder=instituciones`, {
-        method: "POST",
-        credentials: "include",
-        body: fd,
-      });
-
-      const text = await res.text();
-      let json: any = null;
-      try {
-        json = text ? JSON.parse(text) : null;
-      } catch {
-        // ignore
-      }
-
-      if (!res.ok) {
-        const msg = json?.error || json?.message || `Error HTTP ${res.status}`;
-        throw new Error(msg);
-      }
-
-      const url = json?.url || json?.data?.url;
-      if (!url) throw new Error("El backend no devolvió la URL del archivo subido.");
-
-      toast({
-        title: "✅ Logo subido",
-        description: "El logo se ha guardado correctamente",
-      });
-
-      return url;
-    } catch (error: any) {
-      toast({
-        title: "❌ Error al subir logo",
-        description: error?.message || "Error inesperado",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setUploading(false);
-    }
   };
 
   const handleSave = async () => {
@@ -267,26 +253,42 @@ export default function CatalogoAcreedores() {
         return;
       }
 
-      let logoUrl = formData.logo_url;
-
-      if (logoFile) {
-        const uploadedUrl = await uploadLogo();
-        if (uploadedUrl) logoUrl = uploadedUrl;
-      }
-
       if (editingInstitucion) {
         await actualizarInstitucion.mutateAsync({
           id: editingInstitucion.id,
-          ...formData,
-          logo_url: logoUrl,
+          nombre: formData.nombre.trim(),
+          alias: formData.alias.trim(),
+          tipo: formData.tipo.trim(),
+          categoria: formData.categoria.trim(),
+          codigo: formData.codigo.trim(),
+          descripcion: formData.descripcion.trim(),
+          telefono: formData.telefono.trim(),
+          email: formData.email.trim(),
+          sitio_web: formData.sitio_web.trim(),
+          contacto_nombre: formData.contacto_nombre.trim(),
+          contacto_puesto: formData.contacto_puesto.trim(),
+          notas: formData.notas.trim(),
         });
       } else {
-        await crearInstitucion.mutateAsync({ ...formData, logo_url: logoUrl });
+        await crearInstitucion.mutateAsync({
+          nombre: formData.nombre.trim(),
+          alias: formData.alias.trim(),
+          tipo: formData.tipo.trim(),
+          categoria: formData.categoria.trim(),
+          codigo: formData.codigo.trim(),
+          descripcion: formData.descripcion.trim(),
+          telefono: formData.telefono.trim(),
+          email: formData.email.trim(),
+          sitio_web: formData.sitio_web.trim(),
+          contacto_nombre: formData.contacto_nombre.trim(),
+          contacto_puesto: formData.contacto_puesto.trim(),
+          notas: formData.notas.trim(),
+        });
       }
 
       setShowDialog(false);
-      setLogoFile(null);
-      setLogoPreview(null);
+      resetForm();
+      setEditingInstitucion(null);
     } catch (error: any) {
       toast({
         title: "❌ Error al guardar",
@@ -298,17 +300,16 @@ export default function CatalogoAcreedores() {
 
   const getCreditosCount = (institucionId: string) => {
     return financiamientos.filter(
-      (f) => f.institucion_financiera_id === institucionId && f.estado === "activo"
+      (f) => getFinInstitucionId(f) === institucionId && getFinStatus(f) === "activo"
     ).length;
   };
 
   const getFinanciamientosByInstitucion = (institucionId: string) => {
-    return financiamientos.filter((f) => f.institucion_financiera_id === institucionId);
+    return financiamientos.filter((f) => getFinInstitucionId(f) === institucionId);
   };
 
   return (
     <div className="space-y-6">
-      {/* Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -316,12 +317,14 @@ export default function CatalogoAcreedores() {
             <CardTitle className="text-3xl">{institucionesActivas}</CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Créditos Activos</CardDescription>
             <CardTitle className="text-3xl">{creditosActivos}</CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Monto Total Financiado</CardDescription>
@@ -330,6 +333,7 @@ export default function CatalogoAcreedores() {
             </CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Tasa Promedio</CardDescription>
@@ -338,10 +342,9 @@ export default function CatalogoAcreedores() {
         </Card>
       </div>
 
-      {/* Barra de búsqueda y acciones */}
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar institución..."
             value={searchTerm}
@@ -349,18 +352,19 @@ export default function CatalogoAcreedores() {
             className="pl-10"
           />
         </div>
+
         <Button onClick={() => handleOpenDialog()}>
           <Plus className="h-4 w-4 mr-2" />
           Nueva Institución
         </Button>
       </div>
 
-      {/* Tabla de instituciones */}
       <Card>
         <CardHeader>
           <CardTitle>Catálogo de Acreedores Financieros</CardTitle>
           <CardDescription>Gestiona las instituciones financieras con las que trabajas</CardDescription>
         </CardHeader>
+
         <CardContent>
           {isLoadingFin ? (
             <div className="text-sm text-muted-foreground">Cargando financiamientos…</div>
@@ -369,12 +373,13 @@ export default function CatalogoAcreedores() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Institución</TableHead>
-                  <TableHead>Ejecutivo</TableHead>
                   <TableHead>Contacto</TableHead>
+                  <TableHead>Canales</TableHead>
                   <TableHead className="text-center">Créditos Activos</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {institucionesFiltradas.map((institucion) => {
                   const creditosCount = getCreditosCount(institucion.id);
@@ -390,11 +395,15 @@ export default function CatalogoAcreedores() {
                           <Avatar className="h-10 w-10">
                             <AvatarImage src={institucion.logo_url || undefined} />
                             <AvatarFallback>
-                              <Building2 className="h-5 w-5" />
+                              {institucion.nombre?.[0] ? institucion.nombre[0].toUpperCase() : <Building2 className="h-5 w-5" />}
                             </AvatarFallback>
                           </Avatar>
+
                           <div>
                             <p className="font-medium">{institucion.nombre}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {[institucion.alias, institucion.codigo, institucion.tipo].filter(Boolean).join(" • ") || "Sin metadata"}
+                            </p>
                             {institucion.sitio_web && (
                               <a
                                 href={institucion.sitio_web}
@@ -411,18 +420,19 @@ export default function CatalogoAcreedores() {
                       </TableCell>
 
                       <TableCell>
-                        {institucion.ejecutivo_nombre ? (
+                        {institucion.contacto_nombre || institucion.ejecutivo_nombre ? (
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <User className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm">{institucion.ejecutivo_nombre}</span>
+                              <span className="text-sm">
+                                {institucion.contacto_nombre ||
+                                  institucion.contactoNombre ||
+                                  institucion.ejecutivo_nombre}
+                              </span>
                             </div>
-                            {institucion.ejecutivo_telefono && (
-                              <div className="flex items-center gap-2">
-                                <Phone className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-xs text-muted-foreground">
-                                  {institucion.ejecutivo_telefono}
-                                </span>
+                            {(institucion.contacto_puesto || institucion.contactoPuesto) && (
+                              <div className="text-xs text-muted-foreground">
+                                {institucion.contacto_puesto || institucion.contactoPuesto}
                               </div>
                             )}
                           </div>
@@ -433,16 +443,20 @@ export default function CatalogoAcreedores() {
 
                       <TableCell>
                         <div className="space-y-1">
-                          {institucion.telefono_principal && (
+                          {(institucion.telefono || institucion.telefono_principal) && (
                             <div className="flex items-center gap-2">
                               <Phone className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-xs">{institucion.telefono_principal}</span>
+                              <span className="text-xs">
+                                {institucion.telefono || institucion.telefono_principal}
+                              </span>
                             </div>
                           )}
-                          {institucion.email_principal && (
+                          {(institucion.email || institucion.email_principal) && (
                             <div className="flex items-center gap-2">
                               <Mail className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-xs">{institucion.email_principal}</span>
+                              <span className="text-xs">
+                                {institucion.email || institucion.email_principal}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -466,6 +480,7 @@ export default function CatalogoAcreedores() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -482,14 +497,30 @@ export default function CatalogoAcreedores() {
                     </TableRow>
                   );
                 })}
+
+                {institucionesFiltradas.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      No se encontraron instituciones
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog para crear/editar */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog
+        open={showDialog}
+        onOpenChange={(v) => {
+          setShowDialog(v);
+          if (!v) {
+            resetForm();
+            setEditingInstitucion(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingInstitucion ? "Editar Institución" : "Nueva Institución"}</DialogTitle>
@@ -501,152 +532,109 @@ export default function CatalogoAcreedores() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre de la Institución *</Label>
-              <Input
-                id="nombre"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Ej: BBVA Bancomer"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Logo de la Institución</Label>
-
-              {logoPreview && (
-                <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
-                  <img src={logoPreview} alt="Preview" className="w-full h-full object-contain" />
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-6 w-6"
-                    onClick={() => {
-                      setLogoFile(null);
-                      setLogoPreview(null);
-                      setFormData({ ...formData, logo_url: "" });
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-
-              {!logoPreview && (
-                <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
-                  <label className="cursor-pointer">
-                    <Upload className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-1">
-                      <span className="font-semibold text-primary">Click para subir</span> o arrastra aquí
-                    </p>
-                    <p className="text-xs text-muted-foreground">PNG, JPG, SVG (máx. 2MB)</p>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleLogoSelect}
-                      disabled={uploading}
-                    />
-                  </label>
-                </div>
-              )}
-
-              <div className="pt-2">
-                <Label htmlFor="logo_url" className="text-xs text-muted-foreground">
-                  O ingresa una URL directamente
-                </Label>
-                <Input
-                  id="logo_url"
-                  value={formData.logo_url}
-                  onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                  placeholder="https://ejemplo.com/logo.png"
-                  disabled={!!logoFile || uploading}
-                />
-              </div>
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="ejecutivo_nombre">Nombre del Ejecutivo</Label>
+                <Label htmlFor="nombre">Nombre de la Institución *</Label>
                 <Input
-                  id="ejecutivo_nombre"
-                  value={formData.ejecutivo_nombre}
-                  onChange={(e) => setFormData({ ...formData, ejecutivo_nombre: e.target.value })}
+                  id="nombre"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData((p) => ({ ...p, nombre: e.target.value }))}
+                  placeholder="Ej: BBVA"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="ejecutivo_telefono">Teléfono del Ejecutivo</Label>
-                <Input
-                  id="ejecutivo_telefono"
-                  value={formData.ejecutivo_telefono}
-                  onChange={(e) => setFormData({ ...formData, ejecutivo_telefono: e.target.value })}
-                />
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ejecutivo_email">Email del Ejecutivo</Label>
-              <Input
-                id="ejecutivo_email"
-                type="email"
-                value={formData.ejecutivo_email}
-                onChange={(e) => setFormData({ ...formData, ejecutivo_email: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="telefono_principal">Teléfono Principal</Label>
+                <Label htmlFor="alias">Alias</Label>
                 <Input
-                  id="telefono_principal"
-                  value={formData.telefono_principal}
-                  onChange={(e) => setFormData({ ...formData, telefono_principal: e.target.value })}
+                  id="alias"
+                  value={formData.alias}
+                  onChange={(e) => setFormData((p) => ({ ...p, alias: e.target.value }))}
+                  placeholder="Ej: BBVA Empresas"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email_principal">Email Principal</Label>
-                <Input
-                  id="email_principal"
-                  type="email"
-                  value={formData.email_principal}
-                  onChange={(e) => setFormData({ ...formData, email_principal: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="direccion">Dirección</Label>
-              <Input
-                id="direccion"
-                value={formData.direccion}
-                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-              />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
+                <Label htmlFor="tipo">Tipo</Label>
                 <Input
-                  id="ciudad"
-                  value={formData.ciudad}
-                  onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
+                  id="tipo"
+                  value={formData.tipo}
+                  onChange={(e) => setFormData((p) => ({ ...p, tipo: e.target.value }))}
+                  placeholder="banco"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="estado">Estado</Label>
+                <Label htmlFor="categoria">Categoría</Label>
                 <Input
-                  id="estado"
-                  value={formData.estado}
-                  onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                  id="categoria"
+                  value={formData.categoria}
+                  onChange={(e) => setFormData((p) => ({ ...p, categoria: e.target.value }))}
+                  placeholder="financiero"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="codigo_postal">Código Postal</Label>
+                <Label htmlFor="codigo">Código</Label>
                 <Input
-                  id="codigo_postal"
-                  value={formData.codigo_postal}
-                  onChange={(e) => setFormData({ ...formData, codigo_postal: e.target.value })}
+                  id="codigo"
+                  value={formData.codigo}
+                  onChange={(e) => setFormData((p) => ({ ...p, codigo: e.target.value }))}
+                  placeholder="BBVA"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="descripcion">Descripción</Label>
+              <Textarea
+                id="descripcion"
+                value={formData.descripcion}
+                onChange={(e) => setFormData((p) => ({ ...p, descripcion: e.target.value }))}
+                rows={2}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contacto_nombre">Contacto</Label>
+                <Input
+                  id="contacto_nombre"
+                  value={formData.contacto_nombre}
+                  onChange={(e) => setFormData((p) => ({ ...p, contacto_nombre: e.target.value }))}
+                  placeholder="Nombre del ejecutivo"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contacto_puesto">Puesto</Label>
+                <Input
+                  id="contacto_puesto"
+                  value={formData.contacto_puesto}
+                  onChange={(e) => setFormData((p) => ({ ...p, contacto_puesto: e.target.value }))}
+                  placeholder="Ej: Ejecutivo PyME"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="telefono">Teléfono</Label>
+                <Input
+                  id="telefono"
+                  value={formData.telefono}
+                  onChange={(e) => setFormData((p) => ({ ...p, telefono: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
                 />
               </div>
             </div>
@@ -656,7 +644,7 @@ export default function CatalogoAcreedores() {
               <Input
                 id="sitio_web"
                 value={formData.sitio_web}
-                onChange={(e) => setFormData({ ...formData, sitio_web: e.target.value })}
+                onChange={(e) => setFormData((p) => ({ ...p, sitio_web: e.target.value }))}
               />
             </div>
 
@@ -665,36 +653,34 @@ export default function CatalogoAcreedores() {
               <Textarea
                 id="notas"
                 value={formData.notas}
-                onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                onChange={(e) => setFormData((p) => ({ ...p, notas: e.target.value }))}
                 rows={3}
               />
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDialog(false);
+                  resetForm();
+                  setEditingInstitucion(null);
+                }}
+              >
                 Cancelar
               </Button>
+
               <Button
                 onClick={handleSave}
-                disabled={uploading || actualizarInstitucion.isPending || crearInstitucion.isPending}
+                disabled={actualizarInstitucion.isPending || crearInstitucion.isPending}
               >
-                {uploading ? (
-                  <>
-                    <Upload className="mr-2 h-4 w-4 animate-spin" />
-                    Subiendo logo...
-                  </>
-                ) : editingInstitucion ? (
-                  "Guardar Cambios"
-                ) : (
-                  "Crear Institución"
-                )}
+                {editingInstitucion ? "Guardar Cambios" : "Crear Institución"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de detalle de institución */}
       <Dialog open={!!selectedInstitucion} onOpenChange={() => setSelectedInstitucion(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -702,9 +688,12 @@ export default function CatalogoAcreedores() {
               <Avatar className="h-12 w-12">
                 <AvatarImage src={selectedInstitucion?.logo_url || undefined} />
                 <AvatarFallback>
-                  <Building2 className="h-6 w-6" />
+                  {selectedInstitucion?.nombre?.[0]
+                    ? selectedInstitucion.nombre[0].toUpperCase()
+                    : <Building2 className="h-6 w-6" />}
                 </AvatarFallback>
               </Avatar>
+
               <div>
                 <DialogTitle>{selectedInstitucion?.nombre}</DialogTitle>
                 <DialogDescription>Detalle de la institución financiera</DialogDescription>
@@ -715,42 +704,42 @@ export default function CatalogoAcreedores() {
           {selectedInstitucion && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                {selectedInstitucion.ejecutivo_nombre && (
+                {(selectedInstitucion.contacto_nombre ||
+                  selectedInstitucion.contactoNombre ||
+                  selectedInstitucion.ejecutivo_nombre) && (
                   <div>
-                    <Label className="text-muted-foreground">Ejecutivo de Cuenta</Label>
-                    <p className="font-medium">{selectedInstitucion.ejecutivo_nombre}</p>
-                    {selectedInstitucion.ejecutivo_telefono && (
-                      <p className="text-sm text-muted-foreground">{selectedInstitucion.ejecutivo_telefono}</p>
-                    )}
-                    {selectedInstitucion.ejecutivo_email && (
-                      <p className="text-sm text-primary">{selectedInstitucion.ejecutivo_email}</p>
+                    <Label className="text-muted-foreground">Contacto</Label>
+                    <p className="font-medium">
+                      {selectedInstitucion.contacto_nombre ||
+                        selectedInstitucion.contactoNombre ||
+                        selectedInstitucion.ejecutivo_nombre}
+                    </p>
+                    {(selectedInstitucion.contacto_puesto || selectedInstitucion.contactoPuesto) && (
+                      <p className="text-sm text-muted-foreground">
+                        {selectedInstitucion.contacto_puesto || selectedInstitucion.contactoPuesto}
+                      </p>
                     )}
                   </div>
                 )}
+
                 <div>
-                  <Label className="text-muted-foreground">Contacto General</Label>
-                  {selectedInstitucion.telefono_principal && (
-                    <p className="text-sm">{selectedInstitucion.telefono_principal}</p>
+                  <Label className="text-muted-foreground">Canales</Label>
+                  {(selectedInstitucion.telefono || selectedInstitucion.telefono_principal) && (
+                    <p className="text-sm">{selectedInstitucion.telefono || selectedInstitucion.telefono_principal}</p>
                   )}
-                  {selectedInstitucion.email_principal && (
-                    <p className="text-sm text-primary">{selectedInstitucion.email_principal}</p>
+                  {(selectedInstitucion.email || selectedInstitucion.email_principal) && (
+                    <p className="text-sm text-primary">{selectedInstitucion.email || selectedInstitucion.email_principal}</p>
+                  )}
+                  {selectedInstitucion.sitio_web && (
+                    <p className="text-sm">{selectedInstitucion.sitio_web}</p>
                   )}
                 </div>
               </div>
 
-              {selectedInstitucion.direccion && (
+              {selectedInstitucion.descripcion && (
                 <div>
-                  <Label className="text-muted-foreground">Dirección</Label>
-                  <p className="text-sm">{selectedInstitucion.direccion}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {[
-                      selectedInstitucion.ciudad,
-                      selectedInstitucion.estado,
-                      selectedInstitucion.codigo_postal,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
+                  <Label className="text-muted-foreground">Descripción</Label>
+                  <p className="text-sm whitespace-pre-wrap">{selectedInstitucion.descripcion}</p>
                 </div>
               )}
 
@@ -764,30 +753,33 @@ export default function CatalogoAcreedores() {
               <div>
                 <Label className="text-muted-foreground mb-2 block">Financiamientos Asociados</Label>
                 <div className="space-y-2">
-                  {getFinanciamientosByInstitucion(selectedInstitucion.id).map((f) => (
-                    <Card key={f.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{f.nombre}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {f.tipo_credito === "simple"
-                                ? "Crédito Simple"
-                                : f.tipo_credito === "revolvente"
-                                ? "Crédito Revolvente"
-                                : "Tarjeta Corporativa"}
-                            </p>
+                  {getFinanciamientosByInstitucion(selectedInstitucion.id).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No hay financiamientos asociados</p>
+                  ) : (
+                    getFinanciamientosByInstitucion(selectedInstitucion.id).map((f) => (
+                      <Card key={f.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{f.nombre}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {getFinTipoLabel(f)}
+                              </p>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="font-medium">
+                                ${getFinSaldo(f).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                              </p>
+                              <Badge variant={getFinStatus(f) === "activo" ? "default" : "secondary"}>
+                                {getFinStatus(f) || "sin estatus"}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium">
-                              ${Number(f.saldo_actual || 0).toLocaleString("es-MX")}
-                            </p>
-                            <Badge variant={f.estado === "activo" ? "default" : "secondary"}>{f.estado}</Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

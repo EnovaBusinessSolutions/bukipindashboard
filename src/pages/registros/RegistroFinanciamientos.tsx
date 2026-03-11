@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, DollarSign, TrendingDown, Wallet } from "lucide-react";
+
 import RegistroFinanciamientoForm from "@/components/Financiamientos/RegistroFinanciamientoForm";
 import RegistroDisposicionForm from "@/components/Financiamientos/RegistroDisposicionForm";
 import RegistroAmortizacionForm from "@/components/Financiamientos/RegistroAmortizacionForm";
@@ -12,8 +13,25 @@ import DetalleCreditosFinanciamientos from "@/components/Financiamientos/Detalle
 import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
 import CatalogoAcreedores from "@/components/Financiamientos/CatalogoAcreedores";
 
+type TipoRegistro = "" | "financiamiento" | "disposicion" | "amortizacion" | "interes";
+type TabValue = "registro" | "detalle" | "resumen" | "analitica" | "catalogo";
+
 const RegistroFinanciamientos = () => {
-  const [tipoRegistro, setTipoRegistro] = useState<"" | "financiamiento" | "disposicion" | "amortizacion" | "interes">("");
+  const [tabActiva, setTabActiva] = useState<TabValue>("registro");
+  const [tipoRegistro, setTipoRegistro] = useState<TipoRegistro>("");
+
+  const handleTabChange = (value: string) => {
+    const nextTab = value as TabValue;
+    setTabActiva(nextTab);
+
+    // Reset del modo de registro al salir/entrar entre tabs
+    if (nextTab !== "registro") {
+      setTipoRegistro("");
+    }
+  };
+
+  const volverASeleccion = () => setTipoRegistro("");
+
   return (
     <div className="h-full overflow-hidden flex flex-col">
       <div className="p-6 border-b bg-background">
@@ -24,7 +42,7 @@ const RegistroFinanciamientos = () => {
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="registro" className="w-full">
+        <Tabs value={tabActiva} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="registro">Registro</TabsTrigger>
             <TabsTrigger value="detalle">Detalle</TabsTrigger>
@@ -35,8 +53,11 @@ const RegistroFinanciamientos = () => {
 
           <TabsContent value="registro" className="space-y-6">
             {!tipoRegistro ? (
-              <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("financiamiento")}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => setTipoRegistro("financiamiento")}
+                >
                   <CardHeader>
                     <div className="flex items-center justify-center mb-4">
                       <div className="p-3 bg-primary/10 rounded-full">
@@ -50,7 +71,10 @@ const RegistroFinanciamientos = () => {
                   </CardHeader>
                 </Card>
 
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("disposicion")}>
+                <Card
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => setTipoRegistro("disposicion")}
+                >
                   <CardHeader>
                     <div className="flex items-center justify-center mb-4">
                       <div className="p-3 bg-blue-500/10 rounded-full">
@@ -64,7 +88,10 @@ const RegistroFinanciamientos = () => {
                   </CardHeader>
                 </Card>
 
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("amortizacion")}>
+                <Card
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => setTipoRegistro("amortizacion")}
+                >
                   <CardHeader>
                     <div className="flex items-center justify-center mb-4">
                       <div className="p-3 bg-green-500/10 rounded-full">
@@ -78,7 +105,10 @@ const RegistroFinanciamientos = () => {
                   </CardHeader>
                 </Card>
 
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setTipoRegistro("interes")}>
+                <Card
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => setTipoRegistro("interes")}
+                >
                   <CardHeader>
                     <div className="flex items-center justify-center mb-4">
                       <div className="p-3 bg-red-500/10 rounded-full">
@@ -94,9 +124,10 @@ const RegistroFinanciamientos = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                <Button variant="outline" onClick={() => setTipoRegistro("")}>
+                <Button variant="outline" onClick={volverASeleccion}>
                   ← Volver a selección
                 </Button>
+
                 {tipoRegistro === "financiamiento" && <RegistroFinanciamientoForm />}
                 {tipoRegistro === "disposicion" && <RegistroDisposicionForm />}
                 {tipoRegistro === "amortizacion" && <RegistroAmortizacionForm />}

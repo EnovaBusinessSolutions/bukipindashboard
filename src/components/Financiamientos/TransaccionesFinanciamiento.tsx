@@ -1,13 +1,14 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { DollarSign, FileText, TrendingDown, TrendingUp, Eye } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-import { DollarSign, FileText, TrendingDown, TrendingUp, Eye } from "lucide-react";
-import { useMemo, useState } from "react";
 
 interface TransaccionesFinanciamientoProps {
   financiamientoId: string;
@@ -18,11 +19,8 @@ interface TransaccionesFinanciamientoProps {
   tipoCredito?: string;
 }
 
-/**
- * ✅ Ajusta estas rutas si tu backend usa otras
- */
-const API_TRANSACCIONES = (financiamientoId: string) =>
-  `/api/financiamientos/${encodeURIComponent(financiamientoId)}/transacciones`;
+const API_MOVIMIENTOS = (financiamientoId: string) =>
+  `/api/financiamientos/${encodeURIComponent(financiamientoId)}/movimientos`;
 
 const API_ASIENTOS = (q: string) =>
   `/api/contabilidad/asientos?q=${encodeURIComponent(q)}&include=detalle,cuentas`;
@@ -30,25 +28,106 @@ const API_ASIENTOS = (q: string) =>
 async function fetchJSON<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: "include" });
   const text = await res.text();
+
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
-    // ignore
+    // ignore parse error
   }
 
   if (!res.ok) {
     throw new Error(json?.error || json?.message || `Error HTTP ${res.status}`);
   }
 
-  // soporta { ok:true, data:... } o payload plano
   return (json?.data ?? json) as T;
 }
+
+const toNum = (v: unknown, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
 
 const sameDay = (a: string | Date, b: string | Date) => {
   const da = new Date(a);
   const db = new Date(b);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
   return da.toISOString().slice(0, 10) === db.toISOString().slice(0, 10);
+};
+
+const getTipoMovimiento = (tx: any) =>
+  String(tx?.tipo || tx?.tipo_transaccion || "").toLowerCase();
+
+const getFecha = (tx: any) => {
+  const raw = tx?.fecha || tx?.created_at || tx?.createdAt;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const getMonto = (tx: any) => toNum(tx?.monto, 0);
+
+const getMontoCapital = (tx: any) =>
+  toNum(tx?.monto_capital ?? tx?.montoCapital ?? tx?.capital_pagado, 0);
+
+const getMontoIntereses = (tx: any) =>
+  toNum(tx?.monto_intereses ?? tx?.montoIntereses ?? tx?.interes_pagado, 0);
+
+const getMontoMoratorios = (tx: any) =>
+  toNum(tx?.monto_moratorios ?? tx?.montoMoratorios, 0);
+
+const getMontoComisiones = (tx: any) =>
+  toNum(tx?.monto_comisiones ?? tx?.montoComisiones, 0);
+
+const getMetodoPago = (tx: any) =>
+  tx?.metodo_pago || tx?.metodoPago || "-";
+
+const getSaldoRestante = (tx: any, fallbackSaldoActual: number) => {
+  const snap = tx?.snapshot_after || {};
+  const saldoNuevo =
+    snap?.saldo_capital_actual ??
+    snap?.saldo_total_actual ??
+    tx?.saldo_restante;
+
+  return toNum(saldoNuevo, fallbackSaldoActual);
+};
+
+const getTipoLabel = (tipoRaw: string) => {
+  const tipo = String(tipoRaw || "").toLowerCase();
+
+  const labels: Record<string, string> = {
+    apertura: "Apertura",
+    desembolso: "Desembolso",
+    disposicion: "Disposición",
+    amortizacion: "Amortización",
+    cargo_intereses: "Cargo por Intereses",
+    cargo_interes: "Cargo por Interés",
+    pago_intereses: "Pago de Intereses",
+    cargo_comision: "Cargo por Comisión",
+    pago_comision: "Pago de Comisión",
+    cargo_moratorio: "Cargo Moratorio",
+    ajuste: "Ajuste",
+    cancelacion: "Cancelación",
+    refinanciamiento: "Refinanciamiento",
+    otro: "Otro",
+  };
+
+  return labels[tipo] || tipoRaw || "Movimiento";
+};
+
+const getTipoVariant = (
+  tipoRaw: string
+): "default" | "secondary" | "destructive" => {
+  const tipo = String(tipoRaw || "").toLowerCase();
+
+  if (["amortizacion", "pago_intereses", "pago_comision"].includes(tipo)) {
+    return "default";
+  }
+
+  if (["cargo_intereses", "cargo_interes", "cargo_comision", "cargo_moratorio"].includes(tipo)) {
+    return "destructive";
+  }
+
+  return "secondary";
 };
 
 const TransaccionesFinanciamiento = ({
@@ -64,20 +143,18 @@ const TransaccionesFinanciamiento = ({
   const [detalleTransaccionOpen, setDetalleTransaccionOpen] = useState(false);
   const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
 
-  // 1) Obtener transacciones del financiamiento (desde backend)
   const {
     data: transacciones = [],
     isLoading: isLoadingTransacciones,
     error: transaccionesError,
   } = useQuery({
-    queryKey: ["transacciones-financiamiento", financiamientoId],
+    queryKey: ["movimientos-financiamiento", financiamientoId],
     enabled: !!financiamientoId,
     queryFn: async () => {
-      return await fetchJSON<any[]>(API_TRANSACCIONES(financiamientoId));
+      return await fetchJSON<any[]>(API_MOVIMIENTOS(financiamientoId));
     },
   });
 
-  // 2) Obtener asientos contables relacionados (desde backend)
   const {
     data: asientosContables = [],
     isLoading: isLoadingAsientos,
@@ -90,20 +167,17 @@ const TransaccionesFinanciamiento = ({
     },
   });
 
-  const asientosIndex = useMemo(() => {
-    // index rápido por fecha+texto
-    return asientosContables;
-  }, [asientosContables]);
+  const asientosIndex = useMemo(() => asientosContables || [], [asientosContables]);
 
   const handleVerAsiento = (transaccion: any) => {
-    if (!asientosIndex?.length) return;
+    if (!asientosIndex.length) return;
 
-    const tipo = String(transaccion.tipo_transaccion || "").toLowerCase();
+    const tipo = getTipoMovimiento(transaccion);
     const nombre = String(nombreFinanciamiento || "").toLowerCase();
 
     const asiento = asientosIndex.find((a: any) => {
-      const desc = String(a.descripcion || "").toLowerCase();
-      const matchFecha = sameDay(a.fecha, transaccion.fecha);
+      const desc = String(a?.descripcion || "").toLowerCase();
+      const matchFecha = transaccion?.fecha ? sameDay(a?.fecha, transaccion.fecha) : false;
       const matchTexto = desc.includes(tipo) || desc.includes(nombre);
       return matchFecha && matchTexto;
     });
@@ -114,70 +188,101 @@ const TransaccionesFinanciamiento = ({
     }
   };
 
-  const montoAmortizado = saldoInicial - saldoActual;
+  const montoAmortizado = Math.max(0, saldoInicial - saldoActual);
   const porcentajePagado = saldoInicial > 0 ? (montoAmortizado / saldoInicial) * 100 : 0;
 
-  const esRevolvente = tipoCredito === "revolvente" || tipoCredito === "tarjeta_corporativa";
-  const saldoDisponible = montoTotal - saldoActual;
+  const esRevolvente =
+    tipoCredito === "revolvente" ||
+    tipoCredito === "tarjeta_corporativa" ||
+    tipoCredito === "Crédito Revolvente" ||
+    tipoCredito === "Tarjeta Corporativa";
+
+  const saldoDisponible = Math.max(0, montoTotal - saldoActual);
   const porcentajeUtilizado = montoTotal > 0 ? (saldoActual / montoTotal) * 100 : 0;
 
-  const getTipoLabel = (tipo: string) => {
-    const labels: Record<string, string> = {
-      desembolso: "Desembolso Inicial",
-      disposicion: "Disposición",
-      amortizacion: "Amortización",
-      cargo_interes: "Cargo por Interés",
-    };
-    return labels[tipo] || tipo;
-  };
+  const resumenTx = useMemo(() => {
+    const totalCapital = transacciones.reduce((sum, tx) => {
+      const tipo = getTipoMovimiento(tx);
+      if (tipo !== "amortizacion") return sum;
+      return sum + getMontoCapital(tx);
+    }, 0);
 
-  const getTipoVariant = (tipo: string): "default" | "secondary" | "destructive" => {
-    const variants: Record<string, "default" | "secondary" | "destructive"> = {
-      desembolso: "secondary",
-      disposicion: "secondary",
-      amortizacion: "default",
-      cargo_interes: "destructive",
+    const totalIntereses = transacciones.reduce((sum, tx) => {
+      const tipo = getTipoMovimiento(tx);
+      if (!["cargo_intereses", "cargo_interes", "pago_intereses"].includes(tipo)) return sum;
+      return sum + getMontoIntereses(tx);
+    }, 0);
+
+    const totalMovimientos = transacciones.length;
+
+    return {
+      totalCapital,
+      totalIntereses,
+      totalMovimientos,
     };
-    return variants[tipo] || "default";
-  };
+  }, [transacciones]);
 
   const getCuentasAfectadas = (transaccion: any) => {
-    if (transaccion.tipo_transaccion === "desembolso") {
+    const tipo = getTipoMovimiento(transaccion);
+    const metodoPago = String(getMetodoPago(transaccion)).toLowerCase();
+
+    if (tipo === "apertura" || tipo === "desembolso" || tipo === "disposicion") {
       return {
-        cargo: "1002 - Bancos",
-        abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`,
+        cargo: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+        abono: `2101 - Financiamientos (${nombreFinanciamiento})`,
       };
-    } else if (transaccion.tipo_transaccion === "disposicion") {
+    }
+
+    if (tipo === "amortizacion") {
       return {
-        cargo: transaccion.metodo_pago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
-        abono: `2101 - Préstamos Bancarios LP (${nombreFinanciamiento})`,
-      };
-    } else if (transaccion.tipo_transaccion === "amortizacion") {
-      return {
-        cargo: `2101 - Créditos Bancarios (${nombreFinanciamiento})`,
-        abono: transaccion.metodo_pago === "efectivo" ? "1001 - Efectivo" : "1002 - Bancos",
+        cargo: `2101 - Financiamientos (${nombreFinanciamiento})`,
+        abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
         adicional:
-          transaccion.interes_pagado > 0
+          getMontoIntereses(transaccion) > 0
             ? {
                 cargo: "5201 - Gastos Financieros",
-                abono: transaccion.metodo_pago === "efectivo" ? "1001 - Efectivo" : "1002 - Bancos",
-                monto: transaccion.interes_pagado,
+                abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+                monto: getMontoIntereses(transaccion),
               }
             : null,
       };
-    } else if (transaccion.tipo_transaccion === "cargo_interes") {
-      if (transaccion.interes_pagado > 0) {
-        return {
-          cargo: "5201 - Gastos Financieros",
-          abono: transaccion.metodo_pago === "efectivo" ? "1001 - Efectivo" : "1002 - Bancos",
-        };
-      } else {
-        return {
-          cargo: "5201 - Gastos Financieros",
-          abono: `2101 - Créditos Bancarios (${nombreFinanciamiento})`,
-        };
-      }
     }
+
+    if (tipo === "cargo_intereses" || tipo === "cargo_interes") {
+      return {
+        cargo: "5201 - Gastos Financieros",
+        abono: `2101 - Financiamientos (${nombreFinanciamiento})`,
+      };
+    }
+
+    if (tipo === "pago_intereses") {
+      return {
+        cargo: "2101 - Intereses por Pagar",
+        abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+      };
+    }
+
+    if (tipo === "cargo_comision") {
+      return {
+        cargo: "5201 - Gastos Financieros",
+        abono: `2101 - Financiamientos (${nombreFinanciamiento})`,
+      };
+    }
+
+    if (tipo === "pago_comision") {
+      return {
+        cargo: "2101 - Comisiones por Pagar",
+        abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+      };
+    }
+
+    if (tipo === "cargo_moratorio") {
+      return {
+        cargo: "5201 - Gastos Financieros",
+        abono: `2101 - Financiamientos (${nombreFinanciamiento})`,
+      };
+    }
+
     return { cargo: "N/A", abono: "N/A" };
   };
 
@@ -189,7 +294,6 @@ const TransaccionesFinanciamiento = ({
 
   return (
     <div className="space-y-6">
-      {/* Tarjetas de resumen */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {esRevolvente ? (
           <>
@@ -201,7 +305,9 @@ const TransaccionesFinanciamiento = ({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${montoTotal.toLocaleString("es-MX")}</div>
+                <div className="text-2xl font-bold">
+                  ${montoTotal.toLocaleString("es-MX")}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">Línea aprobada</p>
               </CardContent>
             </Card>
@@ -231,7 +337,7 @@ const TransaccionesFinanciamiento = ({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-success">
+                <div className="text-2xl font-bold text-green-600">
                   ${saldoDisponible.toLocaleString("es-MX")}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -244,11 +350,11 @@ const TransaccionesFinanciamiento = ({
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Transacciones
+                  Movimientos
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{transacciones?.length || 0}</div>
+                <div className="text-2xl font-bold">{resumenTx.totalMovimientos}</div>
                 <p className="text-xs text-muted-foreground mt-1">Registros</p>
               </CardContent>
             </Card>
@@ -263,7 +369,9 @@ const TransaccionesFinanciamiento = ({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${montoTotal.toLocaleString("es-MX")}</div>
+                <div className="text-2xl font-bold">
+                  ${montoTotal.toLocaleString("es-MX")}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">Préstamo total</p>
               </CardContent>
             </Card>
@@ -276,7 +384,7 @@ const TransaccionesFinanciamiento = ({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-success">
+                <div className="text-2xl font-bold text-green-600">
                   ${montoAmortizado.toLocaleString("es-MX")}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -304,11 +412,11 @@ const TransaccionesFinanciamiento = ({
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Transacciones
+                  Movimientos
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{transacciones?.length || 0}</div>
+                <div className="text-2xl font-bold">{resumenTx.totalMovimientos}</div>
                 <p className="text-xs text-muted-foreground mt-1">Registros</p>
               </CardContent>
             </Card>
@@ -316,23 +424,24 @@ const TransaccionesFinanciamiento = ({
         )}
       </div>
 
-      {/* Tabla de transacciones */}
       <Card>
         <CardHeader>
-          <CardTitle>Transacciones de {nombreFinanciamiento}</CardTitle>
-          <CardDescription>Historial de desembolsos, amortizaciones y cargos por interés</CardDescription>
+          <CardTitle>Movimientos de {nombreFinanciamiento}</CardTitle>
+          <CardDescription>
+            Historial de disposiciones, amortizaciones, intereses y ajustes
+          </CardDescription>
         </CardHeader>
 
         <CardContent>
           {errorMsg ? (
-            <div className="text-center py-8 text-destructive">
-              {errorMsg}
-            </div>
+            <div className="text-center py-8 text-destructive">{errorMsg}</div>
           ) : isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Cargando transacciones...</div>
+            <div className="text-center py-8 text-muted-foreground">
+              Cargando movimientos...
+            </div>
           ) : !transacciones || transacciones.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No hay transacciones registradas para este financiamiento
+              No hay movimientos registrados para este financiamiento
             </div>
           ) : (
             <Table>
@@ -351,74 +460,77 @@ const TransaccionesFinanciamiento = ({
               </TableHeader>
 
               <TableBody>
-                {transacciones.map((transaccion: any) => (
-                  <TableRow key={transaccion.id}>
-                    <TableCell>
-                      {format(new Date(transaccion.fecha), "dd MMM yyyy", { locale: es })}
-                    </TableCell>
+                {transacciones.map((transaccion: any) => {
+                  const fecha = getFecha(transaccion);
 
-                    <TableCell>
-                      <Badge variant={getTipoVariant(transaccion.tipo_transaccion)}>
-                        {getTipoLabel(transaccion.tipo_transaccion)}
-                      </Badge>
-                    </TableCell>
+                  return (
+                    <TableRow key={transaccion.id || transaccion._id}>
+                      <TableCell>
+                        {fecha ? format(fecha, "dd MMM yyyy", { locale: es }) : "-"}
+                      </TableCell>
 
-                    <TableCell className="text-right font-medium">
-                      ${Number(transaccion.monto || 0).toLocaleString("es-MX")}
-                    </TableCell>
+                      <TableCell>
+                        <Badge variant={getTipoVariant(getTipoMovimiento(transaccion))}>
+                          {getTipoLabel(getTipoMovimiento(transaccion))}
+                        </Badge>
+                      </TableCell>
 
-                    <TableCell className="text-right">
-                      ${Number(transaccion.capital_pagado || 0).toLocaleString("es-MX")}
-                    </TableCell>
+                      <TableCell className="text-right font-medium">
+                        ${getMonto(transaccion).toLocaleString("es-MX")}
+                      </TableCell>
 
-                    <TableCell className="text-right">
-                      ${Number(transaccion.interes_pagado || 0).toLocaleString("es-MX")}
-                    </TableCell>
+                      <TableCell className="text-right">
+                        ${getMontoCapital(transaccion).toLocaleString("es-MX")}
+                      </TableCell>
 
-                    <TableCell className="text-right font-medium">
-                      ${Number(transaccion.saldo_restante || 0).toLocaleString("es-MX")}
-                    </TableCell>
+                      <TableCell className="text-right">
+                        ${getMontoIntereses(transaccion).toLocaleString("es-MX")}
+                      </TableCell>
 
-                    <TableCell>{transaccion.metodo_pago || "-"}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        ${getSaldoRestante(transaccion, saldoActual).toLocaleString("es-MX")}
+                      </TableCell>
 
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleVerAsiento(transaccion)}
-                        disabled={!asientosContables?.length}
-                        title={!asientosContables?.length ? "No hay asientos disponibles" : "Ver asiento"}
-                      >
-                        <FileText className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+                      <TableCell>{getMetodoPago(transaccion)}</TableCell>
 
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setTransaccionSeleccionada(transaccion);
-                          setDetalleTransaccionOpen(true);
-                        }}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleVerAsiento(transaccion)}
+                          disabled={!asientosContables?.length}
+                          title={!asientosContables?.length ? "No hay asientos disponibles" : "Ver asiento"}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setTransaccionSeleccionada(transaccion);
+                            setDetalleTransaccionOpen(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog para ver detalle del asiento contable */}
       <Dialog open={detalleAsientoOpen} onOpenChange={setDetalleAsientoOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Detalle del Asiento Contable</DialogTitle>
-            <DialogDescription>Registro contable de la transacción</DialogDescription>
+            <DialogDescription>Registro contable del movimiento</DialogDescription>
           </DialogHeader>
 
           {asientoSeleccionado && (
@@ -426,17 +538,23 @@ const TransaccionesFinanciamiento = ({
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Número de Asiento</p>
-                  <p className="font-semibold">{asientoSeleccionado.numero_asiento}</p>
+                  <p className="font-semibold">
+                    {asientoSeleccionado.numero_asiento || asientoSeleccionado.numero || "-"}
+                  </p>
                 </div>
+
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha</p>
                   <p className="font-semibold">
-                    {format(new Date(asientoSeleccionado.fecha), "dd MMM yyyy", { locale: es })}
+                    {asientoSeleccionado.fecha
+                      ? format(new Date(asientoSeleccionado.fecha), "dd MMM yyyy", { locale: es })
+                      : "-"}
                   </p>
                 </div>
+
                 <div className="col-span-2">
                   <p className="text-sm text-muted-foreground">Descripción</p>
-                  <p className="font-medium">{asientoSeleccionado.descripcion}</p>
+                  <p className="font-medium">{asientoSeleccionado.descripcion || "-"}</p>
                 </div>
               </div>
 
@@ -444,6 +562,7 @@ const TransaccionesFinanciamiento = ({
                 <CardHeader>
                   <CardTitle className="text-base">Detalle de Movimientos</CardTitle>
                 </CardHeader>
+
                 <CardContent>
                   <Table>
                     <TableHeader>
@@ -456,33 +575,37 @@ const TransaccionesFinanciamiento = ({
                     </TableHeader>
 
                     <TableBody>
-                      {asientoSeleccionado.detalle_asientos?.map((detalle: any) => (
-                        <TableRow key={detalle.id}>
+                      {(asientoSeleccionado.detalle_asientos || []).map((detalle: any) => (
+                        <TableRow key={detalle.id || `${detalle.cuenta_codigo}-${detalle.descripcion}`}>
                           <TableCell className="font-medium">
-                            {detalle.cuenta_codigo} - {detalle.cuentas?.nombre || "N/A"}
+                            {detalle.cuenta_codigo || "-"} - {detalle.cuentas?.nombre || detalle.cuenta_nombre || "N/A"}
                           </TableCell>
-                          <TableCell>{detalle.descripcion}</TableCell>
-                          <TableCell className="text-right font-medium text-success">
-                            {detalle.debe > 0 ? `$${detalle.debe.toLocaleString("es-MX")}` : "-"}
+                          <TableCell>{detalle.descripcion || "-"}</TableCell>
+                          <TableCell className="text-right font-medium text-green-600">
+                            {toNum(detalle.debe, 0) > 0
+                              ? `$${toNum(detalle.debe, 0).toLocaleString("es-MX")}`
+                              : "-"}
                           </TableCell>
                           <TableCell className="text-right font-medium text-destructive">
-                            {detalle.haber > 0 ? `$${detalle.haber.toLocaleString("es-MX")}` : "-"}
+                            {toNum(detalle.haber, 0) > 0
+                              ? `$${toNum(detalle.haber, 0).toLocaleString("es-MX")}`
+                              : "-"}
                           </TableCell>
                         </TableRow>
                       ))}
 
                       <TableRow className="font-bold bg-muted">
                         <TableCell colSpan={2}>TOTALES</TableCell>
-                        <TableCell className="text-right text-success">
+                        <TableCell className="text-right text-green-600">
                           $
-                          {asientoSeleccionado.detalle_asientos
-                            ?.reduce((sum: number, d: any) => sum + (d.debe || 0), 0)
+                          {(asientoSeleccionado.detalle_asientos || [])
+                            .reduce((sum: number, d: any) => sum + toNum(d.debe, 0), 0)
                             .toLocaleString("es-MX")}
                         </TableCell>
                         <TableCell className="text-right text-destructive">
                           $
-                          {asientoSeleccionado.detalle_asientos
-                            ?.reduce((sum: number, d: any) => sum + (d.haber || 0), 0)
+                          {(asientoSeleccionado.detalle_asientos || [])
+                            .reduce((sum: number, d: any) => sum + toNum(d.haber, 0), 0)
                             .toLocaleString("es-MX")}
                         </TableCell>
                       </TableRow>
@@ -495,11 +618,10 @@ const TransaccionesFinanciamiento = ({
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para ver detalle de la transacción con cuentas contables */}
       <Dialog open={detalleTransaccionOpen} onOpenChange={setDetalleTransaccionOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Detalle de Transacción</DialogTitle>
+            <DialogTitle>Detalle de Movimiento</DialogTitle>
           </DialogHeader>
 
           {transaccionSeleccionada && (
@@ -508,45 +630,66 @@ const TransaccionesFinanciamiento = ({
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha</p>
                   <p className="font-medium">
-                    {format(new Date(transaccionSeleccionada.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                    {getFecha(transaccionSeleccionada)
+                      ? format(getFecha(transaccionSeleccionada) as Date, "dd 'de' MMMM 'de' yyyy", { locale: es })
+                      : "-"}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Tipo</p>
-                  <Badge variant={getTipoVariant(transaccionSeleccionada.tipo_transaccion)}>
-                    {getTipoLabel(transaccionSeleccionada.tipo_transaccion)}
+                  <Badge variant={getTipoVariant(getTipoMovimiento(transaccionSeleccionada))}>
+                    {getTipoLabel(getTipoMovimiento(transaccionSeleccionada))}
                   </Badge>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Descripción</p>
                   <p className="font-medium">
-                    {transaccionSeleccionada.descripcion || getTipoLabel(transaccionSeleccionada.tipo_transaccion)}
+                    {transaccionSeleccionada.descripcion ||
+                      getTipoLabel(getTipoMovimiento(transaccionSeleccionada))}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Monto Total</p>
                   <p className="font-medium text-lg">
-                    ${Number(transaccionSeleccionada.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    ${getMonto(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
 
-                {Number(transaccionSeleccionada.capital_pagado || 0) > 0 && (
+                {getMontoCapital(transaccionSeleccionada) > 0 && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Capital Pagado</p>
+                    <p className="text-sm text-muted-foreground">Capital</p>
                     <p className="font-medium">
-                      ${Number(transaccionSeleccionada.capital_pagado || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      ${getMontoCapital(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </p>
                   </div>
                 )}
 
-                {Number(transaccionSeleccionada.interes_pagado || 0) > 0 && (
+                {getMontoIntereses(transaccionSeleccionada) > 0 && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Interés Pagado</p>
+                    <p className="text-sm text-muted-foreground">Intereses</p>
                     <p className="font-medium">
-                      ${Number(transaccionSeleccionada.interes_pagado || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      ${getMontoIntereses(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+
+                {getMontoMoratorios(transaccionSeleccionada) > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Moratorios</p>
+                    <p className="font-medium">
+                      ${getMontoMoratorios(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+
+                {getMontoComisiones(transaccionSeleccionada) > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Comisiones</p>
+                    <p className="font-medium">
+                      ${getMontoComisiones(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                     </p>
                   </div>
                 )}
@@ -554,22 +697,32 @@ const TransaccionesFinanciamiento = ({
                 <div>
                   <p className="text-sm text-muted-foreground">Saldo Restante</p>
                   <p className="font-medium">
-                    ${Number(transaccionSeleccionada.saldo_restante || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    ${getSaldoRestante(transaccionSeleccionada, saldoActual).toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
 
-                {transaccionSeleccionada.metodo_pago && (
+                {getMetodoPago(transaccionSeleccionada) !== "-" && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Método de Pago</p>
+                    <p className="text-sm text-muted-foreground">Método</p>
+                    <p className="font-medium">{getMetodoPago(transaccionSeleccionada)}</p>
+                  </div>
+                )}
+
+                {(transaccionSeleccionada.referencia || transaccionSeleccionada.numero_referencia) && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Referencia</p>
                     <p className="font-medium">
-                      {transaccionSeleccionada.metodo_pago === "efectivo" ? "Efectivo" : "Transferencia/Bancos"}
+                      {transaccionSeleccionada.referencia || transaccionSeleccionada.numero_referencia}
                     </p>
                   </div>
                 )}
               </div>
 
               <div className="pt-4 border-t">
-                <h4 className="font-semibold mb-3">Afectación Contable</h4>
+                <h4 className="font-semibold mb-3">Afectación Contable Estimada</h4>
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -584,10 +737,10 @@ const TransaccionesFinanciamiento = ({
                       <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).cargo}</td>
                       <td className="text-right py-2 text-destructive">
                         $
-                        {Number(
-                          transaccionSeleccionada.tipo_transaccion === "amortizacion"
-                            ? transaccionSeleccionada.capital_pagado
-                            : transaccionSeleccionada.monto
+                        {(
+                          getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
+                            ? getMontoCapital(transaccionSeleccionada)
+                            : getMonto(transaccionSeleccionada)
                         ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                       </td>
                       <td className="text-right py-2">-</td>
@@ -596,12 +749,12 @@ const TransaccionesFinanciamiento = ({
                     <TableRow>
                       <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).abono}</td>
                       <td className="text-right py-2">-</td>
-                      <td className="text-right py-2 text-success">
+                      <td className="text-right py-2 text-green-600">
                         $
-                        {Number(
-                          transaccionSeleccionada.tipo_transaccion === "amortizacion"
-                            ? transaccionSeleccionada.capital_pagado
-                            : transaccionSeleccionada.monto
+                        {(
+                          getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
+                            ? getMontoCapital(transaccionSeleccionada)
+                            : getMonto(transaccionSeleccionada)
                         ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                       </td>
                     </TableRow>
@@ -609,24 +762,28 @@ const TransaccionesFinanciamiento = ({
                     {getCuentasAfectadas(transaccionSeleccionada).adicional && (
                       <>
                         <TableRow>
-                          <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).adicional.cargo}</td>
+                          <td className="font-medium py-2">
+                            {getCuentasAfectadas(transaccionSeleccionada).adicional.cargo}
+                          </td>
                           <td className="text-right py-2 text-destructive">
                             $
-                            {Number(getCuentasAfectadas(transaccionSeleccionada).adicional.monto).toLocaleString("es-MX", {
-                              minimumFractionDigits: 2,
-                            })}
+                            {Number(
+                              getCuentasAfectadas(transaccionSeleccionada).adicional.monto
+                            ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                           </td>
                           <td className="text-right py-2">-</td>
                         </TableRow>
 
                         <TableRow>
-                          <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).adicional.abono}</td>
+                          <td className="font-medium py-2">
+                            {getCuentasAfectadas(transaccionSeleccionada).adicional.abono}
+                          </td>
                           <td className="text-right py-2">-</td>
-                          <td className="text-right py-2 text-success">
+                          <td className="text-right py-2 text-green-600">
                             $
-                            {Number(getCuentasAfectadas(transaccionSeleccionada).adicional.monto).toLocaleString("es-MX", {
-                              minimumFractionDigits: 2,
-                            })}
+                            {Number(
+                              getCuentasAfectadas(transaccionSeleccionada).adicional.monto
+                            ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                           </td>
                         </TableRow>
                       </>
