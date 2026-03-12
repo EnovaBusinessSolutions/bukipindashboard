@@ -111,7 +111,7 @@ const RegistroFinanciamientoForm = () => {
     if (tipo === "simple") return "credito_simple";
     if (tipo === "revolvente") return "linea_credito";
     if (tipo === "tarjeta_corporativa") return "tarjeta_credito";
-    return "prestamo";
+    return "credito_simple";
   };
 
   const getMontoNumber = () => {
@@ -151,6 +151,11 @@ const RegistroFinanciamientoForm = () => {
 
     const esLinea = esLineaCredito;
 
+    // FIX CRITICO:
+    // - Crédito simple debe nacer con saldo vivo inicial
+    // - Revolvente/tarjeta pueden nacer con dispuesto inicial = 0
+    const montoDispuestoInicial = esLinea ? 0 : monto;
+
     return {
       // ===== Campos canónicos backend nuevo =====
       nombre: formData.nombre.trim(),
@@ -158,10 +163,7 @@ const RegistroFinanciamientoForm = () => {
       notas: formData.condiciones.trim(),
 
       tipo: tipoBackend,
-      categoria:
-        formData.tipo_credito === "revolvente" || formData.tipo_credito === "tarjeta_corporativa"
-          ? "bancario"
-          : "bancario",
+      categoria: "bancario",
 
       institucion: institucionNombre,
       institucion_id: formData.institucion_financiera_id || undefined,
@@ -185,16 +187,14 @@ const RegistroFinanciamientoForm = () => {
       estatus: "activo",
       activo: true,
 
-      // Si es línea de crédito, el monto va a linea_credito.
-      // Si es crédito simple, el monto va como monto_original.
       linea_credito: esLinea ? monto : 0,
       lineaCredito: esLinea ? monto : 0,
 
       monto_original: esLinea ? 0 : monto,
       montoOriginal: esLinea ? 0 : monto,
 
-      monto_dispuesto_inicial: 0,
-      montoDispuestoInicial: 0,
+      monto_dispuesto_inicial: montoDispuestoInicial,
+      montoDispuestoInicial: montoDispuestoInicial,
 
       // ===== Compat legacy =====
       tipo_credito: formData.tipo_credito,
@@ -384,22 +384,20 @@ const RegistroFinanciamientoForm = () => {
                 )}
               </div>
 
-              {!esRevolvente && (
-                <div className="space-y-2">
-                  <Label htmlFor="numero_cuenta">
-                    Número de {esLineaCredito ? "Tarjeta/Cuenta" : "Cuenta/Contrato"}
-                  </Label>
-                  <Input
-                    id="numero_cuenta"
-                    value={formData.numero_cuenta}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, numero_cuenta: e.target.value }))
-                    }
-                    placeholder={esLineaCredito ? "**** **** **** 1234" : "Ej: 123456789"}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="numero_cuenta">
+                  Número de {esLineaCredito ? "Tarjeta/Cuenta" : "Cuenta/Contrato"}
+                </Label>
+                <Input
+                  id="numero_cuenta"
+                  value={formData.numero_cuenta}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, numero_cuenta: e.target.value }))
+                  }
+                  placeholder={esLineaCredito ? "**** **** **** 1234" : "Ej: 123456789"}
+                  disabled={isSubmitting}
+                />
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="monto_total">
@@ -527,6 +525,47 @@ const RegistroFinanciamientoForm = () => {
                         {fechaVencimiento
                           ? format(fechaVencimiento, "PPP")
                           : "Se calculará automáticamente"}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {formData.tipo_credito === "tarjeta_corporativa" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Fecha de Registro *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                          disabled={isSubmitting}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
+                        </Button>
+                      </PopoverTrigger>
+
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={fechaInicio}
+                          onSelect={(date) => date && setFechaInicio(date)}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Fecha de Vencimiento</Label>
+                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará automáticamente"}
                       </span>
                     </div>
                   </div>
