@@ -1,7 +1,16 @@
 import React, { useMemo } from "react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Wallet,
+  Landmark,
+  TrendingDown,
+  TrendingUp,
+  Clock3,
+  CreditCard,
+} from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -11,100 +20,189 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-import { useFinanciamientos } from "@/hooks/useFinanciamientos";
+import { useFinanciamientos, type Financiamiento, type TransaccionFinanciamiento } from "@/hooks/useFinanciamientos";
 import TransaccionesTarjetaCredito from "./TransaccionesTarjetaCredito";
 import TransaccionesFinanciamiento from "./TransaccionesFinanciamiento";
 
 const money = (value: number) =>
-  `$${Number(value || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `$${Number(value || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const toNum = (v: unknown, def = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
 };
 
-const getTipoUi = (f: any) => {
-  const raw = String(f?.tipo || f?.tipo_credito || "").toLowerCase();
-
-  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa") return "tarjeta_corporativa";
-  if (raw === "linea_credito" || raw === "revolvente") return "revolvente";
-  if (raw === "credito_simple" || raw === "simple" || raw === "prestamo") return "simple";
-
-  return raw || "otro";
+const asText = (v: unknown, fallback = "") => {
+  if (v === undefined || v === null) return fallback;
+  return String(v).trim();
 };
 
-const getTipoLabel = (f: any) => {
-  const tipo = getTipoUi(f);
-  if (tipo === "tarjeta_corporativa") return "Tarjeta Corporativa";
-  if (tipo === "revolvente") return "Crédito Revolvente";
-  if (tipo === "simple") return "Crédito Simple";
-  return "Financiamiento";
-};
+const getTipoUi = (f: Financiamiento) =>
+  String(f.tipo_ui || f.tipoUi || f.tipo_credito || f.tipo || "").toLowerCase();
 
-const getInstitucion = (f: any) =>
-  f?.institucion ||
-  f?.institucion_financiera ||
-  "Sin institución";
+const getTipoLabel = (f: Financiamiento) =>
+  asText(f.tipo_label || f.tipoLabel) ||
+  (getTipoUi(f) === "tarjeta_corporativa"
+    ? "Tarjeta Corporativa"
+    : getTipoUi(f) === "revolvente"
+      ? "Crédito Revolvente"
+      : "Crédito Simple");
 
-const getMontoTotal = (f: any) => {
-  const tipo = getTipoUi(f);
+const getInstitucion = (f: Financiamiento) =>
+  f.institucion || f.institucion_financiera || "Sin institución";
 
-  if (tipo === "tarjeta_corporativa" || tipo === "revolvente") {
-    return toNum(f?.linea_credito ?? f?.lineaCredito ?? f?.monto_total, 0);
-  }
+const getMontoTotal = (f: Financiamiento) =>
+  toNum(f.monto_total_vista ?? f.montoTotalVista ?? f.monto_total, 0);
 
-  return toNum(f?.monto_original ?? f?.montoOriginal ?? f?.monto_total, 0);
-};
+const getSaldoActual = (f: Financiamiento) =>
+  toNum(f.saldo_actual_vista ?? f.saldoActualVista ?? f.saldo_actual, 0);
 
-const getSaldoActual = (f: any) => {
-  const tipo = getTipoUi(f);
-
-  if (tipo === "tarjeta_corporativa" || tipo === "revolvente") {
-    return toNum(
-      f?.saldo_dispuesto_actual ??
-        f?.saldoDispuestoActual ??
-        f?.saldo_capital_actual ??
-        f?.saldoCapitalActual ??
-        f?.saldo_actual,
-      0
-    );
-  }
-
-  return toNum(
-    f?.saldo_capital_actual ??
-      f?.saldoCapitalActual ??
-      f?.saldo_total_actual ??
-      f?.saldoTotalActual ??
-      f?.saldo_actual,
-    0
-  );
-};
-
-const getSaldoInicial = (f: any) => {
+const getSaldoInicial = (f: Financiamiento) => {
   const montoTotal = getMontoTotal(f);
   const saldoActual = getSaldoActual(f);
-  const amortizado = toNum(
-    f?.total_amortizado_capital ?? f?.totalAmortizadoCapital,
-    0
-  );
+  const amortizado = toNum(f.total_amortizado_capital ?? f.totalAmortizadoCapital, 0);
 
   return montoTotal > 0 ? montoTotal : saldoActual + amortizado;
 };
 
-const getDisponible = (f: any) => {
-  const disponible = toNum(f?.disponible_actual ?? f?.disponibleActual, NaN);
-  if (Number.isFinite(disponible)) return disponible;
+const getDisponible = (f: Financiamiento) =>
+  Math.max(
+    0,
+    toNum(
+      f.disponible_linea ??
+        f.disponibleLinea ??
+        f.disponible_actual ??
+        f.disponibleActual,
+      0
+    )
+  );
 
-  const montoTotal = getMontoTotal(f);
-  const saldoActual = getSaldoActual(f);
-  return Math.max(0, montoTotal - saldoActual);
-};
+const getMontoAmortizado = (f: Financiamiento) =>
+  Math.max(
+    0,
+    toNum(f.monto_pagado_capital ?? f.montoPagadoCapital, NaN) ||
+      Math.max(0, getMontoTotal(f) - getSaldoActual(f))
+  );
 
-const getFecha = (tx: any) => {
-  const raw = tx?.fecha || tx?.created_at || tx?.createdAt;
+const getFecha = (tx: TransaccionFinanciamiento) => {
+  const raw = tx.fecha || tx.created_at || tx.createdAt;
   if (!raw) return null;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const getNombreFinanciamiento = (
+  id: string | undefined,
+  financiamientos: Financiamiento[]
+) => {
+  if (!id) return "N/A";
+  const found = financiamientos.find((f) => f.id === id || f._id === id);
+  return found?.nombre || "N/A";
+};
+
+const getBadgeVariant = (tipo: string): "default" | "secondary" | "destructive" => {
+  const t = String(tipo || "").toLowerCase();
+  if (t === "amortizacion" || t === "pago_intereses" || t === "pago_comision") return "default";
+  if (t === "cargo_intereses" || t === "cargo_interes" || t === "cargo_moratorio") return "destructive";
+  return "secondary";
+};
+
+const getTipoTransaccionLabel = (tipoRaw: string) => {
+  const tipo = String(tipoRaw || "").toLowerCase();
+
+  const labels: Record<string, string> = {
+    apertura: "Apertura",
+    disposicion: "Disposición",
+    amortizacion: "Amortización",
+    cargo_intereses: "Cargo por Intereses",
+    cargo_interes: "Cargo por Interés",
+    pago_intereses: "Pago de Intereses",
+    cargo_comision: "Cargo por Comisión",
+    pago_comision: "Pago de Comisión",
+    cargo_moratorio: "Cargo Moratorio",
+    desembolso: "Desembolso",
+  };
+
+  return labels[tipo] || tipoRaw || "Movimiento";
+};
+
+const KpiCard = ({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  valueClassName = "",
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon: React.ElementType;
+  valueClassName?: string;
+}) => {
+  return (
+    <Card className="rounded-2xl shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+        <div className="space-y-1">
+          <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+          <div className={`text-2xl font-bold tracking-tight ${valueClassName}`}>{value}</div>
+          {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+        </div>
+        <div className="rounded-2xl border bg-slate-50 p-3">
+          <Icon className="h-5 w-5 text-slate-600" />
+        </div>
+      </CardHeader>
+    </Card>
+  );
+};
+
+const FinancingAccordionHeader = ({
+  financiamiento,
+  leftLabel,
+  midLabel,
+  rightLabel,
+  leftValue,
+  midValue,
+  rightValue,
+  rightValueClassName = "",
+}: {
+  financiamiento: Financiamiento;
+  leftLabel: string;
+  midLabel: string;
+  rightLabel: string;
+  leftValue: string;
+  midValue: string;
+  rightValue: string;
+  rightValueClassName?: string;
+}) => {
+  return (
+    <div className="flex w-full flex-col gap-4 pr-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0 text-left">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-900">{financiamiento.nombre}</span>
+          <Badge variant="outline">{getTipoLabel(financiamiento)}</Badge>
+        </div>
+        <span className="text-sm text-muted-foreground">{getInstitucion(financiamiento)}</span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3 lg:min-w-[520px]">
+        <div className="rounded-xl border bg-slate-50 px-3 py-2 text-left">
+          <p className="text-xs text-muted-foreground">{leftLabel}</p>
+          <p className="font-semibold">{leftValue}</p>
+        </div>
+        <div className="rounded-xl border bg-slate-50 px-3 py-2 text-left">
+          <p className="text-xs text-muted-foreground">{midLabel}</p>
+          <p className="font-semibold">{midValue}</p>
+        </div>
+        <div className="rounded-xl border bg-slate-50 px-3 py-2 text-left">
+          <p className="text-xs text-muted-foreground">{rightLabel}</p>
+          <p className={`font-semibold ${rightValueClassName}`}>{rightValue}</p>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const ResumenFinanciamientos = () => {
@@ -126,61 +224,49 @@ const ResumenFinanciamientos = () => {
     );
 
     const totalAmortizaciones = transacciones.reduce((sum, t) => {
-      const tipo = String(t?.tipo || t?.tipo_transaccion || "").toLowerCase();
+      const tipo = String(t.tipo || t.tipo_transaccion || "").toLowerCase();
       if (tipo !== "amortizacion") return sum;
 
       return (
         sum +
         toNum(
-          t?.monto_capital ??
-            t?.montoCapital ??
-            t?.capital_pagado ??
-            t?.monto,
+          t.monto_capital ??
+            t.montoCapital ??
+            t.capital_pagado ??
+            t.monto,
           0
         )
       );
     }, 0);
 
     const totalInteresesPagados = transacciones.reduce((sum, t) => {
-      const tipo = String(t?.tipo || t?.tipo_transaccion || "").toLowerCase();
+      const tipo = String(t.tipo || t.tipo_transaccion || "").toLowerCase();
 
       if (tipo === "pago_intereses") {
         return (
           sum +
           toNum(
-            t?.monto_intereses ??
-              t?.montoIntereses ??
-              t?.interes_pagado ??
-              t?.monto,
+            t.monto_intereses ??
+              t.montoIntereses ??
+              t.interes_pagado ??
+              t.monto,
             0
           )
         );
       }
 
-      return sum + toNum(t?.interes_pagado, 0);
+      return sum + toNum(t.interes_pagado, 0);
     }, 0);
 
     const totalCargos = transacciones.reduce((sum, t) => {
-      const tipo = String(t?.tipo || t?.tipo_transaccion || "").toLowerCase();
+      const tipo = String(t.tipo || t.tipo_transaccion || "").toLowerCase();
 
       if (tipo === "cargo_intereses") {
-        return (
-          sum +
-          toNum(
-            t?.monto_intereses ??
-              t?.montoIntereses ??
-              t?.monto,
-            0
-          )
-        );
+        return sum + toNum(t.monto_intereses ?? t.montoIntereses ?? t.monto, 0);
       }
 
-      if (tipo === "cargo_comision" || tipo === "cargo_moratorio") {
-        return sum + toNum(t?.monto, 0);
-      }
-
-      if (tipo === "cargo_interes") {
-        return sum + toNum(t?.monto, 0);
+      if (tipo === "cargo_comision" || tipo === "cargo_moratorio" || tipo === "cargo_interes") {
+        return sum + toNum(t.monto, 0);
       }
 
       return sum;
@@ -205,99 +291,59 @@ const ResumenFinanciamientos = () => {
     };
   }, [financiamientos, transacciones]);
 
-  const getNombreFinanciamiento = (id?: string) => {
-    if (!id) return "N/A";
-    const found = financiamientos.find((f) => f.id === id || f._id === id);
-    return found?.nombre || "N/A";
-  };
-
-  const getBadgeVariant = (tipo: string): "default" | "secondary" | "destructive" => {
-    const t = String(tipo || "").toLowerCase();
-    if (t === "amortizacion" || t === "pago_intereses" || t === "pago_comision") return "default";
-    if (t === "cargo_intereses" || t === "cargo_interes" || t === "cargo_moratorio") return "destructive";
-    return "secondary";
-  };
-
-  const getTipoTransaccionLabel = (tipoRaw: string) => {
-    const tipo = String(tipoRaw || "").toLowerCase();
-
-    const labels: Record<string, string> = {
-      apertura: "Apertura",
-      disposicion: "Disposición",
-      amortizacion: "Amortización",
-      cargo_intereses: "Cargo por Intereses",
-      cargo_interes: "Cargo por Interés",
-      pago_intereses: "Pago de Intereses",
-      cargo_comision: "Cargo por Comisión",
-      pago_comision: "Pago de Comisión",
-      cargo_moratorio: "Cargo Moratorio",
-      desembolso: "Desembolso",
-    };
-
-    return labels[tipo] || tipoRaw || "Movimiento";
-  };
-
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-96 w-full" />
+      <div className="space-y-6">
+        <Skeleton className="h-36 w-full rounded-2xl" />
+        <Skeleton className="h-96 w-full rounded-2xl" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Amortizado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              {money(totalAmortizaciones || resumen?.total_amortizado_capital || 0)}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          title="Total Amortizado"
+          value={money(totalAmortizaciones || resumen?.total_amortizado_capital || 0)}
+          subtitle="Capital pagado acumulado"
+          icon={TrendingUp}
+          valueClassName="text-emerald-600"
+        />
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Intereses Pagados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {money(totalInteresesPagados)}
-            </div>
-          </CardContent>
-        </Card>
+        <KpiCard
+          title="Intereses Pagados"
+          value={money(totalInteresesPagados)}
+          subtitle="Pagos aplicados a intereses"
+          icon={Clock3}
+          valueClassName="text-amber-600"
+        />
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Cargos Acumulados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {money(totalCargos)}
-            </div>
-          </CardContent>
-        </Card>
+        <KpiCard
+          title="Cargos Acumulados"
+          value={money(totalCargos)}
+          subtitle="Intereses, moratorios y comisiones"
+          icon={TrendingDown}
+          valueClassName="text-rose-600"
+        />
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Saldo Total Actual</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {money(resumen?.saldo_total_actual || 0)}
-            </div>
-          </CardContent>
-        </Card>
+        <KpiCard
+          title="Saldo Total Actual"
+          value={money(resumen?.saldo_total_actual || 0)}
+          subtitle="Saldo vigente del módulo"
+          icon={Wallet}
+        />
       </div>
 
       {ultimasTransacciones.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
-            <CardTitle>Últimos movimientos</CardTitle>
+            <CardTitle className="text-2xl font-semibold tracking-tight">
+              Últimos movimientos
+            </CardTitle>
+            <CardDescription>
+              Resumen reciente de movimientos registrados en financiamientos.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {ultimasTransacciones.map((tx) => {
@@ -308,14 +354,16 @@ const ResumenFinanciamientos = () => {
               return (
                 <div
                   key={tx.id || tx._id}
-                  className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-lg border p-3"
+                  className="flex flex-col gap-3 rounded-2xl border bg-white p-4 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={getBadgeVariant(String(tx.tipo || tx.tipo_transaccion || ""))}>
                         {getTipoTransaccionLabel(String(tx.tipo || tx.tipo_transaccion || ""))}
                       </Badge>
-                      <span className="font-medium">{getNombreFinanciamiento(financingId)}</span>
+                      <span className="font-medium text-slate-900">
+                        {getNombreFinanciamiento(financingId, financiamientos)}
+                      </span>
                     </div>
 
                     <div className="text-sm text-muted-foreground">
@@ -324,13 +372,15 @@ const ResumenFinanciamientos = () => {
 
                     {fecha && (
                       <div className="text-xs text-muted-foreground">
-                        {format(fecha, "dd/MM/yyyy")}
+                        {format(fecha, "dd/MM/yyyy", { locale: es })}
                       </div>
                     )}
                   </div>
 
                   <div className="text-right">
-                    <div className="font-semibold">{money(toNum(tx.monto, 0))}</div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      {money(toNum(tx.monto, 0))}
+                    </div>
                   </div>
                 </div>
               );
@@ -340,9 +390,15 @@ const ResumenFinanciamientos = () => {
       )}
 
       {tarjetas.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
-            <CardTitle>Tarjetas de Crédito Corporativas</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <CreditCard className="h-5 w-5" />
+              Tarjetas de Crédito Corporativas
+            </CardTitle>
+            <CardDescription>
+              Consulta saldos, disponibilidad y transacciones por tarjeta.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Accordion type="single" collapsible className="w-full">
@@ -354,29 +410,16 @@ const ResumenFinanciamientos = () => {
                 return (
                   <AccordionItem key={tarjeta.id} value={tarjeta.id}>
                     <AccordionTrigger>
-                      <div className="flex justify-between items-center w-full pr-4 gap-4">
-                        <div className="flex flex-col items-start text-left">
-                          <span className="font-medium">{tarjeta.nombre}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {getInstitucion(tarjeta)}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-4 text-sm flex-wrap justify-end">
-                          <div>
-                            <span className="text-muted-foreground">Límite: </span>
-                            <span className="font-medium">{money(montoTotal)}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Utilizado: </span>
-                            <span className="font-medium">{money(saldoActual)}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Disponible: </span>
-                            <span className="font-medium text-green-600">{money(disponible)}</span>
-                          </div>
-                        </div>
-                      </div>
+                      <FinancingAccordionHeader
+                        financiamiento={tarjeta}
+                        leftLabel="Límite"
+                        midLabel="Utilizado"
+                        rightLabel="Disponible"
+                        leftValue={money(montoTotal)}
+                        midValue={money(saldoActual)}
+                        rightValue={money(disponible)}
+                        rightValueClassName="text-emerald-600"
+                      />
                     </AccordionTrigger>
 
                     <AccordionContent>
@@ -396,9 +439,15 @@ const ResumenFinanciamientos = () => {
       )}
 
       {revolventes.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
-            <CardTitle>Líneas de Crédito Revolventes</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <Landmark className="h-5 w-5" />
+              Líneas de Crédito Revolventes
+            </CardTitle>
+            <CardDescription>
+              Consulta línea aprobada, monto utilizado y disponibilidad restante.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Accordion type="single" collapsible className="w-full">
@@ -411,33 +460,16 @@ const ResumenFinanciamientos = () => {
                 return (
                   <AccordionItem key={financiamiento.id} value={financiamiento.id}>
                     <AccordionTrigger>
-                      <div className="flex justify-between items-center w-full pr-4 gap-4">
-                        <div className="flex flex-col items-start text-left">
-                          <span className="font-medium">{financiamiento.nombre}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {getInstitucion(financiamiento)}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-4 text-sm flex-wrap justify-end">
-                          <div>
-                            <span className="text-muted-foreground">Línea Aprobada: </span>
-                            <span className="font-medium">{money(montoTotal)}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Monto Utilizado: </span>
-                            <span className="font-medium text-destructive">
-                              {money(saldoActual)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Disponible: </span>
-                            <span className="font-medium text-green-600">
-                              {money(disponible)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                      <FinancingAccordionHeader
+                        financiamiento={financiamiento}
+                        leftLabel="Línea Aprobada"
+                        midLabel="Monto Utilizado"
+                        rightLabel="Disponible"
+                        leftValue={money(montoTotal)}
+                        midValue={money(saldoActual)}
+                        rightValue={money(disponible)}
+                        rightValueClassName="text-emerald-600"
+                      />
                     </AccordionTrigger>
 
                     <AccordionContent>
@@ -459,9 +491,15 @@ const ResumenFinanciamientos = () => {
       )}
 
       {simples.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
-            <CardTitle>Créditos Simples</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <Wallet className="h-5 w-5" />
+              Créditos Simples
+            </CardTitle>
+            <CardDescription>
+              Consulta monto original, saldo amortizado y pendiente por crédito.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Accordion type="single" collapsible className="w-full">
@@ -469,38 +507,21 @@ const ResumenFinanciamientos = () => {
                 const montoTotal = getMontoTotal(financiamiento);
                 const saldoActual = getSaldoActual(financiamiento);
                 const saldoInicial = getSaldoInicial(financiamiento);
-                const amortizado = Math.max(0, montoTotal - saldoActual);
+                const amortizado = getMontoAmortizado(financiamiento);
 
                 return (
                   <AccordionItem key={financiamiento.id} value={financiamiento.id}>
                     <AccordionTrigger>
-                      <div className="flex justify-between items-center w-full pr-4 gap-4">
-                        <div className="flex flex-col items-start text-left">
-                          <span className="font-medium">{financiamiento.nombre}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {getInstitucion(financiamiento)}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-4 text-sm flex-wrap justify-end">
-                          <div>
-                            <span className="text-muted-foreground">Monto Original: </span>
-                            <span className="font-medium">{money(montoTotal)}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Amortizado: </span>
-                            <span className="font-medium text-green-600">
-                              {money(amortizado)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Pendiente: </span>
-                            <span className="font-medium text-destructive">
-                              {money(saldoActual)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                      <FinancingAccordionHeader
+                        financiamiento={financiamiento}
+                        leftLabel="Monto Original"
+                        midLabel="Amortizado"
+                        rightLabel="Pendiente"
+                        leftValue={money(montoTotal)}
+                        midValue={money(amortizado)}
+                        rightValue={money(saldoActual)}
+                        rightValueClassName="text-rose-600"
+                      />
                     </AccordionTrigger>
 
                     <AccordionContent>

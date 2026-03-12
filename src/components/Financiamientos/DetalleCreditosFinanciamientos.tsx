@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useFinanciamientos } from "@/hooks/useFinanciamientos";
+import { useFinanciamientos, type Financiamiento } from "@/hooks/useFinanciamientos";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
@@ -11,130 +12,351 @@ const toNum = (v: unknown, def = 0) => {
   return Number.isFinite(n) ? n : def;
 };
 
-const getTipoUi = (f: any) => {
-  const raw = String(f?.tipo || f?.tipo_credito || "").toLowerCase();
-
-  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa") return "tarjeta_corporativa";
-  if (raw === "linea_credito" || raw === "revolvente") return "revolvente";
-  if (raw === "credito_simple" || raw === "simple" || raw === "prestamo") return "simple";
-  if (raw === "arrendamiento") return "arrendamiento";
-
-  return raw || "otro";
+const asText = (v: unknown, fallback = "") => {
+  if (v === undefined || v === null) return fallback;
+  return String(v).trim();
 };
 
-const getTipoCreditoLabel = (tipo: string) => {
-  const labels: Record<string, string> = {
-    simple: "Crédito Simple",
-    arrendamiento: "Arrendamiento",
-    revolvente: "Crédito Revolvente",
-    tarjeta_corporativa: "Tarjeta Corporativa",
-    otro: "Otro",
-  };
-  return labels[tipo] || tipo;
+const formatMoney = (value: number) =>
+  `$${toNum(value, 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const formatPercent = (value: number) => `${toNum(value, 0).toFixed(1)}%`;
+
+const formatDateSafe = (value: unknown) => {
+  if (!value) return "-";
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "-";
+  return format(d, "dd/MM/yyyy", { locale: es });
 };
 
-const getEstatus = (f: any) => String(f?.estatus || f?.estado || "").toLowerCase();
+const getTipoUi = (f: Financiamiento) =>
+  String(f.tipo_ui || f.tipoUi || f.tipo_credito || f.tipo || "simple").toLowerCase();
 
-const getEstadoBadgeVariant = (
-  estado: string
-): "default" | "secondary" | "destructive" => {
-  const variants: Record<string, "default" | "secondary" | "destructive"> = {
-    activo: "default",
-    liquidado: "secondary",
-    pagado: "secondary",
-    vencido: "destructive",
-    cancelado: "destructive",
-    suspendido: "destructive",
-  };
-  return variants[estado] || "default";
-};
+const getTipoLabel = (f: Financiamiento) =>
+  asText(f.tipo_label || f.tipoLabel) ||
+  (getTipoUi(f) === "revolvente"
+    ? "Crédito Revolvente"
+    : getTipoUi(f) === "tarjeta_corporativa"
+      ? "Tarjeta Corporativa"
+      : "Crédito Simple");
 
-const getInstitucion = (f: any) =>
-  f?.institucion || f?.institucion_financiera || "Sin institución";
+const getEstadoUi = (f: Financiamiento) =>
+  String(f.estado_ui || f.estadoUi || f.estatus || f.estado || "activo").toLowerCase();
 
-const getMontoBase = (f: any) => {
-  const tipo = getTipoUi(f);
+const getEstadoLabel = (f: Financiamiento) =>
+  asText(f.estado_label || f.estadoLabel) ||
+  (getEstadoUi(f) === "liquidado"
+    ? "PAGADO"
+    : getEstadoUi(f) === "vencido"
+      ? "VENCIDO"
+      : getEstadoUi(f) === "cancelado"
+        ? "CANCELADO"
+        : getEstadoUi(f) === "suspendido"
+          ? "SUSPENDIDO"
+          : "ACTIVO");
 
-  if (tipo === "tarjeta_corporativa" || tipo === "revolvente") {
-    return toNum(f?.linea_credito ?? f?.lineaCredito ?? f?.monto_total, 0);
+const getEstadoBadgeClass = (estado: string) => {
+  if (estado === "activo") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50";
   }
-
-  return toNum(f?.monto_original ?? f?.montoOriginal ?? f?.monto_total, 0);
+  if (estado === "liquidado" || estado === "pagado") {
+    return "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100";
+  }
+  if (estado === "vencido") {
+    return "border-red-200 bg-red-50 text-red-700 hover:bg-red-50";
+  }
+  if (estado === "cancelado" || estado === "suspendido") {
+    return "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50";
+  }
+  return "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100";
 };
 
-const getSaldoPendiente = (f: any) => {
-  const tipo = getTipoUi(f);
-
-  if (tipo === "tarjeta_corporativa" || tipo === "revolvente") {
-    return toNum(
-      f?.saldo_dispuesto_actual ??
-        f?.saldoDispuestoActual ??
-        f?.saldo_capital_actual ??
-        f?.saldoCapitalActual ??
-        f?.saldo_actual,
-      0
-    );
+const getTipoBadgeClass = (tipo: string) => {
+  if (tipo === "revolvente") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-50";
   }
+  if (tipo === "tarjeta_corporativa") {
+    return "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50";
+  }
+  return "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-50";
+};
 
-  return toNum(
-    f?.saldo_capital_actual ??
-      f?.saldoCapitalActual ??
-      f?.saldo_total_actual ??
-      f?.saldoTotalActual ??
-      f?.saldo_actual,
-    0
+const getInstitucion = (f: Financiamiento) =>
+  asText(f.institucion || f.institucion_financiera, "Sin institución");
+
+const getCuentaDisplay = (f: Financiamiento) =>
+  asText(f.cuenta_display || f.cuentaDisplay) ||
+  asText(f.numero_cuenta || f.numeroCuenta) ||
+  asText(f.numero_contrato || f.numeroContrato) ||
+  asText(f.referencia);
+
+const getMontoTotalVista = (f: Financiamiento) =>
+  toNum(f.monto_total_vista ?? f.montoTotalVista ?? f.monto_total, 0);
+
+const getSaldoActualVista = (f: Financiamiento) =>
+  toNum(f.saldo_actual_vista ?? f.saldoActualVista ?? f.saldo_actual, 0);
+
+const getMontoPagadoCapital = (f: Financiamiento) =>
+  toNum(f.monto_pagado_capital ?? f.montoPagadoCapital, 0);
+
+const getMontoPendienteCapital = (f: Financiamiento) =>
+  toNum(f.monto_pendiente_capital ?? f.montoPendienteCapital, 0);
+
+const getDisponibleLinea = (f: Financiamiento) =>
+  toNum(f.disponible_linea ?? f.disponibleLinea ?? f.disponible_actual ?? f.disponibleActual, 0);
+
+const getUsoLineaPct = (f: Financiamiento) =>
+  Math.min(100, Math.max(0, toNum(f.uso_linea_pct ?? f.usoLineaPct, 0)));
+
+const getProgresoPagoPct = (f: Financiamiento) =>
+  Math.min(100, Math.max(0, toNum(f.progreso_pago_pct ?? f.progresoPagoPct, 0)));
+
+const getTasa = (f: Financiamiento) =>
+  toNum(f.tasa_interes_anual ?? f.tasaInteresAnual ?? f.tasa_interes, 0);
+
+const getPlazo = (f: Financiamiento) =>
+  toNum(f.plazo_meses ?? f.plazoMeses, 0);
+
+const getFechaInicio = (f: Financiamiento) =>
+  f.fecha_inicio || f.fechaInicio || f.fecha_apertura || f.fechaApertura || null;
+
+const getFechaVencimiento = (f: Financiamiento) =>
+  f.fecha_vencimiento || f.fechaVencimiento || null;
+
+const getDescripcion = (f: Financiamiento) =>
+  asText(f.descripcion_corta || f.descripcionCorta) || asText(f.descripcion);
+
+const getCondiciones = (f: Financiamiento) =>
+  asText(f.condiciones_texto || f.condicionesTexto) || asText(f.condiciones) || asText(f.notas);
+
+const getModoVisual = (f: Financiamiento) =>
+  asText(f.modo_visual || f.modoVisual) === "uso_linea" ? "uso_linea" : "progreso_pago";
+
+const FinancialStat = ({
+  label,
+  value,
+  valueClassName = "",
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) => {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`text-xl font-semibold tracking-tight ${valueClassName}`}>{value}</p>
+    </div>
   );
 };
 
-const getDisponible = (f: any) => {
-  const disponible = Number(f?.disponible_actual ?? f?.disponibleActual);
-  if (Number.isFinite(disponible)) return Math.max(0, disponible);
+const DetailCard = ({ f }: { f: Financiamiento }) => {
+  const tipoUi = getTipoUi(f);
+  const tipoLabel = getTipoLabel(f);
+  const estadoUi = getEstadoUi(f);
+  const estadoLabel = getEstadoLabel(f);
 
-  const monto = getMontoBase(f);
-  const saldo = getSaldoPendiente(f);
-  return Math.max(0, monto - saldo);
+  const institucion = getInstitucion(f);
+  const cuentaDisplay = getCuentaDisplay(f);
+  const descripcion = getDescripcion(f);
+  const condiciones = getCondiciones(f);
+
+  const montoTotalVista = getMontoTotalVista(f);
+  const saldoActualVista = getSaldoActualVista(f);
+  const montoPagadoCapital = getMontoPagadoCapital(f);
+  const montoPendienteCapital = getMontoPendienteCapital(f);
+  const disponibleLinea = getDisponibleLinea(f);
+
+  const tasa = getTasa(f);
+  const plazo = getPlazo(f);
+
+  const fechaInicio = getFechaInicio(f);
+  const fechaVencimiento = getFechaVencimiento(f);
+
+  const modoVisual = getModoVisual(f);
+  const usoLineaPct = getUsoLineaPct(f);
+  const progresoPagoPct = getProgresoPagoPct(f);
+
+  const esLinea = modoVisual === "uso_linea";
+
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm transition-all">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h4 className="text-2xl font-semibold tracking-tight text-slate-900">{f.nombre}</h4>
+          <p className="text-sm text-muted-foreground">{institucion}</p>
+
+          {cuentaDisplay ? (
+            <p className="text-xs text-muted-foreground">Cuenta: {cuentaDisplay}</p>
+          ) : null}
+
+          {descripcion ? (
+            <p className="pt-2 text-sm text-slate-600">{descripcion}</p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <Badge variant="outline" className={getTipoBadgeClass(tipoUi)}>
+            {tipoLabel}
+          </Badge>
+          <Badge variant="outline" className={getEstadoBadgeClass(estadoUi)}>
+            {estadoLabel}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <FinancialStat
+          label={esLinea ? "Línea Total" : "Monto Original"}
+          value={formatMoney(montoTotalVista)}
+        />
+        <FinancialStat
+          label={esLinea ? "Saldo Actual" : "Saldo Actual"}
+          value={formatMoney(saldoActualVista)}
+          valueClassName="text-red-600"
+        />
+        <FinancialStat
+          label="Tasa de Interés"
+          value={`${formatPercent(tasa)} anual`}
+        />
+        <FinancialStat
+          label="Plazo"
+          value={`${plazo || 0} ${plazo === 1 ? "mes" : "meses"}`}
+        />
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Fecha de Inicio</p>
+          <p className="text-base font-medium text-slate-900">{formatDateSafe(fechaInicio)}</p>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Fecha de Vencimiento</p>
+          <p className="text-base font-medium text-slate-900">{formatDateSafe(fechaVencimiento)}</p>
+        </div>
+
+        {tipoUi === "tarjeta_corporativa" ? (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Tipo de Crédito</p>
+            <p className="text-base font-medium text-slate-900">{tipoLabel}</p>
+          </div>
+        ) : null}
+      </div>
+
+      {condiciones ? (
+        <div className="mt-6 space-y-2">
+          <p className="text-xs text-muted-foreground">Condiciones</p>
+          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            {condiciones}
+          </div>
+        </div>
+      ) : null}
+
+      {esLinea ? (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Uso de Línea de Crédito</span>
+            <span className="font-semibold text-slate-900">
+              {formatPercent(usoLineaPct)} utilizado
+            </span>
+          </div>
+
+          <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+            <div className="flex h-full w-full">
+              <div
+                className="h-full bg-emerald-500 transition-all"
+                style={{ width: `${Math.max(0, 100 - usoLineaPct)}%` }}
+                title="Disponible"
+              />
+              <div
+                className="h-full bg-red-500 transition-all"
+                style={{ width: `${usoLineaPct}%` }}
+                title="Utilizado"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-emerald-500" />
+              Disponible: {formatMoney(disponibleLinea)}
+            </span>
+
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-red-500" />
+              Pendiente: {formatMoney(montoPendienteCapital)}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Progreso de Pago</span>
+            <span className="font-semibold text-slate-900">
+              {formatPercent(progresoPagoPct)} completado
+            </span>
+          </div>
+
+          <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-sky-600 transition-all"
+              style={{ width: `${progresoPagoPct}%` }}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Pagado: {formatMoney(montoPagadoCapital)}</span>
+            <span>Pendiente: {formatMoney(montoPendienteCapital)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
-const getMontoPagado = (f: any) => {
-  const monto = getMontoBase(f);
-  const saldo = getSaldoPendiente(f);
-  return Math.max(0, monto - saldo);
+const Section = ({
+  title,
+  count,
+  children,
+  titleClassName = "",
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+  titleClassName?: string;
+}) => {
+  return (
+    <Card className="rounded-2xl shadow-sm">
+      <CardHeader>
+        <CardTitle className={`text-3xl font-semibold tracking-tight ${titleClassName}`}>
+          {title} ({count})
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">{children}</div>
+      </CardContent>
+    </Card>
+  );
 };
 
-const getTasa = (f: any) =>
-  toNum(f?.tasa_interes_anual ?? f?.tasaInteresAnual ?? f?.tasa_interes, 0);
-
-const getPlazo = (f: any) =>
-  toNum(f?.plazo_meses ?? f?.plazoMeses, 0);
-
-const getFechaInicio = (f: any) =>
-  f?.fecha_inicio || f?.fechaInicio || f?.fecha_apertura || f?.fechaApertura || null;
-
-const getFechaVencimiento = (f: any) =>
-  f?.fecha_vencimiento || f?.fechaVencimiento || null;
-
-const formatDateSafe = (value: any) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return format(d, "dd/MM/yyyy");
-};
-
-const percentage = (num: number, den: number) => {
-  if (!den || den <= 0) return 0;
-  return (num / den) * 100;
+const EmptyState = ({ text }: { text: string }) => {
+  return (
+    <div className="rounded-2xl border border-dashed bg-slate-50 px-6 py-12 text-center text-muted-foreground">
+      {text}
+    </div>
+  );
 };
 
 const DetalleCreditosFinanciamientos = () => {
   const { financiamientos, isLoading } = useFinanciamientos();
 
   const { creditosActivos, creditosPagados, creditosVencidos } = useMemo(() => {
-    const activos = financiamientos.filter((f: any) => getEstatus(f) === "activo");
-    const pagados = financiamientos.filter((f: any) => {
-      const estatus = getEstatus(f);
-      return estatus === "liquidado" || estatus === "pagado";
+    const activos = financiamientos.filter((f) => getEstadoUi(f) === "activo");
+    const pagados = financiamientos.filter((f) => {
+      const estado = getEstadoUi(f);
+      return estado === "liquidado" || estado === "pagado";
     });
-    const vencidos = financiamientos.filter((f: any) => getEstatus(f) === "vencido");
+    const vencidos = financiamientos.filter((f) => getEstadoUi(f) === "vencido");
 
     return {
       creditosActivos: activos,
@@ -145,280 +367,42 @@ const DetalleCreditosFinanciamientos = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-96 w-full" />
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Créditos Activos ({creditosActivos.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {creditosActivos.map((f: any) => {
-              const tipo = getTipoUi(f);
-              const montoBase = getMontoBase(f);
-              const saldoPendiente = getSaldoPendiente(f);
-              const montoPagado = getMontoPagado(f);
-              const disponible = getDisponible(f);
-              const estatus = getEstatus(f);
-              const tasa = getTasa(f);
-              const plazo = getPlazo(f);
-
-              const esLinea = tipo === "tarjeta_corporativa" || tipo === "revolvente";
-              const pctUtilizado = percentage(saldoPendiente, montoBase);
-              const pctPagado = percentage(montoPagado, montoBase);
-
-              return (
-                <div key={f.id} className="border rounded-lg p-6 space-y-4">
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <h4 className="font-semibold text-lg">{f.nombre}</h4>
-                      <p className="text-sm text-muted-foreground">{getInstitucion(f)}</p>
-                      {(f.numero_cuenta || f.numeroCuenta) && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Cuenta: {f.numero_cuenta || f.numeroCuenta}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 flex-wrap justify-end">
-                      <Badge>{getTipoCreditoLabel(tipo)}</Badge>
-                      <Badge variant={getEstadoBadgeVariant(estatus)}>
-                        {estatus.toUpperCase()}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {f.descripcion && (
-                    <p className="text-sm text-muted-foreground">{f.descripcion}</p>
-                  )}
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        {esLinea ? "Línea Total" : "Monto Original"}
-                      </p>
-                      <p className="font-semibold">
-                        ${montoBase.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        {esLinea ? "Monto Utilizado" : "Saldo Pendiente"}
-                      </p>
-                      <p className="font-semibold text-red-600">
-                        ${saldoPendiente.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-muted-foreground">Tasa de Interés</p>
-                      <p className="font-semibold">{tasa.toFixed(2)}% anual</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-muted-foreground">Plazo</p>
-                      <p className="font-semibold">{plazo || 0} meses</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Fecha de Inicio</p>
-                      <p className="text-sm">{formatDateSafe(getFechaInicio(f))}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-muted-foreground">Fecha de Vencimiento</p>
-                      <p className="text-sm">{formatDateSafe(getFechaVencimiento(f))}</p>
-                    </div>
-                  </div>
-
-                  {(f.notas || f.condiciones) && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Condiciones / Notas</p>
-                      <p className="text-sm bg-muted p-2 rounded">
-                        {f.notas || f.condiciones}
-                      </p>
-                    </div>
-                  )}
-
-                  {esLinea ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Uso de Línea de Crédito</span>
-                        <span className="font-medium">{pctUtilizado.toFixed(1)}% utilizado</span>
-                      </div>
-
-                      <div className="w-full bg-green-100 rounded-full h-3 flex overflow-hidden">
-                        <div
-                          className="bg-green-500 h-3 transition-all"
-                          style={{
-                            width: `${percentage(disponible, montoBase)}%`,
-                          }}
-                          title="Línea Disponible"
-                        />
-                        <div
-                          className="bg-red-500 h-3 transition-all"
-                          style={{
-                            width: `${pctUtilizado}%`,
-                          }}
-                          title="Saldo Utilizado"
-                        />
-                      </div>
-
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-green-500 rounded" />
-                          Disponible: ${disponible.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-red-500 rounded" />
-                          Utilizado: ${saldoPendiente.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Progreso de Pago</span>
-                        <span className="font-medium">{pctPagado.toFixed(1)}% completado</span>
-                      </div>
-
-                      <div className="w-full bg-muted rounded-full h-3">
-                        <div
-                          className="bg-primary h-3 rounded-full transition-all"
-                          style={{
-                            width: `${pctPagado}%`,
-                          }}
-                        />
-                      </div>
-
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>
-                          Pagado: ${montoPagado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                        </span>
-                        <span>
-                          Pendiente: ${saldoPendiente.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {creditosActivos.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                No hay créditos activos
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <Section title="Créditos Activos" count={creditosActivos.length}>
+        {creditosActivos.length > 0 ? (
+          creditosActivos.map((f) => <DetailCard key={f.id} f={f} />)
+        ) : (
+          <EmptyState text="No hay créditos activos" />
+        )}
+      </Section>
 
       {creditosPagados.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Créditos Pagados ({creditosPagados.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {creditosPagados.map((f: any) => {
-                const montoBase = getMontoBase(f);
-
-                return (
-                  <div key={f.id} className="border rounded-lg p-4 opacity-75">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold">{f.nombre}</h4>
-                        <p className="text-sm text-muted-foreground">{getInstitucion(f)}</p>
-                      </div>
-                      <Badge variant="secondary">PAGADO</Badge>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 mt-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Monto Total</p>
-                        <p className="font-medium">
-                          ${montoBase.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">Fecha de Inicio</p>
-                        <p className="text-sm">{formatDateSafe(getFechaInicio(f))}</p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">Fecha de Vencimiento</p>
-                        <p className="text-sm">{formatDateSafe(getFechaVencimiento(f))}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <Section title="Créditos Pagados" count={creditosPagados.length}>
+          {creditosPagados.map((f) => (
+            <DetailCard key={f.id} f={f} />
+          ))}
+        </Section>
       )}
 
       {creditosVencidos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-red-600">
-              Créditos Vencidos ({creditosVencidos.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {creditosVencidos.map((f: any) => {
-                const saldoPendiente = getSaldoPendiente(f);
-                const tasa = getTasa(f);
-
-                return (
-                  <div key={f.id} className="border border-red-300 rounded-lg p-4 bg-red-50">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold text-red-900">{f.nombre}</h4>
-                        <p className="text-sm text-red-700">{getInstitucion(f)}</p>
-                      </div>
-                      <Badge variant="destructive">VENCIDO</Badge>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 mt-3">
-                      <div>
-                        <p className="text-xs text-red-600">Saldo Pendiente</p>
-                        <p className="font-bold text-red-900">
-                          ${saldoPendiente.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-red-600">Tasa</p>
-                        <p className="font-medium">{tasa.toFixed(2)}%</p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-red-600">Fecha de Vencimiento</p>
-                        <p className="text-sm font-medium">
-                          {formatDateSafe(getFechaVencimiento(f))}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <Section
+          title="Créditos Vencidos"
+          count={creditosVencidos.length}
+          titleClassName="text-red-700"
+        >
+          {creditosVencidos.map((f) => (
+            <DetailCard key={f.id} f={f} />
+          ))}
+        </Section>
       )}
     </div>
   );
