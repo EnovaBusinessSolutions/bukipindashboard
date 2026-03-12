@@ -22,8 +22,11 @@ interface TransaccionesFinanciamientoProps {
 const API_MOVIMIENTOS = (financiamientoId: string) =>
   `/api/financiamientos/${encodeURIComponent(financiamientoId)}/movimientos`;
 
-const API_ASIENTOS = (q: string) =>
-  `/api/contabilidad/asientos?q=${encodeURIComponent(q)}&include=detalle,cuentas`;
+const API_ASIENTO_BY_ID = (journalEntryId: string) =>
+  `/api/asientos/${encodeURIComponent(journalEntryId)}`;
+
+const API_ASIENTO_BY_TX = (movementId: string) =>
+  `/api/asientos/by-transaccion?source=financiamiento&id=${encodeURIComponent(movementId)}`;
 
 async function fetchJSON<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: "include" });
@@ -48,12 +51,11 @@ const toNum = (v: unknown, def = 0) => {
   return Number.isFinite(n) ? n : def;
 };
 
-const sameDay = (a: string | Date, b: string | Date) => {
-  const da = new Date(a);
-  const db = new Date(b);
-  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
-  return da.toISOString().slice(0, 10) === db.toISOString().slice(0, 10);
-};
+const formatMoney = (value: unknown) =>
+  `$${toNum(value, 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const getTipoMovimiento = (tx: any) =>
   String(tx?.tipo || tx?.tipo_transaccion || "").toLowerCase();
@@ -84,8 +86,8 @@ const getMetodoPago = (tx: any) =>
 const getSaldoRestante = (tx: any, fallbackSaldoActual: number) => {
   const snap = tx?.snapshot_after || {};
   const saldoNuevo =
-    snap?.saldo_capital_actual ??
     snap?.saldo_total_actual ??
+    snap?.saldo_capital_actual ??
     tx?.saldo_restante;
 
   return toNum(saldoNuevo, fallbackSaldoActual);
@@ -130,6 +132,12 @@ const getTipoVariant = (
   return "secondary";
 };
 
+const getDetalleAsientos = (asiento: any) => {
+  if (Array.isArray(asiento?.detalle_asientos)) return asiento.detalle_asientos;
+  if (Array.isArray(asiento?.detalles)) return asiento.detalles;
+  return [];
+};
+
 const TransaccionesFinanciamiento = ({
   financiamientoId,
   nombreFinanciamiento,
@@ -142,6 +150,7 @@ const TransaccionesFinanciamiento = ({
   const [asientoSeleccionado, setAsientoSeleccionado] = useState<any>(null);
   const [detalleTransaccionOpen, setDetalleTransaccionOpen] = useState(false);
   const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
+  const [loadingAsientoId, setLoadingAsientoId] = useState<string | null>(null);
 
   const {
     data: transacciones = [],
@@ -154,39 +163,6 @@ const TransaccionesFinanciamiento = ({
       return await fetchJSON<any[]>(API_MOVIMIENTOS(financiamientoId));
     },
   });
-
-  const {
-    data: asientosContables = [],
-    isLoading: isLoadingAsientos,
-    error: asientosError,
-  } = useQuery({
-    queryKey: ["asientos-financiamiento", financiamientoId, nombreFinanciamiento],
-    enabled: !!financiamientoId && !!nombreFinanciamiento,
-    queryFn: async () => {
-      return await fetchJSON<any[]>(API_ASIENTOS(nombreFinanciamiento));
-    },
-  });
-
-  const asientosIndex = useMemo(() => asientosContables || [], [asientosContables]);
-
-  const handleVerAsiento = (transaccion: any) => {
-    if (!asientosIndex.length) return;
-
-    const tipo = getTipoMovimiento(transaccion);
-    const nombre = String(nombreFinanciamiento || "").toLowerCase();
-
-    const asiento = asientosIndex.find((a: any) => {
-      const desc = String(a?.descripcion || "").toLowerCase();
-      const matchFecha = transaccion?.fecha ? sameDay(a?.fecha, transaccion.fecha) : false;
-      const matchTexto = desc.includes(tipo) || desc.includes(nombre);
-      return matchFecha && matchTexto;
-    });
-
-    if (asiento) {
-      setAsientoSeleccionado(asiento);
-      setDetalleAsientoOpen(true);
-    }
-  };
 
   const montoAmortizado = Math.max(0, saldoInicial - saldoActual);
   const porcentajePagado = saldoInicial > 0 ? (montoAmortizado / saldoInicial) * 100 : 0;
@@ -286,11 +262,31 @@ const TransaccionesFinanciamiento = ({
     return { cargo: "N/A", abono: "N/A" };
   };
 
-  const isLoading = isLoadingTransacciones || isLoadingAsientos;
-  const errorMsg =
-    (transaccionesError as any)?.message ||
-    (asientosError as any)?.message ||
-    null;
+  const handleVerAsiento = async (transaccion: any) => {
+    const movementId = String(transaccion?.id || transaccion?._id || "").trim();
+    const journalEntryId = String(transaccion?.journalEntryId || "").trim();
+
+    if (!movementId && !journalEntryId) return;
+
+    try {
+      setLoadingAsientoId(movementId || journalEntryId);
+
+      const asiento = journalEntryId
+        ? await fetchJSON<any>(API_ASIENTO_BY_ID(journalEntryId))
+        : await fetchJSON<any>(API_ASIENTO_BY_TX(movementId));
+
+      setAsientoSeleccionado(asiento);
+      setDetalleAsientoOpen(true);
+    } catch (error) {
+      console.error("Error cargando asiento del financiamiento:", error);
+      setAsientoSeleccionado(null);
+    } finally {
+      setLoadingAsientoId(null);
+    }
+  };
+
+  const isLoading = isLoadingTransacciones;
+  const errorMsg = (transaccionesError as any)?.message || null;
 
   return (
     <div className="space-y-6">
@@ -306,7 +302,7 @@ const TransaccionesFinanciamiento = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${montoTotal.toLocaleString("es-MX")}
+                  {formatMoney(montoTotal)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Línea aprobada</p>
               </CardContent>
@@ -321,7 +317,7 @@ const TransaccionesFinanciamiento = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-orange-600">
-                  ${saldoActual.toLocaleString("es-MX")}
+                  {formatMoney(saldoActual)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {porcentajeUtilizado.toFixed(1)}% utilizado
@@ -338,7 +334,7 @@ const TransaccionesFinanciamiento = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  ${saldoDisponible.toLocaleString("es-MX")}
+                  {formatMoney(saldoDisponible)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {(100 - porcentajeUtilizado).toFixed(1)}% disponible
@@ -370,7 +366,7 @@ const TransaccionesFinanciamiento = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${montoTotal.toLocaleString("es-MX")}
+                  {formatMoney(montoTotal)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Préstamo total</p>
               </CardContent>
@@ -385,7 +381,7 @@ const TransaccionesFinanciamiento = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  ${montoAmortizado.toLocaleString("es-MX")}
+                  {formatMoney(montoAmortizado)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {porcentajePagado.toFixed(1)}% pagado
@@ -402,7 +398,7 @@ const TransaccionesFinanciamiento = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-destructive">
-                  ${saldoActual.toLocaleString("es-MX")}
+                  {formatMoney(saldoActual)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Por pagar</p>
               </CardContent>
@@ -462,9 +458,11 @@ const TransaccionesFinanciamiento = ({
               <TableBody>
                 {transacciones.map((transaccion: any) => {
                   const fecha = getFecha(transaccion);
+                  const rowId = String(transaccion.id || transaccion._id || "");
+                  const loadingThisAsiento = loadingAsientoId === rowId;
 
                   return (
-                    <TableRow key={transaccion.id || transaccion._id}>
+                    <TableRow key={rowId}>
                       <TableCell>
                         {fecha ? format(fecha, "dd MMM yyyy", { locale: es }) : "-"}
                       </TableCell>
@@ -476,19 +474,19 @@ const TransaccionesFinanciamiento = ({
                       </TableCell>
 
                       <TableCell className="text-right font-medium">
-                        ${getMonto(transaccion).toLocaleString("es-MX")}
+                        {formatMoney(getMonto(transaccion))}
                       </TableCell>
 
                       <TableCell className="text-right">
-                        ${getMontoCapital(transaccion).toLocaleString("es-MX")}
+                        {formatMoney(getMontoCapital(transaccion))}
                       </TableCell>
 
                       <TableCell className="text-right">
-                        ${getMontoIntereses(transaccion).toLocaleString("es-MX")}
+                        {formatMoney(getMontoIntereses(transaccion))}
                       </TableCell>
 
                       <TableCell className="text-right font-medium">
-                        ${getSaldoRestante(transaccion, saldoActual).toLocaleString("es-MX")}
+                        {formatMoney(getSaldoRestante(transaccion, saldoActual))}
                       </TableCell>
 
                       <TableCell>{getMetodoPago(transaccion)}</TableCell>
@@ -498,8 +496,8 @@ const TransaccionesFinanciamiento = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleVerAsiento(transaccion)}
-                          disabled={!asientosContables?.length}
-                          title={!asientosContables?.length ? "No hay asientos disponibles" : "Ver asiento"}
+                          disabled={loadingThisAsiento}
+                          title="Ver asiento"
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
@@ -539,7 +537,10 @@ const TransaccionesFinanciamiento = ({
                 <div>
                   <p className="text-sm text-muted-foreground">Número de Asiento</p>
                   <p className="font-semibold">
-                    {asientoSeleccionado.numero_asiento || asientoSeleccionado.numero || "-"}
+                    {asientoSeleccionado.numeroAsiento ||
+                      asientoSeleccionado.numero_asiento ||
+                      asientoSeleccionado.numero ||
+                      "-"}
                   </p>
                 </div>
 
@@ -548,13 +549,15 @@ const TransaccionesFinanciamiento = ({
                   <p className="font-semibold">
                     {asientoSeleccionado.fecha
                       ? format(new Date(asientoSeleccionado.fecha), "dd MMM yyyy", { locale: es })
+                      : asientoSeleccionado.asiento_fecha
+                      ? format(new Date(asientoSeleccionado.asiento_fecha), "dd MMM yyyy", { locale: es })
                       : "-"}
                   </p>
                 </div>
 
                 <div className="col-span-2">
                   <p className="text-sm text-muted-foreground">Descripción</p>
-                  <p className="font-medium">{asientoSeleccionado.descripcion || "-"}</p>
+                  <p className="font-medium">{asientoSeleccionado.descripcion || asientoSeleccionado.concepto || "-"}</p>
                 </div>
               </div>
 
@@ -575,20 +578,21 @@ const TransaccionesFinanciamiento = ({
                     </TableHeader>
 
                     <TableBody>
-                      {(asientoSeleccionado.detalle_asientos || []).map((detalle: any) => (
-                        <TableRow key={detalle.id || `${detalle.cuenta_codigo}-${detalle.descripcion}`}>
+                      {getDetalleAsientos(asientoSeleccionado).map((detalle: any, idx: number) => (
+                        <TableRow key={detalle.id || `${detalle.cuenta_codigo || "sin-cuenta"}-${idx}`}>
                           <TableCell className="font-medium">
-                            {detalle.cuenta_codigo || "-"} - {detalle.cuentas?.nombre || detalle.cuenta_nombre || "N/A"}
+                            {detalle.cuenta_codigo || "-"} -{" "}
+                            {detalle.cuentas?.nombre || detalle.cuenta_nombre || "N/A"}
                           </TableCell>
-                          <TableCell>{detalle.descripcion || "-"}</TableCell>
+                          <TableCell>{detalle.descripcion || detalle.memo || "-"}</TableCell>
                           <TableCell className="text-right font-medium text-green-600">
                             {toNum(detalle.debe, 0) > 0
-                              ? `$${toNum(detalle.debe, 0).toLocaleString("es-MX")}`
+                              ? formatMoney(detalle.debe)
                               : "-"}
                           </TableCell>
                           <TableCell className="text-right font-medium text-destructive">
                             {toNum(detalle.haber, 0) > 0
-                              ? `$${toNum(detalle.haber, 0).toLocaleString("es-MX")}`
+                              ? formatMoney(detalle.haber)
                               : "-"}
                           </TableCell>
                         </TableRow>
@@ -597,16 +601,20 @@ const TransaccionesFinanciamiento = ({
                       <TableRow className="font-bold bg-muted">
                         <TableCell colSpan={2}>TOTALES</TableCell>
                         <TableCell className="text-right text-green-600">
-                          $
-                          {(asientoSeleccionado.detalle_asientos || [])
-                            .reduce((sum: number, d: any) => sum + toNum(d.debe, 0), 0)
-                            .toLocaleString("es-MX")}
+                          {formatMoney(
+                            getDetalleAsientos(asientoSeleccionado).reduce(
+                              (sum: number, d: any) => sum + toNum(d.debe, 0),
+                              0
+                            )
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-destructive">
-                          $
-                          {(asientoSeleccionado.detalle_asientos || [])
-                            .reduce((sum: number, d: any) => sum + toNum(d.haber, 0), 0)
-                            .toLocaleString("es-MX")}
+                          {formatMoney(
+                            getDetalleAsientos(asientoSeleccionado).reduce(
+                              (sum: number, d: any) => sum + toNum(d.haber, 0),
+                              0
+                            )
+                          )}
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -654,7 +662,7 @@ const TransaccionesFinanciamiento = ({
                 <div>
                   <p className="text-sm text-muted-foreground">Monto Total</p>
                   <p className="font-medium text-lg">
-                    ${getMonto(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    {formatMoney(getMonto(transaccionSeleccionada))}
                   </p>
                 </div>
 
@@ -662,7 +670,7 @@ const TransaccionesFinanciamiento = ({
                   <div>
                     <p className="text-sm text-muted-foreground">Capital</p>
                     <p className="font-medium">
-                      ${getMontoCapital(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      {formatMoney(getMontoCapital(transaccionSeleccionada))}
                     </p>
                   </div>
                 )}
@@ -671,7 +679,7 @@ const TransaccionesFinanciamiento = ({
                   <div>
                     <p className="text-sm text-muted-foreground">Intereses</p>
                     <p className="font-medium">
-                      ${getMontoIntereses(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      {formatMoney(getMontoIntereses(transaccionSeleccionada))}
                     </p>
                   </div>
                 )}
@@ -680,7 +688,7 @@ const TransaccionesFinanciamiento = ({
                   <div>
                     <p className="text-sm text-muted-foreground">Moratorios</p>
                     <p className="font-medium">
-                      ${getMontoMoratorios(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      {formatMoney(getMontoMoratorios(transaccionSeleccionada))}
                     </p>
                   </div>
                 )}
@@ -689,7 +697,7 @@ const TransaccionesFinanciamiento = ({
                   <div>
                     <p className="text-sm text-muted-foreground">Comisiones</p>
                     <p className="font-medium">
-                      ${getMontoComisiones(transaccionSeleccionada).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      {formatMoney(getMontoComisiones(transaccionSeleccionada))}
                     </p>
                   </div>
                 )}
@@ -697,9 +705,7 @@ const TransaccionesFinanciamiento = ({
                 <div>
                   <p className="text-sm text-muted-foreground">Saldo Restante</p>
                   <p className="font-medium">
-                    ${getSaldoRestante(transaccionSeleccionada, saldoActual).toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
+                    {formatMoney(getSaldoRestante(transaccionSeleccionada, saldoActual))}
                   </p>
                 </div>
 
@@ -734,28 +740,30 @@ const TransaccionesFinanciamiento = ({
 
                   <TableBody>
                     <TableRow>
-                      <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).cargo}</td>
+                      <td className="font-medium py-2">
+                        {getCuentasAfectadas(transaccionSeleccionada).cargo}
+                      </td>
                       <td className="text-right py-2 text-destructive">
-                        $
-                        {(
+                        {formatMoney(
                           getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
                             ? getMontoCapital(transaccionSeleccionada)
                             : getMonto(transaccionSeleccionada)
-                        ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                        )}
                       </td>
                       <td className="text-right py-2">-</td>
                     </TableRow>
 
                     <TableRow>
-                      <td className="font-medium py-2">{getCuentasAfectadas(transaccionSeleccionada).abono}</td>
+                      <td className="font-medium py-2">
+                        {getCuentasAfectadas(transaccionSeleccionada).abono}
+                      </td>
                       <td className="text-right py-2">-</td>
                       <td className="text-right py-2 text-green-600">
-                        $
-                        {(
+                        {formatMoney(
                           getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
                             ? getMontoCapital(transaccionSeleccionada)
                             : getMonto(transaccionSeleccionada)
-                        ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                        )}
                       </td>
                     </TableRow>
 
@@ -766,10 +774,7 @@ const TransaccionesFinanciamiento = ({
                             {getCuentasAfectadas(transaccionSeleccionada).adicional.cargo}
                           </td>
                           <td className="text-right py-2 text-destructive">
-                            $
-                            {Number(
-                              getCuentasAfectadas(transaccionSeleccionada).adicional.monto
-                            ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                            {formatMoney(getCuentasAfectadas(transaccionSeleccionada).adicional.monto)}
                           </td>
                           <td className="text-right py-2">-</td>
                         </TableRow>
@@ -780,10 +785,7 @@ const TransaccionesFinanciamiento = ({
                           </td>
                           <td className="text-right py-2">-</td>
                           <td className="text-right py-2 text-green-600">
-                            $
-                            {Number(
-                              getCuentasAfectadas(transaccionSeleccionada).adicional.monto
-                            ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                            {formatMoney(getCuentasAfectadas(transaccionSeleccionada).adicional.monto)}
                           </td>
                         </TableRow>
                       </>

@@ -1,13 +1,14 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { AlertCircle, Calendar, CreditCard, Eye, TrendingUp } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-import { CreditCard, TrendingUp, Calendar, Eye, AlertCircle } from "lucide-react";
-import { useMemo, useState } from "react";
 
 interface TransaccionesTarjetaCreditoProps {
   financiamientoId: string;
@@ -16,24 +17,22 @@ interface TransaccionesTarjetaCreditoProps {
   saldoActual: number;
 }
 
-type TxKind = "egreso" | "capex" | "amortizacion" | "cargo_interes" | "desembolso";
-
 type TxTarjeta = {
   id: string;
-  fecha: string; // ISO
-  descripcion: string;
-  monto: number;
-  tipo: TxKind;
-  proveedor: string | null;
+  _id?: string;
+  fecha?: string;
+  descripcion?: string;
+  monto?: number;
+  tipo?: string;
+  proveedor?: string | null;
 
-  // para UI
-  tipoTransaccion: "cargo" | "amortizacion" | "cargo_interes" | "desembolso";
-  estado: "activo" | "cancelado" | string;
-  fechaCancelacion: string | null;
-  motivoCancelacion: string | null;
+  tipoTransaccion?: string;
+  estado?: string;
+  fechaCancelacion?: string | null;
+  motivoCancelacion?: string | null;
 
-  // detalle libre (para dialog)
-  detalle: any;
+  detalle?: any;
+  asiento?: any;
 };
 
 const API_TARJETA_TX = (financiamientoId: string) =>
@@ -42,6 +41,7 @@ const API_TARJETA_TX = (financiamientoId: string) =>
 async function fetchJSON<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: "include" });
   const text = await res.text();
+
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;
@@ -56,6 +56,51 @@ async function fetchJSON<T>(url: string): Promise<T> {
   return (json?.data ?? json) as T;
 }
 
+const toNum = (v: unknown, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+
+const formatMoney = (v: number) =>
+  `$${toNum(v, 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const parseSafeDate = (value?: string | null) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const getTipo = (tx: TxTarjeta) =>
+  String(tx.tipo || tx.tipoTransaccion || "").toLowerCase();
+
+const getEstado = (tx: TxTarjeta) =>
+  String(tx.estado || "activo").toLowerCase();
+
+const getMonto = (tx: TxTarjeta) =>
+  toNum(tx.monto, 0);
+
+const getCapitalPagado = (tx: TxTarjeta) =>
+  toNum(
+    tx.detalle?.monto_capital ??
+      tx.detalle?.montoCapital ??
+      tx.detalle?.capital_pagado,
+    0
+  );
+
+const getInteresPagado = (tx: TxTarjeta) =>
+  toNum(
+    tx.detalle?.monto_intereses ??
+      tx.detalle?.montoIntereses ??
+      tx.detalle?.interes_pagado,
+    0
+  );
+
+const getMetodoPago = (tx: TxTarjeta) =>
+  tx.detalle?.metodo_pago || tx.detalle?.metodoPago || "";
+
 const TransaccionesTarjetaCredito = ({
   financiamientoId,
   nombreTarjeta,
@@ -65,24 +110,41 @@ const TransaccionesTarjetaCredito = ({
   const [selectedTransaction, setSelectedTransaction] = useState<TxTarjeta | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
 
-  const { data: transacciones = [], isLoading, error } = useQuery({
+  const {
+    data: transacciones = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["transacciones-tarjeta", financiamientoId],
     enabled: !!financiamientoId,
     queryFn: async () => {
-      // Backend ya regresa la lista unificada y ordenada
       return await fetchJSON<TxTarjeta[]>(API_TARJETA_TX(financiamientoId));
     },
   });
 
-  const getTipoLabel = (tipo: string) => {
+  const getTipoLabel = (tipoRaw: string) => {
+    const tipo = String(tipoRaw || "").toLowerCase();
     const labels: Record<string, string> = {
       amortizacion: "Pago de Tarjeta",
-      cargo_interes: "Cargo por Intereses",
+      cargo_intereses: "Cargo por Intereses",
+      cargo_interes: "Cargo por Interés",
       desembolso: "Disposición",
       egreso: "Egreso",
       capex: "CAPEX",
+      compra: "Compra",
     };
-    return labels[tipo] || tipo;
+    return labels[tipo] || tipoRaw || "Movimiento";
+  };
+
+  const getTipoBadgeVariant = (tx: TxTarjeta): "default" | "secondary" | "destructive" | "outline" => {
+    const estado = getEstado(tx);
+    const tipo = getTipo(tx);
+
+    if (estado === "cancelado") return "outline";
+    if (tipo === "amortizacion") return "default";
+    if (tipo === "cargo_intereses" || tipo === "cargo_interes") return "destructive";
+    if (tipo === "capex") return "default";
+    return "secondary";
   };
 
   const handleVerDetalle = (tx: TxTarjeta) => {
@@ -91,34 +153,51 @@ const TransaccionesTarjetaCredito = ({
   };
 
   const getCuentasAfectadas = (tx: TxTarjeta) => {
-    if (tx.tipoTransaccion === "cargo") {
-      // Cargo a la tarjeta (egreso o capex)
+    const tipo = getTipo(tx);
+    const metodoPago = String(getMetodoPago(tx)).toLowerCase();
+
+    if (tipo === "egreso" || tipo === "capex" || tipo === "compra") {
       return {
-        cargo: tx.detalle?.cuenta_codigo || "Cuenta de gasto/inversión",
-        abono: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`,
-      };
-    } else if (tx.tipoTransaccion === "amortizacion") {
-      return {
-        cargo: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`,
-        abono: tx.detalle?.metodo_pago === "efectivo" ? "1001 - Efectivo" : "1002 - Bancos",
-      };
-    } else if (tx.tipoTransaccion === "cargo_interes") {
-      return {
-        cargo: "5201 - Gastos Financieros",
-        abono: `2101 - Préstamos Bancarios LP (${nombreTarjeta})`,
+        cargo:
+          tx.detalle?.cuenta_codigo ||
+          tx.detalle?.cuentaCodigo ||
+          "Cuenta de gasto / inversión",
+        abono: `2101 - Financiamientos (${nombreTarjeta})`,
       };
     }
+
+    if (tipo === "amortizacion") {
+      return {
+        cargo: `2101 - Financiamientos (${nombreTarjeta})`,
+        abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+      };
+    }
+
+    if (tipo === "cargo_intereses" || tipo === "cargo_interes") {
+      return {
+        cargo: "5201 - Gastos Financieros",
+        abono: `2101 - Financiamientos (${nombreTarjeta})`,
+      };
+    }
+
+    if (tipo === "desembolso") {
+      return {
+        cargo: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+        abono: `2101 - Financiamientos (${nombreTarjeta})`,
+      };
+    }
+
     return { cargo: "N/A", abono: "N/A" };
   };
 
-  const limiteDisponible = limiteCredito - saldoActual;
+  const limiteDisponible = Math.max(0, limiteCredito - saldoActual);
   const porcentajeUso = limiteCredito > 0 ? (saldoActual / limiteCredito) * 100 : 0;
 
   const cargosCancelados = useMemo(() => {
     return (
       transacciones
-        .filter((t) => t.estado === "cancelado" && (t.tipo === "egreso" || t.tipo === "capex"))
-        .reduce((sum, t) => sum + (Number(t.monto) || 0), 0) || 0
+        .filter((t) => getEstado(t) === "cancelado" && ["egreso", "capex", "compra"].includes(getTipo(t)))
+        .reduce((sum, t) => sum + getMonto(t), 0) || 0
     );
   }, [transacciones]);
 
@@ -126,7 +205,6 @@ const TransaccionesTarjetaCredito = ({
 
   return (
     <div className="space-y-6">
-      {/* Tarjetas de resumen */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -136,7 +214,7 @@ const TransaccionesTarjetaCredito = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${limiteCredito.toLocaleString("es-MX")}</div>
+            <div className="text-2xl font-bold">{formatMoney(limiteCredito)}</div>
             <p className="text-xs text-muted-foreground mt-1">Línea aprobada</p>
           </CardContent>
         </Card>
@@ -149,7 +227,7 @@ const TransaccionesTarjetaCredito = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">${saldoActual.toLocaleString("es-MX")}</div>
+            <div className="text-2xl font-bold text-destructive">{formatMoney(saldoActual)}</div>
             <p className="text-xs text-muted-foreground mt-1">{porcentajeUso.toFixed(1)}% del límite</p>
           </CardContent>
         </Card>
@@ -162,7 +240,7 @@ const TransaccionesTarjetaCredito = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">${limiteDisponible.toLocaleString("es-MX")}</div>
+            <div className="text-2xl font-bold text-green-600">{formatMoney(limiteDisponible)}</div>
             <p className="text-xs text-muted-foreground mt-1">Puede utilizar</p>
           </CardContent>
         </Card>
@@ -176,26 +254,28 @@ const TransaccionesTarjetaCredito = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-muted-foreground">
-              ${cargosCancelados.toLocaleString("es-MX")}
+              {formatMoney(cargosCancelados)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Revertidos (impacto: $0)</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabla */}
       <Card>
         <CardHeader>
           <CardTitle>Transacciones de {nombreTarjeta}</CardTitle>
           <CardDescription>Historial completo de compras, pagos y transacciones canceladas</CardDescription>
         </CardHeader>
+
         <CardContent>
           {errorMsg ? (
             <div className="text-center py-8 text-destructive">{errorMsg}</div>
           ) : isLoading ? (
             <div className="text-center py-8 text-muted-foreground">Cargando transacciones...</div>
           ) : transacciones.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No hay transacciones registradas con esta tarjeta</div>
+            <div className="text-center py-8 text-muted-foreground">
+              No hay transacciones registradas con esta tarjeta
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -211,80 +291,79 @@ const TransaccionesTarjetaCredito = ({
               </TableHeader>
 
               <TableBody>
-                {transacciones.map((t) => (
-                  <TableRow
-                    key={t.id}
-                    className={t.estado === "cancelado" ? "bg-red-50 dark:bg-red-950/20" : ""}
-                  >
-                    <TableCell>{format(new Date(t.fecha), "dd MMM yyyy", { locale: es })}</TableCell>
+                {transacciones.map((t) => {
+                  const fecha = parseSafeDate(t.fecha);
+                  const tipo = getTipo(t);
+                  const estado = getEstado(t);
+                  const monto = getMonto(t);
 
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span>{t.descripcion}</span>
-                        {t.estado === "cancelado" && (
-                          <Badge variant="destructive" className="w-fit text-xs">
-                            CANCELADO
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
+                  const esCancelado = estado === "cancelado";
+                  const esPago = tipo === "amortizacion";
 
-                    <TableCell>{t.proveedor || "-"}</TableCell>
+                  return (
+                    <TableRow
+                      key={t.id || t._id}
+                      className={esCancelado ? "bg-red-50 dark:bg-red-950/20" : ""}
+                    >
+                      <TableCell>
+                        {fecha ? format(fecha, "dd MMM yyyy", { locale: es }) : "-"}
+                      </TableCell>
 
-                    <TableCell>
-                      <Badge
-                        variant={
-                          t.estado === "cancelado"
-                            ? "outline"
-                            : t.tipo === "egreso"
-                            ? "secondary"
-                            : t.tipo === "capex"
-                            ? "default"
-                            : t.tipo === "amortizacion"
-                            ? "default"
-                            : "destructive"
-                        }
-                      >
-                        {getTipoLabel(t.tipo)}
-                      </Badge>
-                    </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span>{t.descripcion || "Sin descripción"}</span>
+                          {esCancelado && (
+                            <Badge variant="destructive" className="w-fit text-xs">
+                              CANCELADO
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
 
-                    <TableCell className="text-right">
-                      {t.estado === "cancelado" ? (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          $0 (revertido)
+                      <TableCell>{t.proveedor || "-"}</TableCell>
+
+                      <TableCell>
+                        <Badge variant={getTipoBadgeVariant(t)}>
+                          {getTipoLabel(tipo)}
                         </Badge>
-                      ) : t.tipoTransaccion === "amortizacion" ? (
-                        <span className="text-green-600 dark:text-green-400 font-medium">
-                          -${Number(t.monto || 0).toLocaleString("es-MX")}
-                        </span>
-                      ) : (
-                        <span className="text-red-600 dark:text-red-400 font-medium">
-                          +${Number(t.monto || 0).toLocaleString("es-MX")}
-                        </span>
-                      )}
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell className="text-right font-medium">
-                      <span className={t.estado === "cancelado" ? "line-through text-muted-foreground" : ""}>
-                        ${Number(t.monto || 0).toLocaleString("es-MX")}
-                      </span>
-                    </TableCell>
+                      <TableCell className="text-right">
+                        {esCancelado ? (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            $0.00 (revertido)
+                          </Badge>
+                        ) : esPago ? (
+                          <span className="text-green-600 font-medium">
+                            -{formatMoney(monto)}
+                          </span>
+                        ) : (
+                          <span className="text-red-600 font-medium">
+                            +{formatMoney(monto)}
+                          </span>
+                        )}
+                      </TableCell>
 
-                    <TableCell className="text-center">
-                      <Button variant="ghost" size="sm" onClick={() => handleVerDetalle(t)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell className="text-right font-medium">
+                        <span className={esCancelado ? "line-through text-muted-foreground" : ""}>
+                          {formatMoney(monto)}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <Button variant="ghost" size="sm" onClick={() => handleVerDetalle(t)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog detalle */}
       <Dialog open={detalleOpen} onOpenChange={setDetalleOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -293,23 +372,28 @@ const TransaccionesTarjetaCredito = ({
 
           {selectedTransaction && (
             <div className="space-y-4">
-              {selectedTransaction.estado === "cancelado" && (
+              {getEstado(selectedTransaction) === "cancelado" && (
                 <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
                     <div className="flex-1">
-                      <h4 className="font-semibold text-red-900 dark:text-red-100">Transacción Cancelada</h4>
-                      {selectedTransaction.fechaCancelacion && (
+                      <h4 className="font-semibold text-red-900 dark:text-red-100">
+                        Transacción Cancelada
+                      </h4>
+
+                      {parseSafeDate(selectedTransaction.fechaCancelacion) && (
                         <p className="text-sm text-red-700 dark:text-red-300 mt-1">
                           Esta transacción fue cancelada el{" "}
-                          {format(new Date(selectedTransaction.fechaCancelacion), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                          {format(parseSafeDate(selectedTransaction.fechaCancelacion) as Date, "dd 'de' MMMM 'de' yyyy", { locale: es })}
                         </p>
                       )}
+
                       {selectedTransaction.motivoCancelacion && (
                         <p className="text-sm text-red-600 dark:text-red-400 mt-2">
                           <strong>Motivo:</strong> {selectedTransaction.motivoCancelacion}
                         </p>
                       )}
+
                       <p className="text-sm text-muted-foreground mt-2">
                         El saldo de la tarjeta fue revertido automáticamente.
                       </p>
@@ -322,36 +406,28 @@ const TransaccionesTarjetaCredito = ({
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha</p>
                   <p className="font-medium">
-                    {format(new Date(selectedTransaction.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                    {parseSafeDate(selectedTransaction.fecha)
+                      ? format(parseSafeDate(selectedTransaction.fecha) as Date, "dd 'de' MMMM 'de' yyyy", { locale: es })
+                      : "-"}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Tipo</p>
-                  <Badge
-                    variant={
-                      selectedTransaction.tipo === "egreso"
-                        ? "secondary"
-                        : selectedTransaction.tipo === "capex"
-                        ? "default"
-                        : selectedTransaction.tipo === "amortizacion"
-                        ? "default"
-                        : "destructive"
-                    }
-                  >
-                    {getTipoLabel(selectedTransaction.tipo)}
+                  <Badge variant={getTipoBadgeVariant(selectedTransaction)}>
+                    {getTipoLabel(getTipo(selectedTransaction))}
                   </Badge>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Descripción</p>
-                  <p className="font-medium">{selectedTransaction.descripcion}</p>
+                  <p className="font-medium">{selectedTransaction.descripcion || "Sin descripción"}</p>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Monto</p>
                   <p className="font-medium text-lg">
-                    ${Number(selectedTransaction.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                    {formatMoney(getMonto(selectedTransaction))}
                   </p>
                 </div>
 
@@ -362,28 +438,26 @@ const TransaccionesTarjetaCredito = ({
                   </div>
                 )}
 
-                {selectedTransaction.tipo === "amortizacion" && (
+                {getTipo(selectedTransaction) === "amortizacion" && (
                   <>
                     <div>
                       <p className="text-sm text-muted-foreground">Capital Pagado</p>
-                      <p className="font-medium">
-                        ${Number(selectedTransaction.detalle?.capital_pagado || 0).toLocaleString("es-MX", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </p>
+                      <p className="font-medium">{formatMoney(getCapitalPagado(selectedTransaction))}</p>
                     </div>
+
                     <div>
                       <p className="text-sm text-muted-foreground">Interés Pagado</p>
-                      <p className="font-medium">
-                        ${Number(selectedTransaction.detalle?.interes_pagado || 0).toLocaleString("es-MX", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </p>
+                      <p className="font-medium">{formatMoney(getInteresPagado(selectedTransaction))}</p>
                     </div>
+
                     <div>
                       <p className="text-sm text-muted-foreground">Método de Pago</p>
                       <p className="font-medium">
-                        {selectedTransaction.detalle?.metodo_pago === "efectivo" ? "Efectivo" : "Transferencia/Bancos"}
+                        {getMetodoPago(selectedTransaction) === "efectivo"
+                          ? "Efectivo"
+                          : getMetodoPago(selectedTransaction)
+                          ? "Transferencia/Bancos"
+                          : "-"}
                       </p>
                     </div>
                   </>
@@ -391,7 +465,8 @@ const TransaccionesTarjetaCredito = ({
               </div>
 
               <div className="pt-4 border-t">
-                <h4 className="font-semibold mb-3">Afectación Contable</h4>
+                <h4 className="font-semibold mb-3">Afectación Contable Estimada</h4>
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -403,30 +478,30 @@ const TransaccionesTarjetaCredito = ({
 
                   <TableBody>
                     <TableRow>
-                      <td className="font-medium py-2">{getCuentasAfectadas(selectedTransaction).cargo}</td>
+                      <td className="font-medium py-2">
+                        {getCuentasAfectadas(selectedTransaction).cargo}
+                      </td>
                       <td className="text-right py-2 text-destructive">
-                        $
-                        {Number(
-                          selectedTransaction.tipoTransaccion === "amortizacion"
-                            ? (Number(selectedTransaction.detalle?.capital_pagado || 0) +
-                                Number(selectedTransaction.detalle?.interes_pagado || 0))
-                            : selectedTransaction.monto
-                        ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                        {formatMoney(
+                          getTipo(selectedTransaction) === "amortizacion"
+                            ? getCapitalPagado(selectedTransaction) + getInteresPagado(selectedTransaction)
+                            : getMonto(selectedTransaction)
+                        )}
                       </td>
                       <td className="text-right py-2">-</td>
                     </TableRow>
 
                     <TableRow>
-                      <td className="font-medium py-2">{getCuentasAfectadas(selectedTransaction).abono}</td>
+                      <td className="font-medium py-2">
+                        {getCuentasAfectadas(selectedTransaction).abono}
+                      </td>
                       <td className="text-right py-2">-</td>
-                      <td className="text-right py-2 text-success">
-                        $
-                        {Number(
-                          selectedTransaction.tipoTransaccion === "amortizacion"
-                            ? (Number(selectedTransaction.detalle?.capital_pagado || 0) +
-                                Number(selectedTransaction.detalle?.interes_pagado || 0))
-                            : selectedTransaction.monto
-                        ).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      <td className="text-right py-2 text-green-600">
+                        {formatMoney(
+                          getTipo(selectedTransaction) === "amortizacion"
+                            ? getCapitalPagado(selectedTransaction) + getInteresPagado(selectedTransaction)
+                            : getMonto(selectedTransaction)
+                        )}
                       </td>
                     </TableRow>
                   </TableBody>
