@@ -24,8 +24,6 @@ import {
 import {
   Activity,
   BadgeDollarSign,
-  Banknote,
-  CalendarClock,
   CheckCircle2,
   CreditCard,
   Landmark,
@@ -43,14 +41,7 @@ type FormatoVisualizacion = "normal" | "miles" | "millones";
 type TipoDeudaAcreedor = "total" | "capital" | "intereses";
 type TipoGastoFinanciero = "total" | "simple" | "revolvente" | "tarjeta" | "combinada";
 
-const COLORS = [
-  "#14b8a6",
-  "#0ea5e9",
-  "#6366f1",
-  "#22c55e",
-  "#f59e0b",
-  "#ef4444",
-];
+const COLORS = ["#14b8a6", "#0ea5e9", "#6366f1", "#22c55e", "#f59e0b", "#ef4444"];
 
 const TYPE_COLORS: Record<string, string> = {
   simple: "#14b8a6",
@@ -98,9 +89,7 @@ const getTipoCreditoLabel = (tipo: string) => {
 };
 
 const getEstatus = (f: any) => String(f?.estatus || f?.estado || f?.estado_ui || "").toLowerCase();
-
 const getInstitucion = (f: any) => f?.institucion || f?.institucion_financiera || "Acreedor";
-
 const getInstitucionId = (f: any) =>
   String(f?.institucion_id || f?.institucionId || f?.institucion_financiera_id || getInstitucion(f));
 
@@ -120,8 +109,7 @@ const getSaldoCapital = (f: any) =>
     0
   );
 
-const getSaldoIntereses = (f: any) =>
-  toNum(f?.saldo_intereses_actual ?? f?.saldoInteresesActual, 0);
+const getSaldoIntereses = (f: any) => toNum(f?.saldo_intereses_actual ?? f?.saldoInteresesActual, 0);
 
 const getSaldoTotal = (f: any) =>
   toNum(
@@ -134,18 +122,17 @@ const getSaldoTotal = (f: any) =>
   );
 
 const getDisponible = (f: any) => {
-  const d = Number(f?.disponible_actual ?? f?.disponibleActual ?? f?.disponible_linea ?? f?.disponibleLinea);
+  const d = Number(
+    f?.disponible_actual ?? f?.disponibleActual ?? f?.disponible_linea ?? f?.disponibleLinea
+  );
   if (Number.isFinite(d)) return Math.max(0, d);
   return Math.max(0, getLineaTotal(f) - getSaldoCapital(f));
 };
 
-const getFechaVencimiento = (f: any) =>
-  safeDate(f?.fecha_vencimiento || f?.fechaVencimiento || null);
-
+const getFechaVencimiento = (f: any) => safeDate(f?.fecha_vencimiento || f?.fechaVencimiento || null);
 const getTxTipo = (t: any) => String(t?.tipo || t?.tipo_transaccion || "").toLowerCase();
 const getTxFinanciamientoId = (t: any) => String(t?.financingId || t?.financing_id || t?.financiamiento_id || "");
 const getTxMonto = (t: any) => toNum(t?.monto, 0);
-const getTxMontoCapital = (t: any) => toNum(t?.monto_capital ?? t?.montoCapital ?? t?.capital_pagado, 0);
 const getTxMontoIntereses = (t: any) => toNum(t?.monto_intereses ?? t?.montoIntereses ?? t?.interes_pagado, 0);
 const getTxFecha = (t: any) => safeDate(t?.fecha || t?.created_at || t?.createdAt || null);
 
@@ -208,14 +195,11 @@ const AnalyticaFinanciamientos = () => {
 
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<PeriodoAmortizacion>("mensual");
   const [formatoVisualizacion, setFormatoVisualizacion] = useState<FormatoVisualizacion>("normal");
-
   const [creditoAmortizacion, setCreditoAmortizacion] = useState<string>("todos");
   const [creditoSimpleSeleccionado, setCreditoSimpleSeleccionado] = useState<string>("todos");
   const [creditoRevolventeSeleccionado, setCreditoRevolventeSeleccionado] = useState<string>("todos");
-
   const [periodoGastosFinancieros, setPeriodoGastosFinancieros] = useState<PeriodoAmortizacion>("mensual");
   const [tipoGastoFinanciero, setTipoGastoFinanciero] = useState<TipoGastoFinanciero>("total");
-
   const [tipoDeudaAcreedor, setTipoDeudaAcreedor] = useState<TipoDeudaAcreedor>("total");
   const [acreedorSeleccionado, setAcreedorSeleccionado] = useState<string | null>(null);
 
@@ -267,39 +251,57 @@ const AnalyticaFinanciamientos = () => {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-36 w-full rounded-3xl" />
-        <Skeleton className="h-[340px] w-full rounded-3xl" />
-        <Skeleton className="h-[340px] w-full rounded-3xl" />
-      </div>
-    );
-  }
+  const financiamientosActivos = useMemo(
+    () => (financiamientos || []).filter((f: any) => getEstatus(f) === "activo"),
+    [financiamientos]
+  );
 
-  const financiamientosActivos = (financiamientos || []).filter((f: any) => getEstatus(f) === "activo");
+  const tarjetasCorporativas = useMemo(
+    () => financiamientosActivos.filter((f: any) => getTipoUi(f) === "tarjeta_corporativa"),
+    [financiamientosActivos]
+  );
 
-  const tarjetasCorporativas = financiamientosActivos.filter((f: any) => getTipoUi(f) === "tarjeta_corporativa");
-  const creditosRevolventes = financiamientosActivos.filter((f: any) => getTipoUi(f) === "revolvente");
-  const creditosSimples = financiamientosActivos.filter((f: any) => {
-    const tipo = getTipoUi(f);
-    return tipo !== "tarjeta_corporativa" && tipo !== "revolvente";
-  });
+  const creditosRevolventes = useMemo(
+    () => financiamientosActivos.filter((f: any) => getTipoUi(f) === "revolvente"),
+    [financiamientosActivos]
+  );
 
-  const deudaTarjetas = tarjetasCorporativas.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0);
-  const deudaRevolvente = creditosRevolventes.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0);
+  const creditosSimples = useMemo(
+    () =>
+      financiamientosActivos.filter((f: any) => {
+        const tipo = getTipoUi(f);
+        return tipo !== "tarjeta_corporativa" && tipo !== "revolvente";
+      }),
+    [financiamientosActivos]
+  );
 
-  const totalOriginalSimples = creditosSimples.reduce((sum: number, f: any) => sum + getMontoOriginal(f), 0);
-  const deudaSimples = creditosSimples.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0);
+  const deudaTarjetas = useMemo(
+    () => tarjetasCorporativas.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    [tarjetasCorporativas]
+  );
+
+  const deudaRevolvente = useMemo(
+    () => creditosRevolventes.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    [creditosRevolventes]
+  );
+
+  const totalOriginalSimples = useMemo(
+    () => creditosSimples.reduce((sum: number, f: any) => sum + getMontoOriginal(f), 0),
+    [creditosSimples]
+  );
+
+  const deudaSimples = useMemo(
+    () => creditosSimples.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    [creditosSimples]
+  );
+
   const totalPagadoSimples = Math.max(0, totalOriginalSimples - deudaSimples);
-
   const totalDeuda = toNum(resumen?.saldo_total_actual, deudaSimples + deudaTarjetas + deudaRevolvente);
   const totalOriginal = totalOriginalSimples;
   const totalPagado = totalPagadoSimples;
-
   const porcentajePagadoGlobal = totalOriginal > 0 ? (totalPagado / totalOriginal) * 100 : 0;
 
-  const creditosVencidosActivos = (() => {
+  const creditosVencidosActivos = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -309,9 +311,12 @@ const AnalyticaFinanciamientos = () => {
       fv.setHours(0, 0, 0, 0);
       return fv < hoy && getSaldoTotal(f) > 0;
     });
-  })();
+  }, [financiamientosActivos]);
 
-  const montoVencido = creditosVencidosActivos.reduce((sum: number, f: any) => sum + getSaldoTotal(f), 0);
+  const montoVencido = useMemo(
+    () => creditosVencidosActivos.reduce((sum: number, f: any) => sum + getSaldoTotal(f), 0),
+    [creditosVencidosActivos]
+  );
 
   const dataPorTipo = useMemo(() => {
     const porTipo = financiamientosActivos.reduce(
@@ -339,47 +344,166 @@ const AnalyticaFinanciamientos = () => {
     }));
   }, [financiamientosActivos]);
 
-  const creditosSimplesFiltrados =
-    creditoSimpleSeleccionado === "todos"
-      ? creditosSimples
-      : creditosSimples.filter((f: any) => f.id === creditoSimpleSeleccionado);
+  const creditosSimplesFiltrados = useMemo(
+    () =>
+      creditoSimpleSeleccionado === "todos"
+        ? creditosSimples
+        : creditosSimples.filter((f: any) => f.id === creditoSimpleSeleccionado),
+    [creditosSimples, creditoSimpleSeleccionado]
+  );
 
-  const totalOriginalSimplesFiltrado = creditosSimplesFiltrados.reduce(
-    (sum: number, f: any) => sum + getMontoOriginal(f),
-    0
+  const totalOriginalSimplesFiltrado = useMemo(
+    () => creditosSimplesFiltrados.reduce((sum: number, f: any) => sum + getMontoOriginal(f), 0),
+    [creditosSimplesFiltrados]
   );
-  const deudaSimplesFiltrada = creditosSimplesFiltrados.reduce(
-    (sum: number, f: any) => sum + getSaldoCapital(f),
-    0
+
+  const deudaSimplesFiltrada = useMemo(
+    () => creditosSimplesFiltrados.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    [creditosSimplesFiltrados]
   );
+
   const totalPagadoSimplesFiltrado = Math.max(0, totalOriginalSimplesFiltrado - deudaSimplesFiltrada);
 
-  const dataComparacionSimples = [
-    { name: "Monto original", valor: totalOriginalSimplesFiltrado, color: "#0ea5e9" },
-    { name: "Pagado", valor: totalPagadoSimplesFiltrado, color: "#22c55e" },
-    { name: "Pendiente", valor: deudaSimplesFiltrada, color: "#ef4444" },
-  ];
+  const dataComparacionSimples = useMemo(
+    () => [
+      { name: "Monto original", valor: totalOriginalSimplesFiltrado, color: "#0ea5e9" },
+      { name: "Pagado", valor: totalPagadoSimplesFiltrado, color: "#22c55e" },
+      { name: "Pendiente", valor: deudaSimplesFiltrada, color: "#ef4444" },
+    ],
+    [totalOriginalSimplesFiltrado, totalPagadoSimplesFiltrado, deudaSimplesFiltrada]
+  );
 
-  const creditosRevolventesYTarjetas = [...creditosRevolventes, ...tarjetasCorporativas];
-  const creditosRevolventesFiltrados =
-    creditoRevolventeSeleccionado === "todos"
-      ? creditosRevolventesYTarjetas
-      : creditosRevolventesYTarjetas.filter((f: any) => f.id === creditoRevolventeSeleccionado);
+  const creditosRevolventesYTarjetas = useMemo(
+    () => [...creditosRevolventes, ...tarjetasCorporativas],
+    [creditosRevolventes, tarjetasCorporativas]
+  );
 
-  const lineaTotal = creditosRevolventesFiltrados.reduce((sum: number, f: any) => sum + getLineaTotal(f), 0);
-  const lineaUtilizada = creditosRevolventesFiltrados.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0);
+  const creditosRevolventesFiltrados = useMemo(
+    () =>
+      creditoRevolventeSeleccionado === "todos"
+        ? creditosRevolventesYTarjetas
+        : creditosRevolventesYTarjetas.filter((f: any) => f.id === creditoRevolventeSeleccionado),
+    [creditosRevolventesYTarjetas, creditoRevolventeSeleccionado]
+  );
+
+  const lineaTotal = useMemo(
+    () => creditosRevolventesFiltrados.reduce((sum: number, f: any) => sum + getLineaTotal(f), 0),
+    [creditosRevolventesFiltrados]
+  );
+
+  const lineaUtilizada = useMemo(
+    () => creditosRevolventesFiltrados.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    [creditosRevolventesFiltrados]
+  );
+
   const lineaDisponible = Math.max(0, lineaTotal - lineaUtilizada);
 
-  const dataUsoLinea = [
-    {
-      name: "Línea consolidada",
-      disponible: lineaDisponible,
-      utilizado: lineaUtilizada,
-      total: lineaTotal,
-    },
-  ];
+  const dataUsoLinea = useMemo(
+    () => [
+      {
+        name: "Línea consolidada",
+        disponible: lineaDisponible,
+        utilizado: lineaUtilizada,
+        total: lineaTotal,
+      },
+    ],
+    [lineaDisponible, lineaUtilizada, lineaTotal]
+  );
 
-  const calcularAmortizacionesFuturas = () => {
+  const acreedoresTop = useMemo(() => {
+    const deudaPorInstitucion: Record<
+      string,
+      { total: number; capital: number; intereses: number; logo?: string; nombre: string }
+    > = {};
+
+    financiamientosActivos
+      .filter((f: any) => getSaldoTotal(f) > 0)
+      .forEach((f: any) => {
+        const key = getInstitucionId(f);
+        const institucion = (instituciones || []).find((i: any) => String(i.id) === key);
+        const capitalPendiente = getSaldoCapital(f);
+        const interesesPendientes = getSaldoIntereses(f);
+
+        if (!deudaPorInstitucion[key]) {
+          deudaPorInstitucion[key] = {
+            total: 0,
+            capital: 0,
+            intereses: 0,
+            logo: institucion?.logo_url || undefined,
+            nombre: institucion?.nombre || getInstitucion(f),
+          };
+        }
+
+        deudaPorInstitucion[key].total += getSaldoTotal(f);
+        deudaPorInstitucion[key].capital += capitalPendiente;
+        deudaPorInstitucion[key].intereses += interesesPendientes;
+      });
+
+    const valorOrden =
+      tipoDeudaAcreedor === "total"
+        ? "total"
+        : tipoDeudaAcreedor === "capital"
+          ? "capital"
+          : "intereses";
+
+    const acreedoresOrdenados = Object.entries(deudaPorInstitucion)
+      .map(([key, data]) => ({ id: key, ...data, saldo: (data as any)[valorOrden] as number }))
+      .filter((a) => a.saldo > 0)
+      .sort((a, b) => b.saldo - a.saldo);
+
+    const total = acreedoresOrdenados.reduce((sum, a) => sum + a.saldo, 0);
+
+    return acreedoresOrdenados.map((a, index) => ({
+      ...a,
+      porcentaje: total > 0 ? (a.saldo / total) * 100 : 0,
+      fill: COLORS[index % COLORS.length],
+    }));
+  }, [financiamientosActivos, instituciones, tipoDeudaAcreedor]);
+
+  const creditosDetalle = useMemo(() => {
+    if (!acreedorSeleccionado) return [];
+
+    const creditosDelAcreedor = financiamientosActivos
+      .filter((f: any) => getSaldoTotal(f) > 0)
+      .filter((f: any) => getInstitucionId(f) === acreedorSeleccionado)
+      .map((f: any) => {
+        const capitalPendiente = getSaldoCapital(f);
+        const interesesPendientes = getSaldoIntereses(f);
+
+        const saldo =
+          tipoDeudaAcreedor === "total"
+            ? getSaldoTotal(f)
+            : tipoDeudaAcreedor === "capital"
+              ? capitalPendiente
+              : interesesPendientes;
+
+        return {
+          id: f.id,
+          nombre: f.nombre,
+          tipo_credito: getTipoUi(f),
+          total: getSaldoTotal(f),
+          capital: capitalPendiente,
+          intereses: interesesPendientes,
+          saldo,
+        };
+      })
+      .filter((c) => c.saldo > 0)
+      .sort((a, b) => b.saldo - a.saldo);
+
+    const total = creditosDelAcreedor.reduce((sum, c) => sum + c.saldo, 0);
+
+    return creditosDelAcreedor.map((c) => ({
+      ...c,
+      porcentaje: total > 0 ? (c.saldo / total) * 100 : 0,
+    }));
+  }, [acreedorSeleccionado, financiamientosActivos, tipoDeudaAcreedor]);
+
+  const nombreAcreedorSeleccionado = useMemo(
+    () => (acreedorSeleccionado ? acreedoresTop.find((a) => a.id === acreedorSeleccionado)?.nombre || "" : ""),
+    [acreedorSeleccionado, acreedoresTop]
+  );
+
+  const dataAmortizacionesFuturas = useMemo(() => {
     const hoy = new Date();
     let fechaVencimientoMaxima = new Date(hoy);
 
@@ -440,9 +564,7 @@ const AnalyticaFinanciamientos = () => {
 
         if (periodoAmortizacion === "mensual") {
           const mesesAMostrar = Math.min(periodos - 1, mesesPendientesPorPagar);
-          for (let i = 1; i <= mesesAMostrar; i++) {
-            data[i][credito.nombre] += amortizacionMensual;
-          }
+          for (let i = 1; i <= mesesAMostrar; i++) data[i][credito.nombre] += amortizacionMensual;
         } else {
           const anoVenc = fechaVencimiento.getFullYear();
           const anoIni = hoy.getFullYear();
@@ -455,13 +577,9 @@ const AnalyticaFinanciamientos = () => {
           for (let i = 0; i < anosAMostrar; i++) {
             let mesesEnEsteAno: number;
 
-            if (i === 0) {
-              mesesEnEsteAno = Math.min(mesesRestantesAnoActual, mesesPendientesPorPagar);
-            } else if (mesesContados + 12 <= mesesPendientesPorPagar) {
-              mesesEnEsteAno = 12;
-            } else {
-              mesesEnEsteAno = Math.max(0, mesesPendientesPorPagar - mesesContados);
-            }
+            if (i === 0) mesesEnEsteAno = Math.min(mesesRestantesAnoActual, mesesPendientesPorPagar);
+            else if (mesesContados + 12 <= mesesPendientesPorPagar) mesesEnEsteAno = 12;
+            else mesesEnEsteAno = Math.max(0, mesesPendientesPorPagar - mesesContados);
 
             data[i][credito.nombre] += amortizacionMensual * mesesEnEsteAno;
             mesesContados += mesesEnEsteAno;
@@ -499,116 +617,22 @@ const AnalyticaFinanciamientos = () => {
 
         const indice = pagosEnMesActual.length > 0 ? 1 : 0;
 
-        if (periodoAmortizacion === "mensual" && indice < periodos) {
-          data[indice][credito.nombre] += saldoBase;
-        } else if (periodoAmortizacion === "anual") {
-          data[0][credito.nombre] += saldoBase;
-        }
+        if (periodoAmortizacion === "mensual" && indice < periodos) data[indice][credito.nombre] += saldoBase;
+        else if (periodoAmortizacion === "anual") data[0][credito.nombre] += saldoBase;
       }
     });
 
     return data;
-  };
+  }, [financiamientosActivos, creditoAmortizacion, periodoAmortizacion, transacciones]);
 
-  const calcularDeudaPorAcreedor = () => {
-    const deudaPorInstitucion: Record<
-      string,
-      { total: number; capital: number; intereses: number; logo?: string; nombre: string }
-    > = {};
-
-    financiamientosActivos
-      .filter((f: any) => getSaldoTotal(f) > 0)
-      .forEach((f: any) => {
-        const key = getInstitucionId(f);
-        const institucion = (instituciones || []).find((i: any) => String(i.id) === key);
-
-        const capitalPendiente = getSaldoCapital(f);
-        const interesesPendientes = getSaldoIntereses(f);
-
-        if (!deudaPorInstitucion[key]) {
-          deudaPorInstitucion[key] = {
-            total: 0,
-            capital: 0,
-            intereses: 0,
-            logo: institucion?.logo_url || undefined,
-            nombre: institucion?.nombre || getInstitucion(f),
-          };
-        }
-
-        deudaPorInstitucion[key].total += getSaldoTotal(f);
-        deudaPorInstitucion[key].capital += capitalPendiente;
-        deudaPorInstitucion[key].intereses += interesesPendientes;
-      });
-
-    const valorOrden =
-      tipoDeudaAcreedor === "total"
-        ? "total"
-        : tipoDeudaAcreedor === "capital"
-          ? "capital"
-          : "intereses";
-
-    const acreedoresOrdenados = Object.entries(deudaPorInstitucion)
-      .map(([key, data]) => ({ id: key, ...data, saldo: (data as any)[valorOrden] as number }))
-      .filter((a) => a.saldo > 0)
-      .sort((a, b) => b.saldo - a.saldo);
-
-    const total = acreedoresOrdenados.reduce((sum, a) => sum + a.saldo, 0);
-
-    return acreedoresOrdenados.map((a, index) => ({
-      ...a,
-      porcentaje: total > 0 ? (a.saldo / total) * 100 : 0,
-      fill: COLORS[index % COLORS.length],
-    }));
-  };
-
-  const calcularCreditosPorAcreedor = (acreedorId: string) => {
-    const creditosDelAcreedor = financiamientosActivos
-      .filter((f: any) => getSaldoTotal(f) > 0)
-      .filter((f: any) => getInstitucionId(f) === acreedorId)
-      .map((f: any) => {
-        const capitalPendiente = getSaldoCapital(f);
-        const interesesPendientes = getSaldoIntereses(f);
-
-        const saldo =
-          tipoDeudaAcreedor === "total"
-            ? getSaldoTotal(f)
-            : tipoDeudaAcreedor === "capital"
-              ? capitalPendiente
-              : interesesPendientes;
-
-        return {
-          id: f.id,
-          nombre: f.nombre,
-          tipo_credito: getTipoUi(f),
-          total: getSaldoTotal(f),
-          capital: capitalPendiente,
-          intereses: interesesPendientes,
-          saldo,
-        };
-      })
-      .filter((c) => c.saldo > 0)
-      .sort((a, b) => b.saldo - a.saldo);
-
-    const total = creditosDelAcreedor.reduce((sum, c) => sum + c.saldo, 0);
-
-    return creditosDelAcreedor.map((c) => ({
-      ...c,
-      porcentaje: total > 0 ? (c.saldo / total) * 100 : 0,
-    }));
-  };
-
-  const acreedoresTop = calcularDeudaPorAcreedor();
-  const creditosDetalle = acreedorSeleccionado ? calcularCreditosPorAcreedor(acreedorSeleccionado) : [];
-  const nombreAcreedorSeleccionado = acreedorSeleccionado
-    ? acreedoresTop.find((a) => a.id === acreedorSeleccionado)?.nombre || ""
-    : "";
-
-  const dataAmortizacionesFuturas = calcularAmortizacionesFuturas();
-  const nombresCreditos =
-    (creditoAmortizacion === "todos"
-      ? financiamientosActivos
-      : financiamientosActivos.filter((f: any) => f.id === creditoAmortizacion)
-    ).map((f: any) => f.nombre);
+  const nombresCreditos = useMemo(
+    () =>
+      (creditoAmortizacion === "todos"
+        ? financiamientosActivos
+        : financiamientosActivos.filter((f: any) => f.id === creditoAmortizacion)
+      ).map((f: any) => f.nombre),
+    [creditoAmortizacion, financiamientosActivos]
+  );
 
   const dataGastosFinancieros = useMemo(() => {
     const byPeriod = new Map<
@@ -667,7 +691,6 @@ const AnalyticaFinanciamientos = () => {
           periodoFormateado: `${nombresMeses[Math.max(0, Number(m) - 1)]} ${y}`,
         };
       }
-
       return { ...d, periodoFormateado: d.periodo };
     });
   }, [transacciones, financiamientos, periodoGastosFinancieros]);
@@ -682,6 +705,16 @@ const AnalyticaFinanciamientos = () => {
     );
     return valorMax * 1.2;
   }, [dataAmortizacionesFuturas, nombresCreditos]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-36 w-full rounded-3xl" />
+        <Skeleton className="h-[340px] w-full rounded-3xl" />
+        <Skeleton className="h-[340px] w-full rounded-3xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
