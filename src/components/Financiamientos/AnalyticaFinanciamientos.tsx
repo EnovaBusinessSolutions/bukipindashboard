@@ -19,7 +19,6 @@ import {
   Line,
   AreaChart,
   Area,
-  LabelList,
 } from "recharts";
 import {
   Activity,
@@ -56,6 +55,14 @@ const toNum = (v: unknown, def = 0) => {
   return Number.isFinite(n) ? n : def;
 };
 
+const firstFinite = (...values: unknown[]) => {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
 const safeDate = (v?: string | null) => {
   if (!v) return null;
   const d = new Date(v);
@@ -69,9 +76,9 @@ const yyyyMm = (d: Date) => {
 };
 
 const getTipoUi = (f: any) => {
-  const raw = String(f?.tipo || f?.tipo_credito || f?.tipo_ui || "").toLowerCase();
-  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa") return "tarjeta_corporativa";
-  if (raw === "linea_credito" || raw === "revolvente") return "revolvente";
+  const raw = String(f?.tipo_ui || f?.tipoUi || f?.tipo_credito || f?.tipo || "").toLowerCase();
+  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa" || raw === "tarjeta") return "tarjeta_corporativa";
+  if (raw === "linea_credito" || raw === "revolvente" || raw === "linea de credito") return "revolvente";
   if (raw === "credito_simple" || raw === "simple" || raw === "prestamo") return "simple";
   if (raw === "arrendamiento") return "arrendamiento";
   return raw || "otro";
@@ -88,44 +95,45 @@ const getTipoCreditoLabel = (tipo: string) => {
   return labels[tipo] || tipo;
 };
 
-const getEstatus = (f: any) => String(f?.estatus || f?.estado || f?.estado_ui || "").toLowerCase();
+const getEstatus = (f: any) => String(f?.estado_ui || f?.estadoUi || f?.estatus || f?.estado || "").toLowerCase();
 const getInstitucion = (f: any) => f?.institucion || f?.institucion_financiera || "Acreedor";
 const getInstitucionId = (f: any) =>
   String(f?.institucion_id || f?.institucionId || f?.institucion_financiera_id || getInstitucion(f));
 
 const getLineaTotal = (f: any) =>
-  toNum(f?.linea_credito ?? f?.lineaCredito ?? f?.monto_total_vista ?? f?.monto_total, 0);
+  firstFinite(f?.linea_credito, f?.lineaCredito, f?.monto_total_vista, f?.montoTotalVista, f?.monto_total) ?? 0;
 
 const getMontoOriginal = (f: any) =>
-  toNum(f?.monto_original ?? f?.montoOriginal ?? f?.monto_total_vista ?? f?.saldo_inicial ?? f?.monto_total, 0);
+  firstFinite(f?.monto_original, f?.montoOriginal, f?.monto_total_vista, f?.montoTotalVista, f?.saldo_inicial, f?.monto_total) ?? 0;
 
 const getSaldoCapital = (f: any) =>
-  toNum(
-    f?.saldo_capital_actual ??
-      f?.saldoCapitalActual ??
-      f?.saldo_actual_vista ??
-      f?.saldoActualVista ??
-      f?.saldo_actual,
-    0
-  );
+  firstFinite(
+    f?.saldo_capital_actual,
+    f?.saldoCapitalActual,
+    f?.saldo_actual_vista,
+    f?.saldoActualVista,
+    f?.saldo_actual
+  ) ?? 0;
 
-const getSaldoIntereses = (f: any) => toNum(f?.saldo_intereses_actual ?? f?.saldoInteresesActual, 0);
+const getSaldoIntereses = (f: any) =>
+  firstFinite(f?.saldo_intereses_actual, f?.saldoInteresesActual) ?? 0;
 
 const getSaldoTotal = (f: any) =>
-  toNum(
-    f?.saldo_total_actual ??
-      f?.saldoTotalActual ??
-      f?.saldo_actual_vista ??
-      f?.saldoActualVista ??
-      (getSaldoCapital(f) + getSaldoIntereses(f)),
-    0
-  );
+  firstFinite(
+    f?.saldo_total_actual,
+    f?.saldoTotalActual,
+    f?.saldo_actual_vista,
+    f?.saldoActualVista
+  ) ?? (getSaldoCapital(f) + getSaldoIntereses(f));
 
 const getDisponible = (f: any) => {
-  const d = Number(
-    f?.disponible_actual ?? f?.disponibleActual ?? f?.disponible_linea ?? f?.disponibleLinea
+  const d = firstFinite(
+    f?.disponible_actual,
+    f?.disponibleActual,
+    f?.disponible_linea,
+    f?.disponibleLinea
   );
-  if (Number.isFinite(d)) return Math.max(0, d);
+  if (d !== undefined) return Math.max(0, d);
   return Math.max(0, getLineaTotal(f) - getSaldoCapital(f));
 };
 
@@ -133,7 +141,8 @@ const getFechaVencimiento = (f: any) => safeDate(f?.fecha_vencimiento || f?.fech
 const getTxTipo = (t: any) => String(t?.tipo || t?.tipo_transaccion || "").toLowerCase();
 const getTxFinanciamientoId = (t: any) => String(t?.financingId || t?.financing_id || t?.financiamiento_id || "");
 const getTxMonto = (t: any) => toNum(t?.monto, 0);
-const getTxMontoIntereses = (t: any) => toNum(t?.monto_intereses ?? t?.montoIntereses ?? t?.interes_pagado, 0);
+const getTxMontoIntereses = (t: any) =>
+  firstFinite(t?.monto_intereses, t?.montoIntereses, t?.interes_pagado, t?.monto) ?? 0;
 const getTxFecha = (t: any) => safeDate(t?.fecha || t?.created_at || t?.createdAt || null);
 
 const KpiCard = ({
@@ -151,14 +160,14 @@ const KpiCard = ({
   accentClass?: string;
   iconWrapClass?: string;
 }) => (
-  <Card className="rounded-3xl border border-slate-200/80 bg-white shadow-sm">
-    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+  <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 pt-5">
       <div className="space-y-1">
         <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
-        <div className={`text-4xl font-semibold tracking-tight ${accentClass}`}>{value}</div>
+        <div className={`text-3xl font-semibold tracking-tight ${accentClass}`}>{value}</div>
         <CardDescription className="text-xs">{subtitle}</CardDescription>
       </div>
-      <div className={`rounded-2xl p-3 ${iconWrapClass}`}>
+      <div className={`rounded-xl p-3 ${iconWrapClass}`}>
         <Icon className="h-5 w-5 text-slate-700" />
       </div>
     </CardHeader>
@@ -174,20 +183,26 @@ const SectionTitle = ({
   description?: string;
   right?: React.ReactNode;
 }) => (
-  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <div>
+  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="min-w-0">
       <h3 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h3>
       {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
     </div>
-    {right ? <div className="flex items-center gap-2">{right}</div> : null}
+    {right ? <div className="flex flex-wrap items-center gap-2">{right}</div> : null}
   </div>
 );
 
 const EmptyState = ({ text }: { text: string }) => (
-  <div className="flex h-[320px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+  <div className="flex h-[280px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
     {text}
   </div>
 );
+
+const formatMoneyFull = (valor: number): string =>
+  `$${Number(valor || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const AnalyticaFinanciamientos = () => {
   const { financiamientos, transacciones, resumen, isLoading } = useFinanciamientos();
@@ -211,12 +226,6 @@ const AnalyticaFinanciamientos = () => {
       maximumFractionDigits: 2,
     });
   };
-
-  const formatMoneyFull = (valor: number): string =>
-    `$${valor.toLocaleString("es-MX", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -276,12 +285,12 @@ const AnalyticaFinanciamientos = () => {
   );
 
   const deudaTarjetas = useMemo(
-    () => tarjetasCorporativas.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    () => tarjetasCorporativas.reduce((sum: number, f: any) => sum + getSaldoTotal(f), 0),
     [tarjetasCorporativas]
   );
 
   const deudaRevolvente = useMemo(
-    () => creditosRevolventes.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
+    () => creditosRevolventes.reduce((sum: number, f: any) => sum + getSaldoTotal(f), 0),
     [creditosRevolventes]
   );
 
@@ -290,16 +299,22 @@ const AnalyticaFinanciamientos = () => {
     [creditosSimples]
   );
 
-  const deudaSimples = useMemo(
+  const deudaSimplesCapital = useMemo(
     () => creditosSimples.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
     [creditosSimples]
   );
 
-  const totalPagadoSimples = Math.max(0, totalOriginalSimples - deudaSimples);
-  const totalDeuda = toNum(resumen?.saldo_total_actual, deudaSimples + deudaTarjetas + deudaRevolvente);
-  const totalOriginal = totalOriginalSimples;
-  const totalPagado = totalPagadoSimples;
-  const porcentajePagadoGlobal = totalOriginal > 0 ? (totalPagado / totalOriginal) * 100 : 0;
+  const deudaSimplesTotal = useMemo(
+    () => creditosSimples.reduce((sum: number, f: any) => sum + getSaldoTotal(f), 0),
+    [creditosSimples]
+  );
+
+  const totalPagadoSimples = Math.max(0, totalOriginalSimples - deudaSimplesCapital);
+  const totalDeuda = toNum(
+    resumen?.saldo_total_actual,
+    deudaSimplesTotal + deudaTarjetas + deudaRevolvente
+  );
+  const porcentajePagadoGlobal = totalOriginalSimples > 0 ? (totalPagadoSimples / totalOriginalSimples) * 100 : 0;
 
   const creditosVencidosActivos = useMemo(() => {
     const hoy = new Date();
@@ -357,20 +372,20 @@ const AnalyticaFinanciamientos = () => {
     [creditosSimplesFiltrados]
   );
 
-  const deudaSimplesFiltrada = useMemo(
+  const deudaSimplesFiltradaCapital = useMemo(
     () => creditosSimplesFiltrados.reduce((sum: number, f: any) => sum + getSaldoCapital(f), 0),
     [creditosSimplesFiltrados]
   );
 
-  const totalPagadoSimplesFiltrado = Math.max(0, totalOriginalSimplesFiltrado - deudaSimplesFiltrada);
+  const totalPagadoSimplesFiltrado = Math.max(0, totalOriginalSimplesFiltrado - deudaSimplesFiltradaCapital);
 
   const dataComparacionSimples = useMemo(
     () => [
       { name: "Monto original", valor: totalOriginalSimplesFiltrado, color: "#0ea5e9" },
       { name: "Pagado", valor: totalPagadoSimplesFiltrado, color: "#22c55e" },
-      { name: "Pendiente", valor: deudaSimplesFiltrada, color: "#ef4444" },
+      { name: "Pendiente", valor: deudaSimplesFiltradaCapital, color: "#ef4444" },
     ],
-    [totalOriginalSimplesFiltrado, totalPagadoSimplesFiltrado, deudaSimplesFiltrada]
+    [totalOriginalSimplesFiltrado, totalPagadoSimplesFiltrado, deudaSimplesFiltradaCapital]
   );
 
   const creditosRevolventesYTarjetas = useMemo(
@@ -404,10 +419,9 @@ const AnalyticaFinanciamientos = () => {
         name: "Línea consolidada",
         disponible: lineaDisponible,
         utilizado: lineaUtilizada,
-        total: lineaTotal,
       },
     ],
-    [lineaDisponible, lineaUtilizada, lineaTotal]
+    [lineaDisponible, lineaUtilizada]
   );
 
   const acreedoresTop = useMemo(() => {
@@ -642,12 +656,10 @@ const AnalyticaFinanciamientos = () => {
 
     (transacciones || []).forEach((t: any) => {
       const tipo = getTxTipo(t);
-      const isInterestMovement =
-        tipo === "cargo_intereses" ||
-        tipo === "cargo_interes" ||
-        tipo === "pago_intereses";
+      const isInterestCharge =
+        tipo === "cargo_intereses" || tipo === "cargo_interes";
 
-      if (!isInterestMovement) return;
+      if (!isInterestCharge) return;
 
       const fecha = getTxFecha(t);
       if (!fecha) return;
@@ -671,7 +683,7 @@ const AnalyticaFinanciamientos = () => {
       const financingId = getTxFinanciamientoId(t);
       const fin = financiamientos.find((f: any) => String(f.id) === financingId);
       const tipoFin = fin ? getTipoUi(fin) : "otro";
-      const monto = getTxMontoIntereses(t) || getTxMonto(t);
+      const monto = getTxMontoIntereses(t);
 
       if (tipoFin === "tarjeta_corporativa") row.tarjeta += monto;
       else if (tipoFin === "revolvente") row.revolvente += monto;
@@ -709,26 +721,26 @@ const AnalyticaFinanciamientos = () => {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-36 w-full rounded-3xl" />
-        <Skeleton className="h-[340px] w-full rounded-3xl" />
-        <Skeleton className="h-[340px] w-full rounded-3xl" />
+        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-[300px] w-full rounded-2xl" />
+        <Skeleton className="h-[300px] w-full rounded-2xl" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-6 shadow-sm">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               Analítica financiera
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
               Vista ejecutiva del portafolio de financiamientos
             </h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Monitorea deuda activa, concentración por acreedor, proyección de amortizaciones y evolución de gastos financieros en una sola vista.
+            <p className="mt-2 text-sm text-slate-500">
+              Monitorea deuda activa, concentración por acreedor, proyección de amortizaciones y evolución de intereses en una sola vista.
             </p>
           </div>
 
@@ -748,14 +760,12 @@ const AnalyticaFinanciamientos = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           title="Créditos activos"
           value={String(financiamientosActivos.length)}
           subtitle="Instrumentos con saldo o línea vigente"
           icon={Activity}
-          accentClass="text-slate-900"
-          iconWrapClass="bg-slate-100"
         />
 
         <KpiCard
@@ -769,8 +779,8 @@ const AnalyticaFinanciamientos = () => {
 
         <KpiCard
           title="Capital pagado"
-          value={formatMoneyFull(totalPagado)}
-          subtitle="Monto amortizado acumulado"
+          value={formatMoneyFull(totalPagadoSimples)}
+          subtitle="Monto amortizado en créditos simples"
           icon={BadgeDollarSign}
           accentClass="text-emerald-600"
           iconWrapClass="bg-emerald-50"
@@ -785,14 +795,14 @@ const AnalyticaFinanciamientos = () => {
           iconWrapClass="bg-sky-50"
         />
 
-        <Card className="rounded-3xl border border-slate-200/80 bg-white shadow-sm">
-          <CardHeader className="pb-3">
+        <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <CardHeader className="pb-2 pt-5">
             <CardTitle className="text-sm font-medium text-slate-500">Estado de vencimientos</CardTitle>
           </CardHeader>
           <CardContent>
             {creditosVencidosActivos.length === 0 ? (
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-50 p-3">
+                <div className="rounded-xl bg-emerald-50 p-3">
                   <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div>
@@ -802,7 +812,7 @@ const AnalyticaFinanciamientos = () => {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-rose-50 p-3">
+                <div className="rounded-xl bg-rose-50 p-3">
                   <ShieldAlert className="h-5 w-5 text-rose-600" />
                 </div>
                 <div>
@@ -819,9 +829,9 @@ const AnalyticaFinanciamientos = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-4">
             <SectionTitle
               title="Composición de deuda por tipo"
               description="Distribución del saldo activo entre créditos simples, revolventes y tarjetas."
@@ -831,16 +841,16 @@ const AnalyticaFinanciamientos = () => {
             {dataPorTipo.length === 0 ? (
               <EmptyState text="No hay deuda activa para mostrar." />
             ) : (
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-                <div className="h-[320px]">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={dataPorTipo}
                         dataKey="value"
                         nameKey="name"
-                        innerRadius={72}
-                        outerRadius={118}
+                        innerRadius={68}
+                        outerRadius={108}
                         paddingAngle={3}
                       >
                         {dataPorTipo.map((entry, index) => (
@@ -881,8 +891,8 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-4">
             <SectionTitle
               title={acreedorSeleccionado ? `Detalle · ${nombreAcreedorSeleccionado}` : "Concentración por acreedor"}
               description={
@@ -922,12 +932,12 @@ const AnalyticaFinanciamientos = () => {
                 <EmptyState text="No hay deuda pendiente con acreedores." />
               ) : (
                 <div className="space-y-4">
-                  <div className="h-[260px]">
+                  <div className="h-[240px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={acreedoresTop.slice(0, 6)}
                         layout="vertical"
-                        margin={{ top: 0, right: 24, left: 12, bottom: 0 }}
+                        margin={{ top: 0, right: 18, left: 0, bottom: 0 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                         <XAxis
@@ -935,18 +945,12 @@ const AnalyticaFinanciamientos = () => {
                           tickFormatter={(v) => `$${formatCompactValue(Number(v || 0))}`}
                           stroke="#94a3b8"
                         />
-                        <YAxis dataKey="nombre" type="category" width={110} stroke="#94a3b8" />
+                        <YAxis dataKey="nombre" type="category" width={105} stroke="#94a3b8" />
                         <Tooltip content={<CustomTooltip />} />
                         <Bar dataKey="saldo" radius={[0, 10, 10, 0]}>
                           {acreedoresTop.slice(0, 6).map((entry, index) => (
                             <Cell key={`${entry.nombre}-${index}`} fill={entry.fill} />
                           ))}
-                          <LabelList
-                            dataKey="saldo"
-                            position="right"
-                            formatter={(v: number) => `$${formatCompactValue(v)}`}
-                            style={{ fill: "#0f172a", fontSize: 11, fontWeight: 700 }}
-                          />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -969,9 +973,9 @@ const AnalyticaFinanciamientos = () => {
                       >
                         <div className="flex-shrink-0">
                           {a.logo ? (
-                            <img src={a.logo} alt={a.nombre} className="h-11 w-11 rounded-xl border bg-white object-contain p-1" />
+                            <img src={a.logo} alt={a.nombre} className="h-10 w-10 rounded-xl border bg-white object-contain p-1" />
                           ) : (
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-sky-500 text-sm font-bold text-white">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-sky-500 text-sm font-bold text-white">
                               {a.nombre.charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -1018,8 +1022,8 @@ const AnalyticaFinanciamientos = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-4">
             <SectionTitle
               title="Comportamiento · crédito simple"
               description="Comparativo visual entre monto original, capital pagado y pendiente."
@@ -1041,23 +1045,17 @@ const AnalyticaFinanciamientos = () => {
             />
           </CardHeader>
           <CardContent>
-            <div className="h-[320px]">
+            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dataComparacionSimples} layout="vertical" margin={{ top: 6, right: 28, left: 18, bottom: 6 }}>
+                <BarChart data={dataComparacionSimples} layout="vertical" margin={{ top: 6, right: 12, left: 8, bottom: 6 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                   <XAxis type="number" tickFormatter={(v) => `$${formatCompactValue(Number(v || 0))}`} stroke="#94a3b8" />
-                  <YAxis dataKey="name" type="category" width={108} stroke="#94a3b8" />
+                  <YAxis dataKey="name" type="category" width={110} stroke="#94a3b8" />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="valor" radius={[0, 12, 12, 0]}>
                     {dataComparacionSimples.map((entry, index) => (
                       <Cell key={`${entry.name}-${index}`} fill={entry.color} />
                     ))}
-                    <LabelList
-                      dataKey="valor"
-                      position="right"
-                      formatter={(v: number) => `$${formatCompactValue(v)}`}
-                      style={{ fill: "#0f172a", fontSize: 11, fontWeight: 700 }}
-                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -1065,8 +1063,8 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-4">
             <SectionTitle
               title="Uso de líneas revolventes y tarjetas"
               description="Capacidad total, saldo utilizado y línea disponible."
@@ -1127,14 +1125,14 @@ const AnalyticaFinanciamientos = () => {
 
                 <div className="h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dataUsoLinea} margin={{ top: 12, right: 18, left: 18, bottom: 0 }}>
+                    <BarChart data={dataUsoLinea} margin={{ top: 12, right: 12, left: 12, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="name" stroke="#94a3b8" />
                       <YAxis tickFormatter={(v) => `$${formatCompactValue(Number(v || 0))}`} stroke="#94a3b8" />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend />
-                      <Bar dataKey="disponible" stackId="a" fill="#22c55e" radius={[0, 0, 12, 12]} name="Disponible" />
-                      <Bar dataKey="utilizado" stackId="a" fill="#ef4444" radius={[12, 12, 0, 0]} name="Utilizado" />
+                      <Bar dataKey="disponible" stackId="a" fill="#22c55e" radius={[0, 0, 10, 10]} name="Disponible" />
+                      <Bar dataKey="utilizado" stackId="a" fill="#ef4444" radius={[10, 10, 0, 0]} name="Utilizado" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1144,8 +1142,8 @@ const AnalyticaFinanciamientos = () => {
         </Card>
       </div>
 
-      <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <CardHeader>
+      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="pb-4">
           <SectionTitle
             title="Proyección de amortizaciones futuras"
             description="Estimación de pagos pendientes por periodo con base en saldos y vencimientos."
@@ -1188,7 +1186,7 @@ const AnalyticaFinanciamientos = () => {
           {dataAmortizacionesFuturas.length === 0 || nombresCreditos.length === 0 ? (
             <EmptyState text="No hay proyección disponible para los créditos seleccionados." />
           ) : (
-            <div className="h-[420px]">
+            <div className="h-[380px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dataAmortizacionesFuturas}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -1203,16 +1201,13 @@ const AnalyticaFinanciamientos = () => {
                   <Legend />
 
                   {nombresCreditos.map((nombre: string, index: number) => (
-                    <Bar key={nombre} dataKey={nombre} stackId="a" fill={COLORS[index % COLORS.length]} radius={index === 0 ? [8, 8, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList
-                        dataKey={nombre}
-                        position="center"
-                        fill="#fff"
-                        fontSize={10}
-                        fontWeight="bold"
-                        formatter={(v: number) => (v === 0 ? "" : `$${formatCompactValue(v)}`)}
-                      />
-                    </Bar>
+                    <Bar
+                      key={nombre}
+                      dataKey={nombre}
+                      stackId="a"
+                      fill={COLORS[index % COLORS.length]}
+                      radius={index === 0 ? [8, 8, 0, 0] : [0, 0, 0, 0]}
+                    />
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -1221,11 +1216,11 @@ const AnalyticaFinanciamientos = () => {
         </CardContent>
       </Card>
 
-      <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <CardHeader>
+      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="pb-4">
           <SectionTitle
             title="Evolución de gastos financieros"
-            description="Intereses registrados a lo largo del tiempo por tipo de instrumento."
+            description="Intereses cargados a lo largo del tiempo por tipo de instrumento."
             right={
               <>
                 <div className="flex items-center gap-2">
@@ -1264,7 +1259,7 @@ const AnalyticaFinanciamientos = () => {
           {dataGastosFinancieros.length === 0 ? (
             <EmptyState text="No hay gastos financieros registrados." />
           ) : (
-            <div className="h-[420px]">
+            <div className="h-[360px]">
               <ResponsiveContainer width="100%" height="100%">
                 {tipoGastoFinanciero === "combinada" ? (
                   <LineChart data={dataGastosFinancieros}>
@@ -1273,9 +1268,9 @@ const AnalyticaFinanciamientos = () => {
                     <YAxis tickFormatter={(v) => `$${formatCompactValue(Number(v || 0))}`} stroke="#94a3b8" />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
-                    <Line type="monotone" dataKey="simple" stroke="#14b8a6" strokeWidth={3} dot={{ r: 4 }} name="Créditos Simples" />
-                    <Line type="monotone" dataKey="revolvente" stroke="#0ea5e9" strokeWidth={3} dot={{ r: 4 }} name="Líneas Revolventes" />
-                    <Line type="monotone" dataKey="tarjeta" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} name="Tarjetas Corporativas" />
+                    <Line type="monotone" dataKey="simple" stroke="#14b8a6" strokeWidth={3} dot={{ r: 3 }} name="Créditos Simples" />
+                    <Line type="monotone" dataKey="revolvente" stroke="#0ea5e9" strokeWidth={3} dot={{ r: 3 }} name="Líneas Revolventes" />
+                    <Line type="monotone" dataKey="tarjeta" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} name="Tarjetas Corporativas" />
                   </LineChart>
                 ) : tipoGastoFinanciero === "total" ? (
                   <AreaChart data={dataGastosFinancieros}>
@@ -1324,14 +1319,14 @@ const AnalyticaFinanciamientos = () => {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-base font-semibold">Mix del portafolio</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-2xl bg-slate-50 p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-teal-50 p-3">
+                <div className="rounded-xl bg-teal-50 p-3">
                   <Landmark className="h-5 w-5 text-teal-600" />
                 </div>
                 <div>
@@ -1343,7 +1338,7 @@ const AnalyticaFinanciamientos = () => {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-sky-50 p-3">
+                <div className="rounded-xl bg-sky-50 p-3">
                   <Wallet className="h-5 w-5 text-sky-600" />
                 </div>
                 <div>
@@ -1355,7 +1350,7 @@ const AnalyticaFinanciamientos = () => {
 
             <div className="rounded-2xl bg-slate-50 p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-indigo-50 p-3">
+                <div className="rounded-xl bg-indigo-50 p-3">
                   <CreditCard className="h-5 w-5 text-indigo-600" />
                 </div>
                 <div>
@@ -1367,7 +1362,7 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-base font-semibold">Riesgo de vencimiento</CardTitle>
           </CardHeader>
@@ -1383,7 +1378,7 @@ const AnalyticaFinanciamientos = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-base font-semibold">Capacidad disponible</CardTitle>
           </CardHeader>

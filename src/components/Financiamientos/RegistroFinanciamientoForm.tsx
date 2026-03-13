@@ -63,10 +63,11 @@ const RegistroFinanciamientoForm = () => {
 
   const esRevolvente = formData.tipo_credito === "revolvente";
   const esSimple = formData.tipo_credito === "simple";
+  const esTarjeta = formData.tipo_credito === "tarjeta_corporativa";
   const isSubmitting = !!crearFinanciamiento?.isPending;
 
   useEffect(() => {
-    if (formData.tipo_credito === "simple" && fechaInicio && formData.plazo_meses) {
+    if (esSimple && fechaInicio && formData.plazo_meses) {
       const meses = parseInt(formData.plazo_meses, 10);
       if (!Number.isNaN(meses) && meses > 0) {
         setFechaVencimiento(addMonths(fechaInicio, meses));
@@ -76,18 +77,20 @@ const RegistroFinanciamientoForm = () => {
       return;
     }
 
-    if (formData.tipo_credito === "revolvente" && fechaInicio) {
+    if (esRevolvente && fechaInicio) {
       setFechaVencimiento(addMonths(fechaInicio, 12));
       return;
     }
 
-    if (formData.tipo_credito === "tarjeta_corporativa" && fechaInicio) {
+    if (esTarjeta && fechaInicio) {
+      // Se mantiene una vigencia técnica para compatibilidad operativa;
+      // la tarjeta nace con límite y saldo usado 0.
       setFechaVencimiento(addMonths(fechaInicio, 60));
       return;
     }
 
     setFechaVencimiento(undefined);
-  }, [fechaInicio, formData.plazo_meses, formData.tipo_credito]);
+  }, [fechaInicio, formData.plazo_meses, esSimple, esRevolvente, esTarjeta]);
 
   const resetForm = () => {
     setFormData(INITIAL_FORM);
@@ -97,14 +100,19 @@ const RegistroFinanciamientoForm = () => {
     setErrorLocal("");
   };
 
-  const handleTipoCreditoSelect = (tipo: TipoCreditoUI) => {
-    setFormData((prev) => ({ ...prev, tipo_credito: tipo }));
-    setStep("datos");
+  const backToTipo = () => {
+    setStep("tipo");
     setErrorLocal("");
   };
 
-  const handleBack = () => {
-    resetForm();
+  const handleTipoCreditoSelect = (tipo: TipoCreditoUI) => {
+    setFormData((prev) => ({
+      ...INITIAL_FORM,
+      ...prev,
+      tipo_credito: tipo,
+    }));
+    setStep("datos");
+    setErrorLocal("");
   };
 
   const mapTipoBackend = (tipo: TipoCreditoUI) => {
@@ -130,9 +138,23 @@ const RegistroFinanciamientoForm = () => {
       return Number.isFinite(n) && n > 0 ? n : 0;
     }
 
-    if (formData.tipo_credito === "revolvente") return 12;
-    if (formData.tipo_credito === "tarjeta_corporativa") return 60;
+    if (esRevolvente) return 12;
+    if (esTarjeta) return 60;
     return 0;
+  };
+
+  const getTituloTipo = () => {
+    if (esSimple) return "Crédito Simple";
+    if (esRevolvente) return "Crédito Revolvente";
+    if (esTarjeta) return "Tarjeta de Crédito Corporativa";
+    return "Financiamiento";
+  };
+
+  const getTextoSubmit = () => {
+    if (esSimple) return "Registrar Préstamo";
+    if (esRevolvente) return "Registrar Línea Revolvente";
+    if (esTarjeta) return "Registrar Tarjeta Corporativa";
+    return "Registrar Financiamiento";
   };
 
   const buildPayload = () => {
@@ -141,23 +163,20 @@ const RegistroFinanciamientoForm = () => {
     const plazoMeses = getPlazoMeses();
 
     const fechaInicioStr = format(fechaInicio, "yyyy-MM-dd");
-    const fechaVencimientoStr =
-      fechaVencimiento
-        ? format(fechaVencimiento, "yyyy-MM-dd")
-        : format(addMonths(fechaInicio, plazoMeses || 12), "yyyy-MM-dd");
+    const fechaVencimientoStr = fechaVencimiento
+      ? format(fechaVencimiento, "yyyy-MM-dd")
+      : format(addMonths(fechaInicio, plazoMeses || 12), "yyyy-MM-dd");
 
     const tipoBackend = mapTipoBackend(formData.tipo_credito);
     const institucionNombre = formData.institucion_financiera || selectedInstitucion?.nombre || "";
+    const numeroCuentaLimpio = formData.numero_cuenta.trim();
 
-    const esLinea = esLineaCredito;
-
-    // FIX CRITICO:
-    // - Crédito simple debe nacer con saldo vivo inicial
-    // - Revolvente/tarjeta pueden nacer con dispuesto inicial = 0
-    const montoDispuestoInicial = esLinea ? 0 : monto;
+    // Crédito simple nace con deuda viva.
+    // Revolvente/tarjeta nacen con línea disponible y saldo usado inicial en 0.
+    const montoDispuestoInicial = esLineaCredito ? 0 : monto;
 
     return {
-      // ===== Campos canónicos backend nuevo =====
+      // ===== Backend canónico =====
       nombre: formData.nombre.trim(),
       descripcion: formData.descripcion.trim(),
       notas: formData.condiciones.trim(),
@@ -168,8 +187,8 @@ const RegistroFinanciamientoForm = () => {
       institucion: institucionNombre,
       institucion_id: formData.institucion_financiera_id || undefined,
 
-      numero_cuenta: formData.numero_cuenta.trim(),
-      numeroCuenta: formData.numero_cuenta.trim(),
+      numero_cuenta: numeroCuentaLimpio,
+      numeroCuenta: numeroCuentaLimpio,
 
       fecha_inicio: fechaInicioStr,
       fechaInicio: fechaInicioStr,
@@ -187,11 +206,11 @@ const RegistroFinanciamientoForm = () => {
       estatus: "activo",
       activo: true,
 
-      linea_credito: esLinea ? monto : 0,
-      lineaCredito: esLinea ? monto : 0,
+      linea_credito: esLineaCredito ? monto : 0,
+      lineaCredito: esLineaCredito ? monto : 0,
 
-      monto_original: esLinea ? 0 : monto,
-      montoOriginal: esLinea ? 0 : monto,
+      monto_original: esLineaCredito ? 0 : monto,
+      montoOriginal: esLineaCredito ? 0 : monto,
 
       monto_dispuesto_inicial: montoDispuestoInicial,
       montoDispuestoInicial: montoDispuestoInicial,
@@ -202,8 +221,8 @@ const RegistroFinanciamientoForm = () => {
       institucion_financiera_id: formData.institucion_financiera_id || undefined,
       monto_total: monto,
       tasa_interes: tasa,
-      saldo_inicial: esLinea ? 0 : monto,
-      saldo_actual: esLinea ? 0 : monto,
+      saldo_inicial: esLineaCredito ? 0 : monto,
+      saldo_actual: esLineaCredito ? 0 : monto,
       estado: "activo",
       condiciones: formData.condiciones.trim(),
     };
@@ -216,9 +235,11 @@ const RegistroFinanciamientoForm = () => {
 
     if (!formData.tipo_credito) return "Debes seleccionar un tipo de financiamiento.";
     if (!formData.nombre.trim()) return "El nombre es requerido.";
+
     if (!formData.institucion_financiera_id && !formData.institucion_financiera.trim()) {
       return "Debes seleccionar una institución financiera.";
     }
+
     if (monto <= 0) return "El monto debe ser mayor a 0.";
     if (tasa < 0) return "La tasa de interés no puede ser negativa.";
 
@@ -310,14 +331,10 @@ const RegistroFinanciamientoForm = () => {
             <div className="flex items-center justify-between pb-4 border-b">
               <div>
                 <p className="text-sm text-muted-foreground">Tipo seleccionado:</p>
-                <p className="font-semibold">
-                  {formData.tipo_credito === "simple" && "Crédito Simple"}
-                  {formData.tipo_credito === "revolvente" && "Crédito Revolvente"}
-                  {formData.tipo_credito === "tarjeta_corporativa" && "Tarjeta de Crédito Corporativa"}
-                </p>
+                <p className="font-semibold">{getTituloTipo()}</p>
               </div>
 
-              <Button type="button" variant="ghost" onClick={handleBack} disabled={isSubmitting}>
+              <Button type="button" variant="ghost" onClick={backToTipo} disabled={isSubmitting}>
                 Cambiar tipo
               </Button>
             </div>
@@ -394,7 +411,7 @@ const RegistroFinanciamientoForm = () => {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, numero_cuenta: e.target.value }))
                   }
-                  placeholder={esLineaCredito ? "**** **** **** 1234" : "Ej: 123456789"}
+                  placeholder={esTarjeta ? "**** **** **** 1234" : "Ej: 123456789"}
                   disabled={isSubmitting}
                 />
               </div>
@@ -431,48 +448,7 @@ const RegistroFinanciamientoForm = () => {
                 />
               </div>
 
-              {esRevolvente && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Fecha de Registro *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                          disabled={isSubmitting}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
-                        </Button>
-                      </PopoverTrigger>
-
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={fechaInicio}
-                          onSelect={(date) => date && setFechaInicio(date)}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Fecha de Vencimiento (1 año)</Label>
-                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
-                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará a 1 año"}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {!esLineaCredito && (
+              {esSimple && (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="plazo_meses">Plazo (meses) *</Label>
@@ -531,7 +507,48 @@ const RegistroFinanciamientoForm = () => {
                 </>
               )}
 
-              {formData.tipo_credito === "tarjeta_corporativa" && (
+              {esRevolvente && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Fecha de Registro *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                          disabled={isSubmitting}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
+                        </Button>
+                      </PopoverTrigger>
+
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={fechaInicio}
+                          onSelect={(date) => date && setFechaInicio(date)}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Fecha de Vencimiento (1 año)</Label>
+                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará a 1 año"}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {esTarjeta && (
                 <>
                   <div className="space-y-2">
                     <Label>Fecha de Registro *</Label>
@@ -565,7 +582,9 @@ const RegistroFinanciamientoForm = () => {
                     <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
                       <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">
-                        {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará automáticamente"}
+                        {fechaVencimiento
+                          ? format(fechaVencimiento, "PPP")
+                          : "Se calculará automáticamente"}
                       </span>
                     </div>
                   </div>
@@ -605,7 +624,7 @@ const RegistroFinanciamientoForm = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleBack}
+                onClick={backToTipo}
                 className="w-1/3"
                 disabled={isSubmitting}
               >
@@ -613,9 +632,7 @@ const RegistroFinanciamientoForm = () => {
               </Button>
 
               <Button type="submit" className="flex-1" disabled={isSubmitting}>
-                {isSubmitting
-                  ? "Registrando..."
-                  : `Registrar ${esLineaCredito ? "Línea de Crédito" : "Préstamo"}`}
+                {isSubmitting ? "Registrando..." : getTextoSubmit()}
               </Button>
             </div>
           </form>

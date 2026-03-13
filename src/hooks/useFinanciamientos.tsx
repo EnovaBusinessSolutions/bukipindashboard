@@ -69,14 +69,14 @@ export interface Financiamiento {
   periodicidad_pago?: string;
   periodicidadPago?: string;
 
-  fecha_inicio?: string;
-  fechaInicio?: string;
+  fecha_inicio?: string | null;
+  fechaInicio?: string | null;
 
-  fecha_apertura?: string;
-  fechaApertura?: string;
+  fecha_apertura?: string | null;
+  fechaApertura?: string | null;
 
-  fecha_vencimiento?: string;
-  fechaVencimiento?: string;
+  fecha_vencimiento?: string | null;
+  fechaVencimiento?: string | null;
 
   fecha_corte?: string | number | null;
   fechaCorte?: string | number | null;
@@ -162,10 +162,10 @@ export interface Financiamiento {
   user_id?: string;
   owner?: string;
 
-  created_at?: string;
-  updated_at?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface TransaccionFinanciamiento {
@@ -235,10 +235,10 @@ export interface TransaccionFinanciamiento {
 
   user_id?: string;
   owner?: string;
-  created_at?: string;
-  createdAt?: string;
-  updated_at?: string;
-  updatedAt?: string;
+  created_at?: string | null;
+  createdAt?: string | null;
+  updated_at?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface ResumenFinanciamientos {
@@ -258,14 +258,16 @@ export interface ResumenFinanciamientos {
   linea_credito_total: number;
 }
 
-type ApiEnvelope<T> = {
-  ok?: boolean;
-  data?: T;
-  items?: T;
-  resumen?: T;
-  item?: T;
-  message?: string;
-} | T;
+type ApiEnvelope<T> =
+  | {
+      ok?: boolean;
+      data?: T;
+      items?: T;
+      resumen?: T;
+      item?: T;
+      message?: string;
+    }
+  | T;
 
 const asString = (v: unknown, def = ""): string => {
   if (v === undefined || v === null) return def;
@@ -302,26 +304,69 @@ const unwrap = <T,>(json: ApiEnvelope<T>): T => {
 };
 
 const getErrorMessage = (error: any, fallback: string) => {
-  return (
-    error?.response?.data?.message ||
-    error?.data?.message ||
-    error?.message ||
-    fallback
-  );
+  return error?.response?.data?.message || error?.data?.message || error?.message || fallback;
 };
 
-const normalizeTipoUi = (raw: unknown): "simple" | "revolvente" | "tarjeta_corporativa" => {
+const firstFinite = (...values: unknown[]): number | undefined => {
+  for (const value of values) {
+    const n = Number(String(value ?? "").replace(/,/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
+const normalizeTipoUi = (
+  raw: unknown
+): "simple" | "revolvente" | "tarjeta_corporativa" => {
   const s = asTrim(raw).toLowerCase();
-  if (["simple", "credito_simple", "prestamo"].includes(s)) return "simple";
-  if (["revolvente", "linea_credito"].includes(s)) return "revolvente";
-  if (["tarjeta_corporativa", "tarjeta_credito"].includes(s)) return "tarjeta_corporativa";
+
+  if (
+    [
+      "simple",
+      "credito_simple",
+      "crédito simple",
+      "prestamo",
+      "préstamo",
+    ].includes(s)
+  ) {
+    return "simple";
+  }
+
+  if (
+    [
+      "revolvente",
+      "linea_credito",
+      "línea_credito",
+      "linea de credito",
+      "línea de crédito",
+      "credito revolvente",
+      "crédito revolvente",
+    ].includes(s)
+  ) {
+    return "revolvente";
+  }
+
+  if (
+    [
+      "tarjeta_corporativa",
+      "tarjeta_credito",
+      "tarjeta corporativa",
+      "tarjeta de credito",
+      "tarjeta de crédito",
+      "tarjeta",
+    ].includes(s)
+  ) {
+    return "tarjeta_corporativa";
+  }
+
   return "simple";
 };
 
 const normalizeEstado = (raw: unknown): string => {
   const s = asTrim(raw, "activo").toLowerCase();
+
   if (!s) return "activo";
-  if (s === "pagado") return "liquidado";
+  if (["pagado", "liquidado", "cerrado", "finalizado"].includes(s)) return "liquidado";
   return s;
 };
 
@@ -346,49 +391,53 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
   const tipoUi = normalizeTipoUi(raw?.tipo_ui || raw?.tipoUi || raw?.tipo_credito || raw?.tipo);
   const estado = normalizeEstado(raw?.estado_ui || raw?.estadoUi || raw?.estatus || raw?.estado);
 
-  const lineaCredito = toNum(raw?.linea_credito ?? raw?.lineaCredito, 0);
-  const montoOriginal = toNum(raw?.monto_original ?? raw?.montoOriginal ?? raw?.saldo_inicial, 0);
-  const saldoDispuestoActual = toNum(raw?.saldo_dispuesto_actual ?? raw?.saldoDispuestoActual, 0);
-  const saldoCapitalActual = toNum(raw?.saldo_capital_actual ?? raw?.saldoCapitalActual, 0);
-  const saldoTotalActual = toNum(
-    raw?.saldo_total_actual ?? raw?.saldoTotalActual ?? raw?.saldo_actual,
-    0
-  );
-  const totalAmortizadoCapital = toNum(
-    raw?.total_amortizado_capital ?? raw?.totalAmortizadoCapital,
-    0
-  );
-  const disponibleActual = toNum(
-    raw?.disponible_actual ?? raw?.disponibleActual ?? raw?.disponible_linea ?? raw?.disponibleLinea,
-    Math.max(0, lineaCredito - saldoDispuestoActual)
-  );
+  const lineaCredito = firstFinite(raw?.linea_credito, raw?.lineaCredito) ?? 0;
+  const montoOriginal =
+    firstFinite(raw?.monto_original, raw?.montoOriginal, raw?.saldo_inicial) ?? 0;
+  const saldoDispuestoActual =
+    firstFinite(raw?.saldo_dispuesto_actual, raw?.saldoDispuestoActual) ?? 0;
+  const saldoCapitalActual =
+    firstFinite(raw?.saldo_capital_actual, raw?.saldoCapitalActual) ?? 0;
+  const saldoTotalActual =
+    firstFinite(raw?.saldo_total_actual, raw?.saldoTotalActual, raw?.saldo_actual) ?? 0;
+
+  const totalAmortizadoCapital =
+    firstFinite(raw?.total_amortizado_capital, raw?.totalAmortizadoCapital) ?? 0;
+
+  const disponibleActual =
+    firstFinite(
+      raw?.disponible_actual,
+      raw?.disponibleActual,
+      raw?.disponible_linea,
+      raw?.disponibleLinea
+    ) ?? Math.max(0, lineaCredito - saldoDispuestoActual);
 
   const montoTotalVista =
-    toNum(raw?.monto_total_vista ?? raw?.montoTotalVista, NaN) ||
+    firstFinite(raw?.monto_total_vista, raw?.montoTotalVista) ??
     (tipoUi === "simple" ? montoOriginal : lineaCredito);
 
   const saldoActualVista =
-    toNum(raw?.saldo_actual_vista ?? raw?.saldoActualVista, NaN) ||
+    firstFinite(raw?.saldo_actual_vista, raw?.saldoActualVista) ??
     (tipoUi === "simple" ? saldoTotalActual : saldoDispuestoActual);
 
   const montoPagadoCapital =
-    toNum(raw?.monto_pagado_capital ?? raw?.montoPagadoCapital, NaN) ||
+    firstFinite(raw?.monto_pagado_capital, raw?.montoPagadoCapital) ??
     (tipoUi === "simple"
       ? Math.max(0, montoOriginal - saldoCapitalActual)
       : totalAmortizadoCapital);
 
   const montoPendienteCapital =
-    toNum(raw?.monto_pendiente_capital ?? raw?.montoPendienteCapital, NaN) ||
+    firstFinite(raw?.monto_pendiente_capital, raw?.montoPendienteCapital) ??
     (tipoUi === "simple"
       ? Math.max(0, saldoCapitalActual)
       : Math.max(0, saldoDispuestoActual));
 
   const usoLineaPct =
-    toNum(raw?.uso_linea_pct ?? raw?.usoLineaPct, NaN) ||
+    firstFinite(raw?.uso_linea_pct, raw?.usoLineaPct) ??
     (lineaCredito > 0 ? Math.min(100, (saldoDispuestoActual / lineaCredito) * 100) : 0);
 
   const progresoPagoPct =
-    toNum(raw?.progreso_pago_pct ?? raw?.progresoPagoPct, NaN) ||
+    firstFinite(raw?.progreso_pago_pct, raw?.progresoPagoPct) ??
     (montoOriginal > 0 ? Math.min(100, (montoPagadoCapital / montoOriginal) * 100) : 0);
 
   const cuentaDisplay =
@@ -420,9 +469,10 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
   return {
     id,
     _id: raw?._id ? asString(raw._id) : id || undefined,
-    alias: asTrim(raw?.alias),
 
     nombre: asTrim(raw?.nombre),
+    alias: asTrim(raw?.alias),
+
     descripcion: asTrim(raw?.descripcion),
     notas: asTrim(raw?.notas),
     condiciones: asTrim(raw?.condiciones || condicionesTexto),
@@ -438,11 +488,17 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     subtipo: asTrim(raw?.subtipo),
 
     institucion: asTrim(raw?.institucion || raw?.institucion_financiera),
-    institucion_id: asTrim(raw?.institucion_id || raw?.institucionId || raw?.institucion_financiera_id),
-    institucionId: asTrim(raw?.institucion_id || raw?.institucionId || raw?.institucion_financiera_id),
+    institucion_id: asTrim(
+      raw?.institucion_id || raw?.institucionId || raw?.institucion_financiera_id
+    ),
+    institucionId: asTrim(
+      raw?.institucion_id || raw?.institucionId || raw?.institucion_financiera_id
+    ),
 
     institucion_financiera: asTrim(raw?.institucion_financiera || raw?.institucion),
-    institucion_financiera_id: asTrim(raw?.institucion_financiera_id || raw?.institucion_id || raw?.institucionId),
+    institucion_financiera_id: asTrim(
+      raw?.institucion_financiera_id || raw?.institucion_id || raw?.institucionId
+    ),
 
     numero_cuenta: asTrim(raw?.numero_cuenta || raw?.numeroCuenta),
     numeroCuenta: asTrim(raw?.numero_cuenta || raw?.numeroCuenta),
@@ -455,8 +511,8 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     cuentaDisplay,
 
     moneda: asTrim(raw?.moneda, "MXN"),
-    tipo_cambio: toNum(raw?.tipo_cambio ?? raw?.tipoCambio, 1),
-    tipoCambio: toNum(raw?.tipo_cambio ?? raw?.tipoCambio, 1),
+    tipo_cambio: firstFinite(raw?.tipo_cambio, raw?.tipoCambio) ?? 1,
+    tipoCambio: firstFinite(raw?.tipo_cambio, raw?.tipoCambio) ?? 1,
 
     linea_credito: lineaCredito,
     lineaCredito,
@@ -464,21 +520,28 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     monto_original: montoOriginal,
     montoOriginal,
 
-    monto_dispuesto_inicial: toNum(raw?.monto_dispuesto_inicial ?? raw?.montoDispuestoInicial, 0),
-    montoDispuestoInicial: toNum(raw?.monto_dispuesto_inicial ?? raw?.montoDispuestoInicial, 0),
+    monto_dispuesto_inicial:
+      firstFinite(raw?.monto_dispuesto_inicial, raw?.montoDispuestoInicial) ?? 0,
+    montoDispuestoInicial:
+      firstFinite(raw?.monto_dispuesto_inicial, raw?.montoDispuestoInicial) ?? 0,
 
-    monto_total: toNum(raw?.monto_total ?? montoTotalVista, 0),
+    monto_total: firstFinite(raw?.monto_total, montoTotalVista) ?? 0,
     monto_total_vista: montoTotalVista,
     montoTotalVista,
 
-    tasa_interes: toNum(raw?.tasa_interes ?? raw?.tasa_interes_anual ?? raw?.tasaInteresAnual, 0),
-    tasa_interes_anual: toNum(raw?.tasa_interes_anual ?? raw?.tasaInteresAnual ?? raw?.tasa_interes, 0),
-    tasaInteresAnual: toNum(raw?.tasa_interes_anual ?? raw?.tasaInteresAnual ?? raw?.tasa_interes, 0),
-    tasa_interes_mensual: toNum(raw?.tasa_interes_mensual ?? raw?.tasaInteresMensual, 0),
-    tasaInteresMensual: toNum(raw?.tasa_interes_mensual ?? raw?.tasaInteresMensual, 0),
+    tasa_interes:
+      firstFinite(raw?.tasa_interes, raw?.tasa_interes_anual, raw?.tasaInteresAnual) ?? 0,
+    tasa_interes_anual:
+      firstFinite(raw?.tasa_interes_anual, raw?.tasaInteresAnual, raw?.tasa_interes) ?? 0,
+    tasaInteresAnual:
+      firstFinite(raw?.tasa_interes_anual, raw?.tasaInteresAnual, raw?.tasa_interes) ?? 0,
+    tasa_interes_mensual:
+      firstFinite(raw?.tasa_interes_mensual, raw?.tasaInteresMensual) ?? 0,
+    tasaInteresMensual:
+      firstFinite(raw?.tasa_interes_mensual, raw?.tasaInteresMensual) ?? 0,
 
-    plazo_meses: toNum(raw?.plazo_meses ?? raw?.plazoMeses, 0),
-    plazoMeses: toNum(raw?.plazo_meses ?? raw?.plazoMeses, 0),
+    plazo_meses: firstFinite(raw?.plazo_meses, raw?.plazoMeses) ?? 0,
+    plazoMeses: firstFinite(raw?.plazo_meses, raw?.plazoMeses) ?? 0,
 
     periodicidad_pago: asTrim(raw?.periodicidad_pago || raw?.periodicidadPago),
     periodicidadPago: asTrim(raw?.periodicidad_pago || raw?.periodicidadPago),
@@ -498,8 +561,8 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     fecha_pago: raw?.fecha_pago ?? raw?.fechaPago ?? null,
     fechaPago: raw?.fecha_pago ?? raw?.fechaPago ?? null,
 
-    saldo_inicial: toNum(raw?.saldo_inicial ?? montoOriginal, 0),
-    saldo_actual: toNum(raw?.saldo_actual ?? saldoActualVista, 0),
+    saldo_inicial: firstFinite(raw?.saldo_inicial, montoOriginal) ?? 0,
+    saldo_actual: firstFinite(raw?.saldo_actual, saldoActualVista) ?? 0,
     saldo_actual_vista: saldoActualVista,
     saldoActualVista,
 
@@ -509,40 +572,54 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     saldo_capital_actual: saldoCapitalActual,
     saldoCapitalActual: saldoCapitalActual,
 
-    saldo_intereses_actual: toNum(raw?.saldo_intereses_actual ?? raw?.saldoInteresesActual, 0),
-    saldoInteresesActual: toNum(raw?.saldo_intereses_actual ?? raw?.saldoInteresesActual, 0),
+    saldo_intereses_actual:
+      firstFinite(raw?.saldo_intereses_actual, raw?.saldoInteresesActual) ?? 0,
+    saldoInteresesActual:
+      firstFinite(raw?.saldo_intereses_actual, raw?.saldoInteresesActual) ?? 0,
 
-    saldo_moratorios_actual: toNum(raw?.saldo_moratorios_actual ?? raw?.saldoMoratoriosActual, 0),
-    saldoMoratoriosActual: toNum(raw?.saldo_moratorios_actual ?? raw?.saldoMoratoriosActual, 0),
+    saldo_moratorios_actual:
+      firstFinite(raw?.saldo_moratorios_actual, raw?.saldoMoratoriosActual) ?? 0,
+    saldoMoratoriosActual:
+      firstFinite(raw?.saldo_moratorios_actual, raw?.saldoMoratoriosActual) ?? 0,
 
-    saldo_comisiones_actual: toNum(raw?.saldo_comisiones_actual ?? raw?.saldoComisionesActual, 0),
-    saldoComisionesActual: toNum(raw?.saldo_comisiones_actual ?? raw?.saldoComisionesActual, 0),
+    saldo_comisiones_actual:
+      firstFinite(raw?.saldo_comisiones_actual, raw?.saldoComisionesActual) ?? 0,
+    saldoComisionesActual:
+      firstFinite(raw?.saldo_comisiones_actual, raw?.saldoComisionesActual) ?? 0,
 
     saldo_total_actual: saldoTotalActual,
     saldoTotalActual: saldoTotalActual,
 
     disponible_actual: disponibleActual,
-    disponibleActual: disponibleActual,
+    disponibleActual,
     disponible_linea: disponibleActual,
     disponibleLinea: disponibleActual,
 
-    total_dispuesto: toNum(raw?.total_dispuesto ?? raw?.totalDispuesto, 0),
-    totalDispuesto: toNum(raw?.total_dispuesto ?? raw?.totalDispuesto, 0),
+    total_dispuesto: firstFinite(raw?.total_dispuesto, raw?.totalDispuesto) ?? 0,
+    totalDispuesto: firstFinite(raw?.total_dispuesto, raw?.totalDispuesto) ?? 0,
 
     total_amortizado_capital: totalAmortizadoCapital,
     totalAmortizadoCapital: totalAmortizadoCapital,
 
-    total_intereses_cargados: toNum(raw?.total_intereses_cargados ?? raw?.totalInteresesCargados, 0),
-    totalInteresesCargados: toNum(raw?.total_intereses_cargados ?? raw?.totalInteresesCargados, 0),
+    total_intereses_cargados:
+      firstFinite(raw?.total_intereses_cargados, raw?.totalInteresesCargados) ?? 0,
+    totalInteresesCargados:
+      firstFinite(raw?.total_intereses_cargados, raw?.totalInteresesCargados) ?? 0,
 
-    total_intereses_pagados: toNum(raw?.total_intereses_pagados ?? raw?.totalInteresesPagados, 0),
-    totalInteresesPagados: toNum(raw?.total_intereses_pagados ?? raw?.totalInteresesPagados, 0),
+    total_intereses_pagados:
+      firstFinite(raw?.total_intereses_pagados, raw?.totalInteresesPagados) ?? 0,
+    totalInteresesPagados:
+      firstFinite(raw?.total_intereses_pagados, raw?.totalInteresesPagados) ?? 0,
 
-    total_comisiones_cargadas: toNum(raw?.total_comisiones_cargadas ?? raw?.totalComisionesCargadas, 0),
-    totalComisionesCargadas: toNum(raw?.total_comisiones_cargadas ?? raw?.totalComisionesCargadas, 0),
+    total_comisiones_cargadas:
+      firstFinite(raw?.total_comisiones_cargadas, raw?.totalComisionesCargadas) ?? 0,
+    totalComisionesCargadas:
+      firstFinite(raw?.total_comisiones_cargadas, raw?.totalComisionesCargadas) ?? 0,
 
-    total_comisiones_pagadas: toNum(raw?.total_comisiones_pagadas ?? raw?.totalComisionesPagadas, 0),
-    totalComisionesPagadas: toNum(raw?.total_comisiones_pagadas ?? raw?.totalComisionesPagadas, 0),
+    total_comisiones_pagadas:
+      firstFinite(raw?.total_comisiones_pagadas, raw?.totalComisionesPagadas) ?? 0,
+    totalComisionesPagadas:
+      firstFinite(raw?.total_comisiones_pagadas, raw?.totalComisionesPagadas) ?? 0,
 
     monto_pagado_capital: montoPagadoCapital,
     montoPagadoCapital,
@@ -583,9 +660,8 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
 };
 
 const normalizeTransaccion = (raw: any): TransaccionFinanciamiento => {
-  const snapshot = raw?.snapshot_after && typeof raw.snapshot_after === "object"
-    ? raw.snapshot_after
-    : {};
+  const snapshot =
+    raw?.snapshot_after && typeof raw.snapshot_after === "object" ? raw.snapshot_after : {};
 
   return {
     id: asString(raw?.id || raw?._id || ""),
@@ -609,8 +685,14 @@ const normalizeTransaccion = (raw: any): TransaccionFinanciamiento => {
     capital_pagado: toNum(raw?.capital_pagado ?? raw?.monto_capital ?? raw?.montoCapital, 0),
 
     monto_intereses: toNum(raw?.monto_intereses ?? raw?.montoIntereses ?? raw?.interes_pagado, 0),
-    montoIntereses: toNum(raw?.monto_intereses ?? raw?.montoIntereses ?? raw?.interes_pagado, 0),
-    interes_pagado: toNum(raw?.interes_pagado ?? raw?.monto_intereses ?? raw?.montoIntereses, 0),
+    montoIntereses: toNum(
+      raw?.monto_intereses ?? raw?.montoIntereses ?? raw?.interes_pagado,
+      0
+    ),
+    interes_pagado: toNum(
+      raw?.interes_pagado ?? raw?.monto_intereses ?? raw?.montoIntereses,
+      0
+    ),
 
     monto_moratorios: toNum(raw?.monto_moratorios ?? raw?.montoMoratorios, 0),
     montoMoratorios: toNum(raw?.monto_moratorios ?? raw?.montoMoratorios, 0),
@@ -765,14 +847,14 @@ export const useFinanciamientos = () => {
     mutationFn: async (
       financiamiento: Omit<
         Financiamiento,
-        "id" |
-        "_id" |
-        "user_id" |
-        "owner" |
-        "created_at" |
-        "updated_at" |
-        "createdAt" |
-        "updatedAt"
+        | "id"
+        | "_id"
+        | "user_id"
+        | "owner"
+        | "created_at"
+        | "updated_at"
+        | "createdAt"
+        | "updatedAt"
       >
     ) => {
       const json = await apiFetch("/api/financiamientos", {
@@ -825,7 +907,7 @@ export const useFinanciamientos = () => {
         body: JSON.stringify(payload),
       });
 
-      return unwrap<any>(json);
+      return normalizeTransaccion(unwrap<any>(json));
     },
     onSuccess: () => {
       refreshAll();
@@ -885,7 +967,7 @@ export const useFinanciamientos = () => {
         body: JSON.stringify(payload),
       });
 
-      return unwrap<any>(json);
+      return normalizeTransaccion(unwrap<any>(json));
     },
     onSuccess: () => {
       refreshAll();
@@ -950,7 +1032,7 @@ export const useFinanciamientos = () => {
         body: JSON.stringify(body),
       });
 
-      return unwrap<any>(json);
+      return normalizeTransaccion(unwrap<any>(json));
     },
     onSuccess: () => {
       refreshAll();
@@ -1009,7 +1091,7 @@ export const useFinanciamientos = () => {
         body: JSON.stringify(body),
       });
 
-      return unwrap<any>(json);
+      return normalizeTransaccion(unwrap<any>(json));
     },
     onSuccess: () => {
       refreshAll();

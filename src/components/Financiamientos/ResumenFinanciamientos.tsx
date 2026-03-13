@@ -20,7 +20,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-import { useFinanciamientos, type Financiamiento, type TransaccionFinanciamiento } from "@/hooks/useFinanciamientos";
+import {
+  useFinanciamientos,
+  type Financiamiento,
+  type TransaccionFinanciamiento,
+} from "@/hooks/useFinanciamientos";
 import TransaccionesTarjetaCredito from "./TransaccionesTarjetaCredito";
 import TransaccionesFinanciamiento from "./TransaccionesFinanciamiento";
 
@@ -40,8 +44,27 @@ const asText = (v: unknown, fallback = "") => {
   return String(v).trim();
 };
 
-const getTipoUi = (f: Financiamiento) =>
-  String(f.tipo_ui || f.tipoUi || f.tipo_credito || f.tipo || "").toLowerCase();
+const firstFinite = (...values: unknown[]) => {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
+const getTipoUi = (f: Financiamiento) => {
+  const raw = String(f.tipo_ui || f.tipoUi || f.tipo_credito || f.tipo || "").toLowerCase();
+
+  if (["tarjeta_corporativa", "tarjeta_credito", "tarjeta"].includes(raw)) {
+    return "tarjeta_corporativa";
+  }
+
+  if (["revolvente", "linea_credito", "línea_credito", "linea de credito"].includes(raw)) {
+    return "revolvente";
+  }
+
+  return "simple";
+};
 
 const getTipoLabel = (f: Financiamiento) =>
   asText(f.tipo_label || f.tipoLabel) ||
@@ -55,37 +78,38 @@ const getInstitucion = (f: Financiamiento) =>
   f.institucion || f.institucion_financiera || "Sin institución";
 
 const getMontoTotal = (f: Financiamiento) =>
-  toNum(f.monto_total_vista ?? f.montoTotalVista ?? f.monto_total, 0);
+  firstFinite(f.monto_total_vista, f.montoTotalVista, f.monto_total) ?? 0;
 
 const getSaldoActual = (f: Financiamiento) =>
-  toNum(f.saldo_actual_vista ?? f.saldoActualVista ?? f.saldo_actual, 0);
+  firstFinite(f.saldo_actual_vista, f.saldoActualVista, f.saldo_actual) ?? 0;
 
 const getSaldoInicial = (f: Financiamiento) => {
-  const montoTotal = getMontoTotal(f);
-  const saldoActual = getSaldoActual(f);
-  const amortizado = toNum(f.total_amortizado_capital ?? f.totalAmortizadoCapital, 0);
+  const tipoUi = getTipoUi(f);
 
-  return montoTotal > 0 ? montoTotal : saldoActual + amortizado;
+  if (tipoUi === "simple") {
+    return firstFinite(f.monto_original, f.montoOriginal, f.saldo_inicial, getMontoTotal(f)) ?? 0;
+  }
+
+  return getMontoTotal(f);
 };
 
 const getDisponible = (f: Financiamiento) =>
   Math.max(
     0,
-    toNum(
-      f.disponible_linea ??
-        f.disponibleLinea ??
-        f.disponible_actual ??
-        f.disponibleActual,
-      0
-    )
+    firstFinite(
+      f.disponible_linea,
+      f.disponibleLinea,
+      f.disponible_actual,
+      f.disponibleActual
+    ) ?? 0
   );
 
-const getMontoAmortizado = (f: Financiamiento) =>
-  Math.max(
-    0,
-    toNum(f.monto_pagado_capital ?? f.montoPagadoCapital, NaN) ||
-      Math.max(0, getMontoTotal(f) - getSaldoActual(f))
-  );
+const getMontoAmortizado = (f: Financiamiento) => {
+  const directo = firstFinite(f.monto_pagado_capital, f.montoPagadoCapital);
+  if (directo !== undefined) return Math.max(0, directo);
+
+  return Math.max(0, getMontoTotal(f) - getSaldoActual(f));
+};
 
 const getFecha = (tx: TransaccionFinanciamiento) => {
   const raw = tx.fecha || tx.created_at || tx.createdAt;
@@ -197,8 +221,8 @@ const FinancingAccordionHeader = ({
           <p className="font-semibold">{midValue}</p>
         </div>
         <div className="rounded-xl border bg-slate-50 px-3 py-2 text-left">
-          <p className="text-xs text-muted-foreground">{rightLabel}</p>
           <p className={`font-semibold ${rightValueClassName}`}>{rightValue}</p>
+          <p className="text-xs text-muted-foreground">{rightLabel}</p>
         </div>
       </div>
     </div>
@@ -219,9 +243,7 @@ const ResumenFinanciamientos = () => {
   } = useMemo(() => {
     const tarjetas = financiamientos.filter((f) => getTipoUi(f) === "tarjeta_corporativa");
     const revolventes = financiamientos.filter((f) => getTipoUi(f) === "revolvente");
-    const simples = financiamientos.filter(
-      (f) => getTipoUi(f) !== "tarjeta_corporativa" && getTipoUi(f) !== "revolvente"
-    );
+    const simples = financiamientos.filter((f) => getTipoUi(f) === "simple");
 
     const totalAmortizaciones = transacciones.reduce((sum, t) => {
       const tipo = String(t.tipo || t.tipo_transaccion || "").toLowerCase();
@@ -229,13 +251,12 @@ const ResumenFinanciamientos = () => {
 
       return (
         sum +
-        toNum(
-          t.monto_capital ??
-            t.montoCapital ??
-            t.capital_pagado ??
-            t.monto,
-          0
-        )
+        (firstFinite(
+          t.monto_capital,
+          t.montoCapital,
+          t.capital_pagado,
+          t.monto
+        ) ?? 0)
       );
     }, 0);
 
@@ -245,24 +266,23 @@ const ResumenFinanciamientos = () => {
       if (tipo === "pago_intereses") {
         return (
           sum +
-          toNum(
-            t.monto_intereses ??
-              t.montoIntereses ??
-              t.interes_pagado ??
-              t.monto,
-            0
-          )
+          (firstFinite(
+            t.monto_intereses,
+            t.montoIntereses,
+            t.interes_pagado,
+            t.monto
+          ) ?? 0)
         );
       }
 
-      return sum + toNum(t.interes_pagado, 0);
+      return sum;
     }, 0);
 
     const totalCargos = transacciones.reduce((sum, t) => {
       const tipo = String(t.tipo || t.tipo_transaccion || "").toLowerCase();
 
       if (tipo === "cargo_intereses") {
-        return sum + toNum(t.monto_intereses ?? t.montoIntereses ?? t.monto, 0);
+        return sum + (firstFinite(t.monto_intereses, t.montoIntereses, t.monto) ?? 0);
       }
 
       if (tipo === "cargo_comision" || tipo === "cargo_moratorio" || tipo === "cargo_interes") {
@@ -300,12 +320,17 @@ const ResumenFinanciamientos = () => {
     );
   }
 
+  const totalAmortizadoKpi =
+    totalAmortizaciones > 0
+      ? totalAmortizaciones
+      : toNum(resumen?.total_amortizado_capital, 0);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Total Amortizado"
-          value={money(totalAmortizaciones || resumen?.total_amortizado_capital || 0)}
+          value={money(totalAmortizadoKpi)}
           subtitle="Capital pagado acumulado"
           icon={TrendingUp}
           valueClassName="text-emerald-600"
@@ -329,7 +354,7 @@ const ResumenFinanciamientos = () => {
 
         <KpiCard
           title="Saldo Total Actual"
-          value={money(resumen?.saldo_total_actual || 0)}
+          value={money(toNum(resumen?.saldo_total_actual, 0))}
           subtitle="Saldo vigente del módulo"
           icon={Wallet}
         />

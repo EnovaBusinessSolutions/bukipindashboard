@@ -9,10 +9,10 @@ import {
   Eye,
   TrendingUp,
   Wallet,
-  ReceiptText,
   XCircle,
 } from "lucide-react";
 
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -31,15 +31,26 @@ type TxTarjeta = {
   id: string;
   _id?: string;
   fecha?: string;
+  created_at?: string;
+  createdAt?: string;
+
   descripcion?: string;
   monto?: number;
+
   tipo?: string;
+  tipoTransaccion?: string;
+  tipo_transaccion?: string;
+
   proveedor?: string | null;
 
-  tipoTransaccion?: string;
   estado?: string;
+  estatus?: string;
+
   fechaCancelacion?: string | null;
+  fecha_cancelacion?: string | null;
+
   motivoCancelacion?: string | null;
+  motivo_cancelacion?: string | null;
 
   detalle?: any;
   asiento?: any;
@@ -47,24 +58,6 @@ type TxTarjeta = {
 
 const API_TARJETA_TX = (financiamientoId: string) =>
   `/api/financiamientos/${encodeURIComponent(financiamientoId)}/tarjeta/transacciones`;
-
-async function fetchJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: "include" });
-  const text = await res.text();
-
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
-
-  if (!res.ok) {
-    throw new Error(json?.error || json?.message || `Error HTTP ${res.status}`);
-  }
-
-  return (json?.data ?? json) as T;
-}
 
 const toNum = (v: unknown, def = 0) => {
   const n = Number(v);
@@ -88,6 +81,9 @@ const parseSafeDate = (value?: string | null) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
+const getFechaRaw = (tx: TxTarjeta) =>
+  tx.fecha || tx.created_at || tx.createdAt || null;
+
 const formatDateSafe = (value?: string | null, pattern = "dd MMM yyyy") => {
   const d = parseSafeDate(value);
   if (!d) return "-";
@@ -95,10 +91,10 @@ const formatDateSafe = (value?: string | null, pattern = "dd MMM yyyy") => {
 };
 
 const getTipo = (tx: TxTarjeta) =>
-  String(tx.tipo || tx.tipoTransaccion || "").toLowerCase();
+  String(tx.tipo || tx.tipoTransaccion || tx.tipo_transaccion || "").toLowerCase();
 
 const getEstado = (tx: TxTarjeta) =>
-  String(tx.estado || "activo").toLowerCase();
+  String(tx.estado || tx.estatus || "activo").toLowerCase();
 
 const getMonto = (tx: TxTarjeta) =>
   toNum(tx.monto, 0);
@@ -124,6 +120,41 @@ const getMetodoPago = (tx: TxTarjeta) =>
 
 const getComentarios = (tx: TxTarjeta) =>
   asText(tx.detalle?.comentarios || tx.detalle?.comentario || "");
+
+const getFechaCancelacion = (tx: TxTarjeta) =>
+  tx.fechaCancelacion || tx.fecha_cancelacion || null;
+
+const getMotivoCancelacion = (tx: TxTarjeta) =>
+  tx.motivoCancelacion || tx.motivo_cancelacion || null;
+
+const normalizeTxTarjeta = (raw: any): TxTarjeta => ({
+  id: asText(raw?.id || raw?._id),
+  _id: asText(raw?._id) || undefined,
+  fecha: raw?.fecha || raw?.created_at || raw?.createdAt || undefined,
+  created_at: raw?.created_at || undefined,
+  createdAt: raw?.createdAt || undefined,
+
+  descripcion: asText(raw?.descripcion),
+  monto: toNum(raw?.monto, 0),
+
+  tipo: asText(raw?.tipo || raw?.tipo_transaccion || raw?.tipoTransaccion),
+  tipoTransaccion: asText(raw?.tipoTransaccion || raw?.tipo_transaccion || raw?.tipo),
+  tipo_transaccion: asText(raw?.tipo_transaccion || raw?.tipoTransaccion || raw?.tipo),
+
+  proveedor: raw?.proveedor ?? null,
+
+  estado: asText(raw?.estado || raw?.estatus || "activo"),
+  estatus: asText(raw?.estatus || raw?.estado || "activo"),
+
+  fechaCancelacion: raw?.fechaCancelacion || raw?.fecha_cancelacion || null,
+  fecha_cancelacion: raw?.fecha_cancelacion || raw?.fechaCancelacion || null,
+
+  motivoCancelacion: raw?.motivoCancelacion || raw?.motivo_cancelacion || null,
+  motivo_cancelacion: raw?.motivo_cancelacion || raw?.motivoCancelacion || null,
+
+  detalle: raw?.detalle || {},
+  asiento: raw?.asiento || null,
+});
 
 const getTipoLabel = (tipoRaw: string) => {
   const tipo = String(tipoRaw || "").toLowerCase();
@@ -180,6 +211,13 @@ const getImpactoLabel = (tx: TxTarjeta) => {
 const getCuentasAfectadas = (tx: TxTarjeta, nombreTarjeta: string) => {
   const tipo = getTipo(tx);
   const metodoPago = String(getMetodoPago(tx)).toLowerCase();
+
+  if (tx.asiento?.detalle_asientos?.length) {
+    return {
+      cargo: "Asiento contable real disponible",
+      abono: "Ver detalle del asiento",
+    };
+  }
 
   if (tipo === "egreso" || tipo === "capex" || tipo === "compra") {
     return {
@@ -279,7 +317,9 @@ const TransaccionesTarjetaCredito = ({
     queryKey: ["transacciones-tarjeta", financiamientoId],
     enabled: !!financiamientoId,
     queryFn: async () => {
-      return await fetchJSON<TxTarjeta[]>(API_TARJETA_TX(financiamientoId));
+      const json = await apiFetch(API_TARJETA_TX(financiamientoId), { method: "GET" });
+      const raw = (json as any)?.data ?? json;
+      return Array.isArray(raw) ? raw.map(normalizeTxTarjeta) : [];
     },
   });
 
@@ -292,20 +332,17 @@ const TransaccionesTarjetaCredito = ({
   const porcentajeUso = limiteCredito > 0 ? (saldoActual / limiteCredito) * 100 : 0;
 
   const resumen = useMemo(() => {
-    const cargosCancelados =
-      transacciones
-        .filter((t) => getEstado(t) === "cancelado" && ["egreso", "capex", "compra"].includes(getTipo(t)))
-        .reduce((sum, t) => sum + getMonto(t), 0) || 0;
+    const cargosCancelados = transacciones
+      .filter((t) => getEstado(t) === "cancelado" && ["egreso", "capex", "compra"].includes(getTipo(t)))
+      .reduce((sum, t) => sum + getMonto(t), 0);
 
-    const pagosAplicados =
-      transacciones
-        .filter((t) => getEstado(t) !== "cancelado" && getTipo(t) === "amortizacion")
-        .reduce((sum, t) => sum + getMonto(t), 0) || 0;
+    const pagosAplicados = transacciones
+      .filter((t) => getEstado(t) !== "cancelado" && getTipo(t) === "amortizacion")
+      .reduce((sum, t) => sum + getMonto(t), 0);
 
-    const intereses =
-      transacciones
-        .filter((t) => getEstado(t) !== "cancelado" && ["cargo_intereses", "cargo_interes"].includes(getTipo(t)))
-        .reduce((sum, t) => sum + getMonto(t), 0) || 0;
+    const intereses = transacciones
+      .filter((t) => getEstado(t) !== "cancelado" && ["cargo_intereses", "cargo_interes"].includes(getTipo(t)))
+      .reduce((sum, t) => sum + getMonto(t), 0);
 
     return {
       cargosCancelados,
@@ -419,7 +456,7 @@ const TransaccionesTarjetaCredito = ({
 
                 <TableBody>
                   {transacciones.map((t) => {
-                    const fecha = parseSafeDate(t.fecha);
+                    const fecha = parseSafeDate(getFechaRaw(t));
                     const tipo = getTipo(t);
                     const estado = getEstado(t);
                     const monto = getMonto(t);
@@ -500,16 +537,16 @@ const TransaccionesTarjetaCredito = ({
                         Transacción Cancelada
                       </h4>
 
-                      {parseSafeDate(selectedTransaction.fechaCancelacion) && (
+                      {parseSafeDate(getFechaCancelacion(selectedTransaction)) && (
                         <p className="mt-1 text-sm text-red-700 dark:text-red-300">
                           Esta transacción fue cancelada el{" "}
-                          {formatDateSafe(selectedTransaction.fechaCancelacion, "dd 'de' MMMM 'de' yyyy")}
+                          {formatDateSafe(getFechaCancelacion(selectedTransaction), "dd 'de' MMMM 'de' yyyy")}
                         </p>
                       )}
 
-                      {selectedTransaction.motivoCancelacion && (
+                      {getMotivoCancelacion(selectedTransaction) && (
                         <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                          <strong>Motivo:</strong> {selectedTransaction.motivoCancelacion}
+                          <strong>Motivo:</strong> {getMotivoCancelacion(selectedTransaction)}
                         </p>
                       )}
 
@@ -530,7 +567,7 @@ const TransaccionesTarjetaCredito = ({
                         <div>
                           <p className="text-sm text-muted-foreground">Fecha</p>
                           <p className="font-medium">
-                            {formatDateSafe(selectedTransaction.fecha, "dd 'de' MMMM 'de' yyyy")}
+                            {formatDateSafe(getFechaRaw(selectedTransaction), "dd 'de' MMMM 'de' yyyy")}
                           </p>
                         </div>
                       </div>
