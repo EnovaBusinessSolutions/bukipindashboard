@@ -1,4 +1,23 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Building2,
+  Edit,
+  Trash2,
+  Plus,
+  Search,
+  User,
+  Phone,
+  Mail,
+  Globe,
+  Landmark,
+  BadgeDollarSign,
+  Activity,
+  Percent,
+  ChevronRight,
+} from "lucide-react";
+
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,9 +40,11 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Trash2, Plus, Search, User, Phone, Mail } from "lucide-react";
-import { useInstitucionesFinancieras, InstitucionFinanciera } from "@/hooks/useInstitucionesFinancieras";
-import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useInstitucionesFinancieras,
+  InstitucionFinanciera,
+} from "@/hooks/useInstitucionesFinancieras";
 import { useToast } from "@/hooks/use-toast";
 
 const FINANCIAMIENTOS_ENDPOINT = "/api/financiamientos";
@@ -34,8 +55,11 @@ type Financiamiento = {
   nombre: string;
   tipo?: string;
   tipo_credito?: string;
+  tipo_ui?: string;
+  tipoUi?: string;
   estatus?: string;
   estado?: string;
+  estado_ui?: string;
   institucion?: string;
   institucion_id?: string | null;
   institucionId?: string | null;
@@ -46,11 +70,15 @@ type Financiamiento = {
   linea_credito?: number;
   lineaCredito?: number;
   monto_total?: number;
+  monto_total_vista?: number;
+  montoTotalVista?: number;
   saldo_total_actual?: number;
   saldoTotalActual?: number;
   saldo_capital_actual?: number;
   saldoCapitalActual?: number;
   saldo_actual?: number;
+  saldo_actual_vista?: number;
+  saldoActualVista?: number;
   tasa_interes_anual?: number;
   tasaInteresAnual?: number;
   tasa_interes?: number;
@@ -86,43 +114,38 @@ const INITIAL_FORM: FormState = {
   notas: "",
 };
 
-async function apiJSON<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: {
-      ...(init?.headers || {}),
-    },
-  });
-
-  const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    // ignore
-  }
-
-  if (!res.ok) {
-    const msg = json?.error || json?.message || `Error HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-
-  return (json?.data ?? json) as T;
-}
-
 const toNum = (v: unknown, def = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
 };
 
-const getFinStatus = (f: Financiamiento) => String(f.estatus || f.estado || "").toLowerCase();
+const asText = (v: unknown, fallback = "") => {
+  if (v === undefined || v === null) return fallback;
+  return String(v).trim();
+};
+
+const firstFinite = (...values: unknown[]) => {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
+const money = (value: number) =>
+  `$${Number(value || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const getFinStatus = (f: Financiamiento) =>
+  String(f.estado_ui || f.estatus || f.estado || "").toLowerCase();
 
 const getFinTipo = (f: Financiamiento) => {
-  const raw = String(f.tipo || f.tipo_credito || "").toLowerCase();
-  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa") return "tarjeta_corporativa";
-  if (raw === "linea_credito" || raw === "revolvente") return "revolvente";
-  if (raw === "credito_simple" || raw === "simple" || raw === "prestamo") return "simple";
+  const raw = String(f.tipo_ui || f.tipoUi || f.tipo || f.tipo_credito || "").toLowerCase();
+  if (["tarjeta_credito", "tarjeta_corporativa", "tarjeta"].includes(raw)) return "tarjeta_corporativa";
+  if (["linea_credito", "revolvente", "linea de credito"].includes(raw)) return "revolvente";
+  if (["credito_simple", "simple", "prestamo"].includes(raw)) return "simple";
   return raw || "otro";
 };
 
@@ -146,17 +169,99 @@ const getFinInstitucionId = (f: Financiamiento) =>
 
 const getFinMontoBase = (f: Financiamiento) => {
   const tipo = getFinTipo(f);
+
   if (tipo === "revolvente" || tipo === "tarjeta_corporativa") {
-    return toNum(f.linea_credito ?? f.lineaCredito ?? f.monto_total, 0);
+    return (
+      firstFinite(
+        f.linea_credito,
+        f.lineaCredito,
+        f.monto_total_vista,
+        f.montoTotalVista,
+        f.monto_total
+      ) ?? 0
+    );
   }
-  return toNum(f.monto_original ?? f.montoOriginal ?? f.monto_total, 0);
+
+  return (
+    firstFinite(
+      f.monto_original,
+      f.montoOriginal,
+      f.monto_total_vista,
+      f.montoTotalVista,
+      f.monto_total
+    ) ?? 0
+  );
 };
 
 const getFinSaldo = (f: Financiamiento) =>
-  toNum(f.saldo_total_actual ?? f.saldoTotalActual ?? f.saldo_capital_actual ?? f.saldoCapitalActual ?? f.saldo_actual, 0);
+  firstFinite(
+    f.saldo_total_actual,
+    f.saldoTotalActual,
+    f.saldo_capital_actual,
+    f.saldoCapitalActual,
+    f.saldo_actual_vista,
+    f.saldoActualVista,
+    f.saldo_actual
+  ) ?? 0;
 
 const getFinTasa = (f: Financiamiento) =>
-  toNum(f.tasa_interes_anual ?? f.tasaInteresAnual ?? f.tasa_interes, 0);
+  firstFinite(f.tasa_interes_anual, f.tasaInteresAnual, f.tasa_interes) ?? 0;
+
+const getInstitucionMeta = (inst: InstitucionFinanciera) =>
+  [inst.alias, inst.codigo, inst.tipo].filter(Boolean).join(" • ");
+
+const KpiCard = ({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  accentClass = "text-slate-900",
+  iconWrapClass = "bg-slate-100",
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: React.ElementType;
+  accentClass?: string;
+  iconWrapClass?: string;
+}) => (
+  <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 pt-5">
+      <div className="space-y-1">
+        <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
+        <div className={`text-3xl font-semibold tracking-tight ${accentClass}`}>{value}</div>
+        <CardDescription className="text-xs">{subtitle}</CardDescription>
+      </div>
+      <div className={`rounded-xl p-3 ${iconWrapClass}`}>
+        <Icon className="h-5 w-5 text-slate-700" />
+      </div>
+    </CardHeader>
+  </Card>
+);
+
+const SectionTitle = ({
+  title,
+  description,
+  right,
+}: {
+  title: string;
+  description?: string;
+  right?: React.ReactNode;
+}) => (
+  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="min-w-0">
+      <h3 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h3>
+      {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+    </div>
+    {right ? <div className="flex flex-wrap items-center gap-2">{right}</div> : null}
+  </div>
+);
+
+const EmptyState = ({ text }: { text: string }) => (
+  <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+    {text}
+  </div>
+);
 
 export default function CatalogoAcreedores() {
   const { instituciones, crearInstitucion, actualizarInstitucion, eliminarInstitucion } =
@@ -173,31 +278,51 @@ export default function CatalogoAcreedores() {
   const { data: financiamientos = [], isLoading: isLoadingFin } = useQuery({
     queryKey: ["financiamientos-por-institucion"],
     queryFn: async () => {
-      return await apiJSON<Financiamiento[]>(FINANCIAMIENTOS_ENDPOINT);
+      const json = await apiFetch(FINANCIAMIENTOS_ENDPOINT, { method: "GET" });
+      const raw = (json as any)?.data ?? json;
+      return Array.isArray(raw) ? (raw as Financiamiento[]) : [];
     },
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const institucionesActivas = instituciones.length;
-  const creditosActivos = financiamientos.filter((f) => getFinStatus(f) === "activo").length || 0;
-  const montoTotalFinanciado =
-    financiamientos.reduce((acc, f) => acc + getFinMontoBase(f), 0) || 0;
 
-  const tasaPromedio =
-    financiamientos.length > 0
-      ? financiamientos.reduce((acc, f) => acc + getFinTasa(f), 0) / financiamientos.length
-      : 0;
+  const financiamientosActivos = useMemo(
+    () => financiamientos.filter((f) => getFinStatus(f) === "activo"),
+    [financiamientos]
+  );
+
+  const creditosActivos = financiamientosActivos.length;
+
+  const montoTotalFinanciado = useMemo(
+    () => financiamientos.reduce((acc, f) => acc + getFinMontoBase(f), 0),
+    [financiamientos]
+  );
+
+  const tasaPromedio = useMemo(() => {
+    if (financiamientos.length === 0) return 0;
+    return financiamientos.reduce((acc, f) => acc + getFinTasa(f), 0) / financiamientos.length;
+  }, [financiamientos]);
 
   const institucionesFiltradas = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return instituciones;
+
     return instituciones.filter((inst) => {
       const haystack = [
         inst.nombre,
         inst.alias,
         inst.codigo,
         inst.contacto_nombre,
+        inst.contactoNombre,
+        inst.ejecutivo_nombre,
         inst.telefono,
+        inst.telefono_principal,
         inst.email,
+        inst.email_principal,
       ]
         .filter(Boolean)
         .join(" ")
@@ -246,44 +371,35 @@ export default function CatalogoAcreedores() {
     try {
       if (!formData.nombre.trim()) {
         toast({
-          title: "❌ Falta el nombre",
+          title: "Falta el nombre",
           description: "El nombre de la institución es obligatorio.",
           variant: "destructive",
         });
         return;
       }
 
+      const payload = {
+        nombre: formData.nombre.trim(),
+        alias: formData.alias.trim(),
+        tipo: formData.tipo.trim(),
+        categoria: formData.categoria.trim(),
+        codigo: formData.codigo.trim(),
+        descripcion: formData.descripcion.trim(),
+        telefono: formData.telefono.trim(),
+        email: formData.email.trim(),
+        sitio_web: formData.sitio_web.trim(),
+        contacto_nombre: formData.contacto_nombre.trim(),
+        contacto_puesto: formData.contacto_puesto.trim(),
+        notas: formData.notas.trim(),
+      };
+
       if (editingInstitucion) {
         await actualizarInstitucion.mutateAsync({
           id: editingInstitucion.id,
-          nombre: formData.nombre.trim(),
-          alias: formData.alias.trim(),
-          tipo: formData.tipo.trim(),
-          categoria: formData.categoria.trim(),
-          codigo: formData.codigo.trim(),
-          descripcion: formData.descripcion.trim(),
-          telefono: formData.telefono.trim(),
-          email: formData.email.trim(),
-          sitio_web: formData.sitio_web.trim(),
-          contacto_nombre: formData.contacto_nombre.trim(),
-          contacto_puesto: formData.contacto_puesto.trim(),
-          notas: formData.notas.trim(),
+          ...payload,
         });
       } else {
-        await crearInstitucion.mutateAsync({
-          nombre: formData.nombre.trim(),
-          alias: formData.alias.trim(),
-          tipo: formData.tipo.trim(),
-          categoria: formData.categoria.trim(),
-          codigo: formData.codigo.trim(),
-          descripcion: formData.descripcion.trim(),
-          telefono: formData.telefono.trim(),
-          email: formData.email.trim(),
-          sitio_web: formData.sitio_web.trim(),
-          contacto_nombre: formData.contacto_nombre.trim(),
-          contacto_puesto: formData.contacto_puesto.trim(),
-          notas: formData.notas.trim(),
-        });
+        await crearInstitucion.mutateAsync(payload);
       }
 
       setShowDialog(false);
@@ -291,7 +407,7 @@ export default function CatalogoAcreedores() {
       setEditingInstitucion(null);
     } catch (error: any) {
       toast({
-        title: "❌ Error al guardar",
+        title: "Error al guardar",
         description: error?.message || "Error inesperado",
         variant: "destructive",
       });
@@ -308,205 +424,242 @@ export default function CatalogoAcreedores() {
     return financiamientos.filter((f) => getFinInstitucionId(f) === institucionId);
   };
 
+  const selectedInstitucionFinanciamientos = selectedInstitucion
+    ? getFinanciamientosByInstitucion(selectedInstitucion.id)
+    : [];
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Instituciones Activas</CardDescription>
-            <CardTitle className="text-3xl">{institucionesActivas}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Créditos Activos</CardDescription>
-            <CardTitle className="text-3xl">{creditosActivos}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Monto Total Financiado</CardDescription>
-            <CardTitle className="text-3xl">
-              ${montoTotalFinanciado.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Tasa Promedio</CardDescription>
-            <CardTitle className="text-3xl">{tasaPromedio.toFixed(2)}%</CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <SectionTitle
+          title="Catálogo de Acreedores Financieros"
+          description="Gestiona instituciones financieras, contactos clave y la relación de créditos asociados desde una sola vista."
+          right={
+            <Button
+              onClick={() => handleOpenDialog()}
+              className="rounded-xl bg-[#0b4a8b] hover:bg-[#083866]"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Institución
+            </Button>
+          }
+        />
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar institución..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          title="Instituciones activas"
+          value={String(institucionesActivas)}
+          subtitle="Acreedores registrados"
+          icon={Landmark}
+          accentClass="text-slate-900"
+          iconWrapClass="bg-sky-50"
+        />
+
+        <KpiCard
+          title="Créditos activos"
+          value={String(creditosActivos)}
+          subtitle="Instrumentos vigentes"
+          icon={Activity}
+          accentClass="text-slate-900"
+          iconWrapClass="bg-slate-100"
+        />
+
+        <KpiCard
+          title="Monto total financiado"
+          value={money(montoTotalFinanciado)}
+          subtitle="Capital o línea registrada"
+          icon={BadgeDollarSign}
+          accentClass="text-[#0b4a8b]"
+          iconWrapClass="bg-blue-50"
+        />
+
+        <KpiCard
+          title="Tasa promedio"
+          value={`${tasaPromedio.toFixed(2)}%`}
+          subtitle="Promedio del portafolio"
+          icon={Percent}
+          accentClass="text-emerald-600"
+          iconWrapClass="bg-emerald-50"
+        />
+      </div>
+
+      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="pb-4">
+          <SectionTitle
+            title="Listado de instituciones"
+            description="Consulta, busca y administra acreedores financieros vinculados a tus financiamientos."
+            right={
+              <div className="relative w-full min-w-[260px] max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="Buscar institución, alias, código o contacto..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="rounded-xl border-slate-200 pl-10"
+                />
+              </div>
+            }
           />
-        </div>
-
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Institución
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Catálogo de Acreedores Financieros</CardTitle>
-          <CardDescription>Gestiona las instituciones financieras con las que trabajas</CardDescription>
         </CardHeader>
 
         <CardContent>
           {isLoadingFin ? (
-            <div className="text-sm text-muted-foreground">Cargando financiamientos…</div>
+            <div className="space-y-3">
+              <Skeleton className="h-16 w-full rounded-xl" />
+              <Skeleton className="h-16 w-full rounded-xl" />
+              <Skeleton className="h-16 w-full rounded-xl" />
+            </div>
+          ) : institucionesFiltradas.length === 0 ? (
+            <EmptyState text="No se encontraron instituciones con ese criterio." />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Institución</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Canales</TableHead>
-                  <TableHead className="text-center">Créditos Activos</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                    <TableHead className="h-12">Institución</TableHead>
+                    <TableHead>Contacto</TableHead>
+                    <TableHead>Canales</TableHead>
+                    <TableHead className="text-center">Créditos Activos</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
 
-              <TableBody>
-                {institucionesFiltradas.map((institucion) => {
-                  const creditosCount = getCreditosCount(institucion.id);
+                <TableBody>
+                  {institucionesFiltradas.map((institucion) => {
+                    const creditosCount = getCreditosCount(institucion.id);
+                    const meta = getInstitucionMeta(institucion);
 
-                  return (
-                    <TableRow
-                      key={institucion.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelectedInstitucion(institucion)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={institucion.logo_url || undefined} />
-                            <AvatarFallback>
-                              {institucion.nombre?.[0] ? institucion.nombre[0].toUpperCase() : <Building2 className="h-5 w-5" />}
-                            </AvatarFallback>
-                          </Avatar>
+                    return (
+                      <TableRow
+                        key={institucion.id}
+                        className="cursor-pointer transition hover:bg-slate-50/70"
+                        onClick={() => setSelectedInstitucion(institucion)}
+                      >
+                        <TableCell className="py-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-11 w-11 rounded-xl border bg-white">
+                              <AvatarImage src={institucion.logo_url || undefined} />
+                              <AvatarFallback className="rounded-xl bg-slate-100 text-slate-700">
+                                {institucion.nombre?.[0] ? (
+                                  institucion.nombre[0].toUpperCase()
+                                ) : (
+                                  <Building2 className="h-5 w-5" />
+                                )}
+                              </AvatarFallback>
+                            </Avatar>
 
-                          <div>
-                            <p className="font-medium">{institucion.nombre}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {[institucion.alias, institucion.codigo, institucion.tipo].filter(Boolean).join(" • ") || "Sin metadata"}
-                            </p>
-                            {institucion.sitio_web && (
-                              <a
-                                href={institucion.sitio_web}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-primary hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                Sitio web →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-
-                      <TableCell>
-                        {institucion.contacto_nombre || institucion.ejecutivo_nombre ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm">
-                                {institucion.contacto_nombre ||
-                                  institucion.contactoNombre ||
-                                  institucion.ejecutivo_nombre}
-                              </span>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-slate-900">{institucion.nombre}</p>
+                              <p className="truncate text-xs text-slate-500">
+                                {meta || "Sin metadata"}
+                              </p>
+                              {institucion.sitio_web && (
+                                <a
+                                  href={institucion.sitio_web}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-1 inline-flex items-center gap-1 text-xs text-[#0b4a8b] hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Globe className="h-3 w-3" />
+                                  Sitio web
+                                </a>
+                              )}
                             </div>
-                            {(institucion.contacto_puesto || institucion.contactoPuesto) && (
-                              <div className="text-xs text-muted-foreground">
-                                {institucion.contacto_puesto || institucion.contactoPuesto}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="py-4">
+                          {institucion.contacto_nombre ||
+                          institucion.contactoNombre ||
+                          institucion.ejecutivo_nombre ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-sm text-slate-800">
+                                <User className="h-3.5 w-3.5 text-slate-400" />
+                                <span>
+                                  {institucion.contacto_nombre ||
+                                    institucion.contactoNombre ||
+                                    institucion.ejecutivo_nombre}
+                                </span>
+                              </div>
+
+                              {(institucion.contacto_puesto || institucion.contactoPuesto) && (
+                                <div className="text-xs text-slate-500">
+                                  {institucion.contacto_puesto || institucion.contactoPuesto}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-slate-400">Sin asignar</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="py-4">
+                          <div className="space-y-1">
+                            {(institucion.telefono || institucion.telefono_principal) && (
+                              <div className="flex items-center gap-2 text-xs text-slate-700">
+                                <Phone className="h-3.5 w-3.5 text-slate-400" />
+                                <span>{institucion.telefono || institucion.telefono_principal}</span>
                               </div>
                             )}
+                            {(institucion.email || institucion.email_principal) && (
+                              <div className="flex items-center gap-2 text-xs text-slate-700">
+                                <Mail className="h-3.5 w-3.5 text-slate-400" />
+                                <span>{institucion.email || institucion.email_principal}</span>
+                              </div>
+                            )}
+                            {!(institucion.telefono || institucion.telefono_principal || institucion.email || institucion.email_principal) && (
+                              <span className="text-sm text-slate-400">Sin canales</span>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Sin asignar</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
 
-                      <TableCell>
-                        <div className="space-y-1">
-                          {(institucion.telefono || institucion.telefono_principal) && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-xs">
-                                {institucion.telefono || institucion.telefono_principal}
-                              </span>
-                            </div>
-                          )}
-                          {(institucion.email || institucion.email_principal) && (
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-xs">
-                                {institucion.email || institucion.email_principal}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="text-center">
-                        <Badge variant={creditosCount > 0 ? "default" : "outline"}>
-                          {creditosCount}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDialog(institucion);
-                            }}
+                        <TableCell className="py-4 text-center">
+                          <Badge
+                            variant={creditosCount > 0 ? "default" : "outline"}
+                            className={creditosCount > 0 ? "bg-[#0b4a8b] hover:bg-[#0b4a8b]" : ""}
                           >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                            {creditosCount}
+                          </Badge>
+                        </TableCell>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              eliminarInstitucion.mutate(institucion.id);
-                            }}
-                            disabled={creditosCount > 0}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        <TableCell className="py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenDialog(institucion);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
 
-                {institucionesFiltradas.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      No se encontraron instituciones
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-xl text-rose-600 hover:text-rose-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                eliminarInstitucion.mutate(institucion.id);
+                              }}
+                              disabled={creditosCount > 0}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+
+                            <ChevronRight className="ml-1 h-4 w-4 text-slate-300" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -521,25 +674,28 @@ export default function CatalogoAcreedores() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{editingInstitucion ? "Editar Institución" : "Nueva Institución"}</DialogTitle>
+            <DialogTitle className="text-xl">
+              {editingInstitucion ? "Editar Institución" : "Nueva Institución"}
+            </DialogTitle>
             <DialogDescription>
               {editingInstitucion
-                ? "Modifica los datos de la institución financiera"
-                : "Registra una nueva institución financiera"}
+                ? "Actualiza la información operativa y comercial del acreedor."
+                : "Registra una nueva institución financiera para vincularla a créditos y líneas."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre de la Institución *</Label>
+                <Label htmlFor="nombre">Nombre de la institución *</Label>
                 <Input
                   id="nombre"
                   value={formData.nombre}
                   onChange={(e) => setFormData((p) => ({ ...p, nombre: e.target.value }))}
                   placeholder="Ej: BBVA"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -550,11 +706,12 @@ export default function CatalogoAcreedores() {
                   value={formData.alias}
                   onChange={(e) => setFormData((p) => ({ ...p, alias: e.target.value }))}
                   placeholder="Ej: BBVA Empresas"
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="tipo">Tipo</Label>
                 <Input
@@ -562,6 +719,7 @@ export default function CatalogoAcreedores() {
                   value={formData.tipo}
                   onChange={(e) => setFormData((p) => ({ ...p, tipo: e.target.value }))}
                   placeholder="banco"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -572,6 +730,7 @@ export default function CatalogoAcreedores() {
                   value={formData.categoria}
                   onChange={(e) => setFormData((p) => ({ ...p, categoria: e.target.value }))}
                   placeholder="financiero"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -582,6 +741,7 @@ export default function CatalogoAcreedores() {
                   value={formData.codigo}
                   onChange={(e) => setFormData((p) => ({ ...p, codigo: e.target.value }))}
                   placeholder="BBVA"
+                  className="rounded-xl"
                 />
               </div>
             </div>
@@ -592,18 +752,21 @@ export default function CatalogoAcreedores() {
                 id="descripcion"
                 value={formData.descripcion}
                 onChange={(e) => setFormData((p) => ({ ...p, descripcion: e.target.value }))}
-                rows={2}
+                rows={3}
+                className="rounded-xl"
+                placeholder="Descripción interna del acreedor, convenios, enfoque comercial, etc."
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="contacto_nombre">Contacto</Label>
+                <Label htmlFor="contacto_nombre">Contacto principal</Label>
                 <Input
                   id="contacto_nombre"
                   value={formData.contacto_nombre}
                   onChange={(e) => setFormData((p) => ({ ...p, contacto_nombre: e.target.value }))}
                   placeholder="Nombre del ejecutivo"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -614,53 +777,60 @@ export default function CatalogoAcreedores() {
                   value={formData.contacto_puesto}
                   onChange={(e) => setFormData((p) => ({ ...p, contacto_puesto: e.target.value }))}
                   placeholder="Ej: Ejecutivo PyME"
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="telefono">Teléfono</Label>
                 <Input
                   id="telefono"
                   value={formData.telefono}
                   onChange={(e) => setFormData((p) => ({ ...p, telefono: e.target.value }))}
+                  className="rounded-xl"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Correo electrónico</Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="sitio_web">Sitio Web</Label>
+              <Label htmlFor="sitio_web">Sitio web</Label>
               <Input
                 id="sitio_web"
                 value={formData.sitio_web}
                 onChange={(e) => setFormData((p) => ({ ...p, sitio_web: e.target.value }))}
+                className="rounded-xl"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notas">Notas</Label>
+              <Label htmlFor="notas">Notas internas</Label>
               <Textarea
                 id="notas"
                 value={formData.notas}
                 onChange={(e) => setFormData((p) => ({ ...p, notas: e.target.value }))}
-                rows={3}
+                rows={4}
+                className="rounded-xl"
+                placeholder="Condiciones preferenciales, observaciones, proceso de atención, etc."
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
+                className="rounded-xl"
                 onClick={() => {
                   setShowDialog(false);
                   resetForm();
@@ -671,10 +841,11 @@ export default function CatalogoAcreedores() {
               </Button>
 
               <Button
+                className="rounded-xl bg-[#0b4a8b] hover:bg-[#083866]"
                 onClick={handleSave}
                 disabled={actualizarInstitucion.isPending || crearInstitucion.isPending}
               >
-                {editingInstitucion ? "Guardar Cambios" : "Crear Institución"}
+                {editingInstitucion ? "Guardar cambios" : "Crear institución"}
               </Button>
             </div>
           </div>
@@ -682,106 +853,149 @@ export default function CatalogoAcreedores() {
       </Dialog>
 
       <Dialog open={!!selectedInstitucion} onOpenChange={() => setSelectedInstitucion(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <Avatar className="h-12 w-12">
+              <Avatar className="h-14 w-14 rounded-2xl border bg-white">
                 <AvatarImage src={selectedInstitucion?.logo_url || undefined} />
-                <AvatarFallback>
-                  {selectedInstitucion?.nombre?.[0]
-                    ? selectedInstitucion.nombre[0].toUpperCase()
-                    : <Building2 className="h-6 w-6" />}
+                <AvatarFallback className="rounded-2xl bg-slate-100 text-slate-700">
+                  {selectedInstitucion?.nombre?.[0] ? (
+                    selectedInstitucion.nombre[0].toUpperCase()
+                  ) : (
+                    <Building2 className="h-6 w-6" />
+                  )}
                 </AvatarFallback>
               </Avatar>
 
               <div>
-                <DialogTitle>{selectedInstitucion?.nombre}</DialogTitle>
-                <DialogDescription>Detalle de la institución financiera</DialogDescription>
+                <DialogTitle className="text-xl">{selectedInstitucion?.nombre}</DialogTitle>
+                <DialogDescription>
+                  Vista detallada del acreedor financiero y sus instrumentos asociados.
+                </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           {selectedInstitucion && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                {(selectedInstitucion.contacto_nombre ||
-                  selectedInstitucion.contactoNombre ||
-                  selectedInstitucion.ejecutivo_nombre) && (
-                  <div>
-                    <Label className="text-muted-foreground">Contacto</Label>
-                    <p className="font-medium">
-                      {selectedInstitucion.contacto_nombre ||
-                        selectedInstitucion.contactoNombre ||
-                        selectedInstitucion.ejecutivo_nombre}
-                    </p>
-                    {(selectedInstitucion.contacto_puesto || selectedInstitucion.contactoPuesto) && (
-                      <p className="text-sm text-muted-foreground">
-                        {selectedInstitucion.contacto_puesto || selectedInstitucion.contactoPuesto}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <Card className="rounded-2xl border border-slate-200 shadow-none">
+                  <CardContent className="pt-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Contacto</p>
+                    <div className="mt-3 space-y-1">
+                      <p className="font-medium text-slate-900">
+                        {selectedInstitucion.contacto_nombre ||
+                          selectedInstitucion.contactoNombre ||
+                          selectedInstitucion.ejecutivo_nombre ||
+                          "Sin asignar"}
                       </p>
-                    )}
-                  </div>
-                )}
+                      <p className="text-sm text-slate-500">
+                        {selectedInstitucion.contacto_puesto ||
+                          selectedInstitucion.contactoPuesto ||
+                          "Sin puesto asignado"}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <div>
-                  <Label className="text-muted-foreground">Canales</Label>
-                  {(selectedInstitucion.telefono || selectedInstitucion.telefono_principal) && (
-                    <p className="text-sm">{selectedInstitucion.telefono || selectedInstitucion.telefono_principal}</p>
-                  )}
-                  {(selectedInstitucion.email || selectedInstitucion.email_principal) && (
-                    <p className="text-sm text-primary">{selectedInstitucion.email || selectedInstitucion.email_principal}</p>
-                  )}
-                  {selectedInstitucion.sitio_web && (
-                    <p className="text-sm">{selectedInstitucion.sitio_web}</p>
-                  )}
-                </div>
+                <Card className="rounded-2xl border border-slate-200 shadow-none">
+                  <CardContent className="pt-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Canales</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <p className="text-slate-900">
+                        {selectedInstitucion.telefono || selectedInstitucion.telefono_principal || "Sin teléfono"}
+                      </p>
+                      <p className="text-slate-900">
+                        {selectedInstitucion.email || selectedInstitucion.email_principal || "Sin correo"}
+                      </p>
+                      <p className="text-slate-500">
+                        {selectedInstitucion.sitio_web || "Sin sitio web"}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border border-slate-200 shadow-none">
+                  <CardContent className="pt-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Créditos asociados</p>
+                    <div className="mt-3 space-y-1">
+                      <p className="text-3xl font-semibold text-slate-900">
+                        {selectedInstitucionFinanciamientos.length}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {selectedInstitucionFinanciamientos.filter((f) => getFinStatus(f) === "activo").length} activos
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
               {selectedInstitucion.descripcion && (
-                <div>
-                  <Label className="text-muted-foreground">Descripción</Label>
-                  <p className="text-sm whitespace-pre-wrap">{selectedInstitucion.descripcion}</p>
-                </div>
+                <Card className="rounded-2xl border border-slate-200 shadow-none">
+                  <CardContent className="pt-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Descripción</p>
+                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                      {selectedInstitucion.descripcion}
+                    </p>
+                  </CardContent>
+                </Card>
               )}
 
               {selectedInstitucion.notas && (
-                <div>
-                  <Label className="text-muted-foreground">Notas</Label>
-                  <p className="text-sm whitespace-pre-wrap">{selectedInstitucion.notas}</p>
-                </div>
+                <Card className="rounded-2xl border border-slate-200 shadow-none">
+                  <CardContent className="pt-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Notas</p>
+                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                      {selectedInstitucion.notas}
+                    </p>
+                  </CardContent>
+                </Card>
               )}
 
-              <div>
-                <Label className="text-muted-foreground mb-2 block">Financiamientos Asociados</Label>
-                <div className="space-y-2">
-                  {getFinanciamientosByInstitucion(selectedInstitucion.id).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No hay financiamientos asociados</p>
+              <Card className="rounded-2xl border border-slate-200 shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Financiamientos asociados</CardTitle>
+                  <CardDescription>
+                    Créditos, líneas y tarjetas vinculadas a esta institución.
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                  {selectedInstitucionFinanciamientos.length === 0 ? (
+                    <EmptyState text="No hay financiamientos asociados a esta institución." />
                   ) : (
-                    getFinanciamientosByInstitucion(selectedInstitucion.id).map((f) => (
-                      <Card key={f.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
+                    <div className="space-y-3">
+                      {selectedInstitucionFinanciamientos.map((f) => (
+                        <div
+                          key={f.id}
+                          className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                        >
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
-                              <p className="font-medium">{f.nombre}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {getFinTipoLabel(f)}
-                              </p>
+                              <p className="font-medium text-slate-900">{f.nombre}</p>
+                              <p className="text-sm text-slate-500">{getFinTipoLabel(f)}</p>
                             </div>
 
-                            <div className="text-right">
-                              <p className="font-medium">
-                                ${getFinSaldo(f).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                              </p>
-                              <Badge variant={getFinStatus(f) === "activo" ? "default" : "secondary"}>
+                            <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                              <div className="text-right">
+                                <p className="text-xs text-slate-500">Saldo / deuda</p>
+                                <p className="font-semibold text-slate-900">{money(getFinSaldo(f))}</p>
+                              </div>
+
+                              <Badge
+                                variant={getFinStatus(f) === "activo" ? "default" : "secondary"}
+                                className={getFinStatus(f) === "activo" ? "bg-[#0b4a8b] hover:bg-[#0b4a8b]" : ""}
+                              >
                                 {getFinStatus(f) || "sin estatus"}
                               </Badge>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </DialogContent>
