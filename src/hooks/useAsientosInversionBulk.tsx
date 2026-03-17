@@ -1,8 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
-type AsientoNumeroApi = {
-  numero_asiento: string;
+type BulkAsientosResponse = string[] | { ok?: boolean; data?: string[]; items?: string[] };
+
+const unwrapIds = (json: BulkAsientosResponse): string[] => {
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.data)) return json.data;
+  if (Array.isArray(json?.items)) return json.items;
+  return [];
 };
 
 export const useAsientosInversionBulk = () => {
@@ -10,29 +15,23 @@ export const useAsientosInversionBulk = () => {
     queryKey: ["asientos-inversion-bulk"],
     queryFn: async (): Promise<Set<string>> => {
       try {
-        // Trae SOLO numero_asiento para asientos de inversión
-        const json = await apiFetch("/api/contabilidad/asientos?prefix=INV&fields=numero_asiento", {
+        const json = await apiFetch("/api/inversiones/asientos/bulk", {
           method: "GET",
         });
 
-        const rows: AsientoNumeroApi[] = (json as any)?.data ?? json ?? [];
-        if (!Array.isArray(rows) || rows.length === 0) return new Set<string>();
+        const ids = unwrapIds(json)
+          .map((id) => String(id || "").trim())
+          .filter(Boolean);
 
-        // Formato esperado: INV-{uuid}...
-        const inversionIds = rows
-          .map((a) => (a?.numero_asiento || "").trim())
-          .filter(Boolean)
-          .filter((num) => num.startsWith("INV-"))
-          .map((num) => num.replace(/^INV-/, "")) // quita prefijo
-          .map((rest) => rest.split("-DEP-")[0]) // por si algún formato extra existe
-          .map((rest) => rest.split("-")[0].includes(" ") ? rest.trim() : rest) // safety
-          .filter((id) => id.length > 0);
-
-        return new Set(inversionIds);
+        return new Set(ids);
       } catch (err) {
         console.error("Error fetching asientos inversion bulk:", err);
         return new Set<string>();
       }
     },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 };
