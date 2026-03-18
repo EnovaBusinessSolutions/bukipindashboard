@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import {
   CalendarIcon,
@@ -39,6 +38,13 @@ import {
   Wallet,
   BadgeCheck,
   Image as ImageIcon,
+  Monitor,
+  Cog,
+  Car,
+  Sofa,
+  Building,
+  Briefcase,
+  Box,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
@@ -46,14 +52,17 @@ import { toast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import PreviewCuentasContables from "./PreviewCuentasContables";
 
+const bukipinBlue = "#0B3A6E";
+const bukipinBlueDark = "#082E57";
+
 const categoriaOptions = [
-  { value: "equipo_computo", label: "Equipo de Cómputo" },
-  { value: "maquinaria", label: "Maquinaria" },
-  { value: "vehiculos", label: "Vehículos" },
-  { value: "mobiliario", label: "Mobiliario" },
-  { value: "edificios", label: "Edificios" },
-  { value: "equipo_oficina", label: "Equipo de Oficina" },
-  { value: "otro", label: "Otro" },
+  { value: "equipo_computo", label: "Equipo de Cómputo", icon: Monitor },
+  { value: "maquinaria", label: "Maquinaria", icon: Cog },
+  { value: "vehiculos", label: "Vehículos", icon: Car },
+  { value: "mobiliario", label: "Mobiliario", icon: Sofa },
+  { value: "edificios", label: "Edificios", icon: Building },
+  { value: "equipo_oficina", label: "Equipo de Oficina", icon: Briefcase },
+  { value: "otro", label: "Otro", icon: Box },
 ];
 
 const cuentaMap: Record<string, string> = {
@@ -93,10 +102,13 @@ const SectionShell = ({
   children: React.ReactNode;
 }) => {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#D6E4F2] bg-white shadow-[0_10px_30px_rgba(11,58,110,0.07)]">
-  <div className="border-b border-[#E3EDF7] bg-gradient-to-r from-[#F4F8FC] via-white to-[#F7FAFE] px-5 py-4 md:px-6">
+    <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(11,58,110,0.08)]">
+      <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.06),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-5 py-4 md:px-6">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF2FB] text-[#0B3A6E] shadow-sm">
+          <div
+            className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl shadow-sm"
+            style={{ backgroundColor: "rgba(11,58,110,0.10)", color: bukipinBlue }}
+          >
             {icon}
           </div>
           <div className="min-w-0">
@@ -122,11 +134,11 @@ const StatMiniCard = ({
   accent?: "default" | "success" | "warning";
 }) => {
   const accentClasses =
-  accent === "success"
-    ? "border-[#B9D7C0] bg-[#EEF8F1] text-[#256C3D]"
-    : accent === "warning"
-      ? "border-[#E7D8B3] bg-[#FBF6EA] text-[#8A6A1F]"
-      : "border-[#D6E4F2] bg-[#F4F8FC] text-[#0B3A6E]";
+    accent === "success"
+      ? "border-[rgba(11,58,110,0.18)] bg-[rgba(11,58,110,0.06)] text-slate-800"
+      : accent === "warning"
+        ? "border-[rgba(11,58,110,0.16)] bg-[rgba(11,58,110,0.045)] text-slate-800"
+        : "border-slate-200 bg-slate-50/80 text-slate-700";
 
   return (
     <div className={cn("rounded-2xl border p-4 shadow-sm", accentClasses)}>
@@ -348,7 +360,7 @@ const RegistroInversionForm = () => {
           }
 
           toast({
-            title: "❌ Error",
+            title: "Error",
             description: errorMessage,
             variant: "destructive",
           });
@@ -384,7 +396,7 @@ const RegistroInversionForm = () => {
     ) {
       if (!saldosDisponibles) {
         toast({
-          title: "⚠️ Error de validación",
+          title: "Error de validación",
           description: "No se pudieron cargar los saldos disponibles. Intenta nuevamente.",
           variant: "destructive",
         });
@@ -395,7 +407,7 @@ const RegistroInversionForm = () => {
     if (formData.metodo_pago === "efectivo") {
       if (montoPagado > saldosDisponibles.efectivo) {
         toast({
-          title: "💰 Saldo insuficiente en efectivo",
+          title: "Saldo insuficiente en efectivo",
           description: `Disponible: $${formatCurrency(saldosDisponibles.efectivo)} | Necesitas: $${formatCurrency(montoPagado)}`,
           variant: "destructive",
         });
@@ -406,7 +418,7 @@ const RegistroInversionForm = () => {
     if (formData.metodo_pago === "transferencia") {
       if (montoPagado > saldosDisponibles.bancos) {
         toast({
-          title: "🏦 Saldo insuficiente en bancos",
+          title: "Saldo insuficiente en bancos",
           description: `Disponible: $${formatCurrency(saldosDisponibles.bancos)} | Necesitas: $${formatCurrency(montoPagado)}`,
           variant: "destructive",
         });
@@ -420,7 +432,7 @@ const RegistroInversionForm = () => {
 
       if (!validacion.valido) {
         toast({
-          title: "⚠️ Límite de crédito excedido",
+          title: "Límite de crédito excedido",
           description: validacion.mensaje,
           variant: "destructive",
         });
@@ -438,11 +450,18 @@ const RegistroInversionForm = () => {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
       <div className="xl:col-span-8 2xl:col-span-9 space-y-6">
-        <Card className="overflow-hidden rounded-3xl border border-[#D6E4F2] bg-white shadow-[0_18px_60px_rgba(11,58,110,0.10)]">
-        <CardHeader className="border-b border-[#DCE8F5] bg-[radial-gradient(circle_at_top_left,_rgba(11,58,110,0.12),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f4f8fc_65%,#eef4fb_100%)] px-6 py-6 md:px-8">
+        <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(11,58,110,0.10)]">
+          <CardHeader className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.10),rgba(255,255,255,1),rgba(11,58,110,0.04))] px-6 py-6 md:px-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#0B3A6E]/15 bg-[#EAF2FB] px-3 py-1 text-xs font-semibold text-[#0B3A6E]">
+                <div
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
+                  style={{
+                    borderColor: "rgba(11,58,110,0.12)",
+                    backgroundColor: "rgba(11,58,110,0.06)",
+                    color: bukipinBlue,
+                  }}
+                >
                   <Sparkles className="h-3.5 w-3.5" />
                   Registro premium de activos CAPEX
                 </div>
@@ -451,7 +470,7 @@ const RegistroInversionForm = () => {
                   <CardTitle className="text-2xl md:text-3xl font-bold tracking-tight text-slate-950">
                     Registro de Inversión CAPEX
                   </CardTitle>
-                  <CardDescription className="mt-2 max-w-3xl text-sm md:text-[15px] leading-6 text-[#3F5F82]">
+                  <CardDescription className="mt-2 max-w-3xl text-sm md:text-[15px] leading-6 text-slate-600">
                     Registra activos fijos con una experiencia más clara, profesional y contablemente alineada.
                     Define categoría, valor, pago, proveedor y depreciación desde un solo flujo.
                   </CardDescription>
@@ -497,33 +516,60 @@ const RegistroInversionForm = () => {
                         <SelectValue placeholder="Selecciona la categoría del activo" />
                       </SelectTrigger>
                       <SelectContent>
-                        {categoriaOptions.map((item) => (
-  <SelectItem key={item.value} value={item.value}>
-    {item.label}
-  </SelectItem>
-))}
+                        {categoriaOptions.map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <SelectItem key={item.value} value={item.value}>
+                              <span className="flex items-center gap-2">
+                                <Icon className="h-4 w-4 text-slate-500" />
+                                <span>{item.label}</span>
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
 
                   {categoriaActivo ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="rounded-2xl border border-[#0B3A6E]/10 bg-[#0B3A6E]/5 p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0B3A6E]/80">
+                      <div
+                        className="rounded-2xl border p-4"
+                        style={{
+                          borderColor: "rgba(11,58,110,0.12)",
+                          backgroundColor: "rgba(11,58,110,0.05)",
+                        }}
+                      >
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                           Categoría seleccionada
                         </p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">
-                         {getCategoriaLabel(categoriaActivo)}
+                        <p className="mt-2 text-sm font-semibold text-slate-900 flex items-center gap-2">
+                          {categoriaMeta?.icon ? React.createElement(categoriaMeta.icon, { className: "h-4 w-4 text-slate-500" }) : null}
+                          {getCategoriaLabel(categoriaActivo)}
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">
+
+                      <div
+                        className="rounded-2xl border p-4"
+                        style={{
+                          borderColor: "rgba(11,58,110,0.14)",
+                          backgroundColor: "rgba(11,58,110,0.07)",
+                        }}
+                      >
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                           Cuenta contable
                         </p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">{formData.cuenta_codigo}</p>
                       </div>
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700/80">
+
+                      <div
+                        className="rounded-2xl border p-4"
+                        style={{
+                          borderColor: "rgba(11,58,110,0.14)",
+                          backgroundColor: "rgba(11,58,110,0.07)",
+                        }}
+                      >
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                           Depreciación sugerida
                         </p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">
@@ -624,7 +670,13 @@ const RegistroInversionForm = () => {
                           Fotografía del activo
                         </Label>
 
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
+                        <div
+                          className="rounded-2xl border border-dashed p-4"
+                          style={{
+                            borderColor: "rgba(11,58,110,0.18)",
+                            backgroundColor: "rgba(11,58,110,0.035)",
+                          }}
+                        >
                           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                             <div className="flex items-center gap-3">
                               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white border border-slate-200 shadow-sm text-slate-600">
@@ -664,16 +716,14 @@ const RegistroInversionForm = () => {
                                 </div>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/70 px-4 py-3">
+                              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3">
                                 <ImageIcon className="h-4 w-4 text-slate-400" />
                                 <p className="text-sm text-slate-500">Aún no has cargado una imagen para este activo.</p>
                               </div>
                             )}
                           </div>
 
-                          {uploading ? (
-                            <p className="mt-3 text-xs text-slate-500">Subiendo imagen…</p>
-                          ) : null}
+                          {uploading ? <p className="mt-3 text-xs text-slate-500">Subiendo imagen…</p> : null}
                         </div>
                       </div>
                     </div>
@@ -821,11 +871,17 @@ const RegistroInversionForm = () => {
                           </div>
 
                           {formData.monto_pagado && formData.valor_total ? (
-                            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
-                              <p className="text-sm font-semibold text-amber-900">
+                            <div
+                              className="rounded-2xl border p-4 shadow-sm"
+                              style={{
+                                borderColor: "rgba(11,58,110,0.16)",
+                                backgroundColor: "rgba(11,58,110,0.05)",
+                              }}
+                            >
+                              <p className="text-sm font-semibold text-slate-900">
                                 Monto pendiente: ${formatNumber(calcularMontoPendiente().toString())}
                               </p>
-                              <p className="mt-1 text-xs text-amber-800/80">
+                              <p className="mt-1 text-xs text-slate-600">
                                 Este saldo quedará registrado como obligación pendiente del activo.
                               </p>
                             </div>
@@ -863,12 +919,18 @@ const RegistroInversionForm = () => {
 
                       {formData.tipo_pago === "credito" && (
                         <div className="space-y-5">
-                          <div className="rounded-2xl border border-[#0B3A6E]/10 bg-[#0B3A6E]/5 p-4 shadow-sm">
-                            <p className="text-sm font-semibold text-[#0B3A6E]">
+                          <div
+                            className="rounded-2xl border p-4 shadow-sm"
+                            style={{
+                              borderColor: "rgba(11,58,110,0.16)",
+                              backgroundColor: "rgba(11,58,110,0.06)",
+                            }}
+                          >
+                            <p className="text-sm font-semibold text-slate-900">
                               Monto total a crédito: $
                               {formData.valor_total ? formatNumber(formData.valor_total) : "0.00"}
                             </p>
-                            <p className="mt-1 text-xs text-[#0B3A6E]/80">
+                            <p className="mt-1 text-xs text-slate-600">
                               Se registrará como pasivo pendiente para liquidación posterior.
                             </p>
                           </div>
@@ -944,7 +1006,7 @@ const RegistroInversionForm = () => {
                             className={cn(
                               "flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition-all shadow-sm",
                               tipoProveedor === "nuevo"
-                                ? "border-[#0B3A6E]/30 bg-[#0B3A6E]/5"
+                                ? "border-[rgba(11,58,110,0.20)] bg-[rgba(11,58,110,0.05)]"
                                 : "border-slate-200 bg-white hover:border-slate-300"
                             )}
                           >
@@ -960,7 +1022,7 @@ const RegistroInversionForm = () => {
                             className={cn(
                               "flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition-all shadow-sm",
                               tipoProveedor === "existente"
-                                ? "border-[#0B3A6E]/30 bg-[#0B3A6E]/5"
+                                ? "border-[rgba(11,58,110,0.20)] bg-[rgba(11,58,110,0.05)]"
                                 : "border-slate-200 bg-white hover:border-slate-300"
                             )}
                           >
@@ -1132,10 +1194,13 @@ const RegistroInversionForm = () => {
                     </div>
                   </SectionShell>
 
-                  <div className="sticky bottom-0 z-10 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur-md">
+                  <div className="sticky bottom-0 z-10 rounded-[26px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_-10px_30px_rgba(11,58,110,0.08)] backdrop-blur-md">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-start gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0B3A6E]/8 text-[#0B3A6E]">
+                        <div
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                          style={{ backgroundColor: "rgba(11,58,110,0.10)", color: bukipinBlue }}
+                        >
                           <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
@@ -1149,7 +1214,14 @@ const RegistroInversionForm = () => {
                       <Button
                         type="submit"
                         disabled={crearInversion.isPending}
-                        className="h-12 rounded-2xl px-6 text-sm font-semibold shadow-lg bg-[#0B3A6E] hover:bg-[#082E57]"
+                        className="h-12 rounded-2xl px-6 text-sm font-semibold shadow-lg text-white"
+                        style={{ backgroundColor: bukipinBlue }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = bukipinBlueDark;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = bukipinBlue;
+                        }}
                       >
                         {crearInversion.isPending ? "Registrando..." : "Registrar inversión"}
                       </Button>
@@ -1165,10 +1237,13 @@ const RegistroInversionForm = () => {
       <div className="xl:col-span-4 2xl:col-span-3 space-y-6">
         <div className="xl:sticky xl:top-6 space-y-6">
           {categoriaActivo && formData.valor_total && formData.tipo_pago ? (
-            <div className="rounded-3xl border border-slate-200/80 bg-white shadow-[0_16px_50px_rgba(2,6,23,0.08)] overflow-hidden">
-              <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-slate-50 px-5 py-4">
+            <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(11,58,110,0.08)]">
+              <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.07),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-5 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B3A6E]/8 text-[#0B3A6E]">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: "rgba(11,58,110,0.10)", color: bukipinBlue }}
+                  >
                     <Landmark className="h-5 w-5" />
                   </div>
                   <div>
@@ -1191,10 +1266,13 @@ const RegistroInversionForm = () => {
               </div>
             </div>
           ) : (
-            <Card className="rounded-3xl border border-slate-200/80 bg-white shadow-[0_16px_50px_rgba(2,6,23,0.06)]">
+            <Card className="rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_50px_rgba(11,58,110,0.06)]">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B3A6E]/8 text-[#0B3A6E]">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: "rgba(11,58,110,0.10)", color: bukipinBlue }}
+                  >
                     <BadgeCheck className="h-5 w-5" />
                   </div>
                   <div>
@@ -1208,10 +1286,13 @@ const RegistroInversionForm = () => {
             </Card>
           )}
 
-          <Card className="rounded-3xl border border-slate-200/80 bg-white shadow-[0_16px_50px_rgba(2,6,23,0.08)] overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-slate-50 px-5 py-4">
+          <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(11,58,110,0.08)]">
+            <CardHeader className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.07),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-5 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B3A6E]/8 text-[#0B3A6E]">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: "rgba(11,58,110,0.10)", color: bukipinBlue }}
+                >
                   <CreditCard className="h-5 w-5" />
                 </div>
                 <div>
@@ -1240,7 +1321,7 @@ const RegistroInversionForm = () => {
                           key={rec.id}
                           className={cn(
                             "transition-colors",
-                            active ? "bg-[#0B3A6E]/5 hover:bg-[#0B3A6E]/5" : "hover:bg-slate-50/80"
+                            active ? "bg-[rgba(11,58,110,0.05)] hover:bg-[rgba(11,58,110,0.05)]" : "hover:bg-slate-50/80"
                           )}
                         >
                           <TableCell className="text-xs font-medium py-3 text-slate-700">
@@ -1250,10 +1331,9 @@ const RegistroInversionForm = () => {
                             <span
                               className={cn(
                                 "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
-                                active
-                                  ? "bg-[#0B3A6E] text-white"
-                                  : "bg-slate-100 text-slate-700"
+                                active ? "text-white" : "bg-slate-100 text-slate-700"
                               )}
+                              style={active ? { backgroundColor: bukipinBlue } : undefined}
                             >
                               {rec.anos_recomendados}
                             </span>
@@ -1266,7 +1346,13 @@ const RegistroInversionForm = () => {
               </div>
 
               {categoriaActivo && recomendacion ? (
-                <div className="mt-4 rounded-2xl border border-[#0B3A6E]/10 bg-[#0B3A6E]/5 p-4">
+                <div
+                  className="mt-4 rounded-2xl border p-4"
+                  style={{
+                    borderColor: "rgba(11,58,110,0.14)",
+                    backgroundColor: "rgba(11,58,110,0.05)",
+                  }}
+                >
                   <p className="text-sm font-semibold text-slate-900">{getCategoriaLabel(categoriaActivo)}</p>
                   <p className="mt-1 text-xs text-slate-600">
                     Rango: {recomendacion.anos_minimos} - {recomendacion.anos_maximos} años
@@ -1282,7 +1368,7 @@ const RegistroInversionForm = () => {
       </div>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent className="rounded-3xl border-slate-200">
+        <AlertDialogContent className="rounded-[26px] border-slate-200">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar pago con tarjeta de crédito</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1327,7 +1413,14 @@ const RegistroInversionForm = () => {
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
-              className="rounded-2xl bg-[#0B3A6E] hover:bg-[#082E57]"
+              className="rounded-2xl text-white"
+              style={{ backgroundColor: bukipinBlue }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = bukipinBlueDark;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = bukipinBlue;
+              }}
               onClick={async () => {
                 if (pendingSubmit) {
                   const { formData: pendingFormData, montoPagado, valorTotal } = pendingSubmit;

@@ -4,52 +4,176 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
 import { useGenerarDepreciaciones } from "@/hooks/useGenerarDepreciaciones";
 import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
-import { Loader2, TrendingDown, Calendar, DollarSign, ChevronDown, FileText, Play, AlertTriangle } from "lucide-react";
+import {
+  Loader2,
+  TrendingDown,
+  Calendar,
+  DollarSign,
+  ChevronDown,
+  FileText,
+  Play,
+  AlertTriangle,
+  Landmark,
+  BarChart3,
+  Clock3,
+  ShieldAlert,
+  Calculator,
+  Layers3,
+  ArrowRight,
+  Image as ImageIcon,
+} from "lucide-react";
 import { format, lastDayOfMonth, differenceInDays, addMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { useState, useMemo } from "react";
+
+const BUKIPIN_BLUE = "#0B3A6E";
+const BUKIPIN_BLUE_DARK = "#082E57";
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
+};
+
+const SummaryMetricCard = ({
+  title,
+  value,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+}) => {
+  return (
+    <Card className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_16px_50px_rgba(11,58,110,0.08)]">
+      <CardContent className="p-0">
+        <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.08),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {title}
+              </p>
+              <p className="mt-3 text-3xl font-bold tracking-tight text-slate-950">{value}</p>
+              {subtitle ? <p className="mt-2 text-xs leading-5 text-slate-500">{subtitle}</p> : null}
+            </div>
+
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ backgroundColor: "rgba(11,58,110,0.10)", color: BUKIPIN_BLUE }}
+            >
+              {icon}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const PremiumNotice = ({
+  title,
+  description,
+  destructive = false,
+  icon,
+}: {
+  title: string;
+  description: React.ReactNode;
+  destructive?: boolean;
+  icon: React.ReactNode;
+}) => {
+  return (
+    <div
+      className="rounded-[24px] border px-4 py-4 shadow-sm"
+      style={{
+        borderColor: destructive ? "rgba(220,38,38,0.18)" : "rgba(11,58,110,0.14)",
+        backgroundColor: destructive ? "rgba(254,242,242,0.92)" : "rgba(11,58,110,0.05)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"
+          style={{
+            backgroundColor: destructive ? "rgba(220,38,38,0.12)" : "rgba(11,58,110,0.10)",
+            color: destructive ? "#b91c1c" : BUKIPIN_BLUE,
+          }}
+        >
+          {icon}
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">{title}</p>
+          <div className="mt-1 text-sm leading-6 text-slate-600">{description}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SectionHeader = ({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}) => {
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        className="flex h-11 w-11 items-center justify-center rounded-2xl"
+        style={{ backgroundColor: "rgba(11,58,110,0.10)", color: BUKIPIN_BLUE }}
+      >
+        {icon}
+      </div>
+      <div>
+        <h3 className="text-lg font-bold text-slate-950">{title}</h3>
+        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+      </div>
+    </div>
+  );
+};
 
 const ResumenDepreciaciones = () => {
   const { inversiones, isLoading } = useInversiones();
   const [expandedInversiones, setExpandedInversiones] = useState<string[]>([]);
   const { mutate: generarDepreciaciones, isPending } = useGenerarDepreciaciones();
   const { depreciacionesAtrasadas, tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
-  
-  // Estado para selector de mes/año
+
   const fechaActual = new Date();
   const [mesSeleccionado, setMesSeleccionado] = useState<string>((fechaActual.getMonth() + 1).toString());
   const [anoSeleccionado, setAnoSeleccionado] = useState<string>(fechaActual.getFullYear().toString());
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  const inversionesActivas = inversiones?.filter((inv) => inv.estado === "activo") || [];
 
-  // Filtrar solo activos activos
-  const inversionesActivas = inversiones?.filter(inv => inv.estado === 'activo') || [];
-
-  // Calcular totales
-  const totalDepreciacionAnual = inversionesActivas.reduce((sum, inv) => sum + (inv.valor_depreciacion_anual || 0), 0);
-  const totalDepreciacionMensual = inversionesActivas.reduce((sum, inv) => sum + (inv.valor_depreciacion_mensual || 0), 0);
+  const totalDepreciacionAnual = inversionesActivas.reduce(
+    (sum, inv) => sum + (inv.valor_depreciacion_anual || 0),
+    0
+  );
+  const totalDepreciacionMensual = inversionesActivas.reduce(
+    (sum, inv) => sum + (inv.valor_depreciacion_mensual || 0),
+    0
+  );
   const totalValorActivos = inversionesActivas.reduce((sum, inv) => sum + inv.valor_total, 0);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value);
-  };
-
   const toggleExpanded = (inversionId: string) => {
-    setExpandedInversiones(prev => 
-      prev.includes(inversionId) 
-        ? prev.filter(id => id !== inversionId)
-        : [...prev, inversionId]
+    setExpandedInversiones((prev) =>
+      prev.includes(inversionId) ? prev.filter((id) => id !== inversionId) : [...prev, inversionId]
     );
   };
 
@@ -57,21 +181,19 @@ const ResumenDepreciaciones = () => {
     generarDepreciaciones({
       mes: parseInt(mesSeleccionado),
       ano: parseInt(anoSeleccionado),
-      origen: 'manual',
+      origen: "manual",
     });
   };
 
-  // Validar si el mes seleccionado es pasado
   const mesSeleccionadoNum = parseInt(mesSeleccionado);
   const anoSeleccionadoNum = parseInt(anoSeleccionado);
   const fechaSeleccionada = new Date(anoSeleccionadoNum, mesSeleccionadoNum - 1, 1);
   const primerDiaMesActual = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
   const esMesPasado = fechaSeleccionada < primerDiaMesActual;
 
-  // Generar opciones de meses y años
   const meses = Array.from({ length: 12 }, (_, i) => ({
     value: (i + 1).toString(),
-    label: new Date(2000, i).toLocaleString('es-MX', { month: 'long' }),
+    label: new Date(2000, i).toLocaleString("es-MX", { month: "long" }),
   }));
 
   const anos = Array.from({ length: 3 }, (_, i) => {
@@ -93,68 +215,98 @@ const ResumenDepreciaciones = () => {
 
     if (!asientos || asientos.length === 0) {
       return (
-        <div className="text-xs text-muted-foreground text-center py-2">
-          No hay asientos de depreciación generados aún
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 text-center text-xs text-slate-500">
+          No hay asientos de depreciación generados aún.
         </div>
       );
     }
 
     return (
       <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(inversionId)}>
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-950/30 transition-colors">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-purple-600" />
-            <span className="text-sm font-medium">Asientos de Depreciación Generados ({asientos.length})</span>
+        <CollapsibleTrigger
+          className="flex w-full items-center justify-between rounded-[20px] border px-4 py-3 text-left transition-colors"
+          style={{
+            borderColor: "rgba(11,58,110,0.14)",
+            backgroundColor: "rgba(11,58,110,0.05)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ backgroundColor: "rgba(11,58,110,0.10)", color: BUKIPIN_BLUE }}
+            >
+              <FileText className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Asientos de depreciación generados
+              </p>
+              <p className="text-xs text-slate-500">{asientos.length} registro(s) contable(s)</p>
+            </div>
           </div>
-          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+
+          <ChevronDown
+            className={`h-4 w-4 text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          />
         </CollapsibleTrigger>
-        
-        <CollapsibleContent className="pt-3 space-y-2">
+
+        <CollapsibleContent className="pt-3 space-y-3">
           {asientos.map((asiento) => {
-            // Extraer mes y año del número de asiento (formato: DEP-{id}-YYYYMM)
             const match = asiento.numero_asiento.match(/DEP-.+-(\d{4})(\d{2})/);
             const año = match ? match[1] : "";
             const mes = match ? match[2] : "";
             const fecha = match ? new Date(parseInt(año), parseInt(mes) - 1) : new Date(asiento.fecha);
 
             return (
-              <div key={asiento.id} className="p-3 border border-purple-200 dark:border-purple-900 rounded-lg bg-background">
-                <div className="flex items-center justify-between mb-2">
+              <div
+                key={asiento.id}
+                className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-semibold">
+                    <p className="text-sm font-semibold capitalize text-slate-900">
                       {format(fecha, "MMMM yyyy", { locale: es })}
                     </p>
-                    <p className="text-xs text-muted-foreground font-mono">{asiento.numero_asiento}</p>
+                    <p className="text-xs font-mono text-slate-500">{asiento.numero_asiento}</p>
                   </div>
-                  <Badge variant="outline" className="text-xs">
+
+                  <Badge variant="outline" className="w-fit">
                     {format(new Date(asiento.fecha), "dd/MM/yyyy")}
                   </Badge>
                 </div>
 
-                <div className="space-y-2 mt-3">
+                <div className="space-y-2">
                   {asiento.detalle_asientos?.map((detalle) => (
-                    <div key={detalle.id} className="flex items-start justify-between text-xs">
-                      <div className="flex-1">
-                        <p className="font-medium">
+                    <div
+                      key={detalle.id}
+                      className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-slate-900">
                           {detalle.cuenta_codigo} - {detalle.cuenta?.nombre}
                         </p>
-                        <p className="text-muted-foreground">{detalle.descripcion}</p>
+                        <p className="mt-1 text-xs text-slate-500">{detalle.descripcion}</p>
                       </div>
-                      <div className="text-right ml-2">
+
+                      <div className="text-right">
                         {detalle.debe > 0 && (
-                          <div className="space-y-0">
-                            <p className="text-green-600 font-semibold">
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-emerald-600">
                               {formatCurrency(detalle.debe)}
                             </p>
-                            <Badge variant="outline" className="text-[10px] h-4">DEBE</Badge>
+                            <Badge variant="outline" className="h-5 text-[10px]">
+                              DEBE
+                            </Badge>
                           </div>
                         )}
                         {detalle.haber > 0 && (
-                          <div className="space-y-0">
-                            <p className="text-blue-600 font-semibold">
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold" style={{ color: BUKIPIN_BLUE }}>
                               {formatCurrency(detalle.haber)}
                             </p>
-                            <Badge variant="outline" className="text-[10px] h-4">HABER</Badge>
+                            <Badge variant="outline" className="h-5 text-[10px]">
+                              HABER
+                            </Badge>
                           </div>
                         )}
                       </div>
@@ -169,24 +321,22 @@ const ResumenDepreciaciones = () => {
     );
   };
 
-  // Componente para calcular datos de cada inversión con depreciación real
   const InversionCard = ({ inversion }: { inversion: any }) => {
     const { data: asientos } = useAsientosDepreciacion(inversion.id);
-    
-    // Calcular depreciación acumulada REAL sumando asientos generados
+
     const depreciacionAcumulada = useMemo(() => {
       if (!asientos) return 0;
       return asientos.reduce((total, asiento) => {
-        const gastoDepreciacion = asiento.detalle_asientos
-          ?.filter(d => d.cuenta_codigo === '5109') // Gasto Depreciación
-          .reduce((sum, d) => sum + d.debe, 0) || 0;
+        const gastoDepreciacion =
+          asiento.detalle_asientos
+            ?.filter((d) => d.cuenta_codigo === "5109")
+            .reduce((sum, d) => sum + d.debe, 0) || 0;
         return total + gastoDepreciacion;
       }, 0);
     }, [asientos]);
-    
+
     const valorLibros = Math.max(0, inversion.valor_total - depreciacionAcumulada);
-    
-    // Extraer último mes depreciado de los asientos
+
     const extraerMesAnoDeAsiento = (numeroAsiento: string) => {
       const match = numeroAsiento.match(/DEP-.+-(\d{4})(\d{2})/);
       if (!match) return null;
@@ -194,221 +344,338 @@ const ResumenDepreciaciones = () => {
       const mes = parseInt(match[2]);
       return new Date(año, mes - 1, 1);
     };
-    
-    const ultimoMesDepreciado = asientos && asientos.length > 0 
-      ? extraerMesAnoDeAsiento(asientos[0].numero_asiento)
-      : null;
-    
-    // Calcular próxima fecha de depreciación
-    const fechaInicio = inversion.fecha_inicio_depreciacion 
-      ? new Date(inversion.fecha_inicio_depreciacion) 
+
+    const ultimoMesDepreciado =
+      asientos && asientos.length > 0 ? extraerMesAnoDeAsiento(asientos[0].numero_asiento) : null;
+
+    const fechaInicio = inversion.fecha_inicio_depreciacion
+      ? new Date(inversion.fecha_inicio_depreciacion)
       : new Date(inversion.fecha_adquisicion);
-    
+
     let proximaFechaDepreciacion;
     if (ultimoMesDepreciado) {
-      // Siguiente mes después del último depreciado
       proximaFechaDepreciacion = lastDayOfMonth(addMonths(ultimoMesDepreciado, 1));
     } else {
-      // Si no hay asientos, usar fecha de inicio
       proximaFechaDepreciacion = lastDayOfMonth(fechaInicio);
     }
-    
+
     const hoy = new Date();
     const diasFaltantes = differenceInDays(proximaFechaDepreciacion, hoy);
-    
-    // Calcular meses transcurridos desde asientos reales
-    const mesesDepreciados = asientos?.length || 0;
-    const porcentajeDepreciado = inversion.valor_total > 0 ? (depreciacionAcumulada / inversion.valor_total) * 100 : 0;
-    
-    return (
-      <Card key={inversion.id} className="border-2">
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            {/* Encabezado */}
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg">{inversion.producto_nombre}</h3>
-                {inversion.descripcion && (
-                  <p className="text-sm text-muted-foreground">{inversion.descripcion}</p>
-                )}
-                <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                  <span>Categoría: {inversion.categoria_activo}</span>
-                  <span>•</span>
-                  <span>Adquisición: {format(new Date(inversion.fecha_adquisicion), "dd MMM yyyy", { locale: es })}</span>
-                </div>
-              </div>
-              {inversion.imagen_url && (
-                <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0 ml-4">
-                  <img 
-                    src={inversion.imagen_url} 
-                    alt={inversion.producto_nombre}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-            </div>
 
-            {/* Métricas de Depreciación */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 pt-4 border-t">
-              <div>
-                <p className="text-xs text-muted-foreground">Valor Original</p>
-                <p className="font-semibold">{formatCurrency(inversion.valor_total)}</p>
+    const mesesDepreciados = asientos?.length || 0;
+    const porcentajeDepreciado =
+      inversion.valor_total > 0 ? (depreciacionAcumulada / inversion.valor_total) * 100 : 0;
+
+    const fechaAdquisicion = new Date(inversion.fecha_adquisicion);
+
+    return (
+      <Card className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_45px_rgba(11,58,110,0.08)]">
+        <CardContent className="p-0">
+          <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.07),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-5 py-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: "rgba(11,58,110,0.10)", color: BUKIPIN_BLUE }}
+                  >
+                    <Layers3 className="h-5 w-5" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-bold text-slate-950">
+                      {inversion.producto_nombre}
+                    </h3>
+                    {inversion.descripcion && (
+                      <p className="mt-1 text-sm leading-6 text-slate-500">{inversion.descripcion}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <Badge variant="outline">{inversion.categoria_activo}</Badge>
+                      <span>Adquisición: {format(fechaAdquisicion, "dd MMM yyyy", { locale: es })}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Años Depreciación</p>
-                <p className="font-semibold">{inversion.anos_depreciacion} años</p>
+
+              <div className="shrink-0">
+                {inversion.imagen_url ? (
+                  <div className="h-20 w-20 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
+                    <img
+                      src={inversion.imagen_url}
+                      alt={inversion.producto_nombre}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 shadow-sm">
+                    <ImageIcon className="h-6 w-6" />
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Meses Depreciados</p>
-                <p className="font-semibold">{mesesDepreciados} meses</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Próxima Depreciación</p>
-                <p className="font-semibold text-blue-600">{format(proximaFechaDepreciacion, "dd MMM yyyy", { locale: es })}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {diasFaltantes === 0 ? "Hoy" : diasFaltantes > 0 ? `en ${diasFaltantes} días` : `hace ${Math.abs(diasFaltantes)} días`}
+            </div>
+          </div>
+
+          <div className="space-y-5 px-5 py-5">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Valor original
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {formatCurrency(inversion.valor_total)}
                 </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Depreciación Acumulada</p>
-                <p className="font-semibold text-orange-600">{formatCurrency(depreciacionAcumulada)}</p>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Años depreciación
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {inversion.anos_depreciacion} años
+                </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Valor en Libros</p>
-                <p className="font-semibold text-green-600">{formatCurrency(valorLibros)}</p>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Meses depreciados
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {mesesDepreciados} meses
+                </p>
+              </div>
+
+              <div
+                className="rounded-2xl border p-4"
+                style={{
+                  borderColor: "rgba(11,58,110,0.14)",
+                  backgroundColor: "rgba(11,58,110,0.05)",
+                }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Próxima depreciación
+                </p>
+                <p className="mt-2 text-sm font-semibold" style={{ color: BUKIPIN_BLUE }}>
+                  {format(proximaFechaDepreciacion, "dd MMM yyyy", { locale: es })}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {diasFaltantes === 0
+                    ? "Hoy"
+                    : diasFaltantes > 0
+                      ? `en ${diasFaltantes} días`
+                      : `hace ${Math.abs(diasFaltantes)} días`}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Depreciación acumulada
+                </p>
+                <p className="mt-2 text-sm font-semibold text-amber-700">
+                  {formatCurrency(depreciacionAcumulada)}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Valor en libros
+                </p>
+                <p className="mt-2 text-sm font-semibold text-emerald-700">
+                  {formatCurrency(valorLibros)}
+                </p>
               </div>
             </div>
 
-            {/* Barra de progreso de depreciación */}
-            <div className="space-y-2 pt-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Progreso de Depreciación</span>
-                <span className="font-medium">{porcentajeDepreciado.toFixed(2)}%</span>
+            <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Progreso de depreciación</p>
+                  <p className="text-xs text-slate-500">
+                    Seguimiento real basado en asientos generados
+                  </p>
+                </div>
+                <p className="text-sm font-semibold text-slate-900">
+                  {porcentajeDepreciado.toFixed(2)}%
+                </p>
               </div>
-              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                <div 
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 h-full rounded-full transition-all duration-500"
+
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#0B3A6E,#356AA3)] transition-all duration-500"
                   style={{ width: `${Math.min(porcentajeDepreciado, 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                 <span>Mensual: {formatCurrency(inversion.valor_depreciacion_mensual || 0)}</span>
                 <span>Anual: {formatCurrency(inversion.valor_depreciacion_anual || 0)}</span>
               </div>
             </div>
 
-            {/* Sección de asientos de depreciación */}
-            <div className="pt-2">
-              <AsientosDepreciacionSection inversionId={inversion.id} />
-            </div>
+            <AsientosDepreciacionSection inversionId={inversion.id} />
           </div>
         </CardContent>
       </Card>
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+          <span className="text-sm text-slate-600">Cargando depreciaciones...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Botón de Generar Depreciaciones */}
-      <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-purple-500/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Play className="h-5 w-5" />
-            Generar Depreciaciones Manualmente
-          </CardTitle>
-          <CardDescription>
-            Genera los asientos contables de depreciación para el mes seleccionado. 
-            Solo puedes generar desde el mes actual en adelante.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex-1 grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Mes</label>
-                <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {meses.map((mes) => {
-                      const esMesActual = mes.value === (fechaActual.getMonth() + 1).toString() 
-                        && anoSeleccionado === fechaActual.getFullYear().toString();
-                      
-                      return (
-                        <SelectItem key={mes.value} value={mes.value}>
-                          <div className="flex items-center gap-2">
-                            {mes.label}
-                            {esMesActual && (
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0">Actual</Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+      <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(11,58,110,0.08)]">
+        <CardHeader className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.08),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-6 py-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-2">
+              <div
+                className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
+                style={{
+                  borderColor: "rgba(11,58,110,0.12)",
+                  backgroundColor: "rgba(11,58,110,0.06)",
+                  color: BUKIPIN_BLUE,
+                }}
+              >
+                <Calculator className="h-3.5 w-3.5" />
+                Control manual de depreciaciones
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Año</label>
-                <Select value={anoSeleccionado} onValueChange={setAnoSeleccionado}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {anos.map((ano) => (
-                      <SelectItem key={ano.value} value={ano.value}>
-                        {ano.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              <div>
+                <CardTitle className="text-2xl font-bold tracking-tight text-slate-950">
+                  Generar Depreciaciones Manualmente
+                </CardTitle>
+                <CardDescription className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                  Genera asientos contables de depreciación para el período seleccionado.
+                  Esta herramienta debe utilizarse como apoyo operativo o corrección puntual.
+                </CardDescription>
               </div>
             </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Activos elegibles
+              </p>
+              <p className="mt-2 text-2xl font-bold text-slate-900">{inversionesActivas.length}</p>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5 px-6 py-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Mes</label>
+              <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+                <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white shadow-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {meses.map((mes) => {
+                    const esMesActual =
+                      mes.value === (fechaActual.getMonth() + 1).toString() &&
+                      anoSeleccionado === fechaActual.getFullYear().toString();
+
+                    return (
+                      <SelectItem key={mes.value} value={mes.value}>
+                        <div className="flex items-center gap-2 capitalize">
+                          {mes.label}
+                          {esMesActual && (
+                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                              Actual
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Año</label>
+              <Select value={anoSeleccionado} onValueChange={setAnoSeleccionado}>
+                <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white shadow-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {anos.map((ano) => (
+                    <SelectItem key={ano.value} value={ano.value}>
+                      {ano.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button 
-                  disabled={isPending || inversionesActivas.length === 0}
+                <Button
+                  disabled={isPending || inversionesActivas.length === 0 || esMesPasado}
                   size="lg"
-                  variant="outline"
-                  className="w-full sm:w-auto"
+                  className="h-12 rounded-2xl px-6 text-white shadow-lg"
+                  style={{ backgroundColor: BUKIPIN_BLUE }}
                 >
-                  <Play className="h-4 w-4 mr-2" />
-                  Generar Manualmente
+                  <Play className="mr-2 h-4 w-4" />
+                  Generar manualmente
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+
+              <AlertDialogContent className="rounded-[28px] border-slate-200">
                 <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-amber-500" />
-                    Generación Manual de Depreciaciones
+                    Generación manual de depreciaciones
                   </AlertDialogTitle>
+
                   <AlertDialogDescription className="space-y-3 text-left">
                     <p className="font-medium text-foreground">
-                      Las depreciaciones se generan automáticamente entre los días 28-31 de cada mes.
+                      Las depreciaciones se generan automáticamente entre los días 28 y 31 de cada mes.
                     </p>
+
                     <p>
-                      <strong>Usa esta función solo si:</strong>
+                      <strong>Utiliza esta función solo si:</strong>
                     </p>
-                    <ul className="list-disc list-inside space-y-1 text-sm pl-2">
+
+                    <ul className="list-inside list-disc space-y-1 pl-2 text-sm">
                       <li>Necesitas registrar depreciaciones de meses anteriores</li>
                       <li>El proceso automático falló por algún motivo</li>
                       <li>Necesitas proyectar depreciaciones futuras</li>
                     </ul>
-                    <p className="text-sm text-muted-foreground pt-2">
-                      Período seleccionado: <strong>{new Date(parseInt(anoSeleccionado), parseInt(mesSeleccionado) - 1).toLocaleString('es-MX', { month: 'long', year: 'numeric' })}</strong>
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Fecha de registro: <strong>Hoy ({format(new Date(), "d 'de' MMMM, yyyy", { locale: es })})</strong>
-                    </p>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <p className="text-sm text-slate-600">
+                        Período seleccionado:{" "}
+                        <strong>
+                          {new Date(
+                            parseInt(anoSeleccionado),
+                            parseInt(mesSeleccionado) - 1
+                          ).toLocaleString("es-MX", { month: "long", year: "numeric" })}
+                        </strong>
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Fecha de registro:{" "}
+                        <strong>
+                          Hoy ({format(new Date(), "d 'de' MMMM, yyyy", { locale: es })})
+                        </strong>
+                      </p>
+                    </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleGenerarDepreciaciones}
                     disabled={isPending}
-                    className="gap-2"
+                    className="gap-2 rounded-2xl text-white"
+                    style={{ backgroundColor: BUKIPIN_BLUE }}
                   >
                     {isPending ? (
                       <>
@@ -418,7 +685,7 @@ const ResumenDepreciaciones = () => {
                     ) : (
                       <>
                         <Play className="h-4 w-4" />
-                        Generar Ahora
+                        Generar ahora
                       </>
                     )}
                   </AlertDialogAction>
@@ -426,116 +693,126 @@ const ResumenDepreciaciones = () => {
               </AlertDialogContent>
             </AlertDialog>
           </div>
-          
+
           {esMesPasado && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertDescription>
-                ⚠️ No puedes generar depreciaciones de meses pasados. Solo puedes generar desde el mes actual en adelante.
-              </AlertDescription>
-            </Alert>
+            <PremiumNotice
+              destructive
+              icon={<AlertTriangle className="h-5 w-5" />}
+              title="Período no permitido"
+              description={
+                <>
+                  No puedes generar depreciaciones de meses pasados. Solo puedes generar desde el mes
+                  actual en adelante.
+                </>
+              }
+            />
           )}
-          
+
           {inversionesActivas.length === 0 && (
-            <p className="text-sm text-muted-foreground mt-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 text-sm text-slate-500">
               No hay activos activos para depreciar.
-            </p>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Resumen General */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Depreciación Anual Total</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalDepreciacionAnual)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Basado en {inversionesActivas.length} activo(s) activo(s)
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <SummaryMetricCard
+          title="Depreciación anual total"
+          value={formatCurrency(totalDepreciacionAnual)}
+          subtitle={`Basado en ${inversionesActivas.length} activo(s) activo(s)`}
+          icon={<TrendingDown className="h-5 w-5" />}
+        />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Depreciación Mensual Total</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalDepreciacionMensual)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Promedio mensual
-            </p>
-          </CardContent>
-        </Card>
+        <SummaryMetricCard
+          title="Depreciación mensual total"
+          value={formatCurrency(totalDepreciacionMensual)}
+          subtitle="Promedio mensual estimado"
+          icon={<Calendar className="h-5 w-5" />}
+        />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total de Activos</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalValorActivos)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Valor original
-            </p>
-          </CardContent>
-        </Card>
+        <SummaryMetricCard
+          title="Valor total de activos"
+          value={formatCurrency(totalValorActivos)}
+          subtitle="Valor original acumulado"
+          icon={<DollarSign className="h-5 w-5" />}
+        />
       </div>
 
-      {/* ALERTA DE DEPRECIACIONES ATRASADAS */}
       {tieneAtrasadas && (
-        <Alert variant="destructive" className="border-l-4 border-red-500">
-          <AlertTriangle className="h-5 w-5" />
-          <AlertDescription className="space-y-2">
-            <p className="font-semibold">
-              {totalAtrasadas} Período(s) de Depreciación Sin Registrar
-            </p>
-            <div className="text-sm space-y-1 mt-2">
-              {depreciacionesAtrasadas.slice(0, 5).map((atraso) => {
-                const ano = atraso.mesAno.substring(0, 4);
-                const mes = atraso.mesAno.substring(4, 6);
-                const fecha = new Date(parseInt(ano), parseInt(mes) - 1);
-                return (
-                  <div key={`${atraso.inversionId}-${atraso.mesAno}`} className="flex justify-between">
-                    <span>{atraso.productoNombre}</span>
-                    <span className="text-muted-foreground">
-                      {fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' })}
-                      {atraso.mesesAtrasados > 0 && ` (${atraso.mesesAtrasados} mes${atraso.mesesAtrasados > 1 ? 'es' : ''} atrás)`}
-                    </span>
-                  </div>
-                );
-              })}
+        <PremiumNotice
+          destructive
+          icon={<ShieldAlert className="h-5 w-5" />}
+          title={`${totalAtrasadas} período(s) de depreciación sin registrar`}
+          description={
+            <div className="space-y-2">
+              <div className="space-y-1">
+                {depreciacionesAtrasadas.slice(0, 5).map((atraso) => {
+                  const ano = atraso.mesAno.substring(0, 4);
+                  const mes = atraso.mesAno.substring(4, 6);
+                  const fecha = new Date(parseInt(ano), parseInt(mes) - 1);
+
+                  return (
+                    <div
+                      key={`${atraso.inversionId}-${atraso.mesAno}`}
+                      className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span className="font-medium text-slate-800">{atraso.productoNombre}</span>
+                      <span className="text-slate-500">
+                        {fecha.toLocaleString("es-MX", { month: "long", year: "numeric" })}
+                        {atraso.mesesAtrasados > 0 &&
+                          ` (${atraso.mesesAtrasados} mes${atraso.mesesAtrasados > 1 ? "es" : ""} atrás)`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
               {depreciacionesAtrasadas.length > 5 && (
-                <p className="text-muted-foreground italic pt-1">
+                <p className="italic text-slate-500">
                   ... y {depreciacionesAtrasadas.length - 5} más
                 </p>
               )}
+
+              <p className="pt-1 text-sm text-slate-600">
+                Usa el botón <strong>"Generar manualmente"</strong> para registrar los períodos
+                pendientes.
+              </p>
             </div>
-            <p className="text-sm mt-3">
-              Usa el botón <strong>"Generar Manualmente"</strong> arriba para registrar períodos atrasados.
-            </p>
-          </AlertDescription>
-        </Alert>
+          }
+        />
       )}
 
-      {/* Tabla de Depreciaciones por Activo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Historial de Depreciaciones por Activo</CardTitle>
-          <CardDescription>
-            Detalle de la depreciación acumulada y valor en libros de cada activo activo
-          </CardDescription>
+      <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(11,58,110,0.08)]">
+        <CardHeader className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.08),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-6 py-5">
+          <SectionHeader
+            icon={<BarChart3 className="h-5 w-5" />}
+            title="Historial de Depreciaciones por Activo"
+            subtitle="Detalle de depreciación acumulada, valor en libros y trazabilidad contable por cada activo activo."
+          />
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="px-5 py-5 md:px-6 md:py-6">
           {inversionesActivas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay inversiones registradas aún
+            <div className="py-16">
+              <div className="flex flex-col items-center justify-center text-center">
+                <div
+                  className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: "rgba(11,58,110,0.08)", color: BUKIPIN_BLUE }}
+                >
+                  <Clock3 className="h-6 w-6" />
+                </div>
+                <p className="text-base font-semibold text-slate-900">
+                  No hay inversiones activas registradas
+                </p>
+                <p className="mt-1 max-w-md text-sm text-slate-500">
+                  Cuando existan activos activos con depreciación aplicable, aparecerán aquí con su
+                  historial y métricas financieras.
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {inversionesActivas.map((inversion) => (
                 <InversionCard key={inversion.id} inversion={inversion} />
               ))}
