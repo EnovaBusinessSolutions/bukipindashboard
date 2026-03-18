@@ -47,13 +47,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import PreviewCuentasContables from "./PreviewCuentasContables";
 
 const categoriaOptions = [
-  { value: "equipo_computo", label: "Equipo de Cómputo", icon: "💻" },
-  { value: "maquinaria", label: "Maquinaria", icon: "⚙️" },
-  { value: "vehiculos", label: "Vehículos", icon: "🚘" },
-  { value: "mobiliario", label: "Mobiliario", icon: "🪑" },
-  { value: "edificios", label: "Edificios", icon: "🏢" },
-  { value: "equipo_oficina", label: "Equipo de Oficina", icon: "🗂️" },
-  { value: "otro", label: "Otro", icon: "📦" },
+  { value: "equipo_computo", label: "Equipo de Cómputo" },
+  { value: "maquinaria", label: "Maquinaria" },
+  { value: "vehiculos", label: "Vehículos" },
+  { value: "mobiliario", label: "Mobiliario" },
+  { value: "edificios", label: "Edificios" },
+  { value: "equipo_oficina", label: "Equipo de Oficina" },
+  { value: "otro", label: "Otro" },
 ];
 
 const cuentaMap: Record<string, string> = {
@@ -93,10 +93,10 @@ const SectionShell = ({
   children: React.ReactNode;
 }) => {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-slate-50/60 px-5 py-4 md:px-6">
+    <div className="overflow-hidden rounded-2xl border border-[#D6E4F2] bg-white shadow-[0_10px_30px_rgba(11,58,110,0.07)]">
+  <div className="border-b border-[#E3EDF7] bg-gradient-to-r from-[#F4F8FC] via-white to-[#F7FAFE] px-5 py-4 md:px-6">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B3A6E]/8 text-[#0B3A6E] shadow-sm">
+          <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF2FB] text-[#0B3A6E] shadow-sm">
             {icon}
           </div>
           <div className="min-w-0">
@@ -122,11 +122,11 @@ const StatMiniCard = ({
   accent?: "default" | "success" | "warning";
 }) => {
   const accentClasses =
-    accent === "success"
-      ? "border-emerald-200 bg-emerald-50/70 text-emerald-700"
-      : accent === "warning"
-        ? "border-amber-200 bg-amber-50/70 text-amber-700"
-        : "border-slate-200 bg-slate-50/80 text-slate-700";
+  accent === "success"
+    ? "border-[#B9D7C0] bg-[#EEF8F1] text-[#256C3D]"
+    : accent === "warning"
+      ? "border-[#E7D8B3] bg-[#FBF6EA] text-[#8A6A1F]"
+      : "border-[#D6E4F2] bg-[#F4F8FC] text-[#0B3A6E]";
 
   return (
     <div className={cn("rounded-2xl border p-4 shadow-sm", accentClasses)}>
@@ -438,11 +438,11 @@ const RegistroInversionForm = () => {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
       <div className="xl:col-span-8 2xl:col-span-9 space-y-6">
-        <Card className="overflow-hidden border border-slate-200/80 bg-white shadow-[0_16px_60px_rgba(2,6,23,0.08)] rounded-3xl">
-          <CardHeader className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(11,58,110,0.08),_transparent_35%),linear-gradient(135deg,rgba(255,255,255,1),rgba(248,250,252,0.92))] px-6 py-6 md:px-8">
+        <Card className="overflow-hidden rounded-3xl border border-[#D6E4F2] bg-white shadow-[0_18px_60px_rgba(11,58,110,0.10)]">
+        <CardHeader className="border-b border-[#DCE8F5] bg-[radial-gradient(circle_at_top_left,_rgba(11,58,110,0.12),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f4f8fc_65%,#eef4fb_100%)] px-6 py-6 md:px-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#0B3A6E]/10 bg-[#0B3A6E]/5 px-3 py-1 text-xs font-semibold text-[#0B3A6E]">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#0B3A6E]/15 bg-[#EAF2FB] px-3 py-1 text-xs font-semibold text-[#0B3A6E]">
                   <Sparkles className="h-3.5 w-3.5" />
                   Registro premium de activos CAPEX
                 </div>
@@ -451,7 +451,7 @@ const RegistroInversionForm = () => {
                   <CardTitle className="text-2xl md:text-3xl font-bold tracking-tight text-slate-950">
                     Registro de Inversión CAPEX
                   </CardTitle>
-                  <CardDescription className="mt-2 max-w-3xl text-sm md:text-[15px] leading-6 text-slate-600">
+                  <CardDescription className="mt-2 max-w-3xl text-sm md:text-[15px] leading-6 text-[#3F5F82]">
                     Registra activos fijos con una experiencia más clara, profesional y contablemente alineada.
                     Define categoría, valor, pago, proveedor y depreciación desde un solo flujo.
                   </CardDescription>
@@ -498,13 +498,10 @@ const RegistroInversionForm = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {categoriaOptions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            <span className="flex items-center gap-2">
-                              <span>{item.icon}</span>
-                              <span>{item.label}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
+  <SelectItem key={item.value} value={item.value}>
+    {item.label}
+  </SelectItem>
+))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -516,7 +513,7 @@ const RegistroInversionForm = () => {
                           Categoría seleccionada
                         </p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">
-                          {categoriaMeta?.icon} {getCategoriaLabel(categoriaActivo)}
+                         {getCategoriaLabel(categoriaActivo)}
                         </p>
                       </div>
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
