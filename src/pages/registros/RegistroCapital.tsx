@@ -338,77 +338,83 @@ const RegistroCapital = () => {
                 <CardContent className="p-6">
                   <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Tipo de Movimiento */}
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-foreground">
-                        Tipo de movimiento
-                      </Label>
+<div className="space-y-3">
+  <Label className="text-sm font-medium text-foreground">
+    Tipo de movimiento
+  </Label>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setTipoMovimiento("aportacion")}
-                          className={cn(
-                            "group h-auto min-h-[112px] justify-start rounded-2xl border px-5 py-4 text-left transition-all",
-                            tipoMovimiento === "aportacion"
-                              ? "border-emerald-500/40 bg-emerald-500/[0.08] shadow-[0_14px_34px_-22px_rgba(16,185,129,0.65)]"
-                              : "border-border/60 bg-background hover:border-emerald-400/30 hover:bg-emerald-500/[0.03]"
-                          )}
-                        >
-                          <div className="flex w-full items-start gap-4">
-                            <div
-                              className={cn(
-                                "rounded-2xl p-3",
-                                tipoMovimiento === "aportacion"
-                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                                  : "bg-muted text-muted-foreground"
-                              )}
-                            >
-                              <TrendingUp className="h-5 w-5" />
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-sm font-semibold">Aportación de Capital</p>
-                              <p className="text-xs leading-5 text-muted-foreground">
-                                Incrementa el capital social y fortalece la posición patrimonial
-                                de la empresa.
-                              </p>
-                            </div>
-                          </div>
-                        </Button>
+  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => setTipoMovimiento("aportacion")}
+      className={cn(
+        "group h-auto min-h-[124px] justify-start rounded-2xl border px-5 py-5 text-left transition-all",
+        tipoMovimiento === "aportacion"
+          ? "border-emerald-500/40 bg-emerald-500/[0.08] shadow-[0_14px_34px_-22px_rgba(16,185,129,0.65)]"
+          : "border-border/60 bg-background hover:border-emerald-400/30 hover:bg-emerald-500/[0.03]"
+      )}
+    >
+      <div className="flex w-full items-start gap-4">
+        <div
+          className={cn(
+            "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+            tipoMovimiento === "aportacion"
+              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          <TrendingUp className="h-5 w-5" />
+        </div>
 
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setTipoMovimiento("dividendo")}
-                          className={cn(
-                            "group h-auto min-h-[112px] justify-start rounded-2xl border px-5 py-4 text-left transition-all",
-                            tipoMovimiento === "dividendo"
-                              ? "border-rose-500/40 bg-rose-500/[0.08] shadow-[0_14px_34px_-22px_rgba(244,63,94,0.65)]"
-                              : "border-border/60 bg-background hover:border-rose-400/30 hover:bg-rose-500/[0.03]"
-                          )}
-                        >
-                          <div className="flex w-full items-start gap-4">
-                            <div
-                              className={cn(
-                                "rounded-2xl p-3",
-                                tipoMovimiento === "dividendo"
-                                  ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
-                                  : "bg-muted text-muted-foreground"
-                              )}
-                            >
-                              <TrendingDown className="h-5 w-5" />
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-sm font-semibold">Pago de Dividendos</p>
-                              <p className="text-xs leading-5 text-muted-foreground">
-                                Registra distribución de utilidades con control y trazabilidad
-                                sobre capital disponible.
-                              </p>
-                            </div>
-                          </div>
-                        </Button>
-                      </div>
-                    </div>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="text-sm font-semibold leading-5">
+            Aportación de Capital
+          </p>
+          <p className="whitespace-normal break-words text-xs leading-5 text-muted-foreground">
+            Incrementa el capital social y fortalece la posición patrimonial
+            de la empresa.
+          </p>
+        </div>
+      </div>
+    </Button>
+
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => setTipoMovimiento("dividendo")}
+      className={cn(
+        "group h-auto min-h-[124px] justify-start rounded-2xl border px-5 py-5 text-left transition-all",
+        tipoMovimiento === "dividendo"
+          ? "border-rose-500/40 bg-rose-500/[0.08] shadow-[0_14px_34px_-22px_rgba(244,63,94,0.65)]"
+          : "border-border/60 bg-background hover:border-rose-400/30 hover:bg-rose-500/[0.03]"
+      )}
+    >
+      <div className="flex w-full items-start gap-4">
+        <div
+          className={cn(
+            "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+            tipoMovimiento === "dividendo"
+              ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          <TrendingDown className="h-5 w-5" />
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="text-sm font-semibold leading-5">
+            Pago de Dividendos
+          </p>
+          <p className="whitespace-normal break-words text-xs leading-5 text-muted-foreground">
+            Registra distribución de utilidades con control y trazabilidad
+            sobre capital disponible.
+          </p>
+        </div>
+      </div>
+    </Button>
+  </div>
+</div>
 
                     {/* Fecha */}
                     <div className="space-y-2">
