@@ -16,6 +16,8 @@ interface TransaccionCapital {
   estado: string;
   fecha_cancelacion?: string;
   motivo_cancelacion?: string;
+  journalEntryId?: string | null;
+  reversalJournalEntryId?: string | null;
 }
 
 interface DialogDetalleTransaccionProps {
@@ -24,16 +26,22 @@ interface DialogDetalleTransaccionProps {
   transaccion: TransaccionCapital | null;
 }
 
-export const DialogDetalleTransaccion = ({ 
-  open, 
-  onOpenChange, 
-  transaccion 
+export const DialogDetalleTransaccion = ({
+  open,
+  onOpenChange,
+  transaccion,
 }: DialogDetalleTransaccionProps) => {
-  const { data: asiento, isLoading } = useAsientosCapital(transaccion?.id);
+  const { data: asiento, isLoading } = useAsientosCapital({
+    transaccionId: transaccion?.id ?? null,
+    asientoId: transaccion?.journalEntryId ?? null,
+  });
 
   if (!transaccion) return null;
 
   const esAportacion = transaccion.tipo_movimiento === "aportacion";
+  const fechaCancelacionValida =
+    transaccion.fecha_cancelacion &&
+    !Number.isNaN(new Date(transaccion.fecha_cancelacion).getTime());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -47,7 +55,7 @@ export const DialogDetalleTransaccion = ({
 
         <div className="space-y-6">
           {/* Información General */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -74,7 +82,7 @@ export const DialogDetalleTransaccion = ({
                 <div>
                   <p className="text-xs text-muted-foreground">Monto</p>
                   <p className="text-xl font-bold">
-                    ${Number(transaccion.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${Number(transaccion.monto).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -105,20 +113,28 @@ export const DialogDetalleTransaccion = ({
           )}
 
           {/* Estado de Cancelación (si aplica) */}
-          {transaccion.estado === 'cancelado' && (
+          {transaccion.estado === "cancelado" && (
             <div className="p-4 bg-red-50 dark:bg-red-950/20 border-l-4 border-red-500 rounded">
               <div className="flex items-start gap-2">
                 <div className="flex-1">
                   <p className="font-semibold text-red-900 dark:text-red-100 mb-1">
                     Transacción Cancelada
                   </p>
-                  <p className="text-sm text-red-700 dark:text-red-300">
-                    <strong>Fecha de cancelación:</strong>{' '}
-                    {format(new Date(transaccion.fecha_cancelacion!), "dd/MM/yyyy HH:mm", { locale: es })}
-                  </p>
-                  <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                    <strong>Motivo:</strong> {transaccion.motivo_cancelacion}
-                  </p>
+
+                  {fechaCancelacionValida && (
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      <strong>Fecha de cancelación:</strong>{" "}
+                      {format(new Date(transaccion.fecha_cancelacion as string), "dd/MM/yyyy", {
+                        locale: es,
+                      })}
+                    </p>
+                  )}
+
+                  {transaccion.motivo_cancelacion && (
+                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                      <strong>Motivo:</strong> {transaccion.motivo_cancelacion}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

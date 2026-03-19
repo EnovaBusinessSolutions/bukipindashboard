@@ -19,6 +19,10 @@ export interface TransaccionCapital {
   motivo_cancelacion?: string;
   transaccion_cancelacion_id?: string;
 
+  // ✅ nuevos para detalle contable
+  journalEntryId?: string | null;
+  reversalJournalEntryId?: string | null;
+
   // enriquecidos
   accionistaActivo?: boolean;
   accionistaNombreActual?: string;
@@ -98,6 +102,12 @@ export const useTransaccionesCapital = () => {
         transaccion_cancelacion_id: t.transaccion_cancelacion_id
           ? String(t.transaccion_cancelacion_id)
           : undefined,
+
+        // ✅ preservar IDs de asiento que manda backend
+        journalEntryId: t.journalEntryId ? String(t.journalEntryId) : null,
+        reversalJournalEntryId: t.reversalJournalEntryId
+          ? String(t.reversalJournalEntryId)
+          : null,
       }));
 
       // Orden por fecha desc

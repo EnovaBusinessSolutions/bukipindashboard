@@ -16,85 +16,106 @@ interface AsientoCapital {
   id: string;
   numero_asiento: string;
   descripcion: string;
-  fecha: string; // "YYYY-MM-DD"
+  fecha: string;
   created_at: string;
   detalle_asientos: DetalleAsiento[];
 }
 
-type AsientoCapitalApi = {
-  id: string;
-  numero_asiento: string;
-  descripcion: string;
-  fecha: string;
-  created_at: string;
-  detalle_asientos: Array<{
-    id: string;
-    cuenta_codigo: string;
-    debe: number | string | null;
-    haber: number | string | null;
-    descripcion: string | null;
-  }>;
+type UseAsientosCapitalParams = {
+  transaccionId?: string | null;
+  asientoId?: string | null;
 };
 
-export const useAsientosCapital = (transaccionId?: string) => {
+const toNumber = (v: unknown) => {
+  const n =
+    typeof v === "number"
+      ? v
+      : Number(String(v ?? "").replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+export const useAsientosCapital = ({
+  transaccionId,
+  asientoId,
+}: UseAsientosCapitalParams) => {
   return useQuery({
-    queryKey: ["asientos-capital", transaccionId],
+    queryKey: ["asientos-capital", transaccionId || null, asientoId || null],
+    enabled: !!transaccionId || !!asientoId,
     queryFn: async (): Promise<AsientoCapital | null> => {
-      if (!transaccionId) return null;
+      let json: any = null;
 
-      // 1) Traer el asiento CAP-{transaccionId} (ya incluye detalle_asientos)
-      // Backend recomendado: resolver todo con populate/lookup.
-      const asientoJson = await apiFetch(
-        `/api/contabilidad/asientos/capital/${encodeURIComponent(transaccionId)}`,
-        { method: "GET" }
-      );
-
-      const asiento: AsientoCapitalApi | null = (asientoJson as any)?.data ?? asientoJson ?? null;
-      if (!asiento) return null;
-
-      // 2) Resolver nombres de cuentas para los códigos usados
-      const detalles = asiento.detalle_asientos || [];
-      const codigos = Array.from(new Set(detalles.map((d) => d.cuenta_codigo).filter(Boolean)));
-
-      if (codigos.length === 0) {
-        return {
-          ...asiento,
-          detalle_asientos: [],
-        } as AsientoCapital;
+      // 1) Si ya tenemos el ID real del asiento, usamos la ruta directa
+      if (asientoId) {
+        json = await apiFetch(`/api/asientos/${encodeURIComponent(asientoId)}`, {
+          method: "GET",
+        });
+      }
+      // 2) Fallback: buscar por transacción de capital
+      else if (transaccionId) {
+        json = await apiFetch(
+          `/api/asientos/by-transaccion?source=capital&id=${encodeURIComponent(transaccionId)}`,
+          { method: "GET" }
+        );
+      } else {
+        return null;
       }
 
-      // Endpoint catálogo (puede aceptar filter por codigos)
-      const cuentasJson = await apiFetch(
-        `/api/catalogos/cuentas?codes=${encodeURIComponent(codigos.join(","))}&fields=codigo,nombre`,
-        { method: "GET" }
-      );
+      const asientoRaw =
+        json?.data ??
+        json?.asiento ??
+        json?.item ??
+        json ??
+        null;
 
-      const cuentas: Array<{ codigo: string; nombre: string }> =
-        (cuentasJson as any)?.data ?? cuentasJson ?? [];
+      if (!asientoRaw) return null;
 
-      const cuentasMap = new Map(cuentas.map((c) => [c.codigo, c.nombre]));
+      const detallesRaw = Array.isArray(asientoRaw.detalle_asientos)
+        ? asientoRaw.detalle_asientos
+        : Array.isArray(asientoRaw.detalles)
+          ? asientoRaw.detalles
+          : [];
 
-      // 3) Adjuntar nombre de cuenta a cada detalle
-      const asientoConCuentas: AsientoCapital = {
-        id: asiento.id,
-        numero_asiento: asiento.numero_asiento,
-        descripcion: asiento.descripcion,
-        fecha: asiento.fecha,
-        created_at: asiento.created_at,
-        detalle_asientos: detalles.map((d) => ({
-          id: d.id,
-          cuenta_codigo: d.cuenta_codigo,
-          debe: Number(d.debe) || 0,
-          haber: Number(d.haber) || 0,
-          descripcion: d.descripcion || "",
-          cuenta: {
-            nombre: cuentasMap.get(d.cuenta_codigo) || d.cuenta_codigo,
-          },
-        })),
+      const detalle_asientos: DetalleAsiento[] = detallesRaw.map((d: any, index: number) => ({
+        id: String(
+          d?.id ??
+          `${asientoRaw.id || "asiento"}-${index}`
+        ),
+        cuenta_codigo: String(d?.cuenta_codigo ?? ""),
+        debe: toNumber(d?.debe),
+        haber: toNumber(d?.haber),
+        descripcion: String(d?.descripcion ?? d?.memo ?? ""),
+        cuenta: {
+          nombre: String(
+            d?.cuenta_nombre ??
+            d?.cuenta?.nombre ??
+            d?.cuenta_codigo ??
+            ""
+          ),
+        },
+      }));
+
+      const asiento: AsientoCapital = {
+        id: String(asientoRaw.id ?? ""),
+        numero_asiento: String(
+          asientoRaw.numero_asiento ??
+          asientoRaw.numeroAsiento ??
+          ""
+        ),
+        descripcion: String(
+          asientoRaw.descripcion ??
+          asientoRaw.concepto ??
+          ""
+        ),
+        fecha: String(
+          asientoRaw.asiento_fecha ??
+          asientoRaw.fecha ??
+          ""
+        ),
+        created_at: String(asientoRaw.created_at ?? ""),
+        detalle_asientos,
       };
 
-      return asientoConCuentas;
+      return asiento;
     },
-    enabled: !!transaccionId,
   });
 };
