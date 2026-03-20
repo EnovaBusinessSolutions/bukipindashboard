@@ -100,33 +100,6 @@ export const RegistroImpuestosForm = () => {
 
   const { data: utilidadData, isLoading } = useUtilidadAntesImpuestos(mesSeleccionado, anoSeleccionado);
 
-  const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
-  const isrCalculado =
-    utilidadAntesImpuestos > 0 ? (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100 : 0;
-
-  const autoridadActiva = autoridadesFindHelper(autoridadSeleccionada);
-
-  function autoridadesFindHelper(id: string) {
-    return autoridades.find((a) => a.id === id) || null;
-  }
-
-  const isPeriodoPasado = () => {
-    const periodoSeleccionado = new Date(anoSeleccionado, mesSeleccionado - 1);
-    const mesActual = new Date(currentDate.getFullYear(), currentDate.getMonth());
-    return periodoSeleccionado < mesActual;
-  };
-
-  const diasRestantesMes = () => {
-    const ultimoDiaMes = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    const diaActual = currentDate.getDate();
-    return ultimoDiaMes - diaActual;
-  };
-
-  const mostrarAlertaCierreMes =
-    mesSeleccionado === currentDate.getMonth() + 1 &&
-    anoSeleccionado === currentDate.getFullYear() &&
-    diasRestantesMes() <= 5;
-
   const { data: autoridades = [] } = useQuery({
     queryKey: ["autoridades-fiscales"],
     queryFn: async () => {
@@ -146,6 +119,31 @@ export const RegistroImpuestosForm = () => {
       return normalizeArray<TxImpuesto>(json);
     },
   });
+
+  const utilidadAntesImpuestos = utilidadData?.utilidadAntesImpuestos || 0;
+  const isrCalculado =
+    utilidadAntesImpuestos > 0 ? (utilidadAntesImpuestos * parseFloat(tasaISR || "0")) / 100 : 0;
+
+  const autoridadActiva = useMemo(() => {
+    return autoridades.find((a) => a.id === autoridadSeleccionada) || null;
+  }, [autoridades, autoridadSeleccionada]);
+
+  const isPeriodoPasado = () => {
+    const periodoSeleccionado = new Date(anoSeleccionado, mesSeleccionado - 1);
+    const mesActual = new Date(currentDate.getFullYear(), currentDate.getMonth());
+    return periodoSeleccionado < mesActual;
+  };
+
+  const diasRestantesMes = () => {
+    const ultimoDiaMes = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const diaActual = currentDate.getDate();
+    return ultimoDiaMes - diaActual;
+  };
+
+  const mostrarAlertaCierreMes =
+    mesSeleccionado === currentDate.getMonth() + 1 &&
+    anoSeleccionado === currentDate.getFullYear() &&
+    diasRestantesMes() <= 5;
 
   const registroExistente = useMemo(() => {
     if (!registrosPeriodo?.length) return null;
@@ -179,8 +177,7 @@ export const RegistroImpuestosForm = () => {
       setMetodoPago("transferencia");
       setMontoPagado("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mesSeleccionado, anoSeleccionado, registroExistente?.registros?.length]);
+  }, [mesSeleccionado, anoSeleccionado, registroExistente]);
 
   const handleGuardarRegistro = async () => {
     if (isPeriodoPasado()) {
@@ -299,8 +296,8 @@ export const RegistroImpuestosForm = () => {
           tipoPago === "total"
             ? "El pago de ISR se registró correctamente con su asiento contable"
             : tipoPago === "credito"
-              ? "La cuenta por pagar de ISR se registró correctamente con su asiento contable"
-              : "El pago parcial de ISR y su cuenta por pagar se registraron correctamente",
+            ? "La cuenta por pagar de ISR se registró correctamente con su asiento contable"
+            : "El pago parcial de ISR y su cuenta por pagar se registraron correctamente",
       });
 
       setIsrReal("");
@@ -860,8 +857,8 @@ export const RegistroImpuestosForm = () => {
                           tipoPago === "total"
                             ? parseFloat(isrReal || "0") || 0
                             : tipoPago === "parcial"
-                              ? parseFloat(montoPagado || "0") || 0
-                              : 0
+                            ? parseFloat(montoPagado || "0") || 0
+                            : 0
                         )}
                       </p>
                     </div>
@@ -881,8 +878,8 @@ export const RegistroImpuestosForm = () => {
                       {tipoPago === "total"
                         ? "El período queda liquidado contablemente."
                         : tipoPago === "parcial"
-                          ? "Se generará pago + cuenta por pagar."
-                          : "Se generará únicamente la obligación fiscal."}
+                        ? "Se generará pago + cuenta por pagar."
+                        : "Se generará únicamente la obligación fiscal."}
                     </p>
                   </div>
                 </div>
