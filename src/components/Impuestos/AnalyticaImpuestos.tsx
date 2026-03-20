@@ -6,9 +6,18 @@ import { Label } from "@/components/ui/label";
 import { useUtilidadAntesImpuestos } from "@/hooks/useUtilidadAntesImpuestos";
 import { useEstadoResultadosMensual } from "@/hooks/useEstadoResultadosMensual";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { TrendingUp, ChevronDown } from "lucide-react";
+import {
+  TrendingUp,
+  ChevronDown,
+  Sparkles,
+  BarChart3,
+  CalendarRange,
+  Scale,
+  ReceiptText,
+  Landmark,
+  ArrowRightLeft,
+} from "lucide-react";
 import { apiFetch } from "@/lib/api";
-
 
 interface DatosGrafica {
   periodo: string;
@@ -26,20 +35,18 @@ type TxImpuesto = {
 
 export const AnalyticaImpuestos = () => {
   const currentYear = new Date().getFullYear();
-  const mesActual = new Date().getMonth() + 1; // 1-12
+  const mesActual = new Date().getMonth() + 1;
   const [anoSeleccionado, setAnoSeleccionado] = useState<number>(currentYear);
   const [tipoVista, setTipoVista] = useState<"mensual" | "anual">("mensual");
   const [datos, setDatos] = useState<DatosGrafica[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tasaISR] = useState<string>("30"); // Usar la misma tasa que el formulario
+  const [tasaISR] = useState<string>("30");
 
-  // Solo obtener utilidad del mes en curso si estamos viendo datos mensuales del año actual
   const { data: utilidadMesActual } = useUtilidadAntesImpuestos(
     tipoVista === "mensual" && anoSeleccionado === currentYear ? mesActual : 0,
     anoSeleccionado
   );
 
-  // Obtener datos del año actual para vista anual
   const { data: resultadosAnuales } = useEstadoResultadosMensual(currentYear);
 
   useEffect(() => {
@@ -56,7 +63,6 @@ export const AnalyticaImpuestos = () => {
 
       try {
         if (tipoVista === "mensual") {
-          // Traer transacciones_impuestos del año seleccionado
           const json = await apiFetch(`/api/impuestos/transacciones?year=${anoSeleccionado}`);
           const payload = (json?.data ?? json) as { transacciones?: TxImpuesto[] } | TxImpuesto[];
           const transacciones: TxImpuesto[] = Array.isArray(payload)
@@ -70,7 +76,6 @@ export const AnalyticaImpuestos = () => {
           const datosCompletos = meses.map((mes, index) => {
             const mesNumero = index + 1;
 
-            // ✅ CASO 1: Mes en curso (calcular ISR dinámicamente)
             if (mesNumero === mesActual && anoSeleccionado === currentYear && utilidadMesActual) {
               const utilidadActual = toNumber((utilidadMesActual as any)?.utilidadAntesImpuestos);
               const isrCalculadoActual = utilidadActual > 0 ? (utilidadActual * parseFloat(tasaISR)) / 100 : 0;
@@ -86,7 +91,6 @@ export const AnalyticaImpuestos = () => {
               };
             }
 
-            // ✅ CASO 2: Meses pasados (usar datos históricos cerrados)
             if (mesNumero < mesActual || anoSeleccionado < currentYear) {
               const transaccionesMes = (transacciones || []).filter((t) => Number(t.mes) === mesNumero);
 
@@ -105,14 +109,11 @@ export const AnalyticaImpuestos = () => {
               };
             }
 
-            // ✅ CASO 3: Meses futuros
             return { periodo: mes, calculado: 0, registrado: 0, diferencia: 0 };
           });
 
           if (!cancelled) setDatos(datosCompletos);
         } else {
-          // ========== VISTA ANUAL ==========
-          // Traer transacciones_impuestos de los últimos 5 años (incluye actual)
           const startYear = currentYear - 4;
           const endYear = currentYear;
 
@@ -124,7 +125,6 @@ export const AnalyticaImpuestos = () => {
               ? payload.transacciones
               : [];
 
-          // CASO 1: ISR calculado del año actual dinámicamente
           let isrCalculadoAnoActual = 0;
           let isrRegistradoAnoActual = 0;
 
@@ -136,15 +136,13 @@ export const AnalyticaImpuestos = () => {
             isrCalculadoAnoActual = utilidadAcumuladaAnual > 0 ? (utilidadAcumuladaAnual * parseFloat(tasaISR)) / 100 : 0;
           }
 
-          // ISR registrado año actual
           isrRegistradoAnoActual = (transacciones || [])
             .filter((t) => Number(t.ano) === currentYear)
             .reduce((sum, t) => sum + toNumber(t.isr_real), 0);
 
-          // CASO 2: Años anteriores (históricos cerrados)
           const anosAnteriores = (transacciones || []).filter((t) => Number(t.ano) < currentYear);
 
-          const agrupadoPorAno = anosAnteriores.reduce((acc, t) => {
+    const agrupadoPorAno = anosAnteriores.reduce((acc, t) => {
             const ano = Number(t.ano);
             if (!acc[ano]) {
               acc[ano] = {
@@ -171,7 +169,6 @@ export const AnalyticaImpuestos = () => {
             diferencia: valores.registrado - valores.calculado,
           })) as any;
 
-          // Agregar año actual (dinámico)
           datosFormateados.push({
             periodo: currentYear.toString(),
             calculado: isrCalculadoAnoActual,
@@ -193,10 +190,8 @@ export const AnalyticaImpuestos = () => {
 
     fetchDatos();
 
-    // Reemplazo del realtime: auto-refresh suave cuando puede cambiar (mes actual / año actual)
-    // (evita que se “congele” cuando registren pagos o cambien asientos)
     if ((tipoVista === "mensual" && anoSeleccionado === currentYear) || tipoVista === "anual") {
-      intervalId = setInterval(fetchDatos, 60_000); // 60s
+      intervalId = setInterval(fetchDatos, 60_000);
     }
 
     return () => {
@@ -221,7 +216,6 @@ export const AnalyticaImpuestos = () => {
     }).format(value);
   };
 
-  // Calcular totales según la vista
   const totales =
     tipoVista === "mensual"
       ? datos.reduce(
@@ -240,22 +234,93 @@ export const AnalyticaImpuestos = () => {
     datos.length > 0 ? Math.max(...datos.map((d) => Math.max(d.calculado, d.registrado, Math.abs(d.diferencia)))) : 0;
   const limiteYAxis = Math.ceil(valorMaximo * 1.2);
 
+  const colorDiferencia =
+    totales.diferencia > 0 ? "text-red-600" : totales.diferencia < 0 ? "text-emerald-600" : "text-slate-900";
+
+  const colorPromedio =
+    promedioDiferencia > 0 ? "text-red-600" : promedioDiferencia < 0 ? "text-emerald-600" : "text-slate-900";
+
   return (
     <div className="space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-slate-50 to-cyan-50/70 p-6 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.10),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.10),transparent_24%)]" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-200/70 bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+              <Sparkles className="h-3.5 w-3.5" />
+              Analítica fiscal premium
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+                Inteligencia visual del comportamiento del ISR
+              </h2>
+              <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-[15px]">
+                Compara ISR calculado contra ISR registrado, detecta desviaciones y analiza el comportamiento mensual o
+                anual con una visual mucho más ejecutiva, clara y premium.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[520px]">
+            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
+              <div className="mb-2 flex items-center gap-2 text-slate-500">
+                <CalendarRange className="h-4 w-4" />
+                <span className="text-xs font-medium uppercase tracking-wide">Vista</span>
+              </div>
+              <p className="text-lg font-semibold text-slate-900 capitalize">{tipoVista}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {tipoVista === "mensual" ? `Ejercicio ${anoSeleccionado}` : "Últimos 5 años"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
+              <div className="mb-2 flex items-center gap-2 text-slate-500">
+                <BarChart3 className="h-4 w-4" />
+                <span className="text-xs font-medium uppercase tracking-wide">Puntos</span>
+              </div>
+              <p className="text-lg font-semibold text-slate-900">{datos.length}</p>
+              <p className="mt-1 text-xs text-slate-500">elementos analizados</p>
+            </div>
+
+            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
+              <div className="mb-2 flex items-center gap-2 text-slate-500">
+                <Scale className="h-4 w-4" />
+                <span className="text-xs font-medium uppercase tracking-wide">Tasa ISR</span>
+              </div>
+              <p className="text-lg font-semibold text-slate-900">{tasaISR}%</p>
+              <p className="mt-1 text-xs text-slate-500">base de cálculo actual</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Controles */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Configuración de Vista</CardTitle>
-          <CardDescription>Selecciona el período y tipo de análisis</CardDescription>
+      <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-white/95 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.35)]">
+        <div className="h-1.5 w-full bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500" />
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-slate-900">
+            <ArrowRightLeft className="h-5 w-5 text-cyan-600" />
+            Configuración de vista
+          </CardTitle>
+          <CardDescription className="text-slate-600">
+            Selecciona el tipo de análisis y el ejercicio a consultar.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="tipo-vista">Tipo de Vista</Label>
+            <Label htmlFor="tipo-vista" className="text-[13px] font-semibold text-slate-700">
+              Tipo de Vista
+            </Label>
             <Select value={tipoVista} onValueChange={(value) => setTipoVista(value as "mensual" | "anual")}>
-              <SelectTrigger id="tipo-vista">
+              <SelectTrigger
+                id="tipo-vista"
+                className="h-12 rounded-2xl border-slate-200 bg-slate-50/70 text-slate-800 shadow-sm transition-all hover:border-cyan-300 focus:ring-2 focus:ring-cyan-500/20"
+              >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-2xl border-slate-200">
                 <SelectItem value="mensual">Mensual</SelectItem>
                 <SelectItem value="anual">Anual</SelectItem>
               </SelectContent>
@@ -264,12 +329,17 @@ export const AnalyticaImpuestos = () => {
 
           {tipoVista === "mensual" && (
             <div className="space-y-2">
-              <Label htmlFor="ano">Año</Label>
+              <Label htmlFor="ano" className="text-[13px] font-semibold text-slate-700">
+                Año
+              </Label>
               <Select value={anoSeleccionado.toString()} onValueChange={(value) => setAnoSeleccionado(parseInt(value))}>
-                <SelectTrigger id="ano">
+                <SelectTrigger
+                  id="ano"
+                  className="h-12 rounded-2xl border-slate-200 bg-slate-50/70 text-slate-800 shadow-sm transition-all hover:border-cyan-300 focus:ring-2 focus:ring-cyan-500/20"
+                >
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-2xl border-slate-200">
                   {Array.from({ length: 5 }, (_, i) => currentYear - i).map((year) => (
                     <SelectItem key={year} value={year.toString()}>
                       {year}
@@ -282,159 +352,267 @@ export const AnalyticaImpuestos = () => {
         </CardContent>
       </Card>
 
-      {/* Métricas Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+      {/* Métricas */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-gradient-to-br from-white via-white to-cyan-50/70 shadow-[0_18px_45px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_-35px_rgba(6,182,212,0.35)]">
           <CardHeader className="pb-3">
-            <CardDescription>Total Calculado {tipoVista === "mensual" ? anoSeleccionado : ""}</CardDescription>
-            <CardTitle className="text-2xl">{formatCurrency(totales.calculado)}</CardTitle>
+            <div className="mb-4 flex items-start justify-between">
+              <div className="rounded-2xl bg-cyan-100 p-3 text-cyan-700 ring-1 ring-cyan-200">
+                <ReceiptText className="h-5 w-5" />
+              </div>
+              <div className="rounded-full bg-cyan-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-700">
+                Calculado
+              </div>
+            </div>
+            <CardDescription className="text-slate-600">
+              Total Calculado {tipoVista === "mensual" ? anoSeleccionado : ""}
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
+              {formatCurrency(totales.calculado)}
+            </CardTitle>
           </CardHeader>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-gradient-to-br from-white via-white to-violet-50/70 shadow-[0_18px_45px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_-35px_rgba(139,92,246,0.35)]">
           <CardHeader className="pb-3">
-            <CardDescription>Total Registrado {tipoVista === "mensual" ? anoSeleccionado : ""}</CardDescription>
-            <CardTitle className="text-2xl">{formatCurrency(totales.registrado)}</CardTitle>
+            <div className="mb-4 flex items-start justify-between">
+              <div className="rounded-2xl bg-violet-100 p-3 text-violet-700 ring-1 ring-violet-200">
+                <Landmark className="h-5 w-5" />
+              </div>
+              <div className="rounded-full bg-violet-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                Registrado
+              </div>
+            </div>
+            <CardDescription className="text-slate-600">
+              Total Registrado {tipoVista === "mensual" ? anoSeleccionado : ""}
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
+              {formatCurrency(totales.registrado)}
+            </CardTitle>
           </CardHeader>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-gradient-to-br from-white via-white to-slate-50 shadow-[0_18px_45px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_-35px_rgba(15,23,42,0.25)]">
           <CardHeader className="pb-3">
-            <CardDescription>Diferencia Total {tipoVista === "mensual" ? anoSeleccionado : ""}</CardDescription>
-            <CardTitle
-              className={`text-2xl ${
-                totales.diferencia > 0 ? "text-red-600" : totales.diferencia < 0 ? "text-green-600" : ""
-              }`}
-            >
+            <div className="mb-4 flex items-start justify-between">
+              <div className="rounded-2xl bg-slate-100 p-3 text-slate-700 ring-1 ring-slate-200">
+                <Scale className="h-5 w-5" />
+              </div>
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                Diferencia
+              </div>
+            </div>
+            <CardDescription className="text-slate-600">
+              Diferencia Total {tipoVista === "mensual" ? anoSeleccionado : ""}
+            </CardDescription>
+            <CardTitle className={`text-2xl font-bold tracking-tight ${colorDiferencia}`}>
               {totales.diferencia > 0 ? "+" : ""}
               {formatCurrency(totales.diferencia)}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+
+        <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-gradient-to-br from-white via-white to-emerald-50/70 shadow-[0_18px_45px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_-35px_rgba(16,185,129,0.35)]">
+          <CardHeader className="pb-3">
+            <div className="mb-4 flex items-start justify-between">
+              <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700 ring-1 ring-emerald-200">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                Promedio
+              </div>
+            </div>
+            <CardDescription className="text-slate-600">Promedio de Diferencia</CardDescription>
+            <CardTitle className={`text-2xl font-bold tracking-tight ${colorPromedio}`}>
+              {promedioDiferencia > 0 ? "+" : ""}
+              {formatCurrency(promedioDiferencia)}
             </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
       {/* Gráfica */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
+      <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-white/95 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.35)]">
+        <div className="h-1.5 w-full bg-gradient-to-r from-slate-900 via-cyan-600 to-emerald-500" />
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-slate-900">
+            <TrendingUp className="h-5 w-5 text-cyan-600" />
             Comparativa ISR Calculado vs Registrado
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-slate-600">
             Análisis histórico {tipoVista === "mensual" ? `del año ${anoSeleccionado}` : "de los últimos 5 años"}
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           {loading ? (
-            <div className="h-80 flex items-center justify-center text-muted-foreground">Cargando datos...</div>
+            <div className="flex h-80 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 text-sm text-slate-500">
+              Cargando datos...
+            </div>
           ) : datos.length === 0 ? (
-            <div className="h-80 flex items-center justify-center text-muted-foreground">
-              No hay datos disponibles para el período seleccionado
+            <div className="flex h-80 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
+              <div className="rounded-2xl bg-slate-100 p-3 text-slate-500">
+                <BarChart3 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-medium text-slate-800">No hay datos disponibles para el período seleccionado</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Cuando existan registros fiscales aparecerá aquí la comparativa analítica.
+                </p>
+              </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={400}>
-              <ComposedChart data={datos}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="periodo" className="text-xs" />
-                <YAxis
-                  className="text-xs"
-                  domain={[0, limiteYAxis]}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "6px",
-                    color: "#000000",
-                  }}
-                  labelStyle={{ color: "#000000", fontWeight: "bold" }}
-                  itemStyle={{ color: "#000000" }}
-                />
-                <Legend />
-                <Bar
-                  dataKey="calculado"
-                  name="ISR Calculado"
-                  fill="hsl(var(--chart-1))"
-                  radius={[4, 4, 0, 0]}
-                  label={{
-                    position: "top",
-                    fill: "hsl(var(--foreground))",
-                    fontSize: 12,
-                    formatter: (value: number) => `$${formatNumber(value)}`,
-                  }}
-                />
-                <Bar
-                  dataKey="registrado"
-                  name="ISR Registrado"
-                  fill="hsl(var(--chart-2))"
-                  radius={[4, 4, 0, 0]}
-                  label={{
-                    position: "top",
-                    fill: "hsl(var(--foreground))",
-                    fontSize: 12,
-                    formatter: (value: number) => `$${formatNumber(value)}`,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="diferencia"
-                  name="Diferencia"
-                  stroke="hsl(var(--destructive))"
-                  strokeWidth={2}
-                  dot={{ fill: "hsl(var(--destructive))", r: 4 }}
-                  label={{
-                    position: "top",
-                    fill: "hsl(var(--foreground))",
-                    fontSize: 12,
-                    formatter: (value: number) => `$${formatNumber(value)}`,
-                  }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50/70 p-3 md:p-4">
+              <ResponsiveContainer width="100%" height={420}>
+                <ComposedChart data={datos} margin={{ top: 28, right: 20, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.25)" />
+                  <XAxis
+                    dataKey="periodo"
+                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    axisLine={{ stroke: "rgba(148,163,184,0.35)" }}
+                    tickLine={{ stroke: "rgba(148,163,184,0.35)" }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    axisLine={{ stroke: "rgba(148,163,184,0.35)" }}
+                    tickLine={{ stroke: "rgba(148,163,184,0.35)" }}
+                    domain={[0, limiteYAxis]}
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      border: "1px solid rgba(226,232,240,0.9)",
+                      borderRadius: "16px",
+                      boxShadow: "0 20px 50px -30px rgba(15,23,42,0.35)",
+                      color: "#0f172a",
+                    }}
+                    labelStyle={{ color: "#0f172a", fontWeight: 700 }}
+                    itemStyle={{ color: "#334155" }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: "10px" }} />
+                  <Bar
+                    dataKey="calculado"
+                    name="ISR Calculado"
+                    fill="hsl(var(--chart-1))"
+                    radius={[10, 10, 0, 0]}
+                    maxBarSize={42}
+                    label={{
+                      position: "top",
+                      fill: "#64748b",
+                      fontSize: 11,
+                      formatter: (value: number) => `$${formatNumber(value)}`,
+                    }}
+                  />
+                  <Bar
+                    dataKey="registrado"
+                    name="ISR Registrado"
+                    fill="hsl(var(--chart-2))"
+                    radius={[10, 10, 0, 0]}
+                    maxBarSize={42}
+                    label={{
+                      position: "top",
+                      fill: "#64748b",
+                      fontSize: 11,
+                      formatter: (value: number) => `$${formatNumber(value)}`,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="diferencia"
+                    name="Diferencia"
+                    stroke="hsl(var(--destructive))"
+                    strokeWidth={3}
+                    dot={{ fill: "hsl(var(--destructive))", r: 4.5 }}
+                    activeDot={{ r: 6 }}
+                    label={{
+                      position: "top",
+                      fill: "#475569",
+                      fontSize: 11,
+                      formatter: (value: number) => `$${formatNumber(value)}`,
+                    }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Análisis de Diferencias - Collapsible */}
+      {/* Análisis de Diferencias */}
       {datos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Análisis de Diferencias</CardTitle>
-            <CardDescription>Detalle de las variaciones entre ISR calculado y registrado</CardDescription>
+        <Card className="overflow-hidden rounded-3xl border-slate-200/70 bg-white/95 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.35)]">
+          <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-cyan-500 to-slate-900" />
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-slate-900">
+              <Scale className="h-5 w-5 text-emerald-600" />
+              Análisis de Diferencias
+            </CardTitle>
+            <CardDescription className="text-slate-600">
+              Detalle de las variaciones entre ISR calculado y registrado.
+            </CardDescription>
           </CardHeader>
+
           <CardContent>
             <Collapsible>
               <CollapsibleTrigger asChild>
-                <button className="w-full flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors group">
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <span className="font-semibold">Resumen Total:</span>
-                    <span className="text-sm text-muted-foreground">Calculado: {formatCurrency(totales.calculado)}</span>
-                    <span className="text-sm text-muted-foreground">Registrado: {formatCurrency(totales.registrado)}</span>
-                    <span
-                      className={`font-semibold ${
-                        totales.diferencia > 0 ? "text-red-600" : totales.diferencia < 0 ? "text-green-600" : ""
-                      }`}
-                    >
-                      Diferencia: {totales.diferencia > 0 ? "+" : ""}
-                      {formatCurrency(totales.diferencia)}
-                    </span>
+                <button className="group w-full rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4 text-left shadow-sm transition-all hover:border-cyan-200 hover:bg-slate-50/80">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                        Resumen Total
+                      </span>
+                      <span className="rounded-full bg-cyan-50 px-3 py-1 text-sm font-medium text-cyan-700">
+                        Calculado: {formatCurrency(totales.calculado)}
+                      </span>
+                      <span className="rounded-full bg-violet-50 px-3 py-1 text-sm font-medium text-violet-700">
+                        Registrado: {formatCurrency(totales.registrado)}
+                      </span>
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                          totales.diferencia > 0
+                            ? "bg-red-50 text-red-700"
+                            : totales.diferencia < 0
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        Diferencia: {totales.diferencia > 0 ? "+" : ""}
+                        {formatCurrency(totales.diferencia)}
+                      </span>
+                    </div>
+
+                    <ChevronDown className="h-5 w-5 text-slate-500 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                   </div>
-                  <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </button>
               </CollapsibleTrigger>
 
-              <CollapsibleContent className="space-y-3 mt-3">
+              <CollapsibleContent className="mt-4 space-y-3">
                 {datos.map((d, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <span className="font-medium">{d.periodo}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-muted-foreground">Calculado: {formatCurrency(d.calculado)}</span>
-                      <span className="text-sm text-muted-foreground">Registrado: {formatCurrency(d.registrado)}</span>
+                  <div
+                    key={index}
+                    className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 transition-colors hover:border-cyan-200 hover:bg-cyan-50/30 lg:flex-row lg:items-center lg:justify-between"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">{d.periodo}</p>
+                      <p className="text-xs text-slate-500">Periodo analizado</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                      <span className="rounded-full bg-white px-3 py-1 text-sm text-slate-600 shadow-sm">
+                        Calculado: {formatCurrency(d.calculado)}
+                      </span>
+                      <span className="rounded-full bg-white px-3 py-1 text-sm text-slate-600 shadow-sm">
+                        Registrado: {formatCurrency(d.registrado)}
+                      </span>
                       <span
-                        className={`font-semibold ${
-                          d.diferencia > 0 ? "text-red-600" : d.diferencia < 0 ? "text-green-600" : ""
+                        className={`rounded-full px-3 py-1 text-sm font-semibold shadow-sm ${
+                          d.diferencia > 0
+                            ? "bg-red-50 text-red-700"
+                            : d.diferencia < 0
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-slate-100 text-slate-700"
                         }`}
                       >
                         {d.diferencia > 0 ? "+" : ""}
