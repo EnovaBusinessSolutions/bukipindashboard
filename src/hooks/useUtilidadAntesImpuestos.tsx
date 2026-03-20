@@ -14,9 +14,42 @@ interface UtilidadData {
 
 type AnyJson = any;
 
+type DetalleAsiento = {
+  cuenta_codigo?: string;
+  cuentaCodigo?: string;
+  code?: string;
+  debe?: number | null;
+  debit?: number | null;
+  haber?: number | null;
+  credit?: number | null;
+  fecha?: string;
+  asiento_fecha?: string;
+};
+
+const asNumber = (v: any, def = 0) => {
+  const n = Number(String(v ?? "").replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? n : def;
+};
+
+const getCodigoBase = (codigo: string) => {
+  const s = String(codigo || "").trim();
+  if (!s) return "";
+  return s.includes("-") ? s.split("-")[0].trim() : s;
+};
+
 const normalizeArray = <T,>(json: AnyJson): T[] => {
-  const data = json?.data ?? json ?? [];
-  return Array.isArray(data) ? (data as T[]) : [];
+  const direct = json?.data ?? json;
+
+  if (Array.isArray(direct)) return direct as T[];
+
+  if (Array.isArray(json?.data?.detalles)) return json.data.detalles as T[];
+  if (Array.isArray(json?.detalles)) return json.detalles as T[];
+  if (Array.isArray(json?.detalle_asientos)) return json.detalle_asientos as T[];
+
+  if (Array.isArray(json?.data?.detalle_asientos)) return json.data.detalle_asientos as T[];
+  if (Array.isArray(json?.items)) return json.items as T[];
+
+  return [];
 };
 
 export const useUtilidadAntesImpuestos = (mes: number, ano: number) => {
@@ -27,26 +60,12 @@ export const useUtilidadAntesImpuestos = (mes: number, ano: number) => {
       const fechaInicio = new Date(ano, mes - 1, 1).toISOString().split("T")[0];
       const fechaFin = new Date(ano, mes, 0).toISOString().split("T")[0];
 
-      /**
-       * ✅ Backend esperado:
-       * GET /api/contabilidad/detalle-asientos?start=YYYY-MM-DD&end=YYYY-MM-DD
-       * Devuelve:
-       * [
-       *   { cuenta_codigo, debe, haber, fecha } ...
-       * ]
-       * o { ok:true, data:[...] }
-       */
       const json: AnyJson = await apiFetch(
         `/api/contabilidad/detalle-asientos?start=${encodeURIComponent(fechaInicio)}&end=${encodeURIComponent(fechaFin)}`,
         { method: "GET" }
       );
 
-      const detalles = normalizeArray<{
-        cuenta_codigo: string;
-        debe?: number | null;
-        haber?: number | null;
-        fecha?: string; // opcional
-      }>(json);
+      const detalles = normalizeArray<DetalleAsiento>(json);
 
       let ingresos = 0;
       let costos = 0;
@@ -55,37 +74,44 @@ export const useUtilidadAntesImpuestos = (mes: number, ano: number) => {
       let intereses = 0;
 
       detalles.forEach((detalle) => {
-        const codigo = String(detalle.cuenta_codigo || "");
-        const debe = Number(detalle.debe || 0);
-        const haber = Number(detalle.haber || 0);
+        const codigoRaw = String(
+          detalle.cuenta_codigo ?? detalle.cuentaCodigo ?? detalle.code ?? ""
+        ).trim();
+
+        const codigo = getCodigoBase(codigoRaw);
+        if (!codigo) return;
+
+        const debe = asNumber(detalle.debe ?? detalle.debit, 0);
+        const haber = asNumber(detalle.haber ?? detalle.credit, 0);
         const saldo = debe - haber;
 
         // Ingresos (cuentas 4xxx) - naturaleza acreedora
         if (codigo.startsWith("4")) {
           ingresos += Math.abs(saldo);
         }
-        // Costos (cuentas 5001-5099) - naturaleza deudora
+        // Costos / gastos / depreciación / intereses (familia 5xxx)
         else if (codigo.startsWith("5")) {
           const n = parseInt(codigo, 10);
+
+          // Costos (5001-5099)
           if (Number.isFinite(n) && n >= 5001 && n <= 5099) {
             costos += Math.abs(saldo);
           }
-          // Depreciación (cuentas 5109, 5110)
+          // Depreciación (5109, 5110)
           else if (codigo === "5109" || codigo === "5110") {
             depreciacion += Math.abs(saldo);
           }
-          // Gastos (cuentas 51XX excepto depreciaciones) - naturaleza deudora
+          // Gastos (51xx excepto depreciaciones)
           else if (codigo.startsWith("51") && codigo !== "5109" && codigo !== "5110") {
             gastos += Math.abs(saldo);
           }
-          // Intereses (cuentas 5111-5199, 5201)
+          // Intereses (5111-5199, 5201)
           else if ((Number.isFinite(n) && n >= 5111 && n <= 5199) || codigo === "5201") {
             intereses += Math.abs(saldo);
           }
         }
       });
 
-      // Calcular utilidad antes de impuestos
       const utilidadBruta = ingresos - costos;
       const ebitda = utilidadBruta - gastos;
       const ebit = ebitda - depreciacion;
