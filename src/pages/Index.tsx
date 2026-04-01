@@ -1,16 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ResponsiveContainer,
-  BarChart,
+  ComposedChart,
   Bar,
-  LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   Cell,
+  PieChart,
+  Pie,
 } from "recharts";
 import {
   TrendingUp,
@@ -30,11 +30,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  CircleDollarSign,
+  LineChart as LineChartIcon,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import useDashboardFinanciero from "@/hooks/useDashboardFinanciero";
+
+type ProfitMetricKey = "utilidadNeta" | "ebitda" | "utilidadBruta";
 
 const Index = () => {
   const {
@@ -53,25 +57,68 @@ const Index = () => {
     refetch,
   } = useDashboardFinanciero();
 
-  const [profitMetric, setProfitMetric] = useState<"utilidadNeta" | "ebitda" | "utilidadBruta">("utilidadNeta");
+  const [profitMetric, setProfitMetric] = useState<ProfitMetricKey>("utilidadNeta");
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-CO", {
+    return new Intl.NumberFormat("es-MX", {
       style: "currency",
-      currency: "COP",
+      currency: "MXN",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(Number(value || 0));
   };
 
   const formatCompactCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-CO", {
+    return new Intl.NumberFormat("es-MX", {
       style: "currency",
-      currency: "COP",
+      currency: "MXN",
       notation: "compact",
       minimumFractionDigits: 0,
       maximumFractionDigits: 1,
     }).format(Number(value || 0));
+  };
+
+  const formatPercent = (value: number) => `${Number(value || 0).toFixed(1)}%`;
+
+  const metricMeta: Record<
+    ProfitMetricKey,
+    {
+      label: string;
+      shortLabel: string;
+      color: string;
+      softBg: string;
+      border: string;
+      glow: string;
+      description: string;
+    }
+  > = {
+    utilidadNeta: {
+      label: "Utilidad neta",
+      shortLabel: "UN",
+      color: "#22c55e",
+      softBg: "rgba(34,197,94,0.10)",
+      border: "rgba(34,197,94,0.26)",
+      glow: "0 0 0 1px rgba(34,197,94,0.20), 0 12px 32px rgba(34,197,94,0.10)",
+      description: "Resultado final después de costos y gastos.",
+    },
+    ebitda: {
+      label: "EBITDA",
+      shortLabel: "EBITDA",
+      color: "#a855f7",
+      softBg: "rgba(168,85,247,0.10)",
+      border: "rgba(168,85,247,0.26)",
+      glow: "0 0 0 1px rgba(168,85,247,0.20), 0 12px 32px rgba(168,85,247,0.10)",
+      description: "Indicador operativo antes de depreciaciones, intereses e impuestos.",
+    },
+    utilidadBruta: {
+      label: "Utilidad bruta",
+      shortLabel: "UB",
+      color: "#f59e0b",
+      softBg: "rgba(245,158,11,0.10)",
+      border: "rgba(245,158,11,0.26)",
+      glow: "0 0 0 1px rgba(245,158,11,0.20), 0 12px 32px rgba(245,158,11,0.10)",
+      description: "Ingresos menos costo directo de venta.",
+    },
   };
 
   const margenMes = useMemo(() => {
@@ -81,27 +128,88 @@ const Index = () => {
     return (ingresoNetoMes / totalIngresosMes) * 100;
   }, [kpis?.ingresoNetoMes, kpis?.totalIngresosMes]);
 
+  const margenBrutoMes = useMemo(() => {
+    const ingresos = Number(kpis?.totalIngresosMes || 0);
+    const utilidadBruta = Number(
+      estadoResultados?.totales?.utilidadBruta ??
+        estadoResultados?.series?.[estadoResultados?.series?.length - 1]?.utilidadBruta ??
+        0
+    );
+    if (ingresos <= 0) return 0;
+    return (utilidadBruta / ingresos) * 100;
+  }, [kpis?.totalIngresosMes, estadoResultados?.totales?.utilidadBruta, estadoResultados?.series]);
+
   const estadoResultadosChartData = useMemo(() => {
-    return (estadoResultados?.series || []).map((item) => ({
-      mes: item.mes,
-      ingresos: Number(item.ingresos || 0),
-      egresos: Number(item.egresos || 0),
-      utilidadNeta: Number(item.utilidadNeta || 0),
-      ebitda: Number(item.ebitda || 0),
-      utilidadBruta: Number(item.utilidadBruta || 0),
-      linea: Number(item?.[profitMetric] || 0),
-    }));
+    return (estadoResultados?.series || []).map((item) => {
+      const ingresos = Number(item.ingresos || 0);
+      const egresos = Number(item.egresos || 0);
+      const utilidadNeta = Number(item.utilidadNeta || 0);
+      const ebitda = Number(item.ebitda || 0);
+      const utilidadBruta = Number(item.utilidadBruta || 0);
+
+      return {
+        mes: item.mes,
+        ingresos,
+        egresos,
+        utilidadNeta,
+        ebitda,
+        utilidadBruta,
+        linea: Number(item?.[profitMetric] || 0),
+        margenLinea: ingresos > 0 ? (Number(item?.[profitMetric] || 0) / ingresos) * 100 : 0,
+      };
+    });
   }, [estadoResultados?.series, profitMetric]);
+
+  const estadoResultadosMax = useMemo(() => {
+    if (!estadoResultadosChartData.length) return 0;
+    return Math.max(
+      ...estadoResultadosChartData.flatMap((item) => [
+        Number(item.ingresos || 0),
+        Number(item.egresos || 0),
+        Number(item.linea || 0),
+      ]),
+      0
+    );
+  }, [estadoResultadosChartData]);
+
+  const estadoResultadosSummary = useMemo(() => {
+    const ingresos = Number(estadoResultados?.totales?.ingresos || 0);
+    const egresos = Number(estadoResultados?.totales?.egresos || 0);
+    const utilidadNeta = Number(estadoResultados?.totales?.utilidadNeta || 0);
+    const ebitda = Number(estadoResultados?.totales?.ebitda || 0);
+    const utilidadBruta = Number(estadoResultados?.totales?.utilidadBruta || 0);
+
+    return {
+      ingresos,
+      egresos,
+      utilidadNeta,
+      ebitda,
+      utilidadBruta,
+      selectedValue:
+        profitMetric === "utilidadNeta"
+          ? utilidadNeta
+          : profitMetric === "ebitda"
+          ? ebitda
+          : utilidadBruta,
+      selectedMargin:
+        ingresos > 0
+          ? ((profitMetric === "utilidadNeta"
+              ? utilidadNeta
+              : profitMetric === "ebitda"
+              ? ebitda
+              : utilidadBruta) /
+              ingresos) *
+            100
+          : 0,
+    };
+  }, [estadoResultados?.totales, profitMetric]);
 
   const flujoWaterfallData = useMemo(() => {
     return (flujo?.seriesMensuales || []).map((item) => ({
       mes: item.mes,
       neto: Number(item.neto || 0),
       acumulado: Number(item.acumulado || 0),
-      fill:
-        Number(item.neto || 0) >= 0
-          ? "hsl(var(--success))"
-          : "hsl(var(--destructive))",
+      fill: Number(item.neto || 0) >= 0 ? "#22c55e" : "#ef4444",
     }));
   }, [flujo?.seriesMensuales]);
 
@@ -131,6 +239,40 @@ const Index = () => {
     ];
   }, [balanceGeneral?.estructura]);
 
+  const balanceBlocks = useMemo(() => {
+    const activos = Number(balanceGeneral?.activos || 0);
+    const pasivos = Number(balanceGeneral?.pasivos || 0);
+    const capital = Number(balanceGeneral?.capital || 0);
+    const total = Math.max(activos + pasivos + capital, 1);
+
+    return [
+      {
+        label: "Activos",
+        value: activos,
+        pct: (activos / total) * 100,
+        className:
+          "from-sky-500/25 via-blue-500/20 to-cyan-500/10 border-sky-400/20 text-sky-100",
+        badgeClass: "bg-sky-500/15 text-sky-300 border-sky-400/20",
+      },
+      {
+        label: "Pasivos",
+        value: pasivos,
+        pct: (pasivos / total) * 100,
+        className:
+          "from-rose-500/25 via-red-500/20 to-orange-500/10 border-rose-400/20 text-rose-100",
+        badgeClass: "bg-rose-500/15 text-rose-300 border-rose-400/20",
+      },
+      {
+        label: "Capital",
+        value: capital,
+        pct: (capital / total) * 100,
+        className:
+          "from-emerald-500/25 via-green-500/20 to-lime-500/10 border-emerald-400/20 text-emerald-100",
+        badgeClass: "bg-emerald-500/15 text-emerald-300 border-emerald-400/20",
+      },
+    ];
+  }, [balanceGeneral?.activos, balanceGeneral?.pasivos, balanceGeneral?.capital]);
+
   const inventarioTotal = Number(inventario?.totalProductos || 0);
   const inventarioBienPct = inventarioTotal > 0 ? (Number(inventario?.bien || 0) / inventarioTotal) * 100 : 0;
   const inventarioBajoPct = inventarioTotal > 0 ? (Number(inventario?.bajo || 0) / inventarioTotal) * 100 : 0;
@@ -146,25 +288,33 @@ const Index = () => {
 
   const topPasivos = (pasivosBancarios?.items || []).slice(0, 5);
 
+  const inventoryPieData = [
+    { name: "Óptimo", value: Number(inventario?.bien || 0), color: "#22c55e" },
+    { name: "Bajo", value: Number(inventario?.bajo || 0), color: "#f59e0b" },
+    { name: "Negativo", value: Number(inventario?.negativo || 0), color: "#ef4444" },
+  ].filter((item) => item.value > 0);
+
+  const currentMetricMeta = metricMeta[profitMetric];
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0f2d56_0%,#081426_35%,#050b14_100%)]">
         <div className="p-8">
           <div className="space-y-8 animate-pulse">
-            <div className="h-36 rounded-2xl bg-muted/50" />
+            <div className="h-36 rounded-[28px] bg-white/5" />
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-32 rounded-2xl bg-muted/50" />
+                <div key={i} className="h-32 rounded-[24px] bg-white/5" />
               ))}
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="xl:col-span-2 h-[420px] rounded-2xl bg-muted/50" />
-              <div className="h-[420px] rounded-2xl bg-muted/50" />
+              <div className="xl:col-span-2 h-[460px] rounded-[28px] bg-white/5" />
+              <div className="h-[460px] rounded-[28px] bg-white/5" />
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="h-[360px] rounded-2xl bg-muted/50" />
-              <div className="h-[360px] rounded-2xl bg-muted/50" />
-              <div className="h-[360px] rounded-2xl bg-muted/50" />
+              <div className="h-[360px] rounded-[28px] bg-white/5" />
+              <div className="h-[360px] rounded-[28px] bg-white/5" />
+              <div className="h-[360px] rounded-[28px] bg-white/5" />
             </div>
           </div>
         </div>
@@ -174,16 +324,18 @@ const Index = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0f2d56_0%,#081426_35%,#050b14_100%)]">
         <div className="p-8">
-          <Card className="border-destructive/20 shadow-lg">
+          <Card className="border border-red-500/20 bg-[#0b1628]/90 shadow-2xl rounded-[28px]">
             <CardContent className="py-10 flex flex-col items-center justify-center gap-4 text-center">
-              <AlertTriangle className="h-10 w-10 text-destructive" />
+              <AlertTriangle className="h-10 w-10 text-red-400" />
               <div>
-                <p className="text-lg font-semibold">No pudimos cargar el dashboard</p>
-                <p className="text-sm text-muted-foreground mt-1">{error}</p>
+                <p className="text-lg font-semibold text-white">No pudimos cargar el dashboard</p>
+                <p className="text-sm text-white/60 mt-1">{error}</p>
               </div>
-              <Button onClick={() => refetch()}>Reintentar</Button>
+              <Button onClick={() => refetch()} className="rounded-xl">
+                Reintentar
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -202,35 +354,34 @@ const Index = () => {
     title: string;
     value: string;
     subtitle?: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
     accentClass?: string;
     highlight?: boolean;
   }) => (
     <Card
-      className={`group relative overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${
+      className={`group relative overflow-hidden rounded-[26px] border transition-all duration-300 hover:-translate-y-1.5 ${
         highlight
-          ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground"
-          : "bg-gradient-to-br from-card to-card/80"
+          ? "border-blue-400/20 bg-gradient-to-br from-[#1d4ed8] via-[#1e40af] to-[#0f172a] shadow-[0_18px_60px_rgba(37,99,235,0.25)]"
+          : "border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]"
       }`}
     >
       <div
-        className={`absolute top-0 right-0 h-24 w-24 rounded-full -mr-8 -mt-8 group-hover:scale-110 transition-transform ${
-          highlight ? "bg-white/10" : "bg-primary/10"
+        className={`absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl transition-all duration-300 group-hover:scale-110 ${
+          highlight ? "bg-white/10" : "bg-blue-400/10"
         }`}
       />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
-          <CardDescription className={highlight ? "text-primary-foreground/80 font-medium" : "text-muted-foreground font-medium"}>
+          <CardDescription className={highlight ? "text-white/75 font-medium" : "text-white/55 font-medium"}>
             {title}
           </CardDescription>
-          <div className={`p-2 rounded-lg ${highlight ? "bg-white/20 text-primary-foreground" : accentClass}`}>{icon}</div>
+          <div className={`p-2.5 rounded-xl ${highlight ? "bg-white/12 text-white" : accentClass}`}>{icon}</div>
         </div>
       </CardHeader>
       <CardContent>
-        <p className={`text-3xl font-bold mb-1 ${highlight ? "text-primary-foreground" : "text-foreground"}`}>{value}</p>
-        {subtitle ? (
-          <p className={`text-sm ${highlight ? "text-primary-foreground/75" : "text-muted-foreground"}`}>{subtitle}</p>
-        ) : null}
+        <p className={`text-3xl font-bold mb-1 tracking-tight ${highlight ? "text-white" : "text-white"}`}>{value}</p>
+        {subtitle ? <p className={`text-sm ${highlight ? "text-white/70" : "text-white/55"}`}>{subtitle}</p> : null}
       </CardContent>
     </Card>
   );
@@ -254,307 +405,568 @@ const Index = () => {
     overdueLabel: string;
     overdueValue: number;
     overduePct: number;
-    icon: React.ReactNode;
+    icon: ReactNode;
   }) => (
-    <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+    <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">{icon}</div>
+          <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-300">{icon}</div>
           <div>
-            <CardTitle className="text-base">{title}</CardTitle>
-            <CardDescription>Total: {formatCurrency(total)}</CardDescription>
+            <CardTitle className="text-base text-white">{title}</CardTitle>
+            <CardDescription className="text-white/55">Total: {formatCurrency(total)}</CardDescription>
           </div>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-5">
         <div>
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="font-medium text-foreground">{currentLabel}</span>
-            <span className="text-muted-foreground">
+            <span className="font-medium text-white">{currentLabel}</span>
+            <span className="text-white/55">
               {formatCurrency(currentValue)} · {currentPct.toFixed(1)}%
             </span>
           </div>
-          <div className="h-3 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-success transition-all duration-500" style={{ width: `${Math.min(currentPct, 100)}%` }} />
+          <div className="h-3 rounded-full bg-white/8 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all duration-500"
+              style={{ width: `${Math.min(currentPct, 100)}%` }}
+            />
           </div>
         </div>
 
         <div>
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="font-medium text-foreground">{overdueLabel}</span>
-            <span className="text-muted-foreground">
+            <span className="font-medium text-white">{overdueLabel}</span>
+            <span className="text-white/55">
               {formatCurrency(overdueValue)} · {overduePct.toFixed(1)}%
             </span>
           </div>
-          <div className="h-3 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-destructive transition-all duration-500" style={{ width: `${Math.min(overduePct, 100)}%` }} />
+          <div className="h-3 rounded-full bg-white/8 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-rose-400 to-red-500 transition-all duration-500"
+              style={{ width: `${Math.min(overduePct, 100)}%` }}
+            />
           </div>
         </div>
       </CardContent>
     </Card>
   );
 
+  const EstadoResultadosTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: Array<{ name?: string; value?: number; color?: string; dataKey?: string }>;
+    label?: string;
+  }) => {
+    if (!active || !payload || !payload.length) return null;
+
+    const itemMap = payload.reduce<Record<string, number>>((acc, item) => {
+      acc[String(item.dataKey || item.name || "")] = Number(item.value || 0);
+      return acc;
+    }, {});
+
+    const selectedLabel = currentMetricMeta.label;
+    const selectedValue = Number(itemMap.linea ?? 0);
+    const ingresos = Number(itemMap.ingresos ?? 0);
+
+    return (
+      <div className="min-w-[240px] rounded-2xl border border-white/15 bg-[#0b1324]/95 backdrop-blur-xl p-4 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-white">{label}</p>
+          <span
+            className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+            style={{
+              background: currentMetricMeta.softBg,
+              borderColor: currentMetricMeta.border,
+              color: currentMetricMeta.color,
+            }}
+          >
+            {selectedLabel}
+          </span>
+        </div>
+
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#60a5fa]" />
+              <span className="text-sm text-white/75">Ingresos</span>
+            </div>
+            <span className="text-sm font-semibold text-white">{formatCurrency(Number(itemMap.ingresos ?? 0))}</span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#fb7185]" />
+              <span className="text-sm text-white/75">Egresos</span>
+            </div>
+            <span className="text-sm font-semibold text-white">{formatCurrency(Number(itemMap.egresos ?? 0))}</span>
+          </div>
+
+          <div className="my-2 h-px bg-white/10" />
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: currentMetricMeta.color }} />
+              <span className="text-sm text-white/75">{selectedLabel}</span>
+            </div>
+            <span className="text-sm font-semibold" style={{ color: currentMetricMeta.color }}>
+              {formatCurrency(selectedValue)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-white/45">Margen</span>
+            <span className="text-xs font-medium text-white/70">
+              {ingresos > 0 ? formatPercent((selectedValue / ingresos) * 100) : "0.0%"}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30">
-      <div className="p-8">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0f2d56_0%,#081426_35%,#050b14_100%)]">
+      <div className="p-6 md:p-8">
         <div className="space-y-8">
-          {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary/90 to-accent p-8 text-primary-foreground shadow-xl">
-            <div className="absolute top-0 right-0 -mt-8 -mr-8 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-            <div className="absolute bottom-0 left-0 -mb-8 -ml-8 h-32 w-32 rounded-full bg-white/5 blur-2xl" />
-            <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+          <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(29,78,216,0.95)_0%,rgba(15,23,42,0.96)_45%,rgba(10,15,28,0.98)_100%)] p-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+            <div className="absolute top-0 right-0 -mt-10 -mr-8 h-52 w-52 rounded-full bg-cyan-300/10 blur-3xl" />
+            <div className="absolute bottom-0 left-0 -mb-10 -ml-8 h-44 w-44 rounded-full bg-blue-300/10 blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+
+            <div className="relative flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
               <div>
-                <h1 className="text-4xl font-bold mb-2 tracking-tight">Dashboard Financiero</h1>
-                <p className="text-primary-foreground/80 text-lg">
-                  Resumen ejecutivo integral de tu negocio en Bukipin
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80 backdrop-blur">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Resumen financiero premium
+                </div>
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Dashboard Financiero</h1>
+                <p className="mt-2 text-base md:text-lg text-white/75">
+                  Vista ejecutiva integral del negocio, diseñada para que Bukipin se sienta de nivel enterprise.
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-xs uppercase tracking-wide text-primary-foreground/70">Ventas mes</p>
-                  <p className="text-xl font-bold">{formatCurrency(kpis.ventasMes)}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-full xl:min-w-[520px]">
+                <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-md">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/55">Ventas mes</p>
+                  <p className="mt-1 text-2xl font-bold">{formatCurrency(Number(kpis?.ventasMes || 0))}</p>
                 </div>
-                <div className="rounded-xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-xs uppercase tracking-wide text-primary-foreground/70">Caja total</p>
-                  <p className="text-xl font-bold">{formatCurrency(kpis.caja.total)}</p>
+                <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-md">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/55">Caja total</p>
+                  <p className="mt-1 text-2xl font-bold">{formatCurrency(Number(kpis?.caja?.total || 0))}</p>
+                </div>
+                <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-md">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/55">Margen mes</p>
+                  <p className="mt-1 text-2xl font-bold">{formatPercent(margenMes)}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* KPIs Top */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-6">
             <MetricCardPro
               title="Ventas del Día"
-              value={formatCurrency(kpis.ventasDia)}
+              value={formatCurrency(Number(kpis?.ventasDia || 0))}
               subtitle="Facturación registrada hoy"
               icon={<Calendar className="h-5 w-5" />}
-              accentClass="bg-primary/10 text-primary"
+              accentClass="bg-blue-500/10 text-blue-300"
             />
 
             <MetricCardPro
               title="Ventas del Mes"
-              value={formatCurrency(kpis.ventasMes)}
+              value={formatCurrency(Number(kpis?.ventasMes || 0))}
               subtitle="Mes en curso"
               icon={<BarChart3 className="h-5 w-5" />}
-              accentClass="bg-accent/20 text-accent"
+              accentClass="bg-cyan-500/10 text-cyan-300"
             />
 
             <MetricCardPro
               title="Ventas del Año"
-              value={formatCurrency(kpis.ventasAno)}
+              value={formatCurrency(Number(kpis?.ventasAno || 0))}
               subtitle="Acumulado anual"
               icon={<TrendingUp className="h-5 w-5" />}
-              accentClass="bg-success/15 text-success"
+              accentClass="bg-emerald-500/10 text-emerald-300"
             />
 
             <MetricCardPro
               title="Caja Total"
-              value={formatCurrency(kpis.caja.total)}
+              value={formatCurrency(Number(kpis?.caja?.total || 0))}
               subtitle="Efectivo + bancos"
               icon={<Wallet className="h-5 w-5" />}
-              accentClass="bg-primary/10 text-primary"
+              accentClass="bg-blue-500/10 text-blue-300"
             />
 
             <MetricCardPro
               title="Efectivo"
-              value={formatCurrency(kpis.caja.efectivo)}
+              value={formatCurrency(Number(kpis?.caja?.efectivo || 0))}
               subtitle="Saldo en caja"
               icon={<DollarSign className="h-5 w-5" />}
-              accentClass="bg-success/15 text-success"
+              accentClass="bg-emerald-500/10 text-emerald-300"
             />
 
             <MetricCardPro
               title="Margen del Mes"
-              value={`${margenMes.toFixed(1)}%`}
+              value={formatPercent(margenMes)}
               subtitle="Ingreso neto / ingresos del mes"
               icon={<Target className="h-5 w-5" />}
               highlight
             />
           </div>
 
-          {/* Estado de resultados + Resumen lateral */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <Card className="xl:col-span-2 border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
-              <CardHeader className="pb-4">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Activity className="h-5 w-5 text-primary" />
+            <Card className="xl:col-span-2 rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.97)_0%,rgba(11,20,38,0.98)_100%)] shadow-[0_24px_80px_rgba(0,0,0,0.24)] overflow-hidden">
+              <CardHeader className="pb-0">
+                <div className="flex flex-col gap-5">
+                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-2xl border border-blue-400/15 bg-blue-500/10 p-3 text-blue-300">
+                        <Activity className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-[28px] leading-none tracking-tight text-white">
+                          Estado de Resultados
+                        </CardTitle>
+                        <CardDescription className="mt-2 text-base text-white/60">
+                          Doble barra de ingresos y egresos, combinada con línea dinámica para {currentMetricMeta.label.toLowerCase()}.
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-xl">Estado de Resultados</CardTitle>
-                      <CardDescription>Ingresos vs egresos con utilidad dinámica</CardDescription>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(Object.keys(metricMeta) as ProfitMetricKey[]).map((key) => {
+                        const meta = metricMeta[key];
+                        const active = profitMetric === key;
+
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setProfitMetric(key)}
+                            className={`group relative overflow-hidden rounded-2xl border px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                              active
+                                ? "text-white scale-[1.02]"
+                                : "text-white/70 hover:text-white hover:border-white/20"
+                            }`}
+                            style={{
+                              background: active ? meta.softBg : "rgba(255,255,255,0.04)",
+                              borderColor: active ? meta.border : "rgba(255,255,255,0.08)",
+                              boxShadow: active ? meta.glow : "none",
+                            }}
+                          >
+                            <span
+                              className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
+                              style={{ backgroundColor: meta.color }}
+                            />
+                            {meta.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant={profitMetric === "utilidadNeta" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setProfitMetric("utilidadNeta")}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Total ingresos</p>
+                      <p className="mt-2 text-2xl font-bold text-[#93c5fd]">
+                        {formatCurrency(estadoResultadosSummary.ingresos)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Total egresos</p>
+                      <p className="mt-2 text-2xl font-bold text-[#fb7185]">
+                        {formatCurrency(estadoResultadosSummary.egresos)}
+                      </p>
+                    </div>
+
+                    <div
+                      className="rounded-2xl border p-4"
+                      style={{
+                        background: currentMetricMeta.softBg,
+                        borderColor: currentMetricMeta.border,
+                        boxShadow: currentMetricMeta.glow,
+                      }}
                     >
-                      Utilidad neta
-                    </Button>
-                    <Button
-                      variant={profitMetric === "ebitda" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setProfitMetric("ebitda")}
-                    >
-                      EBITDA
-                    </Button>
-                    <Button
-                      variant={profitMetric === "utilidadBruta" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setProfitMetric("utilidadBruta")}
-                    >
-                      Utilidad bruta
-                    </Button>
+                      <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: `${currentMetricMeta.color}` }}>
+                        {currentMetricMeta.label}
+                      </p>
+                      <p className="mt-2 text-2xl font-bold" style={{ color: currentMetricMeta.color }}>
+                        {formatCurrency(estadoResultadosSummary.selectedValue)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Margen seleccionado</p>
+                      <p className="mt-2 text-2xl font-bold text-white">
+                        {formatPercent(estadoResultadosSummary.selectedMargin)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent>
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={estadoResultadosChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} />
-                    <XAxis dataKey="mes" axisLine={false} tickLine={false} />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v) => formatCompactCurrency(v)}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "none",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 40px -10px rgba(0,0,0,0.25)",
-                      }}
-                    />
-                    <Legend />
-                    <Bar dataKey="ingresos" name="Ingresos" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="egresos" name="Egresos" fill="hsl(var(--destructive))" radius={[6, 6, 0, 0]} />
-                    <Line
-                      type="monotone"
-                      dataKey="linea"
-                      name={
-                        profitMetric === "utilidadNeta"
-                          ? "Utilidad neta"
-                          : profitMetric === "ebitda"
-                          ? "EBITDA"
-                          : "Utilidad bruta"
-                      }
-                      stroke="hsl(var(--success))"
-                      strokeWidth={3}
-                      dot={{ r: 3 }}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+              <CardContent className="pt-6">
+                {estadoResultadosChartData.length > 0 ? (
+                  <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.015)_100%)] p-3 md:p-5">
+                    <div className="pointer-events-none absolute inset-x-6 top-0 h-24 bg-gradient-to-b from-blue-400/8 to-transparent blur-2xl" />
+
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#60a5fa]" />
+                        Total Ingresos
+                      </div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#fb7185]" />
+                        Total Egresos
+                      </div>
+                      <div
+                        className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs"
+                        style={{
+                          background: currentMetricMeta.softBg,
+                          borderColor: currentMetricMeta.border,
+                          color: currentMetricMeta.color,
+                        }}
+                      >
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: currentMetricMeta.color }}
+                        />
+                        {currentMetricMeta.label}
+                      </div>
+                    </div>
+
+                    <ResponsiveContainer width="100%" height={390}>
+                      <ComposedChart
+                        data={estadoResultadosChartData}
+                        margin={{ top: 16, right: 18, left: 4, bottom: 6 }}
+                        barGap={10}
+                        barCategoryGap="20%"
+                      >
+                        <defs>
+                          <linearGradient id="incomeBarGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.95} />
+                            <stop offset="100%" stopColor="#2563eb" stopOpacity={0.85} />
+                          </linearGradient>
+                          <linearGradient id="expenseBarGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#fb7185" stopOpacity={0.95} />
+                            <stop offset="100%" stopColor="#e11d48" stopOpacity={0.85} />
+                          </linearGradient>
+                          <linearGradient id="chartPanelGlow" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="rgba(96,165,250,0.12)" />
+                            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                          </linearGradient>
+                        </defs>
+
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} strokeDasharray="3 5" />
+                        <XAxis
+                          dataKey="mes"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "rgba(255,255,255,0.60)", fontSize: 12 }}
+                        />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "rgba(255,255,255,0.50)", fontSize: 12 }}
+                          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+                          width={82}
+                          domain={[0, Math.max(estadoResultadosMax * 1.18, 1)]}
+                        />
+                        <Tooltip content={<EstadoResultadosTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+
+                        <Bar
+                          dataKey="ingresos"
+                          name="Total Ingresos"
+                          fill="url(#incomeBarGradient)"
+                          radius={[12, 12, 4, 4]}
+                          maxBarSize={34}
+                        />
+                        <Bar
+                          dataKey="egresos"
+                          name="Total Egresos"
+                          fill="url(#expenseBarGradient)"
+                          radius={[12, 12, 4, 4]}
+                          maxBarSize={34}
+                        />
+
+                        <Line
+                          type="monotone"
+                          dataKey="linea"
+                          name={currentMetricMeta.label}
+                          stroke={currentMetricMeta.color}
+                          strokeWidth={3.5}
+                          dot={{
+                            r: 4,
+                            strokeWidth: 2,
+                            fill: "#0b1324",
+                            stroke: currentMetricMeta.color,
+                          }}
+                          activeDot={{
+                            r: 6,
+                            strokeWidth: 2,
+                            fill: "#0b1324",
+                            stroke: currentMetricMeta.color,
+                          }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                        <div className="flex items-center gap-2 text-white/50 text-xs uppercase tracking-[0.18em]">
+                          <CircleDollarSign className="h-3.5 w-3.5" />
+                          Lectura
+                        </div>
+                        <p className="mt-2 text-sm text-white/72">
+                          La línea cambia en tiempo real entre <span className="font-semibold text-white">Utilidad neta</span>,{" "}
+                          <span className="font-semibold text-white">EBITDA</span> y{" "}
+                          <span className="font-semibold text-white">Utilidad bruta</span>.
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                        <div className="flex items-center gap-2 text-white/50 text-xs uppercase tracking-[0.18em]">
+                          <LineChartIcon className="h-3.5 w-3.5" />
+                          Estado actual
+                        </div>
+                        <p className="mt-2 text-sm" style={{ color: currentMetricMeta.color }}>
+                          {currentMetricMeta.description}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                        <div className="flex items-center gap-2 text-white/50 text-xs uppercase tracking-[0.18em]">
+                          <Target className="h-3.5 w-3.5" />
+                          Margen bruto mes
+                        </div>
+                        <p className="mt-2 text-sm text-white/72">{formatPercent(margenBrutoMes)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-[26px] border border-dashed border-white/10 bg-white/[0.02] p-10 text-center">
+                    <p className="text-white font-semibold">No hay datos para pintar el estado de resultados.</p>
+                    <p className="mt-2 text-sm text-white/55">
+                      Cuando existan ingresos y egresos suficientes, aquí se mostrará el gráfico premium combinado.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <div className="space-y-6">
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+              <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-success/10">
-                      <ArrowUpRight className="h-5 w-5 text-success" />
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10">
+                      <ArrowUpRight className="h-5 w-5 text-emerald-300" />
                     </div>
                     <div>
-                      <CardTitle className="text-base">Ingresos Totales</CardTitle>
-                      <CardDescription>Acumulado del año</CardDescription>
+                      <CardTitle className="text-base text-white">Ingresos Totales</CardTitle>
+                      <CardDescription className="text-white/55">Acumulado del año</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-foreground">
-                    {formatCurrency(estadoResultados.totales.ingresos)}
+                  <p className="text-3xl font-bold text-[#93c5fd]">
+                    {formatCurrency(Number(estadoResultados?.totales?.ingresos || 0))}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Fuente principal para la lectura de resultados.
+                  <p className="text-sm text-white/55 mt-2">
+                    Fuente principal para la lectura del comportamiento financiero.
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+              <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-destructive/10">
-                      <ArrowDownRight className="h-5 w-5 text-destructive" />
+                    <div className="p-2.5 rounded-xl bg-rose-500/10">
+                      <ArrowDownRight className="h-5 w-5 text-rose-300" />
                     </div>
                     <div>
-                      <CardTitle className="text-base">Egresos Totales</CardTitle>
-                      <CardDescription>Acumulado del año</CardDescription>
+                      <CardTitle className="text-base text-white">Egresos Totales</CardTitle>
+                      <CardDescription className="text-white/55">Acumulado del año</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-foreground">
-                    {formatCurrency(estadoResultados.totales.egresos)}
+                  <p className="text-3xl font-bold text-[#fda4af]">
+                    {formatCurrency(Number(estadoResultados?.totales?.egresos || 0))}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Costos + gastos reconocidos contablemente.
+                  <p className="text-sm text-white/55 mt-2">
+                    Costos y gastos reconocidos contablemente dentro del periodo.
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-primary to-primary/90 text-primary-foreground">
+              <Card className="rounded-[28px] border border-blue-400/15 bg-[linear-gradient(135deg,rgba(37,99,235,0.95)_0%,rgba(30,41,59,0.95)_100%)] text-white shadow-[0_22px_70px_rgba(37,99,235,0.22)]">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-white/20">
-                      <Sparkles className="h-5 w-5 text-primary-foreground" />
+                    <div className="p-2.5 rounded-xl bg-white/12">
+                      <Sparkles className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <CardTitle className="text-base">Utilidad del Mes</CardTitle>
-                      <CardDescription className="text-primary-foreground/75">
-                        Basada en ingreso neto del sistema
+                      <CardTitle className="text-base">Resultado seleccionado</CardTitle>
+                      <CardDescription className="text-white/70">
+                        {currentMetricMeta.label} acumulada
                       </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{formatCurrency(kpis.ingresoNetoMes)}</p>
-                  <p className="text-sm text-primary-foreground/75 mt-2">
-                    Descuentos del mes: {formatCurrency(kpis.descuentosMes)}
+                  <p className="text-3xl font-bold">{formatCurrency(estadoResultadosSummary.selectedValue)}</p>
+                  <p className="text-sm text-white/75 mt-2">
+                    Margen actual: {formatPercent(estadoResultadosSummary.selectedMargin)}
                   </p>
                 </CardContent>
               </Card>
             </div>
           </div>
 
-          {/* Flujo + Balance + Pasivos */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+            <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <TrendingUp className="h-5 w-5 text-primary" />
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <TrendingUp className="h-5 w-5 text-blue-300" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">Flujo acumulado</CardTitle>
-                    <CardDescription>Waterfall mensual del efectivo</CardDescription>
+                    <CardTitle className="text-lg text-white">Flujo acumulado</CardTitle>
+                    <CardDescription className="text-white/55">Waterfall mensual del efectivo</CardDescription>
                   </div>
                 </div>
               </CardHeader>
+
               <CardContent>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={flujoWaterfallData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
-                    <XAxis dataKey="mes" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => formatCompactCurrency(v)} />
+                  <ComposedChart data={flujoWaterfallData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} strokeDasharray="3 5" />
+                    <XAxis
+                      dataKey="mes"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "rgba(255,255,255,0.60)", fontSize: 12 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "rgba(255,255,255,0.50)", fontSize: 12 }}
+                      tickFormatter={(v) => formatCompactCurrency(Number(v))}
+                    />
                     <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
                       contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "none",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 40px -10px rgba(0,0,0,0.25)",
+                        backgroundColor: "#0b1324",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        borderRadius: "16px",
+                        boxShadow: "0 18px 60px rgba(0,0,0,0.30)",
                       }}
+                      labelStyle={{ color: "rgba(255,255,255,0.85)" }}
                     />
-                    <Bar dataKey="neto" name="Flujo neto" radius={[6, 6, 0, 0]}>
+                    <Bar dataKey="neto" name="Flujo neto" radius={[10, 10, 4, 4]} maxBarSize={32}>
                       {flujoWaterfallData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
@@ -563,110 +975,131 @@ const Index = () => {
                       type="monotone"
                       dataKey="acumulado"
                       name="Acumulado"
-                      stroke="hsl(var(--primary))"
+                      stroke="#60a5fa"
                       strokeWidth={3}
-                      dot={{ r: 2 }}
+                      dot={{ r: 3, fill: "#0b1324", stroke: "#60a5fa", strokeWidth: 2 }}
                     />
-                  </BarChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="rounded-xl bg-muted/40 p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Saldo inicial</p>
-                    <p className="text-lg font-bold">{formatCurrency(flujo.saldoInicial)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Saldo inicial</p>
+                    <p className="text-lg font-bold text-white">{formatCurrency(Number(flujo?.saldoInicial || 0))}</p>
                   </div>
-                  <div className="rounded-xl bg-muted/40 p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Saldo final</p>
-                    <p className="text-lg font-bold">{formatCurrency(flujo.saldoFinal)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Saldo final</p>
+                    <p className="text-lg font-bold text-white">{formatCurrency(Number(flujo?.saldoFinal || 0))}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+            <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-accent/20">
-                    <Landmark className="h-5 w-5 text-accent" />
+                  <div className="p-2.5 rounded-xl bg-cyan-500/10">
+                    <Landmark className="h-5 w-5 text-cyan-300" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">Balance General</CardTitle>
-                    <CardDescription>Estructura financiera del negocio</CardDescription>
+                    <CardTitle className="text-lg text-white">Balance General</CardTitle>
+                    <CardDescription className="text-white/55">Estructura visual del negocio</CardDescription>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {balanceStructureData.map((item) => {
-                  const totalBase = Math.max(
-                    Number(balanceGeneral.activos || 0) +
-                      Number(balanceGeneral.pasivos || 0) +
-                      Number(balanceGeneral.capital || 0),
-                    1
-                  );
-                  const pct = (Number(item.value || 0) / totalBase) * 100;
-
-                  return (
-                    <div key={item.name}>
-                      <div className="flex items-center justify-between text-sm mb-2">
-                        <span className="font-medium text-foreground">{item.name}</span>
-                        <span className="text-muted-foreground">
-                          {formatCurrency(item.value)} · {pct.toFixed(1)}%
-                        </span>
+                <div className="grid grid-cols-12 gap-3 auto-rows-[132px]">
+                  {balanceBlocks.map((block, index) => {
+                    const cols =
+                      index === 0
+                        ? "col-span-12 md:col-span-7"
+                        : index === 1
+                        ? "col-span-12 md:col-span-5"
+                        : "col-span-12";
+                    return (
+                      <div
+                        key={block.label}
+                        className={`relative overflow-hidden rounded-[24px] border bg-gradient-to-br p-5 ${cols} ${block.className}`}
+                      >
+                        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/8 blur-2xl" />
+                        <div className="relative flex h-full flex-col justify-between">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.18em] text-white/55">{block.label}</p>
+                              <p className="mt-2 text-3xl font-bold text-white">{formatCompactCurrency(block.value)}</p>
+                            </div>
+                            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${block.badgeClass}`}>
+                              {block.pct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-white/80"
+                              style={{ width: `${Math.min(Math.max(block.pct, 0), 100)}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="h-3 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all duration-500"
-                          style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
 
                 <div className="grid grid-cols-3 gap-3 pt-2">
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Activos</p>
-                    <p className="text-base font-bold">{formatCompactCurrency(balanceGeneral.activos)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Activos</p>
+                    <p className="text-base font-bold text-white">
+                      {formatCompactCurrency(Number(balanceGeneral?.activos || 0))}
+                    </p>
                   </div>
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Pasivos</p>
-                    <p className="text-base font-bold">{formatCompactCurrency(balanceGeneral.pasivos)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Pasivos</p>
+                    <p className="text-base font-bold text-white">
+                      {formatCompactCurrency(Number(balanceGeneral?.pasivos || 0))}
+                    </p>
                   </div>
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Capital</p>
-                    <p className="text-base font-bold">{formatCompactCurrency(balanceGeneral.capital)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Capital</p>
+                    <p className="text-base font-bold text-white">
+                      {formatCompactCurrency(Number(balanceGeneral?.capital || 0))}
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+            <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <CreditCard className="h-5 w-5 text-primary" />
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <CreditCard className="h-5 w-5 text-blue-300" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">Pasivos bancarios</CardTitle>
-                    <CardDescription>Deuda, pagos y saldo pendiente</CardDescription>
+                    <CardTitle className="text-lg text-white">Pasivos bancarios</CardTitle>
+                    <CardDescription className="text-white/55">Deuda, pagos y saldo pendiente</CardDescription>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Deuda total</p>
-                    <p className="text-base font-bold">{formatCompactCurrency(pasivosBancarios.totalDeuda)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Deuda total</p>
+                    <p className="text-base font-bold text-white">
+                      {formatCompactCurrency(Number(pasivosBancarios?.totalDeuda || 0))}
+                    </p>
                   </div>
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Pagado</p>
-                    <p className="text-base font-bold">{formatCompactCurrency(pasivosBancarios.totalPagado)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Pagado</p>
+                    <p className="text-base font-bold text-white">
+                      {formatCompactCurrency(Number(pasivosBancarios?.totalPagado || 0))}
+                    </p>
                   </div>
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Pendiente</p>
-                    <p className="text-base font-bold">{formatCompactCurrency(pasivosBancarios.totalPendiente)}</p>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/45">Pendiente</p>
+                    <p className="text-base font-bold text-white">
+                      {formatCompactCurrency(Number(pasivosBancarios?.totalPendiente || 0))}
+                    </p>
                   </div>
                 </div>
 
@@ -679,25 +1112,25 @@ const Index = () => {
                           : 0;
 
                       return (
-                        <div key={item.id} className="rounded-xl border border-border/50 bg-background/60 p-4">
+                        <div key={item.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="font-semibold text-foreground">{item.institucion}</p>
-                              <p className="text-sm text-muted-foreground">{item.nombre}</p>
+                              <p className="font-semibold text-white">{item.institucion}</p>
+                              <p className="text-sm text-white/55">{item.nombre}</p>
                             </div>
-                            <span className="text-xs rounded-full bg-primary/10 text-primary px-2.5 py-1">
+                            <span className="text-xs rounded-full border border-blue-400/20 bg-blue-500/10 text-blue-300 px-2.5 py-1">
                               {item.tipo}
                             </span>
                           </div>
 
                           <div className="mt-3">
                             <div className="flex items-center justify-between text-sm mb-2">
-                              <span className="text-muted-foreground">Saldo actual</span>
-                              <span className="font-medium">{formatCurrency(item.saldoActual)}</span>
+                              <span className="text-white/55">Saldo actual</span>
+                              <span className="font-medium text-white">{formatCurrency(Number(item.saldoActual || 0))}</span>
                             </div>
-                            <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-2.5 rounded-full bg-white/8 overflow-hidden">
                               <div
-                                className="h-full rounded-full bg-primary transition-all duration-500"
+                                className="h-full rounded-full bg-gradient-to-r from-blue-400 to-cyan-400 transition-all duration-500"
                                 style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }}
                               />
                             </div>
@@ -706,7 +1139,7 @@ const Index = () => {
                       );
                     })
                   ) : (
-                    <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-white/55">
                       No hay financiamientos activos para mostrar.
                     </div>
                   )}
@@ -715,152 +1148,190 @@ const Index = () => {
             </Card>
           </div>
 
-          {/* CxC / CxP / Inventario */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <ProgressSplitCard
               title="Cuentas por Cobrar"
-              total={cxc.total}
+              total={Number(cxc?.total || 0)}
               currentLabel="Corriente"
-              currentValue={cxc.corriente}
+              currentValue={Number(cxc?.corriente || 0)}
               currentPct={cxcCorrientePct}
               overdueLabel="Vencido"
-              overdueValue={cxc.vencido}
+              overdueValue={Number(cxc?.vencido || 0)}
               overduePct={cxcVencidoPct}
               icon={<Clock3 className="h-5 w-5" />}
             />
 
             <ProgressSplitCard
               title="Cuentas por Pagar"
-              total={cxp.total}
+              total={Number(cxp?.total || 0)}
               currentLabel="Corriente"
-              currentValue={cxp.corriente}
+              currentValue={Number(cxp?.corriente || 0)}
               currentPct={cxpCorrientePct}
               overdueLabel="Vencido"
-              overdueValue={cxp.vencido}
+              overdueValue={Number(cxp?.vencido || 0)}
               overduePct={cxpVencidoPct}
               icon={<CreditCard className="h-5 w-5" />}
             />
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+            <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Boxes className="h-5 w-5 text-primary" />
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <Boxes className="h-5 w-5 text-blue-300" />
                   </div>
                   <div>
-                    <CardTitle className="text-base">Salud del inventario</CardTitle>
-                    <CardDescription>Total productos: {inventario.totalProductos}</CardDescription>
+                    <CardTitle className="text-base text-white">Salud del inventario</CardTitle>
+                    <CardDescription className="text-white/55">
+                      Total productos: {Number(inventario?.totalProductos || 0)}
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-5">
+                <div className="h-[190px]">
+                  {inventoryPieData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={inventoryPieData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={52}
+                          outerRadius={72}
+                          paddingAngle={4}
+                          stroke="rgba(255,255,255,0.06)"
+                          strokeWidth={2}
+                        >
+                          {inventoryPieData.map((entry, index) => (
+                            <Cell key={`pie-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/10 text-sm text-white/55">
+                      Sin datos de inventario
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="font-medium flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    <span className="font-medium flex items-center gap-2 text-white">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                       Bien
                     </span>
-                    <span className="text-muted-foreground">
-                      {inventario.bien} · {inventarioBienPct.toFixed(1)}%
+                    <span className="text-white/55">
+                      {Number(inventario?.bien || 0)} · {inventarioBienPct.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="h-3 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-success" style={{ width: `${Math.min(inventarioBienPct, 100)}%` }} />
+                  <div className="h-3 rounded-full bg-white/8 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500"
+                      style={{ width: `${Math.min(inventarioBienPct, 100)}%` }}
+                    />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="font-medium flex items-center gap-2">
-                      <Clock3 className="h-4 w-4 text-warning" />
+                    <span className="font-medium flex items-center gap-2 text-white">
+                      <Clock3 className="h-4 w-4 text-amber-400" />
                       Bajo
                     </span>
-                    <span className="text-muted-foreground">
-                      {inventario.bajo} · {inventarioBajoPct.toFixed(1)}%
+                    <span className="text-white/55">
+                      {Number(inventario?.bajo || 0)} · {inventarioBajoPct.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="h-3 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-warning" style={{ width: `${Math.min(inventarioBajoPct, 100)}%` }} />
+                  <div className="h-3 rounded-full bg-white/8 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                      style={{ width: `${Math.min(inventarioBajoPct, 100)}%` }}
+                    />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="font-medium flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <span className="font-medium flex items-center gap-2 text-white">
+                      <AlertTriangle className="h-4 w-4 text-rose-400" />
                       Negativo
                     </span>
-                    <span className="text-muted-foreground">
-                      {inventario.negativo} · {inventarioNegativoPct.toFixed(1)}%
+                    <span className="text-white/55">
+                      {Number(inventario?.negativo || 0)} · {inventarioNegativoPct.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="h-3 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.min(inventarioNegativoPct, 100)}%` }} />
+                  <div className="h-3 rounded-full bg-white/8 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-rose-400 to-red-500"
+                      style={{ width: `${Math.min(inventarioNegativoPct, 100)}%` }}
+                    />
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Pendientes / Próximamente */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+            <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Sparkles className="h-5 w-5 text-primary" />
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <Sparkles className="h-5 w-5 text-blue-300" />
                   </div>
                   <div>
-                    <CardTitle>Radiografía del negocio</CardTitle>
-                    <CardDescription>Módulo ligado a análisis financiero</CardDescription>
+                    <CardTitle className="text-white">Radiografía del negocio</CardTitle>
+                    <CardDescription className="text-white/55">
+                      Módulo ligado a análisis financiero
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-white/55">
                     Este bloque ya quedó contemplado en el dashboard y se puede activar cuando conectemos el módulo de análisis financiero.
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-warning/15 text-warning px-3 py-1.5 text-sm font-medium">
-                  {pendientes.radiografiaNegocio ? "Pendiente" : "Activo"}
+                <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-300 px-3 py-1.5 text-sm font-medium">
+                  {pendientes?.radiografiaNegocio ? "Pendiente" : "Activo"}
                 </span>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/20">
+            <Card className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(11,20,38,0.96)_100%)] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Sparkles className="h-5 w-5 text-primary" />
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <Sparkles className="h-5 w-5 text-blue-300" />
                   </div>
                   <div>
-                    <CardTitle>Recomendaciones IA</CardTitle>
-                    <CardDescription>Insights automáticos sobre información financiera</CardDescription>
+                    <CardTitle className="text-white">Recomendaciones IA</CardTitle>
+                    <CardDescription className="text-white/55">
+                      Insights automáticos sobre información financiera
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-white/55">
                     La UI queda lista para pintar recomendaciones en cuanto integremos la capa de IA.
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-warning/15 text-warning px-3 py-1.5 text-sm font-medium">
-                  {pendientes.recomendacionesIA ? "Pendiente" : "Activo"}
+                <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-300 px-3 py-1.5 text-sm font-medium">
+                  {pendientes?.recomendacionesIA ? "Pendiente" : "Activo"}
                 </span>
               </CardContent>
             </Card>
           </div>
 
-          {/* Footer mini info */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-white/45">
+            <p>Dashboard conectado al nuevo resumen financiero unificado de Bukipin.</p>
             <p>
-              Dashboard conectado al nuevo resumen financiero unificado de Bukipin.
-            </p>
-            <p>
-              Registros cargados: {dashboard?.meta?.generatedAt ? new Date(dashboard.meta.generatedAt).toLocaleString() : "N/D"}
+              Registros cargados:{" "}
+              {dashboard?.meta?.generatedAt ? new Date(dashboard.meta.generatedAt).toLocaleString() : "N/D"}
             </p>
           </div>
         </div>
