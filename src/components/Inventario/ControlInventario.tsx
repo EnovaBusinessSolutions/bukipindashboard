@@ -23,172 +23,19 @@ const n = (v: any) => {
 const pickPrecioVenta = (p: any) =>
   n(p?.precio_venta ?? p?.precioVenta ?? p?.precio_venta_sugerido ?? p?.precioVentaSugerido ?? 0);
 
-const pickCostoCompraFallback = (p: any) =>
+const pickCostoPromedioBackend = (p: any) =>
   n(
-    p?.costo_unitario ?? // (a veces calculado por hook)
+    p?.costo_promedio ??
+      p?.costoPromedio ??
+      p?.costoPromedioPonderado ??
+      p?.costo_unitario ??
       p?.costo_compra ??
       p?.costoCompra ??
-      p?.precio ?? // compat legacy (precio como costo)
       0
   );
 
-/**
- * Intenta detectar un array de movimientos en distintas llaves.
- * (Bukipin ha tenido varias versiones / nombres)
- */
-function pickMovements(producto: any): any[] {
-  const candidates = [
-    producto?.movimientos,
-    producto?.movimientosInventario,
-    producto?.movimientos_inventario,
-    producto?.inventoryMovements,
-    producto?.inventory_movements,
-    producto?.historial,
-    producto?.historialMovimientos,
-    producto?.transaccionesInventario,
-    producto?.transacciones_inventario,
-    producto?.kardex,
-    producto?.movs,
-    producto?.movsInventario,
-    producto?.movimientosData,
-  ];
-
-  for (const c of candidates) {
-    if (Array.isArray(c) && c.length) return c;
-  }
-
-  // a veces viene anidado
-  const nestedCandidates = [
-    producto?.data?.movimientos,
-    producto?.data?.movimientosInventario,
-    producto?.data?.movimientos_inventario,
-  ];
-  for (const c of nestedCandidates) {
-    if (Array.isArray(c) && c.length) return c;
-  }
-
-  return [];
-}
-
-function normalizeMovement(mv: any) {
-  const rawType = String(
-    mv?.tipo ??
-      mv?.type ??
-      mv?.tipoMovimiento ??
-      mv?.tipo_movimiento ??
-      mv?.movementType ??
-      mv?.movement_type ??
-      ""
-  ).toLowerCase();
-
-  let qty = n(
-    mv?.cantidad ??
-      mv?.qty ??
-      mv?.quantity ??
-      mv?.cantidadMovida ??
-      mv?.cantidad_movida ??
-      mv?.cantidadVendida ??
-      mv?.cantidad_vendida ??
-      mv?.unidades ??
-      mv?.units ??
-      0
-  );
-
-  // si qty viene negativo, lo tratamos como salida (abs)
-  const wasNegative = qty < 0;
-  if (qty < 0) qty = Math.abs(qty);
-
-  const unitCost = n(
-    mv?.costoUnitario ??
-      mv?.costo_unitario ??
-      mv?.costo ??
-      mv?.cost ??
-      mv?.unitCost ??
-      mv?.unit_cost ??
-      0
-  );
-
-  const totalCost = n(
-    mv?.costoTotal ??
-      mv?.costo_total ??
-      mv?.totalCost ??
-      mv?.total_cost ??
-      (unitCost > 0 && qty > 0 ? unitCost * qty : 0)
-  );
-
-  const isEntrada =
-    rawType.includes("entrada") ||
-    rawType.includes("compra") ||
-    rawType.includes("in") ||
-    rawType.includes("purchase") ||
-    mv?.esEntrada === true ||
-    mv?.isEntrada === true;
-
-  const isSalida =
-    rawType.includes("salida") ||
-    rawType.includes("venta") ||
-    rawType.includes("out") ||
-    rawType.includes("sale") ||
-    mv?.esSalida === true ||
-    mv?.isSalida === true ||
-    wasNegative;
-
-  // Si no se detecta por type, inferimos por campos comunes
-  // (ej: source="ingreso" suele ser salida)
-  const source = String(mv?.source ?? mv?.origen ?? "").toLowerCase();
-  const inferredSalida =
-    !isEntrada && !isSalida && (source.includes("ingreso") || source.includes("venta"));
-
-  const kind: "entrada" | "salida" | "unknown" = isEntrada
-    ? "entrada"
-    : isSalida || inferredSalida
-      ? "salida"
-      : "unknown";
-
-  return { kind, qty, unitCost, totalCost, rawType };
-}
-
-function computeFromMovements(movs: any[]) {
-  let entradasQty = 0;
-  let salidasQty = 0;
-
-  // para costo promedio ponderado (solo entradas)
-  let entradasCostSum = 0;
-  let entradasQtyForAvg = 0;
-
-  for (const mv of movs) {
-    const m = normalizeMovement(mv);
-    if (!m.qty) continue;
-
-    if (m.kind === "entrada") {
-      entradasQty += m.qty;
-
-      const costToUse = m.totalCost > 0 ? m.totalCost : m.unitCost > 0 ? m.unitCost * m.qty : 0;
-      if (costToUse > 0) {
-        entradasCostSum += costToUse;
-        entradasQtyForAvg += m.qty;
-      }
-      continue;
-    }
-
-    if (m.kind === "salida") {
-      salidasQty += m.qty;
-      continue;
-    }
-  }
-
-  const costoPromedioMovs =
-    entradasQtyForAvg > 0 && entradasCostSum > 0 ? entradasCostSum / entradasQtyForAvg : 0;
-
-  const stock = entradasQty - salidasQty;
-
-  return {
-    entradasQty,
-    salidasQty,
-    stock,
-    costoPromedioMovs,
-  };
-}
+const pickStockBackend = (p: any) =>
+  n(p?.stock_actual ?? p?.stockActual ?? p?.stock ?? p?.cantidad_stock ?? p?.existencia ?? 0);
 
 const ControlInventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -218,11 +65,6 @@ const ControlInventario = () => {
     }
   }
 
-  /**
-   * ✅ FIX REAL:
-   * Calculamos métricas POR MOVIMIENTOS cuando existan,
-   * porque el backend todavía puede no actualizar producto.stock.
-   */
   const inventoryData = useMemo(() => {
     const list = productosInventario || [];
 
@@ -230,44 +72,12 @@ const ControlInventario = () => {
       const id = String(producto?.id ?? producto?._id ?? producto?.productId ?? producto?.productoId ?? "");
       const nombre = String(producto?.nombre ?? producto?.name ?? "");
 
-      // fallback legacy directo del producto
-      const stockLegacy = n(
-        producto?.cantidad_stock ??
-          producto?.stock ??
-          producto?.stock_actual ??
-          producto?.stockActual ??
-          producto?.existencia ??
-          0
-      );
-      const compradoLegacy = n(producto?.cantidad_comprada ?? producto?.cantidadComprada ?? 0);
-      const vendidoLegacy = n(producto?.cantidad_vendida ?? producto?.cantidadVendida ?? 0);
-
-      const movs = pickMovements(producto);
-      const hasMovs = Array.isArray(movs) && movs.length > 0;
-
-      const calc = hasMovs ? computeFromMovements(movs) : null;
-
-      // ✅ costo promedio: movimientos > hook/producto > fallback
-      const costoUnitarioHook = n(producto?.costo_unitario);
-      const costoFallback = pickCostoCompraFallback(producto);
-
-      const costoPromedio =
-        (calc?.costoPromedioMovs ?? 0) > 0
-          ? (calc?.costoPromedioMovs ?? 0)
-          : costoUnitarioHook > 0
-            ? costoUnitarioHook
-            : costoFallback;
-
-      // ✅ stock: movimientos > legacy
-      const stockActual = calc ? calc.stock : stockLegacy;
-
-      // ✅ totales: movimientos > legacy
-      const totalComprado = calc ? calc.entradasQty : (compradoLegacy > 0 ? compradoLegacy : Math.max(stockLegacy, 0));
-      const totalVendido = calc ? calc.salidasQty : vendidoLegacy;
-
-      // ✅ valor total: si hay movs, lo calculamos; si no, respetamos backend/hook
+      const stockActual = pickStockBackend(producto);
+      const costoPromedio = pickCostoPromedioBackend(producto);
+      const totalComprado = n(producto?.cantidad_comprada ?? producto?.cantidadComprada ?? 0);
+      const totalVendido = n(producto?.cantidad_vendida ?? producto?.cantidadVendida ?? 0);
       const valorTotalBackend = n(producto?.valor_total_inventario ?? producto?.valorTotalInventario ?? 0);
-      const valorTotal = calc ? stockActual * costoPromedio : (valorTotalBackend > 0 ? valorTotalBackend : stockActual * costoPromedio);
+      const valorTotal = valorTotalBackend > 0 ? valorTotalBackend : stockActual * costoPromedio;
 
       // ✅ Precio configurado (VENTA), no costo
       const precioConfigurado = pickPrecioVenta(producto);
@@ -299,9 +109,6 @@ const ControlInventario = () => {
         subcuenta_nombre: producto.subcuenta_nombre ?? producto.subcuentaNombre ?? null,
         descripcion: producto.descripcion ?? null,
 
-        // debug util (por si quieres inspeccionar)
-        __hasMovs: hasMovs,
-        __movsCount: hasMovs ? movs.length : 0,
       };
     });
   }, [productosInventario]);
