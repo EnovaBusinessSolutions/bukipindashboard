@@ -53,25 +53,6 @@ const getActivo = (p: any) => {
 };
 const getUserId = (p: any) => String(p?.user_id ?? p?.userId ?? p?.owner ?? "");
 
-const pickProductoStockConsolidado = (p: any) =>
-  num(p?.stockActual ?? p?.stock_actual ?? p?.stock ?? p?.cantidad_stock ?? p?.existencia ?? 0);
-
-const pickProductoCostoConsolidado = (p: any) =>
-  num(
-    p?.costoPromedio ??
-      p?.costo_promedio ??
-      p?.costoPromedioPonderado ??
-      p?.costo_unitario ??
-      p?.costoCompra ??
-      p?.costo_compra ??
-      p?.precioCompra ??
-      p?.precio_compra ??
-      0
-  );
-
-const pickProductoValorInventario = (p: any) =>
-  num(p?.valor_total_inventario ?? p?.valorTotalInventario ?? p?.valorTotal ?? 0);
-
 /** ✅ Normaliza cualquier shape para devolver un array */
 function asArray<T = any>(json: ApiEnvelope<any>): T[] {
   const j: any = json as any;
@@ -152,6 +133,169 @@ const getMovCantidad = (m: MovimientoLike) =>
       m?.cantidadVendida ??
       m?.cantidad_vendida
   );
+
+/** -------------------------
+ * ✅ Helpers deep (dot paths)
+ * ------------------------- */
+function getByPath(obj: any, path: string) {
+  if (!obj || !path) return undefined;
+  const parts = path.split(".");
+  let cur = obj;
+  for (const p of parts) {
+    if (cur == null) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+/** lee el primer número >0 desde paths (dot paths) */
+function pickNumberDeep(obj: any, paths: string[]): number {
+  for (const path of paths) {
+    const v = getByPath(obj, path);
+    const n = num(v);
+    if (n > 0) return n;
+  }
+  return 0;
+}
+
+/**
+ * ✅ Costo TOTAL (root + deep aliases)
+ */
+const getMovCostoTotal = (m: MovimientoLike) => {
+  const root =
+    num(
+      m?.costo_total ??
+        m?.costoTotal ??
+        m?.total ??
+        m?.monto_total ??
+        m?.montoTotal ??
+        m?.importe_total ??
+        m?.importeTotal ??
+        m?.amount ??
+        m?.monto ??
+        m?.importe ??
+        m?.totalCompra ??
+        m?.total_compra
+    ) || 0;
+  if (root > 0) return root;
+
+  return pickNumberDeep(m, [
+    "detalle.costo_total",
+    "detalle.costoTotal",
+    "detalle.total",
+    "detalle.monto_total",
+    "detalle.montoTotal",
+    "detalle.importe_total",
+    "detalle.importeTotal",
+    "detalle.amount",
+    "payload.costo_total",
+    "payload.costoTotal",
+    "payload.total",
+    "payload.monto_total",
+    "payload.montoTotal",
+    "data.costo_total",
+    "data.costoTotal",
+    "data.total",
+    "data.monto_total",
+    "data.montoTotal",
+    "meta.total",
+    "meta.totalCompra",
+    "meta.total_compra",
+    "items.0.total",
+    "items.0.monto",
+    "items.0.importe",
+  ]);
+};
+
+/**
+ * ✅ Costo UNITARIO (root + deep aliases)
+ */
+const getMovCostoUnit = (m: MovimientoLike) => {
+  const root =
+    num(
+      m?.costo_unitario ??
+        m?.costoUnitario ??
+        m?.unitCost ??
+        m?.costoUnit ??
+        m?.costoCompra ??
+        m?.costo_compra ??
+        m?.precio_unitario ??
+        m?.precioUnitario ??
+        m?.unitPrice ??
+        m?.precio ??
+        m?.price ??
+        m?.precioUnitarioCompra ??
+        m?.precio_unitario_compra
+    ) || 0;
+  if (root > 0) return root;
+
+  return pickNumberDeep(m, [
+    "detalle.costo_unitario",
+    "detalle.costoUnitario",
+    "detalle.unitCost",
+    "detalle.unit_cost",
+    "detalle.costoCompra",
+    "detalle.costo_compra",
+    "detalle.precioUnitario",
+    "detalle.precio_unitario",
+    "detalle.unitPrice",
+    "detalle.unit_price",
+    "detalle.precioUnitarioCompra",
+    "detalle.precio_unitario_compra",
+    "payload.costo_unitario",
+    "payload.costoUnitario",
+    "payload.unitCost",
+    "payload.costoCompra",
+    "payload.costo_compra",
+    "payload.precioUnitario",
+    "payload.precio_unitario",
+    "payload.precioUnitarioCompra",
+    "payload.precio_unitario_compra",
+    "data.costo_unitario",
+    "data.costoUnitario",
+    "data.unitCost",
+    "data.costoCompra",
+    "data.costo_compra",
+    "data.precioUnitario",
+    "data.precio_unitario",
+    "data.precioUnitarioCompra",
+    "data.precio_unitario_compra",
+    "items.0.costo_unitario",
+    "items.0.costoUnitario",
+    "items.0.unitCost",
+    "items.0.precioUnitario",
+    "items.0.precioUnitarioCompra",
+    "items.0.precio",
+    "items.0.price",
+  ]);
+};
+
+/**
+ * ✅ Costo unitario efectivo:
+ * - si viene unitario, úsalo
+ * - si viene total y qty > 0, usa total/qty
+ */
+function getEffectiveUnitCost(m: MovimientoLike): number {
+  const qty = getMovCantidad(m);
+  const unit = getMovCostoUnit(m);
+  if (unit > 0) return unit;
+
+  const total = getMovCostoTotal(m);
+  if (total > 0 && qty > 0) return total / qty;
+
+  const alt =
+    num(m?.costo) ||
+    num(m?.cost) ||
+    num(m?.purchaseCost) ||
+    num(m?.precioCompra) ||
+    num(m?.precio_compra) ||
+    num(m?.detalle?.costo) ||
+    num(m?.payload?.costo) ||
+    0;
+
+  if (alt > 0) return alt;
+  return 0;
+}
 
 /** ✅ Cancelación robusta */
 function isCancelled(m: any): boolean {
@@ -387,15 +531,36 @@ export const useInventarioConMovimientos = () => {
           return sum + delta;
         }, 0);
 
-        const stock_backend = pickProductoStockConsolidado(producto);
-        const cantidad_stock = stock_backend;
+        const cantidad_stock = cantidad_comprada - cantidad_vendida + ajuste_cantidad;
 
-        // ✅ CPP backend-first: NO recalcular desde movimientos.
-        const costo_unitario = pickProductoCostoConsolidado(producto);
+        // ✅ Costo promedio ponderado (solo compras con costo válido)
+        let totalCost = 0;
+        let totalQty = 0;
 
-        const valor_total_backend = pickProductoValorInventario(producto);
-        const valor_total_inventario =
-          valor_total_backend > 0 ? valor_total_backend : cantidad_stock * costo_unitario;
+        for (const m of compras) {
+          const qty = getMovCantidad(m);
+          const unit = getEffectiveUnitCost(m);
+          if (qty > 0 && unit > 0) {
+            totalQty += qty;
+            totalCost += unit * qty;
+          }
+        }
+
+        let costo_unitario = totalQty > 0 ? totalCost / totalQty : 0;
+
+        // ✅ Fallback FINAL: si no se pudo desde movimientos, usa el costoCompra guardado en el producto
+        if (costo_unitario <= 0) {
+          const fallback =
+            num(producto?.costoCompra) ||
+            num(producto?.costo_compra) ||
+            num(producto?.precioCompra) ||
+            num(producto?.precio_compra) ||
+            0;
+
+          if (fallback > 0) costo_unitario = fallback;
+        }
+
+        const valor_total_inventario = cantidad_stock * costo_unitario;
 
         const ultimo_movimiento = movimientosProducto[0] ? getMovFecha(movimientosProducto[0]) : null;
 
