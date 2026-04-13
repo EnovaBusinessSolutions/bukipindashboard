@@ -44,9 +44,7 @@ const toISODate = (d: Date) => d.toISOString().split("T")[0];
 
 export const useTransaccionesCapital = () => {
   const queryClient = useQueryClient();
-
-  // (Se sigue usando en otros lados, aunque aquí no es estrictamente necesario)
-  const { accionistas: accionistasActivos } = useAccionistas();
+  useAccionistas();
 
   /**
    * ✅ Backend esperado:
@@ -159,6 +157,8 @@ export const useTransaccionesCapital = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transacciones-capital"] });
+      queryClient.invalidateQueries({ queryKey: ["asientos-capital"] });
+      queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
       toast({
         title: "Registro exitoso",
         description: "La transacción de capital se ha registrado correctamente",
@@ -184,7 +184,7 @@ export const useTransaccionesCapital = () => {
     .filter((t) => t.tipo_movimiento === "dividendo")
     .reduce((sum, t) => sum + toNumber(t.monto), 0);
 
-  const capitalSocialTotal = totalAportaciones - totalDividendos;
+  const capitalNetoVigente = totalAportaciones - totalDividendos;
 
   // Totales por tipo de socio (activos vs inactivos)
   const totalAportacionesActivos = transaccionesActivas
@@ -247,7 +247,8 @@ export const useTransaccionesCapital = () => {
 
     totalAportaciones,
     totalDividendos,
-    capitalSocialTotal,
+    capitalSocialTotal: capitalNetoVigente,
+    capitalNetoVigente,
 
     resumenPorSocio,
 

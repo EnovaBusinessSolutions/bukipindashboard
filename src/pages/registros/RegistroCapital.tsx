@@ -58,7 +58,7 @@ const RegistroCapital = () => {
     registrarTransaccion,
     totalAportaciones,
     totalDividendos,
-    capitalSocialTotal,
+    capitalNetoVigente,
     resumenPorSocio,
     totalAportacionesActivos,
     totalAportacionesInactivos,
@@ -76,6 +76,12 @@ const RegistroCapital = () => {
   const [accionistaId, setAccionistaId] = useState("");
   const [accionistaSeleccionado, setAccionistaSeleccionado] = useState<string>("all");
   const [mostrarInactivos, setMostrarInactivos] = useState(true);
+  const [filtroTipoResumen, setFiltroTipoResumen] = useState<
+    "all" | "aportacion" | "dividendo"
+  >("all");
+  const [filtroEstadoResumen, setFiltroEstadoResumen] = useState<
+    "all" | "activo" | "cancelado"
+  >("all");
 
   // Estados para diálogos
   const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
@@ -231,6 +237,13 @@ const RegistroCapital = () => {
     procederConRegistro();
   };
 
+  const transaccionesResumen = transacciones.filter((t) => {
+    if (!mostrarInactivos && t.accionistaActivo === false) return false;
+    if (filtroTipoResumen !== "all" && t.tipo_movimiento !== filtroTipoResumen) return false;
+    if (filtroEstadoResumen !== "all" && t.estado !== filtroEstadoResumen) return false;
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 md:px-6 lg:px-8">
@@ -257,30 +270,39 @@ const RegistroCapital = () => {
               <div className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm backdrop-blur">
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   <Landmark className="h-4 w-4 text-primary" />
-                  Capital social
+                  Capital neto vigente
                 </div>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(capitalSocialTotal)}
+                  {formatCurrency(capitalNetoVigente)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Aportaciones activas menos dividendos activos
                 </p>
               </div>
 
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 shadow-sm">
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
                   <ArrowUpRight className="h-4 w-4" />
-                  Aportaciones
+                  Aportaciones acumuladas
                 </div>
                 <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                   {formatCurrency(totalAportaciones)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Histórico bruto de entradas activas
                 </p>
               </div>
 
               <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.04] p-4 shadow-sm">
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-rose-700 dark:text-rose-400">
                   <ArrowDownRight className="h-4 w-4" />
-                  Dividendos
+                  Dividendos acumulados
                 </div>
                 <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
                   {formatCurrency(totalDividendos)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Histórico bruto de salidas activas
                 </p>
               </div>
             </div>
@@ -743,7 +765,8 @@ const RegistroCapital = () => {
                       <div>
                         <CardTitle>Resumen de Movimientos de Capital</CardTitle>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Vista consolidada del historial operativo y estatus de movimientos.
+                          Vista consolidada separando histórico bruto de aportaciones y dividendos
+                          contra el capital neto vigente.
                         </p>
                       </div>
                     </div>
@@ -766,15 +789,15 @@ const RegistroCapital = () => {
                     <Card className="rounded-2xl border border-border/60 bg-gradient-to-br from-background to-muted/25 shadow-none">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
-                          Capital Social Total
+                          Capital Neto Vigente
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-2xl font-bold text-primary">
-                          {formatCurrency(capitalSocialTotal)}
+                          {formatCurrency(capitalNetoVigente)}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Aportaciones acumuladas
+                          Saldo vigente después de dividendos activos
                         </p>
                       </CardContent>
                     </Card>
@@ -782,21 +805,23 @@ const RegistroCapital = () => {
                     <Card className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] shadow-none">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
-                          Total Aportaciones
+                          Aportaciones Acumuladas
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                           {formatCurrency(totalAportaciones)}
                         </p>
-                        <p className="mt-1 text-xs text-muted-foreground">En el periodo</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Histórico bruto de movimientos de entrada activos
+                        </p>
                       </CardContent>
                     </Card>
 
                     <Card className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.04] shadow-none">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
-                          Total Dividendos
+                          Dividendos Acumulados
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -804,19 +829,80 @@ const RegistroCapital = () => {
                           {formatCurrency(totalDividendos)}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Distribuidos en el periodo
+                          Histórico bruto de movimientos de salida activos
                         </p>
                       </CardContent>
                     </Card>
                   </div>
 
+                  <div className="mb-6 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                    El histórico conserva aportaciones y dividendos por separado. El capital neto
+                    vigente se calcula restando dividendos activos a las aportaciones activas; no
+                    reemplaza ni borra movimientos previos.
+                  </div>
+
                   {/* Tabla de transacciones */}
                   <div className="overflow-hidden rounded-[22px] border border-border/60">
-                    <div className="flex items-center justify-between border-b border-border/60 bg-muted/35 px-5 py-4">
-                      <h3 className="font-semibold">Historial de Transacciones</h3>
-                      <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                        {transacciones.length} registro(s)
-                      </Badge>
+                    <div className="space-y-4 border-b border-border/60 bg-muted/35 px-5 py-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <h3 className="font-semibold">Historial Completo de Transacciones</h3>
+                        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                          {transaccionesResumen.length} de {transacciones.length} registro(s)
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                            Tipo de movimiento
+                          </Label>
+                          <Select
+                            value={filtroTipoResumen}
+                            onValueChange={(value: "all" | "aportacion" | "dividendo") =>
+                              setFiltroTipoResumen(value)
+                            }
+                          >
+                            <SelectTrigger className="h-10 rounded-xl border-border/60 bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl border-border/60">
+                              <SelectItem value="all">Todos</SelectItem>
+                              <SelectItem value="aportacion">Aportaciones</SelectItem>
+                              <SelectItem value="dividendo">Dividendos</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                            Estado
+                          </Label>
+                          <Select
+                            value={filtroEstadoResumen}
+                            onValueChange={(value: "all" | "activo" | "cancelado") =>
+                              setFiltroEstadoResumen(value)
+                            }
+                          >
+                            <SelectTrigger className="h-10 rounded-xl border-border/60 bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl border-border/60">
+                              <SelectItem value="all">Todos</SelectItem>
+                              <SelectItem value="activo">Activos</SelectItem>
+                              <SelectItem value="cancelado">Cancelados</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                            Lectura rápida
+                          </Label>
+                          <div className="flex h-10 items-center rounded-xl border border-border/60 bg-background px-3 text-sm text-muted-foreground">
+                            Bruto = historial acumulado | Neto = saldo vigente
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {isLoading ? (
@@ -828,6 +914,13 @@ const RegistroCapital = () => {
                         <p>No hay transacciones registradas</p>
                         <p className="mt-2 text-sm">
                           Las transacciones aparecerán aquí una vez que las registres
+                        </p>
+                      </div>
+                    ) : transaccionesResumen.length === 0 ? (
+                      <div className="p-10 text-center text-muted-foreground">
+                        <p>No hay transacciones que coincidan con los filtros actuales.</p>
+                        <p className="mt-2 text-sm">
+                          Ajusta tipo, estado o visibilidad de inactivos para ver más movimientos.
                         </p>
                       </div>
                     ) : (
@@ -860,7 +953,7 @@ const RegistroCapital = () => {
                           </thead>
 
                           <tbody>
-                            {transacciones.map((t) => (
+                            {transaccionesResumen.map((t) => (
                               <tr
                                 key={t.id}
                                 className="border-b border-border/50 transition-colors hover:bg-muted/20"
@@ -966,8 +1059,8 @@ const RegistroCapital = () => {
                     <div>
                       <CardTitle>Resumen por Socio / Accionista</CardTitle>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Balance ejecutivo por participante con visibilidad de aportaciones y
-                        dividendos.
+                        Balance neto por participante, mostrando por separado aportaciones y
+                        dividendos históricos activos.
                       </p>
                     </div>
                   </div>

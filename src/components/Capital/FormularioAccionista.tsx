@@ -18,7 +18,7 @@ import {
   FileText,
   Sparkles,
 } from "lucide-react";
-import { useAccionistas, Accionista } from "@/hooks/useAccionistas";
+import { useAccionistas } from "@/hooks/useAccionistas";
 import {
   Dialog,
   DialogContent,
@@ -38,9 +38,17 @@ interface AjustePorcentaje {
   porcentajeNuevo: number;
 }
 
+const MAX_ACTIVE_SHAREHOLDERS = 99;
+
 export const FormularioAccionista = () => {
-  const { accionistas, isLoading, crearAccionista, actualizarAccionista, eliminarAccionista } =
-    useAccionistas();
+  const {
+    accionistas,
+    isLoading,
+    crearAccionista,
+    actualizarAccionista,
+    eliminarAccionista,
+    redistribuirAccionistas,
+  } = useAccionistas();
 
   // Calcular porcentaje total asignado y disponible
   const porcentajeTotalAsignado = accionistas.reduce(
@@ -56,6 +64,22 @@ export const FormularioAccionista = () => {
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [rfc, setRfc] = useState("");
+  const accionistasActivos = accionistas.length;
+  const limiteAccionistasAlcanzado =
+    accionistasActivos >= MAX_ACTIVE_SHAREHOLDERS && !modoEdicion;
+  const mayorParticipacion = accionistas.reduce(
+    (max, a) => Math.max(max, a.porcentaje_participacion || 0),
+    0
+  );
+  const accionistasConMayorParticipacion = new Set(
+    accionistas
+      .filter(
+        (accionista) =>
+          mayorParticipacion > 0 &&
+          Math.abs((accionista.porcentaje_participacion || 0) - mayorParticipacion) < 0.01
+      )
+      .map((accionista) => accionista.id)
+  );
 
   // Validar si el porcentaje excede el límite disponible
   const porcentajeNumerico = parseFloat(porcentaje) || 0;
@@ -91,6 +115,15 @@ export const FormularioAccionista = () => {
     e.preventDefault();
 
     if (!nombre.trim()) return;
+
+    if (limiteAccionistasAlcanzado) {
+      toast({
+        title: "Límite alcanzado",
+        description: `No puedes registrar más de ${MAX_ACTIVE_SHAREHOLDERS} accionistas activos.`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     const porcentajeNumerico = porcentaje ? parseFloat(porcentaje) : 0;
 
@@ -198,19 +231,19 @@ export const FormularioAccionista = () => {
     }
 
     // Crear el nuevo accionista
-    crearAccionista.mutate(nuevoAccionistaData, {
-      onSuccess: () => {
-        // Actualizar porcentajes de accionistas existentes
-        ajustesPorcentajes.forEach((ajuste) => {
-          if (ajuste.porcentajeNuevo !== ajuste.porcentajeActual) {
-            actualizarAccionista.mutate({
-              id: ajuste.id,
-              porcentaje_participacion: ajuste.porcentajeNuevo,
-            });
-          }
-        });
+    redistribuirAccionistas.mutate(
+      {
+        nuevoAccionista: nuevoAccionistaData,
+        ajustes: ajustesPorcentajes.map((ajuste) => ({
+          id: ajuste.id,
+          porcentaje_participacion: ajuste.porcentajeNuevo,
+        })),
+        require_exact_total: true,
+      },
+      {
+        onSuccess: () => {
+          // Limpiar formulario y cerrar diÃ¡logo
 
-        // Limpiar formulario y cerrar diálogo
         setNombre("");
         setPorcentaje("");
         setEmail("");
@@ -219,8 +252,9 @@ export const FormularioAccionista = () => {
         setMostrarDialogoDilucion(false);
         setNuevoAccionistaData(null);
         setAjustesPorcentajes([]);
-      },
-    });
+        },
+      }
+    );
   };
 
   const cancelarDilucion = () => {
@@ -441,9 +475,25 @@ export const FormularioAccionista = () => {
 
               <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.05] p-5 text-center">
                 <p className="mb-1 text-sm text-muted-foreground">Accionistas</p>
-                <p className="text-3xl font-bold text-violet-600">{accionistas.length}</p>
+                <p className="text-3xl font-bold text-violet-600">
+                  {accionistasActivos}/{MAX_ACTIVE_SHAREHOLDERS}
+                </p>
               </div>
             </div>
+
+            {limiteAccionistasAlcanzado && (
+              <Alert
+                variant="destructive"
+                className="mt-5 rounded-2xl border border-destructive/20"
+              >
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Límite de accionistas alcanzado</AlertTitle>
+                <AlertDescription>
+                  Ya existen {MAX_ACTIVE_SHAREHOLDERS} accionistas activos. Para registrar uno
+                  nuevo primero debes dar de baja o redistribuir la estructura actual.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {porcentajeDisponible !== 0 && (
               <Alert
@@ -483,6 +533,9 @@ export const FormularioAccionista = () => {
                   <p>{modoEdicion ? "Editar Accionista" : "Registrar Nuevo Accionista"}</p>
                   <p className="mt-1 text-sm font-normal text-muted-foreground">
                     Captura y administra la estructura accionaria con un flujo claro y profesional.
+                  </p>
+                  <p className="mt-1 text-xs font-normal text-muted-foreground">
+                    Accionistas activos: {accionistasActivos}/{MAX_ACTIVE_SHAREHOLDERS}
                   </p>
                 </div>
               </div>
@@ -606,9 +659,17 @@ export const FormularioAccionista = () => {
                 </div>
               </div>
 
-              <Button type="submit" className="h-12 w-full rounded-xl font-semibold">
+              <Button
+                type="submit"
+                disabled={limiteAccionistasAlcanzado}
+                className="h-12 w-full rounded-xl font-semibold"
+              >
                 <Plus className="mr-2 h-4 w-4" />
-                {modoEdicion ? "Actualizar Accionista" : "Registrar Accionista"}
+                {modoEdicion
+                  ? "Actualizar Accionista"
+                  : limiteAccionistasAlcanzado
+                  ? "Límite alcanzado"
+                  : "Registrar Accionista"}
               </Button>
             </form>
           </CardContent>
@@ -647,7 +708,14 @@ export const FormularioAccionista = () => {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex-1">
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <p className="text-base font-semibold">{accionista.nombre}</p>
+                          <div>
+                            <p className="text-base font-semibold">{accionista.nombre}</p>
+                            {accionistasConMayorParticipacion.has(accionista.id) && (
+                              <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                                Mayor participacion actual
+                              </p>
+                            )}
+                          </div>
 
                           {accionista.porcentaje_participacion > 0 && (
                             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-primary/8 px-3 py-1 text-sm font-medium text-primary">

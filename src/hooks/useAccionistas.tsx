@@ -27,6 +27,15 @@ type ActualizarAccionistaInput = Partial<Omit<Accionista, "created_at" | "update
   id: string;
 };
 
+type RedistribucionAccionistasInput = {
+  nuevoAccionista?: CrearAccionistaInput;
+  ajustes: Array<{
+    id: string;
+    porcentaje_participacion: number;
+  }>;
+  require_exact_total?: boolean;
+};
+
 export const useAccionistas = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -55,6 +64,7 @@ export const useAccionistas = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accionistas"] });
+      queryClient.invalidateQueries({ queryKey: ["accionistas-todos"] });
       toast({
         title: "Accionista creado",
         description: "El accionista ha sido registrado exitosamente",
@@ -82,6 +92,7 @@ export const useAccionistas = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accionistas"] });
+      queryClient.invalidateQueries({ queryKey: ["accionistas-todos"] });
       toast({
         title: "Accionista actualizado",
         description: "Los datos del accionista han sido actualizados",
@@ -105,6 +116,7 @@ export const useAccionistas = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accionistas"] });
+      queryClient.invalidateQueries({ queryKey: ["accionistas-todos"] });
       toast({
         title: "Accionista eliminado",
         description: "El accionista ha sido dado de baja",
@@ -119,11 +131,40 @@ export const useAccionistas = () => {
     },
   });
 
+  const redistribuirAccionistas = useMutation({
+    mutationFn: async (payload: RedistribucionAccionistasInput) => {
+      const json = await apiFetch("/api/accionistas/redistribucion", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const response: any = (json as any)?.data ?? json;
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accionistas"] });
+      queryClient.invalidateQueries({ queryKey: ["accionistas-todos"] });
+      toast({
+        title: "Redistribución aplicada",
+        description: "La estructura accionaria se actualizó correctamente",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description:
+          "No se pudo aplicar la redistribución: " + (error?.message || "Error desconocido"),
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     accionistas,
     isLoading,
     crearAccionista,
     actualizarAccionista,
     eliminarAccionista,
+    redistribuirAccionistas,
   };
 };

@@ -39,6 +39,7 @@ export const useCancelarTransaccionCapital = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["transacciones-capital"] });
       queryClient.invalidateQueries({ queryKey: ["asientos-capital"] });
+      queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
 
       const numeroAsiento =
         (data as any)?.numeroAsientoReversion ||

@@ -196,6 +196,19 @@ function tipoPorNumeroAsiento(numeroAsiento: string) {
   return "Otro";
 }
 
+function tipoPorSource(source: string) {
+  const s = String(source || "").trim().toLowerCase();
+  if (!s) return "Otro";
+  if (s.startsWith("capital")) return "Capital";
+  if (s.startsWith("ingreso") || s.startsWith("cobro")) return "Ingreso";
+  if (s.startsWith("egreso") || s.startsWith("pago")) return "Egreso";
+  if (s.includes("depreci")) return "Depreciación";
+  if (s.startsWith("inversion") || s.startsWith("capex")) return "Inversión";
+  if (s.startsWith("financ")) return "Financiamiento";
+  if (s.startsWith("impuesto") || s.startsWith("isr")) return "Impuesto";
+  return "Otro";
+}
+
 // Normalizador para endpoints estilo Bukipin: {ok:true,data} o payload plano
 function unwrap(json: any) {
   return json?.data ?? json;
@@ -347,7 +360,10 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
 
       for (const a of asientos || []) {
         const referencia = normalizeCode(a?.numero_asiento ?? a?.numeroAsiento);
-        const tipo = tipoPorNumeroAsiento(referencia);
+        const tipo =
+          tipoPorNumeroAsiento(referencia) !== "Otro"
+            ? tipoPorNumeroAsiento(referencia)
+            : tipoPorSource(String((a as any)?.source ?? ""));
         const descripcionFinal = String(a?.concepto ?? a?.descripcion ?? "");
         const fechaYMD = String(a?.asiento_fecha ?? a?.fecha ?? "");
         const fechaFormateada = formatDMYFromYMD(fechaYMD);
