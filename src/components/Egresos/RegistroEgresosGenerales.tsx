@@ -13,7 +13,7 @@ import { Wallet, Save, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useCuentas } from "@/hooks/useCuentas";
 import { useSubcuentas } from "@/hooks/useSubcuentas";
-import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { useTarjetasCorporativasEgresos, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import {
   AlertDialog,
@@ -68,6 +68,7 @@ const normalizeMetodoPago = (m: string) => {
 const getId = (x: any) => String(x?.id ?? x?._id ?? "");
 
 const getTarjetaNombre = (t: any) => String(t?.nombre ?? t?.name ?? "Tarjeta");
+const getTarjetaInstitucion = (t: any) => String(t?.institucion_financiera ?? t?.institucion ?? "");
 const getTarjetaLimiteDisponible = (t: any) => Number(t?.limite_disponible ?? t?.limiteDisponible ?? 0);
 
 // -------------------- Subcuentas robustas --------------------
@@ -139,7 +140,7 @@ const RegistroEgresosGenerales = () => {
 
   const { data: cuentasData } = useCuentas();
   const { data: subcuentasData } = useSubcuentas();
-  const { data: tarjetasCreditoRaw = [] } = useTarjetasCredito();
+  const { data: tarjetasCreditoRaw = [] } = useTarjetasCorporativasEgresos();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
   const tarjetasCredito = useMemo(() => tarjetasCreditoRaw ?? [], [tarjetasCreditoRaw]);
@@ -373,6 +374,9 @@ const RegistroEgresosGenerales = () => {
     setIsSubmitting(true);
     try {
       const montoPendiente = Math.max(0, montoTotal - montoPagado);
+      const financingId = metodoPagoNorm.startsWith("tarjeta_credito_")
+        ? metodoPagoNorm.replace("tarjeta_credito_", "")
+        : null;
 
       // ✅ Backend exige cantidad y precio_unitario > 0.
       // Para “Generales”, usamos 1 x montoTotal.
@@ -407,6 +411,7 @@ const RegistroEgresosGenerales = () => {
 
         tipoPago: paymentType,
         metodoPago: metodoPagoNorm || null,
+        financingId,
         montoPagado,
         montoPendiente,
 
@@ -427,6 +432,7 @@ const RegistroEgresosGenerales = () => {
         monto_total: montoTotal,
         tipo_pago: paymentType,
         metodo_pago: metodoPagoNorm || null,
+        financing_id: financingId,
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
         fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? dueDate || null : null,
@@ -677,7 +683,9 @@ const RegistroEgresosGenerales = () => {
                               const limite = getTarjetaLimiteDisponible(t);
                               return (
                                 <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
-                                  {nombre} - Disponible: ${formatCurrency(limite)}
+                                  {nombre}
+                                  {getTarjetaInstitucion(t) ? ` - ${getTarjetaInstitucion(t)}` : ""}
+                                  {` - Disponible: $${formatCurrency(limite)}`}
                                 </SelectItem>
                               );
                             })
@@ -851,6 +859,7 @@ const RegistroEgresosGenerales = () => {
                       <div className="space-y-2 my-4">
                         <p>
                           <strong>Tarjeta:</strong> {getTarjetaNombre(tarjeta)}
+                          {getTarjetaInstitucion(tarjeta) ? ` - ${getTarjetaInstitucion(tarjeta)}` : ""}
                         </p>
                         <p>
                           <strong>Límite disponible actual:</strong> ${limiteActual.toFixed(2)}

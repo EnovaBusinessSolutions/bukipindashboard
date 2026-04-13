@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Receipt, Save, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { useTarjetasCorporativasEgresos, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import {
   AlertDialog,
@@ -65,6 +65,7 @@ const normalizeMetodoPago = (m: string) => {
 // -------------------- Helpers robustos (ids/props) --------------------
 const getId = (x: any) => String(x?.id ?? x?._id ?? "");
 const getTarjetaNombre = (t: any) => String(t?.nombre ?? t?.name ?? "Tarjeta");
+const getTarjetaInstitucion = (t: any) => String(t?.institucion_financiera ?? t?.institucion ?? "");
 const getTarjetaLimiteDisponible = (t: any) => Number(t?.limite_disponible ?? t?.limiteDisponible ?? 0);
 
 const RegistroOtrosGastos = () => {
@@ -93,7 +94,7 @@ const RegistroOtrosGastos = () => {
   const [esProveedorRecurrente, setEsProveedorRecurrente] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: tarjetasCreditoRaw } = useTarjetasCredito();
+  const { data: tarjetasCreditoRaw } = useTarjetasCorporativasEgresos();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
   const tarjetasCredito = useMemo(() => {
@@ -143,6 +144,9 @@ const RegistroOtrosGastos = () => {
 
   const processTransaction = async (montoPagado: number, montoTotal: number, metodoPagoNorm: string) => {
     const montoPendiente = Math.max(0, montoTotal - montoPagado);
+    const financingId = metodoPagoNorm.startsWith("tarjeta_credito_")
+      ? metodoPagoNorm.replace("tarjeta_credito_", "")
+      : null;
 
     // ✅ Backend exige cantidad y precio_unitario > 0.
     // Para “Otros gastos”, usamos 1 x montoTotal.
@@ -171,6 +175,7 @@ const RegistroOtrosGastos = () => {
 
       tipoPago: paymentType,
       metodoPago: metodoPagoNorm || null,
+      financingId,
       montoPagado,
       montoPendiente,
 
@@ -192,6 +197,7 @@ const RegistroOtrosGastos = () => {
       monto_total: montoTotal,
       tipo_pago: paymentType,
       metodo_pago: metodoPagoNorm || null,
+      financing_id: financingId,
       monto_pagado: montoPagado,
       monto_pendiente: montoPendiente,
       fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
@@ -527,7 +533,9 @@ const RegistroOtrosGastos = () => {
                                   const limite = getTarjetaLimiteDisponible(t);
                                   return (
                                     <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
-                                      {nombre} - Disponible: ${formatCurrency(limite)}
+                                      {nombre}
+                                      {getTarjetaInstitucion(t) ? ` - ${getTarjetaInstitucion(t)}` : ""}
+                                      {` - Disponible: $${formatCurrency(limite)}`}
                                     </SelectItem>
                                   );
                                 })
@@ -725,6 +733,7 @@ const RegistroOtrosGastos = () => {
                       <div className="space-y-2 my-4">
                         <p>
                           <strong>Tarjeta:</strong> {getTarjetaNombre(tarjeta)}
+                          {getTarjetaInstitucion(tarjeta) ? ` - ${getTarjetaInstitucion(tarjeta)}` : ""}
                         </p>
                         <p>
                           <strong>Límite disponible actual:</strong> ${limiteActual.toFixed(2)}

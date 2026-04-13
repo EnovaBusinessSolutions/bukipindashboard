@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api";
 
 export interface TarjetaCredito {
   id: string;
+  financingId?: string;
   nombre: string;
   institucion_financiera: string;
   monto_total: number;
@@ -21,6 +22,54 @@ const toNumber = (v: any) => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "0"));
   return Number.isFinite(n) ? n : 0;
 };
+
+const asTrim = (v: any) => String(v ?? "").trim();
+
+const getFinancingTipo = (raw: any) =>
+  asTrim(raw?.tipo_ui ?? raw?.tipoUi ?? raw?.tipo ?? raw?.tipo_credito).toLowerCase();
+
+const getFinancingStatus = (raw: any) =>
+  asTrim(raw?.estatus ?? raw?.estado ?? raw?.estado_ui ?? raw?.estadoUi).toLowerCase();
+
+const getFinancingDisponible = (raw: any) =>
+  toNumber(
+    raw?.disponible_actual ??
+      raw?.disponibleActual ??
+      raw?.disponible_linea ??
+      raw?.disponibleLinea ??
+      0
+  );
+
+const getFinancingMontoTotal = (raw: any) =>
+  toNumber(
+    raw?.monto_total_vista ??
+      raw?.montoTotalVista ??
+      raw?.linea_credito ??
+      raw?.lineaCredito ??
+      0
+  );
+
+const getFinancingSaldoActual = (raw: any) =>
+  toNumber(
+    raw?.saldo_actual_vista ??
+      raw?.saldoActualVista ??
+      raw?.saldo_dispuesto_actual ??
+      raw?.saldoDispuestoActual ??
+      raw?.saldo_actual ??
+      0
+  );
+
+const mapFinancingToCorporateCard = (raw: any): TarjetaCredito => ({
+  id: asTrim(raw?.id || raw?._id),
+  financingId: asTrim(raw?.id || raw?._id),
+  nombre: asTrim(raw?.nombre || raw?.alias || "Tarjeta corporativa"),
+  institucion_financiera: asTrim(
+    raw?.institucion || raw?.institucion_financiera || raw?.institucionId || ""
+  ),
+  monto_total: getFinancingMontoTotal(raw),
+  saldo_actual: getFinancingSaldoActual(raw),
+  limite_disponible: getFinancingDisponible(raw),
+});
 
 export const useTarjetasCredito = () => {
   return useQuery<TarjetaCredito[]>({
@@ -67,6 +116,44 @@ export const useTarjetasCredito = () => {
       });
 
       return tarjetas;
+    },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+};
+
+export const useTarjetasCorporativasEgresos = () => {
+  return useQuery<TarjetaCredito[]>({
+    queryKey: ["egresos", "tarjetas-corporativas-financing"],
+    queryFn: async () => {
+      const json: AnyJson = await apiFetch("/api/financiamientos", {
+        method: "GET",
+      });
+
+      const items = normalizeArray<any>(json);
+
+      return items
+        .filter((item: any) => {
+          const tipo = getFinancingTipo(item);
+          const estatus = getFinancingStatus(item);
+          const activo = item?.activo !== false;
+          const disponible = getFinancingDisponible(item);
+
+          return (
+            (tipo === "tarjeta_credito" || tipo === "tarjeta_corporativa") &&
+            activo &&
+            estatus === "activo" &&
+            disponible > 0
+          );
+        })
+        .map(mapFinancingToCorporateCard)
+        .sort((a, b) => {
+          const byInstitucion = a.institucion_financiera.localeCompare(b.institucion_financiera);
+          if (byInstitucion !== 0) return byInstitucion;
+          return a.nombre.localeCompare(b.nombre);
+        });
     },
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,

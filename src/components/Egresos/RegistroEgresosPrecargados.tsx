@@ -26,7 +26,7 @@ import { toast } from "@/hooks/use-toast";
 
 import { useProductosEgresos } from "@/hooks/useProductosEgresos";
 import { useProveedores } from "@/hooks/useProveedores";
-import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { useTarjetasCorporativasEgresos, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
@@ -59,6 +59,7 @@ const getProveedorNombre = (p: any) => p?.nombre ?? p?.name ?? "";
 const getProveedorTelefono = (p: any) => p?.telefono ?? p?.phone ?? "";
 const getProveedorEmail = (p: any) => p?.email ?? "";
 const getProveedorRFC = (p: any) => p?.rfc ?? p?.taxId ?? "";
+const getTarjetaInstitucion = (t: any) => String(t?.institucion_financiera ?? t?.institucion ?? "");
 
 // Formateo SOLO display
 const formatNumber = (value: string) => {
@@ -108,7 +109,7 @@ const money = (n: any) => formatCurrency(toNum(n, 0));
 const RegistroEgresosPrecargados = () => {
   const { data: productosRaw = [] } = useProductosEgresos();
   const { proveedores: proveedoresRaw = [], createProveedor } = useProveedores();
-  const { data: tarjetasCreditoRaw = [] } = useTarjetasCredito();
+  const { data: tarjetasCreditoRaw = [] } = useTarjetasCorporativasEgresos();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
   const productos = useMemo(() => productosRaw ?? [], [productosRaw]);
@@ -366,6 +367,9 @@ const RegistroEgresosPrecargados = () => {
       }
 
       const montoPendiente = Math.max(0, montoTotal - montoPagado);
+      const financingId = metodoPagoNormLocal.startsWith("tarjeta_credito_")
+        ? metodoPagoNormLocal.replace("tarjeta_credito_", "")
+        : null;
 
       if (montoPagado > 0 && (metodoPagoNormLocal === "efectivo" || metodoPagoNormLocal === "bancos")) {
         if (!saldosDisponibles) {
@@ -452,6 +456,7 @@ const RegistroEgresosPrecargados = () => {
 
         tipoPago: paymentType,
         metodoPago: metodoPagoNormLocal || null,
+        financingId,
 
         montoPagado,
         montoPendiente,
@@ -475,6 +480,7 @@ const RegistroEgresosPrecargados = () => {
         precio_unitario: up,
         tipo_pago: paymentType,
         metodo_pago: metodoPagoNormLocal || null,
+        financing_id: financingId,
         monto_pagado: montoPagado,
         monto_pendiente: montoPendiente,
         fecha_vencimiento: paymentType === "credito" || paymentType === "parcial" ? (dueDate || null) : null,
@@ -811,7 +817,10 @@ const RegistroEgresosPrecargados = () => {
                                       <SelectItem key={tid} value={`tarjeta_credito_${tid}`}>
                                         <div className="flex items-center gap-2">
                                           <CreditCard className="h-4 w-4" />
-                                          <span className="truncate">{tarjeta?.nombre ?? tarjeta?.name ?? "Tarjeta"}</span>
+                                          <span className="truncate">
+                                            {tarjeta?.nombre ?? tarjeta?.name ?? "Tarjeta"}
+                                            {getTarjetaInstitucion(tarjeta) ? ` - ${getTarjetaInstitucion(tarjeta)}` : ""}
+                                          </span>
                                           <span className="text-muted-foreground text-xs">
                                             • Disponible: ${money(limite)}
                                           </span>
