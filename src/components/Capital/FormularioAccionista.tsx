@@ -90,6 +90,27 @@ export const FormularioAccionista = () => {
   const [nuevoAccionistaData, setNuevoAccionistaData] = useState<any>(null);
   const [ajustesPorcentajes, setAjustesPorcentajes] = useState<AjustePorcentaje[]>([]);
 
+  const limpiarFormulario = () => {
+    setNombre("");
+    setPorcentaje("");
+    setEmail("");
+    setTelefono("");
+    setRfc("");
+  };
+
+  const prepararRedistribucion = (nuevoAccionista: any | null) => {
+    const ajustesIniciales = accionistas.map((a) => ({
+      id: a.id,
+      nombre: a.nombre,
+      porcentajeActual: a.porcentaje_participacion,
+      porcentajeNuevo: a.porcentaje_participacion,
+    }));
+
+    setNuevoAccionistaData(nuevoAccionista);
+    setAjustesPorcentajes(ajustesIniciales);
+    setMostrarDialogoDilucion(true);
+  };
+
   const handleEditar = (accionista: any) => {
     setModoEdicion(true);
     setAccionistaEditandoId(accionista.id);
@@ -104,11 +125,7 @@ export const FormularioAccionista = () => {
   const handleCancelarEdicion = () => {
     setModoEdicion(false);
     setAccionistaEditandoId(null);
-    setNombre("");
-    setPorcentaje("");
-    setEmail("");
-    setTelefono("");
-    setRfc("");
+    limpiarFormulario();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -126,7 +143,8 @@ export const FormularioAccionista = () => {
     }
 
     const porcentajeNumerico = porcentaje ? parseFloat(porcentaje) : 0;
-    const requiereDilucion = !modoEdicion && accionistas.length > 0 && porcentajeNumerico > 0;
+    const nuevoTotal = porcentajeTotalAsignado + porcentajeNumerico;
+    const requiereDilucion = !modoEdicion && nuevoTotal > 100.01;
 
     // Validación: No permitir crear si excede el 100%
     if (!modoEdicion && !requiereDilucion) {
@@ -162,6 +180,16 @@ export const FormularioAccionista = () => {
     } else {
       // Si hay accionistas existentes y se especificó un porcentaje, mostrar diálogo de dilución
       if (requiereDilucion) {
+        prepararRedistribucion({
+          nombre: nombre.trim(),
+          porcentaje_participacion: porcentajeNumerico,
+          email: email.trim() || undefined,
+          telefono: telefono.trim() || undefined,
+          rfc: rfc.trim() || undefined,
+          activo: true,
+        });
+        return;
+
         const nuevoData = {
           nombre: nombre.trim(),
           porcentaje_participacion: porcentajeNumerico,
@@ -195,11 +223,7 @@ export const FormularioAccionista = () => {
           },
           {
             onSuccess: () => {
-              setNombre("");
-              setPorcentaje("");
-              setEmail("");
-              setTelefono("");
-              setRfc("");
+              limpiarFormulario();
             },
           }
         );
@@ -222,10 +246,10 @@ export const FormularioAccionista = () => {
       (nuevoAccionistaData?.porcentaje_participacion || 0);
 
     // Validar que la suma sea EXACTAMENTE 100%
-    if (Math.abs(sumaPorcentajes - 100) > 0.01) {
+    if (sumaPorcentajes > 100.01) {
       toast({
         title: "Validación de participación",
-        description: `La suma debe ser exactamente 100%. Actual: ${sumaPorcentajes.toFixed(2)}%`,
+        description: `La suma no puede exceder 100%. Actual: ${sumaPorcentajes.toFixed(2)}%`,
         variant: "destructive",
       });
       return;
@@ -239,17 +263,13 @@ export const FormularioAccionista = () => {
           id: ajuste.id,
           porcentaje_participacion: ajuste.porcentajeNuevo,
         })),
-        require_exact_total: true,
+        require_exact_total: false,
       },
       {
         onSuccess: () => {
           // Limpiar formulario y cerrar diÃ¡logo
 
-        setNombre("");
-        setPorcentaje("");
-        setEmail("");
-        setTelefono("");
-        setRfc("");
+        limpiarFormulario();
         setMostrarDialogoDilucion(false);
         setNuevoAccionistaData(null);
         setAjustesPorcentajes([]);
@@ -267,7 +287,8 @@ export const FormularioAccionista = () => {
   const sumaPorcentajes =
     ajustesPorcentajes.reduce((sum, a) => sum + a.porcentajeNuevo, 0) +
     (nuevoAccionistaData?.porcentaje_participacion || 0);
-  const esSumaValida = Math.abs(sumaPorcentajes - 100) < 0.01;
+  const porcentajeRemanenteRedistribucion = Math.max(0, 100 - sumaPorcentajes);
+  const esSumaValida = sumaPorcentajes <= 100.01;
 
   return (
     <>
@@ -292,7 +313,8 @@ export const FormularioAccionista = () => {
 
           <div className="space-y-6 px-6 py-6">
             {/* Nuevo Accionista */}
-            <div className="rounded-[22px] border border-emerald-500/25 bg-emerald-500/[0.05] p-5 shadow-sm">
+            {nuevoAccionistaData && (
+              <div className="rounded-[22px] border border-emerald-500/25 bg-emerald-500/[0.05] p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-3">
                 <div className="rounded-2xl bg-emerald-500/15 p-2.5">
                   <UserPlus className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
@@ -322,7 +344,8 @@ export const FormularioAccionista = () => {
                   </p>
                 </div>
               </div>
-            </div>
+              </div>
+            )}
 
             {/* Accionistas Existentes */}
             <div>
@@ -402,6 +425,10 @@ export const FormularioAccionista = () => {
                     {sumaPorcentajes.toFixed(2)}%
                   </span>
                 </div>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  La redistribucion puede cerrar en 100% o dejar un remanente disponible; solo no
+                  debe exceder 100%.
+                </p>
 
                 {esSumaValida ? (
                   <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">
@@ -409,9 +436,8 @@ export const FormularioAccionista = () => {
                   </p>
                 ) : (
                   <p className="mt-3 text-sm">
-                    La suma debe ser exactamente 100% y actualmente{" "}
-                    {sumaPorcentajes > 100 ? "excede" : "falta"}{" "}
-                    {Math.abs(100 - sumaPorcentajes).toFixed(2)}%.
+                    La suma no puede exceder 100% y actualmente excede{" "}
+                    {(sumaPorcentajes - 100).toFixed(2)}%.
                   </p>
                 )}
               </AlertDescription>
@@ -481,7 +507,6 @@ export const FormularioAccionista = () => {
                 </p>
               </div>
             </div>
-
             {limiteAccionistasAlcanzado && (
               <Alert
                 variant="destructive"
@@ -584,8 +609,8 @@ export const FormularioAccionista = () => {
                     type="number"
                     step="0.01"
                     min="0"
-                    max={modoEdicion ? 100 : porcentajeDisponible}
-                    placeholder={modoEdicion ? "0.00" : porcentajeDisponible.toFixed(2)}
+                    max={100}
+                    placeholder="0.00"
                     value={porcentaje}
                     onChange={(e) => setPorcentaje(e.target.value)}
                     className={cn(
@@ -672,6 +697,16 @@ export const FormularioAccionista = () => {
                   ? "Límite alcanzado"
                   : "Registrar Accionista"}
               </Button>
+              {!modoEdicion && accionistas.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => prepararRedistribucion(null)}
+                  className="h-11 w-full rounded-xl"
+                >
+                  Redistribuir porcentajes manualmente
+                </Button>
+              )}
             </form>
           </CardContent>
         </Card>
