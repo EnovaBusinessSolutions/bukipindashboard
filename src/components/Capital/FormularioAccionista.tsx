@@ -126,9 +126,10 @@ export const FormularioAccionista = () => {
     }
 
     const porcentajeNumerico = porcentaje ? parseFloat(porcentaje) : 0;
+    const requiereDilucion = !modoEdicion && accionistas.length > 0 && porcentajeNumerico > 0;
 
     // Validación: No permitir crear si excede el 100%
-    if (!modoEdicion) {
+    if (!modoEdicion && !requiereDilucion) {
       const nuevoTotal = porcentajeTotalAsignado + porcentajeNumerico;
       if (nuevoTotal > 100) {
         toast({
@@ -160,10 +161,10 @@ export const FormularioAccionista = () => {
       );
     } else {
       // Si hay accionistas existentes y se especificó un porcentaje, mostrar diálogo de dilución
-      if (accionistas.length > 0 && porcentaje && parseFloat(porcentaje) > 0) {
+      if (requiereDilucion) {
         const nuevoData = {
           nombre: nombre.trim(),
-          porcentaje_participacion: parseFloat(porcentaje),
+          porcentaje_participacion: porcentajeNumerico,
           email: email.trim() || undefined,
           telefono: telefono.trim() || undefined,
           rfc: rfc.trim() || undefined,

@@ -8,8 +8,20 @@ interface CancelarTransaccionParams {
 }
 
 type CancelarTransaccionResponse =
-  | { ok: true; numeroAsientoReversion?: string; data?: any }
-  | { numeroAsientoReversion?: string; [key: string]: any };
+  | {
+      ok: true;
+      numeroAsientoReversion?: string;
+      numero_asiento_reversion?: string;
+      data?: unknown;
+    }
+  | {
+      numeroAsientoReversion?: string;
+      numero_asiento_reversion?: string;
+      data?: unknown;
+    };
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "No se pudo cancelar la transaccion";
 
 export const useCancelarTransaccionCapital = () => {
   const queryClient = useQueryClient();
@@ -20,20 +32,16 @@ export const useCancelarTransaccionCapital = () => {
       motivoCancelacion,
     }: CancelarTransaccionParams) => {
       if (!transaccionId) throw new Error("transaccionId es requerido");
-      if (!motivoCancelacion?.trim())
-        throw new Error("Debes indicar un motivo de cancelación");
+      if (!motivoCancelacion?.trim()) {
+        throw new Error("Debes indicar un motivo de cancelacion");
+      }
 
       const json = await apiFetch("/api/capital/cancelar", {
         method: "POST",
         body: JSON.stringify({ transaccionId, motivoCancelacion }),
       });
 
-      // Soporta backend que devuelva {ok:true,data:{...}} o payload plano
-      const payload = (json as any)?.data ?? json;
-
-      // Validación mínima de respuesta (para UX)
-      // Idealmente backend regresa numeroAsientoReversion
-      return payload as CancelarTransaccionResponse;
+      return json as CancelarTransaccionResponse;
     },
 
     onSuccess: (data) => {
@@ -42,20 +50,20 @@ export const useCancelarTransaccionCapital = () => {
       queryClient.invalidateQueries({ queryKey: ["asientos-balanza"] });
 
       const numeroAsiento =
-        (data as any)?.numeroAsientoReversion ||
-        (data as any)?.numero_asiento_reversion;
+        data.numeroAsientoReversion ||
+        data.numero_asiento_reversion;
 
-      toast.success("Transacción cancelada exitosamente", {
+      toast.success("Transaccion cancelada exitosamente", {
         description: numeroAsiento
-          ? `Se generó el asiento de reversión ${numeroAsiento}`
-          : "Se generó el asiento de reversión correctamente",
+          ? `Se genero el asiento de reversion ${numeroAsiento}`
+          : "Se genero el asiento de reversion correctamente",
       });
     },
 
-    onError: (error: any) => {
-      console.error("Error al cancelar transacción:", error);
+    onError: (error: unknown) => {
+      console.error("Error al cancelar transaccion:", error);
       toast.error("Error al cancelar", {
-        description: error?.message || "No se pudo cancelar la transacción",
+        description: getErrorMessage(error),
       });
     },
   });

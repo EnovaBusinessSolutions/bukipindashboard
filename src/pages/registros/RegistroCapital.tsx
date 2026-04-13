@@ -194,7 +194,6 @@ const RegistroCapital = () => {
           setMonto("");
           setDescripcion("");
           setAccionistaId("");
-          setAccionistaSeleccionado("");
           setFecha(new Date());
         },
       }
@@ -475,8 +474,6 @@ const RegistroCapital = () => {
                         value={accionistaId}
                         onValueChange={(value) => {
                           setAccionistaId(value);
-                          const accionista = accionistas.find((a) => a.id === value);
-                          setAccionistaSeleccionado(accionista?.nombre || "");
                         }}
                       >
                         <SelectTrigger className="h-11 rounded-xl border-border/60 bg-background">

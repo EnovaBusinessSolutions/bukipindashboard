@@ -33,7 +33,10 @@ export const DialogDetalleTransaccion = ({
 }: DialogDetalleTransaccionProps) => {
   const { data: asiento, isLoading } = useAsientosCapital({
     transaccionId: transaccion?.id ?? null,
-    asientoId: transaccion?.journalEntryId ?? null,
+    asientoId:
+      (transaccion?.estado === "cancelado"
+        ? transaccion?.reversalJournalEntryId
+        : transaccion?.journalEntryId) ?? null,
   });
 
   if (!transaccion) return null;
