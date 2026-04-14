@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -193,6 +193,9 @@ const getHaber = (detalle: any) =>
 const getMemoDetalle = (detalle: any) =>
   detalle?.descripcion || detalle?.memo || "-";
 
+const getAsientoEstatus = (asiento: any) =>
+  asText(asiento?.estatus || asiento?.status || asiento?.estado || "");
+
 const KpiCard = ({
   title,
   value,
@@ -250,9 +253,13 @@ const TransaccionesFinanciamiento = ({
 }: TransaccionesFinanciamientoProps) => {
   const [detalleAsientoOpen, setDetalleAsientoOpen] = useState(false);
   const [asientoSeleccionado, setAsientoSeleccionado] = useState<any>(null);
+  const [mensajeAsiento, setMensajeAsiento] = useState("");
   const [detalleTransaccionOpen, setDetalleTransaccionOpen] = useState(false);
   const [transaccionSeleccionada, setTransaccionSeleccionada] = useState<any>(null);
   const [loadingAsientoId, setLoadingAsientoId] = useState<string | null>(null);
+  const [asientoDetalleTransaccion, setAsientoDetalleTransaccion] = useState<any>(null);
+  const [loadingDetalleAsiento, setLoadingDetalleAsiento] = useState(false);
+  const [mensajeDetalleAsiento, setMensajeDetalleAsiento] = useState("");
 
   const {
     data: transacciones = [],
@@ -378,15 +385,18 @@ const TransaccionesFinanciamiento = ({
     return { cargo: "N/A", abono: "N/A" };
   };
 
-  const handleVerAsiento = async (transaccion: any) => {
+  const resolveAsientoForTransaccion = async (transaccion: any) => {
     const movementId = String(transaccion?.id || transaccion?._id || "").trim();
     const journalEntryId = String(transaccion?.journalEntryId || "").trim();
 
-    if (!movementId && !journalEntryId) return;
+    if (!movementId && !journalEntryId) {
+      return {
+        asiento: null,
+        message: "Este movimiento no tiene un asiento contable ligado.",
+      };
+    }
 
     try {
-      setLoadingAsientoId(movementId || journalEntryId);
-
       let asiento: any = null;
 
       if (journalEntryId) {
@@ -396,22 +406,74 @@ const TransaccionesFinanciamiento = ({
           if (movementId) {
             asiento = await fetchJSON<any>(API_ASIENTO_BY_TX(movementId));
           } else {
-            throw new Error("No se pudo cargar el asiento.");
+            throw new Error("No se pudo cargar el asiento ligado.");
           }
         }
-      } else {
+      } else if (movementId) {
         asiento = await fetchJSON<any>(API_ASIENTO_BY_TX(movementId));
       }
 
-      setAsientoSeleccionado(asiento);
-      setDetalleAsientoOpen(true);
+      if (!asiento) {
+        return {
+          asiento: null,
+          message: "Este movimiento no tiene un asiento contable ligado.",
+        };
+      }
+
+      return { asiento, message: "" };
     } catch (error) {
       console.error("Error cargando asiento del financiamiento:", error);
-      setAsientoSeleccionado(null);
+      return {
+        asiento: null,
+        message: "No se pudo cargar el asiento contable real de este movimiento.",
+      };
+    }
+  };
+
+  const handleVerAsiento = async (transaccion: any) => {
+    const movementId = String(transaccion?.id || transaccion?._id || "").trim();
+    const journalEntryId = String(transaccion?.journalEntryId || "").trim();
+
+    try {
+      setLoadingAsientoId(movementId || journalEntryId);
+      const { asiento, message } = await resolveAsientoForTransaccion(transaccion);
+      setAsientoSeleccionado(asiento);
+      setMensajeAsiento(message);
+      setDetalleAsientoOpen(true);
     } finally {
       setLoadingAsientoId(null);
     }
   };
+
+  useEffect(() => {
+    if (!detalleTransaccionOpen || !transaccionSeleccionada) {
+      setAsientoDetalleTransaccion(null);
+      setLoadingDetalleAsiento(false);
+      setMensajeDetalleAsiento("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAsiento = async () => {
+      setLoadingDetalleAsiento(true);
+      setMensajeDetalleAsiento("");
+
+      const { asiento, message } = await resolveAsientoForTransaccion(transaccionSeleccionada);
+
+      if (cancelled) return;
+
+      setAsientoDetalleTransaccion(asiento);
+      setMensajeDetalleAsiento(message);
+      setLoadingDetalleAsiento(false);
+    };
+
+    void loadAsiento();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detalleTransaccionOpen, transaccionSeleccionada]);
 
   const isLoading = isLoadingTransacciones;
   const errorMsg = (transaccionesError as any)?.message || null;
@@ -604,11 +666,15 @@ const TransaccionesFinanciamiento = ({
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="gap-2"
                             onClick={() => handleVerAsiento(transaccion)}
                             disabled={loadingThisAsiento}
-                            title="Ver asiento"
+                            title={transaccion?.journalEntryId ? "Ver asiento real" : "Verificar asiento ligado"}
                           >
                             <FileText className="h-4 w-4" />
+                            <span className="hidden lg:inline">
+                              {transaccion?.journalEntryId ? "Asiento real" : "Verificar"}
+                            </span>
                           </Button>
                         </TableCell>
 
@@ -639,11 +705,19 @@ const TransaccionesFinanciamiento = ({
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>Detalle del Asiento Contable</DialogTitle>
-            <DialogDescription>Registro contable del movimiento</DialogDescription>
+            <DialogDescription>
+              {asientoSeleccionado
+                ? "Asiento contable real registrado para este movimiento."
+                : "No se encontro un asiento contable real ligado a este movimiento."}
+            </DialogDescription>
           </DialogHeader>
 
-          {asientoSeleccionado && (
+          {asientoSeleccionado ? (
             <div className="space-y-4">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                Asiento contable registrado. Este movimiento impacta la Balanza de Comprobacion.
+              </div>
+
               <div className="grid grid-cols-1 gap-4 rounded-2xl bg-muted p-4 md:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Número de Asiento</p>
@@ -719,6 +793,10 @@ const TransaccionesFinanciamiento = ({
                 </CardContent>
               </Card>
             </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+              {mensajeAsiento || "No se encontro un asiento contable real ligado a este movimiento."}
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -728,7 +806,7 @@ const TransaccionesFinanciamiento = ({
           <DialogHeader>
             <DialogTitle>Detalle de Movimiento</DialogTitle>
             <DialogDescription>
-              Información operativa y afectación contable estimada
+              Informacion operativa y trazabilidad contable del movimiento
             </DialogDescription>
           </DialogHeader>
 
@@ -848,57 +926,120 @@ const TransaccionesFinanciamiento = ({
 
               <Card className="rounded-2xl shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-base">Afectación Contable Estimada</CardTitle>
+                  <CardTitle className="text-base">
+                    {asientoDetalleTransaccion
+                      ? "Asiento Contable Registrado"
+                      : "Afectacion Contable Estimada"}
+                  </CardTitle>
+                  <CardDescription>
+                    {asientoDetalleTransaccion
+                      ? "Se muestra el asiento contable real ligado a este movimiento."
+                      : "Fallback visual cuando el movimiento no tiene un asiento real ligado."}
+                  </CardDescription>
                 </CardHeader>
 
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Cuenta</TableHead>
-                        <TableHead className="text-right">Cargo (Debe)</TableHead>
-                        <TableHead className="text-right">Abono (Haber)</TableHead>
-                      </TableRow>
-                    </TableHeader>
+                <CardContent className="space-y-4">
+                  {loadingDetalleAsiento ? (
+                    <div className="rounded-2xl border bg-slate-50 px-4 py-4 text-sm text-muted-foreground">
+                      Cargando asiento contable real...
+                    </div>
+                  ) : asientoDetalleTransaccion ? (
+                    <>
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        Asiento contable registrado. Impacta la Balanza de Comprobacion y deja trazabilidad directa con este movimiento.
+                      </div>
 
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          {getCuentasAfectadas(transaccionSeleccionada).cargo}
-                        </TableCell>
-                        <TableCell className="text-right text-rose-600">
-                          {formatMoney(
-                            getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
-                              ? getMontoCapital(transaccionSeleccionada)
-                              : getMonto(transaccionSeleccionada)
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">-</TableCell>
-                      </TableRow>
+                      <div className="grid grid-cols-1 gap-4 rounded-2xl bg-muted p-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Numero de Asiento</p>
+                          <p className="font-semibold">{getAsientoNumero(asientoDetalleTransaccion)}</p>
+                        </div>
 
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          {getCuentasAfectadas(transaccionSeleccionada).abono}
-                        </TableCell>
-                        <TableCell className="text-right">-</TableCell>
-                        <TableCell className="text-right text-emerald-600">
-                          {formatMoney(
-                            getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
-                              ? getMontoCapital(transaccionSeleccionada)
-                              : getMonto(transaccionSeleccionada)
-                          )}
-                        </TableCell>
-                      </TableRow>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Fecha del Asiento</p>
+                          <p className="font-semibold">
+                            {formatDateSafe(getAsientoFecha(asientoDetalleTransaccion))}
+                          </p>
+                        </div>
 
-                      {getCuentasAfectadas(transaccionSeleccionada).adicional && (
-                        <>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Estatus</p>
+                          <p className="font-semibold">
+                            {getAsientoEstatus(asientoDetalleTransaccion) || "Registrado"}
+                          </p>
+                        </div>
+
+                        <div className="flex items-end justify-start xl:justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => {
+                              setAsientoSeleccionado(asientoDetalleTransaccion);
+                              setMensajeAsiento("");
+                              setDetalleAsientoOpen(true);
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
+                            Ver asiento real
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Cuenta</TableHead>
+                            <TableHead>Descripcion</TableHead>
+                            <TableHead className="text-right">Debe</TableHead>
+                            <TableHead className="text-right">Haber</TableHead>
+                          </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                          {getDetalleAsientos(asientoDetalleTransaccion).map((detalle: any, idx: number) => (
+                            <TableRow key={detalle.id || `${getCuentaCodigo(detalle)}-${idx}`}>
+                              <TableCell className="font-medium">
+                                {getCuentaCodigo(detalle)} - {getCuentaNombre(detalle)}
+                              </TableCell>
+                              <TableCell>{getMemoDetalle(detalle)}</TableCell>
+                              <TableCell className="text-right text-emerald-600">
+                                {getDebe(detalle) > 0 ? formatMoney(getDebe(detalle)) : "-"}
+                              </TableCell>
+                              <TableCell className="text-right text-rose-600">
+                                {getHaber(detalle) > 0 ? formatMoney(getHaber(detalle)) : "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </>
+                  ) : (
+                    <>
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      {mensajeDetalleAsiento ||
+        "Informacion operativa y trazabilidad contable del movimiento"}
+    </div>
+
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Cuenta</TableHead>
+                            <TableHead className="text-right">Cargo (Debe)</TableHead>
+                            <TableHead className="text-right">Abono (Haber)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
                           <TableRow>
                             <TableCell className="font-medium">
-                              {getCuentasAfectadas(transaccionSeleccionada).adicional.cargo}
+                              {getCuentasAfectadas(transaccionSeleccionada).cargo}
                             </TableCell>
                             <TableCell className="text-right text-rose-600">
                               {formatMoney(
-                                getCuentasAfectadas(transaccionSeleccionada).adicional.monto
+                                getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
+                                  ? getMontoCapital(transaccionSeleccionada)
+                                  : getMonto(transaccionSeleccionada)
                               )}
                             </TableCell>
                             <TableCell className="text-right">-</TableCell>
@@ -906,19 +1047,49 @@ const TransaccionesFinanciamiento = ({
 
                           <TableRow>
                             <TableCell className="font-medium">
-                              {getCuentasAfectadas(transaccionSeleccionada).adicional.abono}
+                              {getCuentasAfectadas(transaccionSeleccionada).abono}
                             </TableCell>
                             <TableCell className="text-right">-</TableCell>
                             <TableCell className="text-right text-emerald-600">
                               {formatMoney(
-                                getCuentasAfectadas(transaccionSeleccionada).adicional.monto
+                                getTipoMovimiento(transaccionSeleccionada) === "amortizacion"
+                                  ? getMontoCapital(transaccionSeleccionada)
+                                  : getMonto(transaccionSeleccionada)
                               )}
                             </TableCell>
                           </TableRow>
-                        </>
-                      )}
-                    </TableBody>
-                  </Table>
+
+                          {getCuentasAfectadas(transaccionSeleccionada).adicional && (
+                            <>
+                              <TableRow>
+                                <TableCell className="font-medium">
+                                  {getCuentasAfectadas(transaccionSeleccionada).adicional.cargo}
+                                </TableCell>
+                                <TableCell className="text-right text-rose-600">
+                                  {formatMoney(
+                                    getCuentasAfectadas(transaccionSeleccionada).adicional.monto
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">-</TableCell>
+                              </TableRow>
+
+                              <TableRow>
+                                <TableCell className="font-medium">
+                                  {getCuentasAfectadas(transaccionSeleccionada).adicional.abono}
+                                </TableCell>
+                                <TableCell className="text-right">-</TableCell>
+                                <TableCell className="text-right text-emerald-600">
+                                  {formatMoney(
+                                    getCuentasAfectadas(transaccionSeleccionada).adicional.monto
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            </>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>
