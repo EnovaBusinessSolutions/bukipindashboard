@@ -32,8 +32,7 @@ import { useInventarioConMovimientos } from "@/hooks/useInventarioConMovimientos
 import { useSubcuentasInventario } from "@/hooks/useSubcuentas";
 import { useProveedores } from "@/hooks/useProveedores";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
-import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
-import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
+import { useTarjetasCorporativasEgresos, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { useCreateProducto } from "@/hooks/useProductos";
 
 type ProductoForm = {
@@ -115,7 +114,7 @@ const RegistroProductos = () => {
   const createProducto = useCreateProducto();
 
   const { data: saldosDisponibles, isLoading: loadingSaldos } = useSaldosDisponibles();
-  const { data: tarjetasCredito } = useTarjetasCredito();
+  const { data: tarjetasCredito } = useTarjetasCorporativasEgresos();
 
   // ✅ NUEVO: catálogo base desde /api/productos (esto es lo que ya confirmaste que trae datos)
   const [productosBase, setProductosBase] = useState<ProductoBase[]>([]);
@@ -371,32 +370,7 @@ const RegistroProductos = () => {
     return { ok: true as const };
   };
 
-  async function crearCuentaPorPagarInventario(payload: {
-    tipo_egreso: "compra_inventario";
-    descripcion: string;
-    monto_total: number;
-    monto_pagado: number;
-    monto_pendiente: number;
-    tipo_pago: "contado" | "parcial" | "pendiente";
-    metodo_pago: string | null;
-    proveedor_id: string | null;
-    proveedor_nombre: string | null;
-    proveedor_telefono: string | null;
-    proveedor_email: string | null;
-    proveedor_rfc: string | null;
-    fecha_vencimiento: string | null;
-    subcuenta_id: string | null;
-    cuenta_codigo: string; // inventario/cxp según tu contabilidad (mantengo "1005" como en tu código)
-    cantidad: number;
-    precio_unitario: number;
-    producto_id?: string | null;
-  }) {
-    const json = await apiFetch("/api/egresos", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    return normalize(json);
-  }
+
 
   function asArray<T = any>(json: any): T[] {
   const j: any = json;
@@ -530,7 +504,7 @@ const RegistroProductos = () => {
     }
 
     await createProducto.mutateAsync({
-      productId: selectedProducto?.id || undefined, // <- si tu hook no lo soporta, puedes ignorarlo en el backend
+      productId: selectedProducto?.id || undefined,
       nombre: data.nombre,
       precio: data.precio,
       precioVenta: data.precioVenta,
@@ -538,65 +512,24 @@ const RegistroProductos = () => {
       descripcion: data.descripcion,
       subcuentaId: data.subcuentaId,
       imagen: selectedImage || undefined,
+      tipoPago: tipoPago === "pendiente" ? "credito" : tipoPago,
+      metodoPago: tipoPago === "pendiente" ? "" : data.metodoPago,
+      montoPagado: tipoPago === "pendiente" ? 0 : montoPagado,
+      fechaVencimiento: data.fechaVencimiento || null,
+      financingId: data.metodoPago?.startsWith("tarjeta_credito_")
+        ? data.metodoPago.replace("tarjeta_credito_", "")
+        : null,
+      proveedorId,
+      proveedorNombre,
+      proveedorTelefono: proveedorTelefono || null,
+      proveedorEmail: proveedorEmail || null,
+      proveedorRfc: proveedorRFC || null,
     } as any);
 
     // ✅ refrescar catálogo base para que aparezca inmediatamente al volver a “Producto existente”
     try {
       await loadProductosBase();
     } catch (_) {}
-
-    // Actualizar saldo tarjeta de crédito si se usó y hubo pago
-    if ((tipoPago === "contado" || tipoPago === "parcial") && montoPagado > 0) {
-      const tarjetaId = extraerIdTarjetaCredito(data.metodoPago);
-      if (tarjetaId) {
-        await actualizarSaldoTarjetaCredito(
-          tarjetaId,
-          montoPagado,
-          `Compra de inventario: ${data.cantidad} unidades de ${data.nombre}`
-        );
-      }
-    }
-
-    // Crear cuenta por pagar si aplica (parcial o pendiente) y hay saldo pendiente
-    if ((tipoPago === "parcial" || tipoPago === "pendiente") && montoPendiente > 0) {
-      try {
-        await crearCuentaPorPagarInventario({
-          tipo_egreso: "compra_inventario",
-          descripcion: `Compra de ${data.cantidad} unidades de ${data.nombre}`,
-          monto_total: montoTotal,
-          monto_pagado: tipoPago === "pendiente" ? 0 : montoPagado,
-          monto_pendiente: montoPendiente,
-          tipo_pago: tipoPago as any,
-          metodo_pago: tipoPago === "parcial" ? data.metodoPago : null,
-
-          proveedor_id: proveedorId,
-          proveedor_nombre: proveedorNombre,
-          proveedor_telefono: proveedorTelefono || null,
-          proveedor_email: proveedorEmail || null,
-          proveedor_rfc: proveedorRFC || null,
-
-          fecha_vencimiento: data.fechaVencimiento || null,
-          subcuenta_id: data.subcuentaId || null,
-
-          cuenta_codigo: "1005",
-          cantidad: data.cantidad,
-          precio_unitario: data.precio,
-          producto_id: selectedProducto?.id || null,
-        });
-
-        toast({
-          title: "✅ Cuenta por pagar creada",
-          description: `Saldo pendiente: ${formatCurrency(montoPendiente)} | Proveedor: ${proveedorNombre || "N/A"}`,
-        });
-      } catch (e: any) {
-        console.error(e);
-        toast({
-          title: "⚠️ Advertencia",
-          description: "Producto registrado, pero falló la creación de la cuenta por pagar.",
-          variant: "destructive",
-        });
-      }
-    }
 
     toast({ title: "✅ Registro completado", description: "Producto y compra registrados correctamente." });
 
@@ -1029,10 +962,17 @@ const RegistroProductos = () => {
                               <div className="flex-1">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center space-x-2">
-                                    <CreditCard className="h-4 w-4 text-purple-600" />
-                                    <Label htmlFor={`tarjeta-inv-${tarjeta.id}`} className="cursor-pointer">
-                                      {tarjeta.nombre}
-                                    </Label>
+                                    <CreditCard className="h-4 w-4 text-primary" />
+                                    <div className="leading-tight">
+                                      <Label htmlFor={`tarjeta-inv-${tarjeta.id}`} className="cursor-pointer">
+                                        {tarjeta.nombre}
+                                      </Label>
+                                      {tarjeta.institucion_financiera ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          {tarjeta.institucion_financiera}
+                                        </p>
+                                      ) : null}
+                                    </div>
                                   </div>
                                   <Badge variant="outline">
                                     Disponible: {formatCurrency(tarjeta.limite_disponible || 0)}

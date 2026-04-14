@@ -257,6 +257,16 @@ export const useCreateProducto = () => {
       descripcion,
       subcuentaId,
       imagen,
+      tipoPago,
+      metodoPago,
+      montoPagado,
+      fechaVencimiento,
+      financingId,
+      proveedorId,
+      proveedorNombre,
+      proveedorTelefono,
+      proveedorEmail,
+      proveedorRfc,
     }: {
       // ✅ CLAVE E2E: si viene productId, ES RESTOCK y no dependemos del nombre
       productId?: string;
@@ -267,6 +277,16 @@ export const useCreateProducto = () => {
       descripcion?: string;
       subcuentaId?: string | null; // ✅ permitir null para "Sin subcuenta"
       imagen?: File;
+      tipoPago?: string;
+      metodoPago?: string;
+      montoPagado?: number;
+      fechaVencimiento?: string | null;
+      financingId?: string | null;
+      proveedorId?: string | null;
+      proveedorNombre?: string | null;
+      proveedorTelefono?: string | null;
+      proveedorEmail?: string | null;
+      proveedorRfc?: string | null;
     }) => {
       const esCompraInventario = cantidad !== undefined;
       const cuentaCodigo = esCompraInventario ? "1005" : "4001";
@@ -284,6 +304,44 @@ export const useCreateProducto = () => {
         const qty = Number(cantidad || 0);
         const costoUnit = Number(precio);
         const costoTotal = costoUnit * qty;
+        const paymentTipo = String(tipoPago || "contado").trim();
+        const paymentMetodo = String(metodoPago || "").trim();
+        const paymentFinancingId =
+          financingId ||
+          (paymentMetodo.startsWith("tarjeta_credito_")
+            ? paymentMetodo.replace("tarjeta_credito_", "")
+            : null);
+
+        const movementPayload = {
+          tipo_movimiento: "compra",
+          tipoMovimiento: "compra",
+          tipo: "compra",
+          cantidad: qty,
+          costo_unitario: costoUnit,
+          costoUnitario: costoUnit,
+          costo_total: costoTotal,
+          costoTotal: costoTotal,
+          tipo_pago: paymentTipo,
+          tipoPago: paymentTipo,
+          metodo_pago: paymentMetodo || null,
+          metodoPago: paymentMetodo || null,
+          monto_pagado: Number(montoPagado || 0),
+          montoPagado: Number(montoPagado || 0),
+          fecha_vencimiento: fechaVencimiento || null,
+          fechaVencimiento: fechaVencimiento || null,
+          financingId: paymentFinancingId || null,
+          financing_id: paymentFinancingId || null,
+          proveedorId: proveedorId || null,
+          proveedor_id: proveedorId || null,
+          proveedorNombre: proveedorNombre || null,
+          proveedor_nombre: proveedorNombre || null,
+          proveedorTelefono: proveedorTelefono || null,
+          proveedor_telefono: proveedorTelefono || null,
+          proveedorEmail: proveedorEmail || null,
+          proveedor_email: proveedorEmail || null,
+          proveedorRfc: proveedorRfc || null,
+          proveedor_rfc: proveedorRfc || null,
+        };
 
         // 0) Si viene productId => RESTOCK directo (fuente de verdad)
         if (productId) {
@@ -308,19 +366,7 @@ export const useCreateProducto = () => {
               // aliases para compat
               producto_id: productId,
               productoId: productId,
-
-              tipo_movimiento: "compra",
-              tipoMovimiento: "compra",
-              tipo: "compra",
-
-              cantidad: qty,
-
-              costo_unitario: costoUnit,
-              costoUnitario: costoUnit,
-
-              costo_total: costoTotal,
-              costoTotal: costoTotal,
-
+              ...movementPayload,
               descripcion: "Compra adicional de inventario",
             }),
           });
@@ -360,19 +406,7 @@ export const useCreateProducto = () => {
             body: JSON.stringify({
               producto_id: productoExistente.id,
               productoId: productoExistente.id,
-
-              tipo_movimiento: "compra",
-              tipoMovimiento: "compra",
-              tipo: "compra",
-
-              cantidad: qty,
-
-              costo_unitario: costoUnit,
-              costoUnitario: costoUnit,
-
-              costo_total: costoTotal,
-              costoTotal: costoTotal,
-
+              ...movementPayload,
               descripcion: "Compra adicional de inventario",
             }),
           });
@@ -405,19 +439,7 @@ export const useCreateProducto = () => {
           body: JSON.stringify({
             producto_id: creado.id,
             productoId: creado.id,
-
-            tipo_movimiento: "compra",
-            tipoMovimiento: "compra",
-            tipo: "compra",
-
-            cantidad: qty,
-
-            costo_unitario: costoUnit,
-            costoUnitario: costoUnit,
-
-            costo_total: costoTotal,
-            costoTotal: costoTotal,
-
+            ...movementPayload,
             descripcion: "Compra inicial - Nuevo producto en inventario",
           }),
         });
@@ -454,6 +476,12 @@ export const useCreateProducto = () => {
 
       // ✅ refrescar inventario/movimientos (E2E real)
       invalidateInventarioRelatedQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["cuentas-por-pagar-agrupadas"] });
+      queryClient.invalidateQueries({ queryKey: ["egresos"] });
+      queryClient.invalidateQueries({ queryKey: ["transacciones-egresos"] });
+      queryClient.invalidateQueries({ queryKey: ["tarjetas-credito"] });
+      queryClient.invalidateQueries({ queryKey: ["egresos", "tarjetas-corporativas-financing"] });
+      queryClient.invalidateQueries({ queryKey: ["financiamientos"] });
 
       if (data?.esActualizacion) {
         toast({
