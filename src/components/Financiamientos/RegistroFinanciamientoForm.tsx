@@ -1,278 +1,144 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { format, addMonths } from "date-fns";
-import { CalendarIcon } from "lucide-react";
-
+import React, { useState } from "react";
+import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useFinanciamientos, type DireccionFinanciamiento } from "@/hooks/useFinanciamientos";
 
-import { cn } from "@/lib/utils";
-import { useFinanciamientos } from "@/hooks/useFinanciamientos";
-import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
-import InstitucionFinancieraSelector from "./InstitucionFinancieraSelector";
-
-type TipoCreditoUI = "" | "simple" | "revolvente" | "tarjeta_corporativa";
-
-type FormDataState = {
-  nombre: string;
-  descripcion: string;
-  tipo_credito: TipoCreditoUI;
-  institucion_financiera: string;
-  institucion_financiera_id: string;
-  numero_cuenta: string;
-  monto_total: string;
-  tasa_interes: string;
-  plazo_meses: string;
-  condiciones: string;
-};
-
-const INITIAL_FORM: FormDataState = {
-  nombre: "",
-  descripcion: "",
-  tipo_credito: "",
-  institucion_financiera: "",
-  institucion_financiera_id: "",
-  numero_cuenta: "",
-  monto_total: "",
-  tasa_interes: "",
-  plazo_meses: "",
-  condiciones: "",
-};
-
-const RegistroFinanciamientoForm = () => {
-  const { crearFinanciamiento } = useFinanciamientos();
-  const { instituciones } = useInstitucionesFinancieras();
-
-  const [step, setStep] = useState<"tipo" | "datos">("tipo");
-  const [formData, setFormData] = useState<FormDataState>(INITIAL_FORM);
-  const [fechaInicio, setFechaInicio] = useState<Date>(new Date());
-  const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>();
+const RegistroFinanciamientoForm = ({
+  direccion = "recibido",
+}: {
+  direccion?: DireccionFinanciamiento;
+}) => {
+  const { crearFinanciamiento } = useFinanciamientos(direccion);
+  const esRealizado = direccion === "realizado";
   const [errorLocal, setErrorLocal] = useState("");
+  const [form, setForm] = useState({
+    nombre: "",
+    monto: "",
+    tasa: "",
+    fecha: format(new Date(), "yyyy-MM-dd"),
+    fechaVencimiento: "",
+    comentarios: "",
+    institucion: "",
+    numeroCuenta: "",
+    tipoCredito: "simple",
+    deudorNombre: "",
+    deudorRfc: "",
+    deudorTipo: "persona",
+    deudorContacto: "",
+    metodoPago: "bancos",
+  });
 
-  const selectedInstitucion = useMemo(() => {
-    return instituciones.find((inst: any) => inst.id === formData.institucion_financiera_id);
-  }, [instituciones, formData.institucion_financiera_id]);
+  const isSubmitting = !!crearFinanciamiento.isPending;
 
-  const esLineaCredito =
-    formData.tipo_credito === "tarjeta_corporativa" || formData.tipo_credito === "revolvente";
-
-  const esRevolvente = formData.tipo_credito === "revolvente";
-  const esSimple = formData.tipo_credito === "simple";
-  const esTarjeta = formData.tipo_credito === "tarjeta_corporativa";
-  const isSubmitting = !!crearFinanciamiento?.isPending;
-
-  useEffect(() => {
-    if (esSimple && fechaInicio && formData.plazo_meses) {
-      const meses = parseInt(formData.plazo_meses, 10);
-      if (!Number.isNaN(meses) && meses > 0) {
-        setFechaVencimiento(addMonths(fechaInicio, meses));
-      } else {
-        setFechaVencimiento(undefined);
-      }
-      return;
-    }
-
-    if (esRevolvente && fechaInicio) {
-      setFechaVencimiento(addMonths(fechaInicio, 12));
-      return;
-    }
-
-    if (esTarjeta && fechaInicio) {
-      // Se mantiene una vigencia técnica para compatibilidad operativa;
-      // la tarjeta nace con límite y saldo usado 0.
-      setFechaVencimiento(addMonths(fechaInicio, 60));
-      return;
-    }
-
-    setFechaVencimiento(undefined);
-  }, [fechaInicio, formData.plazo_meses, esSimple, esRevolvente, esTarjeta]);
-
-  const resetForm = () => {
-    setFormData(INITIAL_FORM);
-    setFechaInicio(new Date());
-    setFechaVencimiento(undefined);
-    setStep("tipo");
+  const reset = () => {
+    setForm({
+      nombre: "",
+      monto: "",
+      tasa: "",
+      fecha: format(new Date(), "yyyy-MM-dd"),
+      fechaVencimiento: "",
+      comentarios: "",
+      institucion: "",
+      numeroCuenta: "",
+      tipoCredito: "simple",
+      deudorNombre: "",
+      deudorRfc: "",
+      deudorTipo: "persona",
+      deudorContacto: "",
+      metodoPago: "bancos",
+    });
     setErrorLocal("");
-  };
-
-  const backToTipo = () => {
-    setStep("tipo");
-    setErrorLocal("");
-  };
-
-  const handleTipoCreditoSelect = (tipo: TipoCreditoUI) => {
-    setFormData((prev) => ({
-      ...INITIAL_FORM,
-      ...prev,
-      tipo_credito: tipo,
-    }));
-    setStep("datos");
-    setErrorLocal("");
-  };
-
-  const mapTipoBackend = (tipo: TipoCreditoUI) => {
-    if (tipo === "simple") return "credito_simple";
-    if (tipo === "revolvente") return "linea_credito";
-    if (tipo === "tarjeta_corporativa") return "tarjeta_credito";
-    return "credito_simple";
-  };
-
-  const getMontoNumber = () => {
-    const n = Number(formData.monto_total);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  };
-
-  const getTasaNumber = () => {
-    const n = Number(formData.tasa_interes);
-    return Number.isFinite(n) && n >= 0 ? n : 0;
-  };
-
-  const getPlazoMeses = () => {
-    if (esSimple) {
-      const n = parseInt(formData.plazo_meses, 10);
-      return Number.isFinite(n) && n > 0 ? n : 0;
-    }
-
-    if (esRevolvente) return 12;
-    if (esTarjeta) return 60;
-    return 0;
-  };
-
-  const getTituloTipo = () => {
-    if (esSimple) return "Crédito Simple";
-    if (esRevolvente) return "Crédito Revolvente";
-    if (esTarjeta) return "Tarjeta de Crédito Corporativa";
-    return "Financiamiento";
-  };
-
-  const getTextoSubmit = () => {
-    if (esSimple) return "Registrar Préstamo";
-    if (esRevolvente) return "Registrar Línea Revolvente";
-    if (esTarjeta) return "Registrar Tarjeta Corporativa";
-    return "Registrar Financiamiento";
-  };
-
-  const buildPayload = () => {
-    const monto = getMontoNumber();
-    const tasa = getTasaNumber();
-    const plazoMeses = getPlazoMeses();
-
-    const fechaInicioStr = format(fechaInicio, "yyyy-MM-dd");
-    const fechaVencimientoStr = fechaVencimiento
-      ? format(fechaVencimiento, "yyyy-MM-dd")
-      : format(addMonths(fechaInicio, plazoMeses || 12), "yyyy-MM-dd");
-
-    const tipoBackend = mapTipoBackend(formData.tipo_credito);
-    const institucionNombre = formData.institucion_financiera || selectedInstitucion?.nombre || "";
-    const numeroCuentaLimpio = formData.numero_cuenta.trim();
-
-    // Crédito simple nace con deuda viva.
-    // Revolvente/tarjeta nacen con línea disponible y saldo usado inicial en 0.
-    const montoDispuestoInicial = esLineaCredito ? 0 : monto;
-
-    return {
-      // ===== Backend canónico =====
-      nombre: formData.nombre.trim(),
-      descripcion: formData.descripcion.trim(),
-      notas: formData.condiciones.trim(),
-
-      tipo: tipoBackend,
-      categoria: "bancario",
-
-      institucion: institucionNombre,
-      institucion_id: formData.institucion_financiera_id || undefined,
-
-      numero_cuenta: numeroCuentaLimpio,
-      numeroCuenta: numeroCuentaLimpio,
-
-      fecha_inicio: fechaInicioStr,
-      fechaInicio: fechaInicioStr,
-      fecha_vencimiento: fechaVencimientoStr,
-      fechaVencimiento: fechaVencimientoStr,
-      fecha_apertura: fechaInicioStr,
-      fechaApertura: fechaInicioStr,
-
-      tasa_interes_anual: tasa,
-      tasaInteresAnual: tasa,
-
-      plazo_meses: plazoMeses,
-      plazoMeses: plazoMeses,
-
-      estatus: "activo",
-      activo: true,
-
-      linea_credito: esLineaCredito ? monto : 0,
-      lineaCredito: esLineaCredito ? monto : 0,
-
-      monto_original: esLineaCredito ? 0 : monto,
-      montoOriginal: esLineaCredito ? 0 : monto,
-
-      monto_dispuesto_inicial: montoDispuestoInicial,
-      montoDispuestoInicial: montoDispuestoInicial,
-
-      // ===== Compat legacy =====
-      tipo_credito: formData.tipo_credito,
-      institucion_financiera: institucionNombre,
-      institucion_financiera_id: formData.institucion_financiera_id || undefined,
-      monto_total: monto,
-      tasa_interes: tasa,
-      saldo_inicial: esLineaCredito ? 0 : monto,
-      saldo_actual: esLineaCredito ? 0 : monto,
-      estado: "activo",
-      condiciones: formData.condiciones.trim(),
-    };
-  };
-
-  const validateForm = () => {
-    const monto = getMontoNumber();
-    const tasa = getTasaNumber();
-    const plazo = getPlazoMeses();
-
-    if (!formData.tipo_credito) return "Debes seleccionar un tipo de financiamiento.";
-    if (!formData.nombre.trim()) return "El nombre es requerido.";
-
-    if (!formData.institucion_financiera_id && !formData.institucion_financiera.trim()) {
-      return "Debes seleccionar una institución financiera.";
-    }
-
-    if (monto <= 0) return "El monto debe ser mayor a 0.";
-    if (tasa < 0) return "La tasa de interés no puede ser negativa.";
-
-    if (esSimple) {
-      if (plazo <= 0) return "El plazo en meses debe ser mayor a 0.";
-      if (!fechaVencimiento) return "No se pudo calcular la fecha de vencimiento.";
-    }
-
-    return "";
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorLocal("");
 
-    const validationError = validateForm();
-    if (validationError) {
-      setErrorLocal(validationError);
+    const monto = Number(form.monto);
+    const tasa = Number(form.tasa || 0);
+
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setErrorLocal("El monto debe ser mayor a 0.");
+      return;
+    }
+    if (!form.fecha) {
+      setErrorLocal("La fecha es obligatoria.");
+      return;
+    }
+    if (!form.fechaVencimiento) {
+      setErrorLocal("La fecha de vencimiento es obligatoria.");
       return;
     }
 
-    const payload = buildPayload();
+    const payload = esRealizado
+      ? {
+          nombre: form.nombre.trim() || `Préstamo a ${form.deudorNombre.trim()}`,
+          descripcion: form.comentarios.trim(),
+          notas: form.comentarios.trim(),
+          direccion,
+          tipo: "credito_simple",
+          tipo_credito: "simple",
+          categoria: "otro",
+          fecha_apertura: form.fecha,
+          fecha_inicio: form.fecha,
+          fecha_vencimiento: form.fechaVencimiento,
+          tasa_interes_anual: Number.isFinite(tasa) ? tasa : 0,
+          monto_original: monto,
+          monto_dispuesto_inicial: monto,
+          deudor_nombre: form.deudorNombre.trim(),
+          deudor_rfc: form.deudorRfc.trim(),
+          deudor_tipo: form.deudorTipo,
+          deudor_contacto: form.deudorContacto.trim(),
+          metodo_pago: form.metodoPago,
+          cuenta_activo_codigo: "1004",
+          cuenta_activo_nombre: "Documentos por Cobrar",
+          cuenta_intereses_codigo: "4101",
+          cuenta_intereses_nombre: "Productos Financieros",
+        }
+      : {
+          nombre: form.nombre.trim(),
+          descripcion: form.comentarios.trim(),
+          notas: form.comentarios.trim(),
+          direccion,
+          tipo: form.tipoCredito === "simple" ? "credito_simple" : form.tipoCredito === "revolvente" ? "linea_credito" : "tarjeta_credito",
+          tipo_credito: form.tipoCredito,
+          categoria: "bancario",
+          institucion: form.institucion.trim(),
+          numero_cuenta: form.numeroCuenta.trim(),
+          fecha_apertura: form.fecha,
+          fecha_inicio: form.fecha,
+          fecha_vencimiento: form.fechaVencimiento,
+          tasa_interes_anual: Number.isFinite(tasa) ? tasa : 0,
+          monto_original: form.tipoCredito === "simple" ? monto : 0,
+          monto_dispuesto_inicial: form.tipoCredito === "simple" ? monto : 0,
+          linea_credito: form.tipoCredito === "simple" ? 0 : monto,
+        };
 
-    crearFinanciamiento.mutate(payload, {
-      onSuccess: () => {
-        resetForm();
-      },
+    if (esRealizado) {
+      if (!form.deudorNombre.trim()) {
+        setErrorLocal("El nombre del deudor es obligatorio.");
+        return;
+      }
+      if (!form.deudorRfc.trim()) {
+        setErrorLocal("El RFC del deudor es obligatorio.");
+        return;
+      }
+    } else if (!form.institucion.trim()) {
+      setErrorLocal("La institución financiera es obligatoria.");
+      return;
+    }
+
+    crearFinanciamiento.mutate(payload as any, {
+      onSuccess: () => reset(),
       onError: (error: any) => {
-        const message =
-          error?.response?.data?.message ||
-          error?.message ||
-          "No se pudo registrar el financiamiento.";
-        setErrorLocal(String(message));
+        setErrorLocal(
+          error?.response?.data?.message || error?.message || "No se pudo registrar."
+        );
       },
     });
   };
@@ -280,366 +146,109 @@ const RegistroFinanciamientoForm = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Registro de Nuevo Financiamiento</CardTitle>
+        <CardTitle>
+          {esRealizado ? "Registro de nuevo préstamo realizado" : "Registro de nuevo financiamiento"}
+        </CardTitle>
       </CardHeader>
-
       <CardContent>
-        {step === "tipo" ? (
-          <div className="space-y-4">
-            <Label className="text-base">¿Qué tipo de financiamiento deseas registrar?</Label>
-
-            <div className="grid gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-auto p-6 flex flex-col items-start space-y-2 hover:border-primary"
-                onClick={() => handleTipoCreditoSelect("simple")}
-              >
-                <span className="font-semibold text-lg">Crédito Simple</span>
-                <span className="text-sm text-muted-foreground text-left">
-                  Préstamo con monto fijo que se paga gradualmente con intereses
-                </span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="h-auto p-6 flex flex-col items-start space-y-2 hover:border-primary"
-                onClick={() => handleTipoCreditoSelect("revolvente")}
-              >
-                <span className="font-semibold text-lg">Crédito Revolvente</span>
-                <span className="text-sm text-muted-foreground text-left">
-                  Línea de crédito que se dispone según necesidad y se libera al pagar
-                </span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="h-auto p-6 flex flex-col items-start space-y-2 hover:border-primary"
-                onClick={() => handleTipoCreditoSelect("tarjeta_corporativa")}
-              >
-                <span className="font-semibold text-lg">Tarjeta de Crédito Corporativa</span>
-                <span className="text-sm text-muted-foreground text-left">
-                  Tarjeta empresarial con límite de crédito para gastos operativos
-                </span>
-              </Button>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {errorLocal ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {errorLocal}
             </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b">
-              <div>
-                <p className="text-sm text-muted-foreground">Tipo seleccionado:</p>
-                <p className="font-semibold">{getTituloTipo()}</p>
-              </div>
+          ) : null}
 
-              <Button type="button" variant="ghost" onClick={backToTipo} disabled={isSubmitting}>
-                Cambiar tipo
-              </Button>
+          {!esRealizado && (
+            <div className="space-y-2">
+              <Label>Tipo de crédito</Label>
+              <Select value={form.tipoCredito} onValueChange={(value) => setForm((prev) => ({ ...prev, tipoCredito: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simple">Crédito Simple</SelectItem>
+                  <SelectItem value="revolvente">Crédito Revolvente</SelectItem>
+                  <SelectItem value="tarjeta_corporativa">Tarjeta Corporativa</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          )}
 
-            {errorLocal ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {errorLocal}
-              </div>
-            ) : null}
-
+          {esRealizado ? (
             <div className="grid grid-cols-2 gap-4">
+              <Field label="Nombre del préstamo" value={form.nombre} onChange={(value) => setForm((prev) => ({ ...prev, nombre: value }))} placeholder="Ej: Préstamo puente Marzo" />
+              <Field label="Monto" type="number" value={form.monto} onChange={(value) => setForm((prev) => ({ ...prev, monto: value }))} placeholder="0.00" />
+              <Field label="Fecha" type="date" value={form.fecha} onChange={(value) => setForm((prev) => ({ ...prev, fecha: value }))} />
+              <Field label="Fecha vencimiento" type="date" value={form.fechaVencimiento} onChange={(value) => setForm((prev) => ({ ...prev, fechaVencimiento: value }))} />
+              <Field label="Tasa anual" type="number" value={form.tasa} onChange={(value) => setForm((prev) => ({ ...prev, tasa: value }))} placeholder="0.00" />
               <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre del {esLineaCredito ? "Instrumento" : "Crédito"} *</Label>
-                <Input
-                  id="nombre"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, nombre: e.target.value }))}
-                  placeholder={esLineaCredito ? "Ej: Amex Corporativa" : "Ej: Crédito Equipamiento"}
-                  required
-                  disabled={isSubmitting}
-                />
+                <Label>Método de entrega</Label>
+                <Select value={form.metodoPago} onValueChange={(value) => setForm((prev) => ({ ...prev, metodoPago: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="caja">Caja</SelectItem>
+                    <SelectItem value="bancos">Bancos</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
+              <Field label="Nombre del deudor" value={form.deudorNombre} onChange={(value) => setForm((prev) => ({ ...prev, deudorNombre: value }))} />
+              <Field label="RFC del deudor" value={form.deudorRfc} onChange={(value) => setForm((prev) => ({ ...prev, deudorRfc: value }))} />
               <div className="space-y-2">
-                <Label htmlFor="institucion">Institución Financiera *</Label>
-
-                <InstitucionFinancieraSelector
-                  value={formData.institucion_financiera_id}
-                  onChange={(id, nombre) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      institucion_financiera_id: id,
-                      institucion_financiera: nombre,
-                    }));
-                  }}
-                />
-
-                {selectedInstitucion && (
-                  <Card className="mt-2 p-3 bg-muted">
-                    <div className="flex items-center gap-3">
-                      {selectedInstitucion.logo_url ? (
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={selectedInstitucion.logo_url} />
-                          <AvatarFallback>
-                            {selectedInstitucion.nombre?.[0] || "I"}
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : null}
-
-                      <div className="flex-1">
-                        <p className="font-medium">{selectedInstitucion.nombre}</p>
-
-                        {selectedInstitucion.ejecutivo_nombre ? (
-                          <p className="text-sm text-muted-foreground">
-                            Ejecutivo: {selectedInstitucion.ejecutivo_nombre}
-                            {selectedInstitucion.ejecutivo_telefono
-                              ? ` • ${selectedInstitucion.ejecutivo_telefono}`
-                              : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </Card>
-                )}
+                <Label>Tipo de deudor</Label>
+                <Select value={form.deudorTipo} onValueChange={(value) => setForm((prev) => ({ ...prev, deudorTipo: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="persona">Persona</SelectItem>
+                    <SelectItem value="empresa">Empresa</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="numero_cuenta">
-                  Número de {esLineaCredito ? "Tarjeta/Cuenta" : "Cuenta/Contrato"}
-                </Label>
-                <Input
-                  id="numero_cuenta"
-                  value={formData.numero_cuenta}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, numero_cuenta: e.target.value }))
-                  }
-                  placeholder={esTarjeta ? "**** **** **** 1234" : "Ej: 123456789"}
-                  disabled={isSubmitting}
-                />
+              <Field label="Contacto del deudor" value={form.deudorContacto} onChange={(value) => setForm((prev) => ({ ...prev, deudorContacto: value }))} />
+              <div className="col-span-2 space-y-2">
+                <Label>Comentarios</Label>
+                <Textarea value={form.comentarios} onChange={(e) => setForm((prev) => ({ ...prev, comentarios: e.target.value }))} rows={4} />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="monto_total">
-                  {esLineaCredito ? "Límite de Crédito" : "Monto del Préstamo"} *
-                </Label>
-                <Input
-                  id="monto_total"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.monto_total}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, monto_total: e.target.value }))}
-                  placeholder="0.00"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="tasa_interes">Tasa de Interés Anual (%) *</Label>
-                <Input
-                  id="tasa_interes"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.tasa_interes}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, tasa_interes: e.target.value }))}
-                  placeholder="0.00"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {esSimple && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="plazo_meses">Plazo (meses) *</Label>
-                    <Input
-                      id="plazo_meses"
-                      type="number"
-                      min="1"
-                      value={formData.plazo_meses}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, plazo_meses: e.target.value }))
-                      }
-                      placeholder="12"
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Fecha de Inicio *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                          disabled={isSubmitting}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
-                        </Button>
-                      </PopoverTrigger>
-
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={fechaInicio}
-                          onSelect={(date) => date && setFechaInicio(date)}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2 col-span-2">
-                    <Label>Fecha de Vencimiento (calculada automáticamente)</Label>
-                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
-                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {fechaVencimiento
-                          ? format(fechaVencimiento, "PPP")
-                          : "Se calculará automáticamente"}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {esRevolvente && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Fecha de Registro *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                          disabled={isSubmitting}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
-                        </Button>
-                      </PopoverTrigger>
-
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={fechaInicio}
-                          onSelect={(date) => date && setFechaInicio(date)}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Fecha de Vencimiento (1 año)</Label>
-                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
-                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {fechaVencimiento ? format(fechaVencimiento, "PPP") : "Se calculará a 1 año"}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {esTarjeta && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Fecha de Registro *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                          disabled={isSubmitting}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaInicio ? format(fechaInicio, "PPP") : "Selecciona fecha"}
-                        </Button>
-                      </PopoverTrigger>
-
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={fechaInicio}
-                          onSelect={(date) => date && setFechaInicio(date)}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Fecha de Vencimiento</Label>
-                    <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted">
-                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {fechaVencimiento
-                          ? format(fechaVencimiento, "PPP")
-                          : "Se calculará automáticamente"}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="descripcion">Descripción</Label>
-              <Textarea
-                id="descripcion"
-                value={formData.descripcion}
-                onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))}
-                placeholder={
-                  esLineaCredito
-                    ? "Detalles adicionales sobre la línea de crédito..."
-                    : "Propósito del préstamo..."
-                }
-                rows={2}
-                disabled={isSubmitting}
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Nombre" value={form.nombre} onChange={(value) => setForm((prev) => ({ ...prev, nombre: value }))} />
+              <Field label="Institución financiera" value={form.institucion} onChange={(value) => setForm((prev) => ({ ...prev, institucion: value }))} />
+              <Field label="Cuenta / contrato" value={form.numeroCuenta} onChange={(value) => setForm((prev) => ({ ...prev, numeroCuenta: value }))} />
+              <Field label="Monto" type="number" value={form.monto} onChange={(value) => setForm((prev) => ({ ...prev, monto: value }))} placeholder="0.00" />
+              <Field label="Fecha" type="date" value={form.fecha} onChange={(value) => setForm((prev) => ({ ...prev, fecha: value }))} />
+              <Field label="Fecha vencimiento" type="date" value={form.fechaVencimiento} onChange={(value) => setForm((prev) => ({ ...prev, fechaVencimiento: value }))} />
+              <Field label="Tasa anual" type="number" value={form.tasa} onChange={(value) => setForm((prev) => ({ ...prev, tasa: value }))} placeholder="0.00" />
+              <div className="col-span-2 space-y-2">
+                <Label>Comentarios</Label>
+                <Textarea value={form.comentarios} onChange={(e) => setForm((prev) => ({ ...prev, comentarios: e.target.value }))} rows={4} />
+              </div>
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="condiciones">Condiciones y Términos</Label>
-              <Textarea
-                id="condiciones"
-                value={formData.condiciones}
-                onChange={(e) => setFormData((prev) => ({ ...prev, condiciones: e.target.value }))}
-                placeholder="Garantías, seguros, comisiones, etc."
-                rows={3}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={backToTipo}
-                className="w-1/3"
-                disabled={isSubmitting}
-              >
-                Atrás
-              </Button>
-
-              <Button type="submit" className="flex-1" disabled={isSubmitting}>
-                {isSubmitting ? "Registrando..." : getTextoSubmit()}
-              </Button>
-            </div>
-          </form>
-        )}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Registrando..." : esRealizado ? "Registrar préstamo" : "Registrar financiamiento"}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
 };
+
+const Field = ({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+}) => (
+  <div className="space-y-2">
+    <Label>{label}</Label>
+    <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+  </div>
+);
 
 export default RegistroFinanciamientoForm;

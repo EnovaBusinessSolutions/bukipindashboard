@@ -1,350 +1,136 @@
 import React, { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, AlertCircle } from "lucide-react";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useFinanciamientos, type DireccionFinanciamiento } from "@/hooks/useFinanciamientos";
 
-import { cn } from "@/lib/utils";
-import { useFinanciamientos } from "@/hooks/useFinanciamientos";
-
-const toNum = (v: unknown, def = 0) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
-};
-
-const money = (v: number) =>
-  `$${toNum(v, 0).toLocaleString("es-MX", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-
-const getTipoUi = (f: any) => {
-  const raw = String(f?.tipo || f?.tipo_credito || "").toLowerCase();
-  if (raw === "linea_credito" || raw === "revolvente") return "revolvente";
-  if (raw === "tarjeta_credito" || raw === "tarjeta_corporativa") return "tarjeta_corporativa";
-  if (raw === "credito_simple" || raw === "simple" || raw === "prestamo") return "simple";
-  return raw || "otro";
-};
-
-const getEstatus = (f: any) => String(f?.estatus || f?.estado || "").toLowerCase();
-
-const getInstitucion = (f: any) => f?.institucion || f?.institucion_financiera || "Sin institución";
-
-const getLineaTotal = (f: any) =>
-  toNum(f?.linea_credito ?? f?.lineaCredito ?? f?.monto_total, 0);
-
-const getUtilizado = (f: any) =>
-  toNum(
-    f?.saldo_dispuesto_actual ??
-      f?.saldoDispuestoActual ??
-      f?.saldo_capital_actual ??
-      f?.saldoCapitalActual ??
-      f?.saldo_actual,
-    0
-  );
-
-const getDisponible = (f: any) => {
-  const disponible = Number(f?.disponible_actual ?? f?.disponibleActual);
-  if (Number.isFinite(disponible)) return Math.max(0, disponible);
-
-  return Math.max(0, getLineaTotal(f) - getUtilizado(f));
-};
-
-const RegistroDisposicionForm = () => {
-  const { financiamientos, crearDisposicion } = useFinanciamientos();
-
-  const [formData, setFormData] = useState({
-    financiamiento_id: "",
-    monto: "",
-    descripcion: "",
-    metodo_pago: "",
-    numero_referencia: "",
-  });
-  const [fecha, setFecha] = useState<Date>(new Date());
+const RegistroDisposicionForm = ({
+  direccion = "recibido",
+}: {
+  direccion?: DireccionFinanciamiento;
+}) => {
+  const { financiamientos, crearDisposicion } = useFinanciamientos(direccion);
+  const esRealizado = direccion === "realizado";
   const [errorLocal, setErrorLocal] = useState("");
+  const [form, setForm] = useState({
+    financiamientoId: "",
+    monto: "",
+    fecha: format(new Date(), "yyyy-MM-dd"),
+    metodoPago: esRealizado ? "bancos" : "transferencia",
+    referencia: "",
+    descripcion: "",
+  });
 
-  const lineasRevolventes = useMemo(() => {
-    return financiamientos.filter((f: any) => {
-      const tipo = getTipoUi(f);
-      const estatus = getEstatus(f);
-      return tipo === "revolvente" && estatus === "activo";
+  const opciones = useMemo(() => {
+    return financiamientos.filter((f) => {
+      const estatus = String(f.estatus || f.estado || "").toLowerCase();
+      if (estatus !== "activo") return false;
+      if (esRealizado) return true;
+      const tipo = String(f.tipo_ui || f.tipoUi || f.tipo_credito || f.tipo || "").toLowerCase();
+      return tipo === "revolvente" || tipo === "linea_credito";
     });
-  }, [financiamientos]);
-
-  const financiamientoSeleccionado = useMemo(() => {
-    return lineasRevolventes.find((f: any) => f.id === formData.financiamiento_id);
-  }, [lineasRevolventes, formData.financiamiento_id]);
-
-  const lineaTotal = financiamientoSeleccionado ? getLineaTotal(financiamientoSeleccionado) : 0;
-  const saldoUtilizado = financiamientoSeleccionado ? getUtilizado(financiamientoSeleccionado) : 0;
-  const limiteDisponible = financiamientoSeleccionado ? getDisponible(financiamientoSeleccionado) : 0;
+  }, [financiamientos, esRealizado]);
 
   const isSubmitting = !!crearDisposicion.isPending;
-
-  const resetForm = () => {
-    setFormData({
-      financiamiento_id: "",
-      monto: "",
-      descripcion: "",
-      metodo_pago: "",
-      numero_referencia: "",
-    });
-    setFecha(new Date());
-    setErrorLocal("");
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorLocal("");
-
-    const monto = Number(formData.monto);
-
-    if (!formData.financiamiento_id) {
-      setErrorLocal("Debes seleccionar una línea de crédito.");
-      return;
-    }
-
-    if (!Number.isFinite(monto) || monto <= 0) {
-      setErrorLocal("El monto debe ser mayor a 0.");
-      return;
-    }
-
-    if (monto > limiteDisponible) {
-      setErrorLocal(`El monto excede el límite disponible de ${money(limiteDisponible)}.`);
-      return;
-    }
-
-    if (!formData.metodo_pago) {
-      setErrorLocal("Debes seleccionar un método de pago.");
-      return;
-    }
-
-    if (!formData.descripcion.trim()) {
-      setErrorLocal("La descripción es requerida.");
-      return;
-    }
+    const monto = Number(form.monto);
+    if (!form.financiamientoId) return setErrorLocal("Debes seleccionar un crédito.");
+    if (!Number.isFinite(monto) || monto <= 0) return setErrorLocal("El monto debe ser mayor a 0.");
+    if (!form.descripcion.trim()) return setErrorLocal("La descripción es obligatoria.");
 
     crearDisposicion.mutate(
       {
-        financiamiento_id: formData.financiamiento_id,
+        financiamiento_id: form.financiamientoId,
         monto,
-        fecha: format(fecha, "yyyy-MM-dd"),
-        metodo_pago: formData.metodo_pago,
-        descripcion: formData.descripcion.trim(),
-        numero_referencia: formData.numero_referencia.trim() || undefined,
+        fecha: form.fecha,
+        metodo_pago: form.metodoPago,
+        numero_referencia: form.referencia,
+        descripcion: form.descripcion.trim(),
       },
       {
-        onSuccess: () => {
-          resetForm();
-        },
-        onError: (error: any) => {
-          setErrorLocal(
-            error?.response?.data?.message ||
-              error?.message ||
-              "No se pudo registrar la disposición."
-          );
-        },
+        onSuccess: () =>
+          setForm({
+            financiamientoId: "",
+            monto: "",
+            fecha: format(new Date(), "yyyy-MM-dd"),
+            metodoPago: esRealizado ? "bancos" : "transferencia",
+            referencia: "",
+            descripcion: "",
+          }),
+        onError: (error: any) =>
+          setErrorLocal(error?.response?.data?.message || error?.message || "No se pudo registrar."),
       }
     );
   };
 
-  if (lineasRevolventes.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Registro de Disposición</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              No hay líneas de crédito revolventes activas disponibles para disponer.
-              Para utilizar esta opción, primero registra un Crédito Revolvente.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Registro de Disposición</CardTitle>
+        <CardTitle>{esRealizado ? "Registro de disposición adicional" : "Registro de disposición"}</CardTitle>
       </CardHeader>
-
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {errorLocal ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{errorLocal}</AlertDescription>
-            </Alert>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {errorLocal}
+            </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="financiamiento_id">Línea de Crédito *</Label>
-              <Select
-                value={formData.financiamiento_id}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, financiamiento_id: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona la línea de crédito" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  {lineasRevolventes.map((f: any) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.nombre} - {getInstitucion(f)} (Disponible: {money(getDisponible(f))})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {financiamientoSeleccionado && (
-              <div className="col-span-2 p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Línea Total:</span>
-                  <span className="font-medium">{money(lineaTotal)}</span>
-                </div>
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Saldo Utilizado:</span>
-                  <span className="font-medium text-red-600">{money(saldoUtilizado)}</span>
-                </div>
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Límite Disponible:</span>
-                  <span className="font-semibold text-green-600">{money(limiteDisponible)}</span>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="monto">Monto a Disponer *</Label>
-              <Input
-                id="monto"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.monto}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, monto: e.target.value }))
-                }
-                placeholder="0.00"
-                max={limiteDisponible || undefined}
-                disabled={isSubmitting}
-                required
-              />
-              {formData.monto && Number(formData.monto) > limiteDisponible ? (
-                <p className="text-sm text-red-600">El monto excede el límite disponible</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Fecha de Disposición *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                    disabled={isSubmitting}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {fecha ? format(fecha, "PPP") : "Selecciona fecha"}
-                  </Button>
-                </PopoverTrigger>
-
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={fecha}
-                    onSelect={(date) => date && setFecha(date)}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="metodo_pago">Método de Pago *</Label>
-              <Select
-                value={formData.metodo_pago}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, metodo_pago: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona método" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="transferencia">Transferencia/Bancos</SelectItem>
-                  <SelectItem value="efectivo">Efectivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="col-span-2">
-              <Alert className="bg-blue-50 border-blue-200">
-                <AlertCircle className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-sm text-blue-800">
-                  <strong>Nota:</strong> Las disposiciones de crédito generalmente se realizan mediante
-                  transferencia bancaria. La opción de efectivo está disponible para casos especiales.
-                </AlertDescription>
-              </Alert>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="numero_referencia">Número de Referencia</Label>
-              <Input
-                id="numero_referencia"
-                value={formData.numero_referencia}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, numero_referencia: e.target.value }))
-                }
-                placeholder="Folio, referencia o número de operación"
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
-
           <div className="space-y-2">
-            <Label htmlFor="descripcion">Descripción *</Label>
-            <Textarea
-              id="descripcion"
-              value={formData.descripcion}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, descripcion: e.target.value }))
-              }
-              placeholder="Describe el propósito de esta disposición..."
-              rows={3}
-              disabled={isSubmitting}
-              required
-            />
+            <Label>{esRealizado ? "Préstamo" : "Línea de crédito"}</Label>
+            <Select value={form.financiamientoId} onValueChange={(value) => setForm((prev) => ({ ...prev, financiamientoId: value }))}>
+              <SelectTrigger><SelectValue placeholder="Selecciona" /></SelectTrigger>
+              <SelectContent>
+                {opciones.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <Button type="submit" className="w-full" disabled={!formData.financiamiento_id || isSubmitting}>
-            {isSubmitting ? "Registrando..." : "Registrar Disposición"}
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Monto" type="number" value={form.monto} onChange={(value) => setForm((prev) => ({ ...prev, monto: value }))} />
+            <Field label="Fecha" type="date" value={form.fecha} onChange={(value) => setForm((prev) => ({ ...prev, fecha: value }))} />
+            <div className="space-y-2">
+              <Label>{esRealizado ? "Método de entrega" : "Método de pago"}</Label>
+              <Select value={form.metodoPago} onValueChange={(value) => setForm((prev) => ({ ...prev, metodoPago: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={esRealizado ? "caja" : "efectivo"}>Caja</SelectItem>
+                  <SelectItem value={esRealizado ? "bancos" : "transferencia"}>Bancos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Field label="Referencia" value={form.referencia} onChange={(value) => setForm((prev) => ({ ...prev, referencia: value }))} />
+            <div className="col-span-2 space-y-2">
+              <Label>Descripción</Label>
+              <Textarea value={form.descripcion} onChange={(e) => setForm((prev) => ({ ...prev, descripcion: e.target.value }))} rows={4} />
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Registrando..." : "Registrar disposición"}
           </Button>
         </form>
       </CardContent>
     </Card>
   );
 };
+
+const Field = ({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) => (
+  <div className="space-y-2">
+    <Label>{label}</Label>
+    <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+  </div>
+);
 
 export default RegistroDisposicionForm;

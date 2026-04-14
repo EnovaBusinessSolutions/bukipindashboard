@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
+export type DireccionFinanciamiento = "recibido" | "realizado";
+
 export interface Financiamiento {
   id: string;
   _id?: string;
@@ -14,6 +16,7 @@ export interface Financiamiento {
   condiciones?: string;
 
   tipo?: string;
+  direccion?: DireccionFinanciamiento;
   tipo_credito?: string;
   tipo_ui?: string;
   tipoUi?: string;
@@ -37,6 +40,14 @@ export interface Financiamiento {
   numeroContrato?: string;
 
   referencia?: string;
+  deudor_nombre?: string;
+  deudorNombre?: string;
+  deudor_rfc?: string;
+  deudorRfc?: string;
+  deudor_tipo?: "persona" | "empresa" | "";
+  deudorTipo?: "persona" | "empresa" | "";
+  deudor_contacto?: string;
+  deudorContacto?: string;
   cuenta_display?: string;
   cuentaDisplay?: string;
 
@@ -129,6 +140,10 @@ export interface Financiamiento {
 
   total_comisiones_pagadas?: number;
   totalComisionesPagadas?: number;
+  cuenta_activo_codigo?: string;
+  cuentaActivoCodigo?: string;
+  cuenta_activo_nombre?: string;
+  cuentaActivoNombre?: string;
 
   monto_pagado_capital?: number;
   montoPagadoCapital?: number;
@@ -257,6 +272,11 @@ export interface ResumenFinanciamientos {
   disponible_actual: number;
   linea_credito_total: number;
 }
+
+const withDireccion = (path: string, direccion: DireccionFinanciamiento) => {
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}direccion=${encodeURIComponent(direccion)}`;
+};
 
 type ApiEnvelope<T> =
   | {
@@ -478,6 +498,7 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     condiciones: asTrim(raw?.condiciones || condicionesTexto),
 
     tipo: asTrim(raw?.tipo, "credito_simple"),
+    direccion: asTrim(raw?.direccion, "recibido") as DireccionFinanciamiento,
     tipo_credito: asTrim(raw?.tipo_credito || tipoUi),
     tipo_ui: tipoUi,
     tipoUi,
@@ -507,6 +528,14 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     numeroContrato: asTrim(raw?.numero_contrato || raw?.numeroContrato),
 
     referencia: asTrim(raw?.referencia),
+    deudor_nombre: asTrim(raw?.deudor_nombre || raw?.deudorNombre),
+    deudorNombre: asTrim(raw?.deudor_nombre || raw?.deudorNombre),
+    deudor_rfc: asTrim(raw?.deudor_rfc || raw?.deudorRfc),
+    deudorRfc: asTrim(raw?.deudor_rfc || raw?.deudorRfc),
+    deudor_tipo: asTrim(raw?.deudor_tipo || raw?.deudorTipo) as "persona" | "empresa" | "",
+    deudorTipo: asTrim(raw?.deudor_tipo || raw?.deudorTipo) as "persona" | "empresa" | "",
+    deudor_contacto: asTrim(raw?.deudor_contacto || raw?.deudorContacto),
+    deudorContacto: asTrim(raw?.deudor_contacto || raw?.deudorContacto),
     cuenta_display: cuentaDisplay,
     cuentaDisplay,
 
@@ -620,6 +649,10 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
       firstFinite(raw?.total_comisiones_pagadas, raw?.totalComisionesPagadas) ?? 0,
     totalComisionesPagadas:
       firstFinite(raw?.total_comisiones_pagadas, raw?.totalComisionesPagadas) ?? 0,
+    cuenta_activo_codigo: asTrim(raw?.cuenta_activo_codigo || raw?.cuentaActivoCodigo),
+    cuentaActivoCodigo: asTrim(raw?.cuenta_activo_codigo || raw?.cuentaActivoCodigo),
+    cuenta_activo_nombre: asTrim(raw?.cuenta_activo_nombre || raw?.cuentaActivoNombre),
+    cuentaActivoNombre: asTrim(raw?.cuenta_activo_nombre || raw?.cuentaActivoNombre),
 
     monto_pagado_capital: montoPagadoCapital,
     montoPagadoCapital,
@@ -768,7 +801,9 @@ const normalizeResumen = (raw: any): ResumenFinanciamientos => {
   };
 };
 
-export const useFinanciamientos = () => {
+export const useFinanciamientos = (
+  direccion: DireccionFinanciamiento = "recibido"
+) => {
   const queryClient = useQueryClient();
 
   const {
@@ -776,9 +811,9 @@ export const useFinanciamientos = () => {
     isLoading: isLoadingFinanciamientos,
     error: financiamientosError,
   } = useQuery({
-    queryKey: ["financiamientos"],
+    queryKey: ["financiamientos", direccion],
     queryFn: async () => {
-      const json = await apiFetch("/api/financiamientos", { method: "GET" });
+      const json = await apiFetch(withDireccion("/api/financiamientos", direccion), { method: "GET" });
       const raw = unwrap<any>(json);
       return asArray<any>(raw).map(normalizeFinanciamiento);
     },
@@ -793,9 +828,9 @@ export const useFinanciamientos = () => {
     isLoading: isLoadingTransacciones,
     error: transaccionesError,
   } = useQuery({
-    queryKey: ["transacciones_financiamientos"],
+    queryKey: ["transacciones_financiamientos", direccion],
     queryFn: async () => {
-      const json = await apiFetch("/api/financiamientos/transacciones", { method: "GET" });
+      const json = await apiFetch(withDireccion("/api/financiamientos/transacciones", direccion), { method: "GET" });
       const raw = unwrap<any>(json);
       return asArray<any>(raw).map(normalizeTransaccion);
     },
@@ -825,9 +860,9 @@ export const useFinanciamientos = () => {
     isLoading: isLoadingResumen,
     error: resumenError,
   } = useQuery({
-    queryKey: ["resumen_financiamientos"],
+    queryKey: ["resumen_financiamientos", direccion],
     queryFn: async () => {
-      const json = await apiFetch("/api/financiamientos/resumen", { method: "GET" });
+      const json = await apiFetch(withDireccion("/api/financiamientos/resumen", direccion), { method: "GET" });
       const raw = unwrap<any>(json);
       return normalizeResumen(raw);
     },
@@ -838,9 +873,9 @@ export const useFinanciamientos = () => {
   });
 
   const refreshAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["financiamientos"] });
-    queryClient.invalidateQueries({ queryKey: ["transacciones_financiamientos"] });
-    queryClient.invalidateQueries({ queryKey: ["resumen_financiamientos"] });
+    queryClient.invalidateQueries({ queryKey: ["financiamientos", direccion] });
+    queryClient.invalidateQueries({ queryKey: ["transacciones_financiamientos", direccion] });
+    queryClient.invalidateQueries({ queryKey: ["resumen_financiamientos", direccion] });
   };
 
   const crearFinanciamiento = useMutation({
@@ -859,7 +894,7 @@ export const useFinanciamientos = () => {
     ) => {
       const json = await apiFetch("/api/financiamientos", {
         method: "POST",
-        body: JSON.stringify(financiamiento),
+        body: JSON.stringify({ ...financiamiento, direccion }),
       });
 
       return normalizeFinanciamiento(unwrap<any>(json));
@@ -904,7 +939,7 @@ export const useFinanciamientos = () => {
 
       const json = await apiFetch(`/api/financiamientos/${financingId}/movimientos`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, direccion }),
       });
 
       return normalizeTransaccion(unwrap<any>(json));
@@ -964,7 +999,7 @@ export const useFinanciamientos = () => {
 
       const json = await apiFetch(`/api/financiamientos/${financingId}/disposicion`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, direccion }),
       });
 
       return normalizeTransaccion(unwrap<any>(json));
@@ -1029,7 +1064,7 @@ export const useFinanciamientos = () => {
 
       const json = await apiFetch(`/api/financiamientos/${financingId}/amortizacion`, {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, direccion }),
       });
 
       return normalizeTransaccion(unwrap<any>(json));
@@ -1088,7 +1123,7 @@ export const useFinanciamientos = () => {
 
       const json = await apiFetch(`/api/financiamientos/${financingId}/intereses`, {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, direccion }),
       });
 
       return normalizeTransaccion(unwrap<any>(json));

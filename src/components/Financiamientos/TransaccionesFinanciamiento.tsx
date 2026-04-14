@@ -28,6 +28,7 @@ interface TransaccionesFinanciamientoProps {
   saldoActual: number;
   saldoInicial: number;
   tipoCredito?: string;
+  direccion?: "recibido" | "realizado";
 }
 
 const API_MOVIMIENTOS = (financiamientoId: string) =>
@@ -250,6 +251,7 @@ const TransaccionesFinanciamiento = ({
   saldoActual,
   saldoInicial,
   tipoCredito = "simple",
+  direccion = "recibido",
 }: TransaccionesFinanciamientoProps) => {
   const [detalleAsientoOpen, setDetalleAsientoOpen] = useState(false);
   const [asientoSeleccionado, setAsientoSeleccionado] = useState<any>(null);
@@ -326,6 +328,12 @@ const TransaccionesFinanciamiento = ({
     const metodoPago = String(getMetodoPago(transaccion)).toLowerCase();
 
     if (tipo === "apertura" || tipo === "desembolso" || tipo === "disposicion") {
+      if (direccion === "realizado") {
+        return {
+          cargo: "1004 - Documentos por Cobrar",
+          abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+        };
+      }
       return {
         cargo: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
         abono: `2101 - Financiamientos (${nombreFinanciamiento})`,
@@ -333,6 +341,12 @@ const TransaccionesFinanciamiento = ({
     }
 
     if (tipo === "amortizacion") {
+      if (direccion === "realizado") {
+        return {
+          cargo: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
+          abono: `1004 - Documentos por Cobrar (${nombreFinanciamiento})`,
+        };
+      }
       return {
         cargo: `2101 - Financiamientos (${nombreFinanciamiento})`,
         abono: metodoPago === "efectivo" ? "1001 - Caja" : "1002 - Bancos",
@@ -348,6 +362,16 @@ const TransaccionesFinanciamiento = ({
     }
 
     if (tipo === "cargo_intereses" || tipo === "cargo_interes") {
+      if (direccion === "realizado") {
+        return {
+          cargo: getDescripcion(transaccion).toLowerCase().includes("pagado")
+            ? metodoPago === "efectivo"
+              ? "1001 - Caja"
+              : "1002 - Bancos"
+            : "1004 - Documentos por Cobrar",
+          abono: "4101 - Productos Financieros",
+        };
+      }
       return {
         cargo: "5201 - Gastos Financieros",
         abono: `2101 - Financiamientos (${nombreFinanciamiento})`,
