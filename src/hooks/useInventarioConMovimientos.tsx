@@ -379,6 +379,29 @@ export const useInventarioConMovimientos = () => {
 
         const cantidad_comprada = compras.reduce((sum, m) => sum + getMovCantidad(m), 0);
         const cantidad_vendida = ventas.reduce((sum, m) => sum + getMovCantidad(m), 0);
+        const costo_total_entradas = compras.reduce((sum, m) => {
+          const qty = getMovCantidad(m);
+          const total = num(
+            m?.costo_total ??
+              m?.costoTotal ??
+              m?.total ??
+              m?.monto_total ??
+              m?.montoTotal ??
+              0
+          );
+          const unit = num(
+            m?.costo_unitario ??
+              m?.costoUnitario ??
+              m?.unitCost ??
+              m?.precio_unitario ??
+              m?.precioUnitario ??
+              0
+          );
+
+          if (total > 0) return sum + total;
+          if (unit > 0 && qty > 0) return sum + unit * qty;
+          return sum;
+        }, 0);
 
         // Ajustes: por compat, si alguna vez viene delta negativo, lo respetamos
         const ajuste_cantidad = ajustes.reduce((sum, m) => {
@@ -387,11 +410,18 @@ export const useInventarioConMovimientos = () => {
           return sum + delta;
         }, 0);
 
+        const stock_movimientos = cantidad_comprada - cantidad_vendida + ajuste_cantidad;
+        const costo_promedio_movimientos =
+          cantidad_comprada > 0 ? costo_total_entradas / cantidad_comprada : 0;
+
         const stock_backend = pickProductoStockConsolidado(producto);
-        const cantidad_stock = stock_backend;
+        const cantidad_stock =
+          stock_backend === 0 && stock_movimientos !== 0 ? stock_movimientos : stock_backend;
 
         // ✅ CPP backend-first: NO recalcular desde movimientos.
-        const costo_unitario = pickProductoCostoConsolidado(producto);
+        const costo_backend = pickProductoCostoConsolidado(producto);
+        const costo_unitario =
+          costo_backend <= 0 && costo_promedio_movimientos > 0 ? costo_promedio_movimientos : costo_backend;
 
         const valor_total_backend = pickProductoValorInventario(producto);
         const valor_total_inventario =
