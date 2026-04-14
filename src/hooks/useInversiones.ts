@@ -13,6 +13,8 @@ export interface InversionCapex {
   monto_pendiente: number;
   tipo_pago: string;
   metodo_pago?: string;
+  financingId?: string | null;
+  financingMovementId?: string | null;
   anos_depreciacion: number;
   valor_depreciacion_anual?: number;
   valor_depreciacion_mensual?: number;

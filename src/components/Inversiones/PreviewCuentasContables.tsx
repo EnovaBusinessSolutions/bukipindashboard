@@ -43,10 +43,10 @@ const PreviewCuentasContables = ({
   const getCuentaPago = () => {
     if (metodoPago === "efectivo") {
       return { codigo: "1001", nombre: "Caja" };
-    } else if (metodoPago === "transferencia") {
+    } else if (metodoPago === "bancos" || metodoPago === "transferencia") {
       return { codigo: "1002", nombre: "Bancos" };
     } else if (metodoPago?.startsWith("tarjeta_credito_")) {
-      return { codigo: "2002", nombre: "Cuentas por Pagar" };
+      return { codigo: "2101", nombre: "Tarjetas de Crédito" };
     }
     return null;
   };
@@ -144,7 +144,13 @@ const PreviewCuentasContables = ({
                 <div>
                   <p className="text-xs font-medium">{cuentaPago.codigo} - {cuentaPago.nombre}</p>
                   <p className="text-xs text-muted-foreground">
-                    {tipoPago === "parcial" ? "Pago parcial" : "Pago total"} ({metodoPago === "efectivo" ? "efectivo" : metodoPago === "transferencia" ? "transferencia" : "tarjeta crédito"})
+                    {tipoPago === "parcial" ? "Pago parcial" : "Pago total"} (
+                    {metodoPago === "efectivo"
+                      ? "efectivo"
+                      : metodoPago === "bancos" || metodoPago === "transferencia"
+                        ? "bancos"
+                        : "tarjeta crédito"}
+                    )
                   </p>
                 </div>
                 <p className="text-xs font-bold text-blue-600">{formatCurrency(montoPagado)}</p>

@@ -7,9 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useProveedores } from "@/hooks/useProveedores";
-import { useTarjetasCredito, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
+import { useTarjetasCorporativasEgresos, validarLimiteCredito } from "@/hooks/useTarjetasCredito";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { actualizarSaldoTarjetaCredito, extraerIdTarjetaCredito } from "@/lib/tarjetaCreditoUtils";
 import { useSaldosDisponibles } from "@/hooks/useSaldosDisponibles";
 import {
   AlertDialog,
@@ -149,10 +148,17 @@ const StatMiniCard = ({
   );
 };
 
+const normalizeMetodoPago = (value: string) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  if (normalized === "transferencia" || normalized === "tarjeta-transferencia") return "bancos";
+  return normalized;
+};
+
 const RegistroInversionForm = () => {
   const { crearInversion, recomendaciones } = useInversiones();
   const { proveedores } = useProveedores();
-  const { data: tarjetasCredito } = useTarjetasCredito();
+  const { data: tarjetasCreditoRaw = [] } = useTarjetasCorporativasEgresos();
   const { data: saldosDisponibles } = useSaldosDisponibles();
 
   const [fecha] = useState<Date>(new Date());
@@ -196,6 +202,7 @@ const RegistroInversionForm = () => {
     () => categoriaOptions.find((item) => item.value === categoriaActivo),
     [categoriaActivo]
   );
+  const tarjetasCredito = useMemo(() => tarjetasCreditoRaw ?? [], [tarjetasCreditoRaw]);
 
   const resetForm = () => {
     setFormData(initialFormData);
@@ -314,6 +321,10 @@ const RegistroInversionForm = () => {
   const submitInversion = async (payloadForm: typeof formData, montoPagado: number, valorTotal: number) => {
     const valorDepreciacionAnual = valorTotal / (anosDepreciacion || 1);
     const valorDepreciacionMensual = valorDepreciacionAnual / 12;
+    const metodoPagoNormalizado = normalizeMetodoPago(payloadForm.metodo_pago);
+    const financingId = metodoPagoNormalizado.startsWith("tarjeta_credito_")
+      ? metodoPagoNormalizado.replace("tarjeta_credito_", "")
+      : null;
 
     crearInversion.mutate(
       {
@@ -329,17 +340,12 @@ const RegistroInversionForm = () => {
         fecha_inicio_depreciacion: format(fecha, "yyyy-MM-dd"),
         fecha_vencimiento: fechaVencimiento ? format(fechaVencimiento, "yyyy-MM-dd") : null,
         imagen_url: imagenUrl,
+        metodo_pago: metodoPagoNormalizado || null,
+        financingId,
+        financing_id: financingId,
       } as any,
       {
         onSuccess: async () => {
-          const tarjetaId = extraerIdTarjetaCredito(payloadForm.metodo_pago);
-          if (tarjetaId && montoPagado > 0) {
-            await actualizarSaldoTarjetaCredito(
-              tarjetaId,
-              montoPagado,
-              `Pago de inversión: ${payloadForm.producto_nombre}`
-            );
-          }
           resetForm();
           setShowConfirmDialog(false);
           setPendingSubmit(null);
@@ -389,11 +395,9 @@ const RegistroInversionForm = () => {
         : formData.tipo_pago === "credito"
           ? 0
           : parseFloat(formData.monto_pagado);
+    const metodoPagoNormalizado = normalizeMetodoPago(formData.metodo_pago);
 
-    if (
-      montoPagado > 0 &&
-      (formData.metodo_pago === "efectivo" || formData.metodo_pago === "transferencia")
-    ) {
+    if (montoPagado > 0 && (metodoPagoNormalizado === "efectivo" || metodoPagoNormalizado === "bancos")) {
       if (!saldosDisponibles) {
         toast({
           title: "Error de validación",
@@ -404,7 +408,7 @@ const RegistroInversionForm = () => {
       }
     }
 
-    if (formData.metodo_pago === "efectivo") {
+    if (metodoPagoNormalizado === "efectivo") {
       if (montoPagado > saldosDisponibles.efectivo) {
         toast({
           title: "Saldo insuficiente en efectivo",
@@ -415,7 +419,7 @@ const RegistroInversionForm = () => {
       }
     }
 
-    if (formData.metodo_pago === "transferencia") {
+    if (metodoPagoNormalizado === "bancos") {
       if (montoPagado > saldosDisponibles.bancos) {
         toast({
           title: "Saldo insuficiente en bancos",
@@ -426,8 +430,8 @@ const RegistroInversionForm = () => {
       }
     }
 
-    if (formData.metodo_pago?.startsWith("tarjeta_credito_") && tarjetasCredito) {
-      const tarjetaId = formData.metodo_pago.replace("tarjeta_credito_", "");
+    if (metodoPagoNormalizado?.startsWith("tarjeta_credito_") && tarjetasCredito) {
+      const tarjetaId = metodoPagoNormalizado.replace("tarjeta_credito_", "");
       const validacion = validarLimiteCredito(tarjetaId, montoPagado, tarjetasCredito);
 
       if (!validacion.valido) {
@@ -439,12 +443,16 @@ const RegistroInversionForm = () => {
         return;
       }
 
-      setPendingSubmit({ formData, montoPagado, valorTotal });
+      setPendingSubmit({
+        formData: { ...formData, metodo_pago: metodoPagoNormalizado },
+        montoPagado,
+        valorTotal,
+      });
       setShowConfirmDialog(true);
       return;
     }
 
-    await submitInversion(formData, montoPagado, valorTotal);
+    await submitInversion({ ...formData, metodo_pago: metodoPagoNormalizado }, montoPagado, valorTotal);
   };
 
   return (
@@ -801,13 +809,15 @@ const RegistroInversionForm = () => {
                               <SelectItem value="efectivo">
                                 Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
                               </SelectItem>
-                              <SelectItem value="transferencia">
-                                Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                              <SelectItem value="bancos">
+                                Bancos / Transferencia - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
                               </SelectItem>
                               {tarjetasCredito && tarjetasCredito.length > 0
                                 ? tarjetasCredito.map((tarjeta) => (
                                     <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                                      {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                                      {tarjeta.nombre}
+                                      {tarjeta.institucion_financiera ? ` - ${tarjeta.institucion_financiera}` : ""}
+                                      {` - Disponible: $${tarjeta.limite_disponible.toFixed(2)}`}
                                     </SelectItem>
                                   ))
                                 : null}
@@ -855,13 +865,15 @@ const RegistroInversionForm = () => {
                                   <SelectItem value="efectivo">
                                     Efectivo - Disponible: ${saldosDisponibles?.efectivo.toFixed(2) || "0.00"}
                                   </SelectItem>
-                                  <SelectItem value="transferencia">
-                                    Bancos - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
+                                  <SelectItem value="bancos">
+                                    Bancos / Transferencia - Disponible: ${saldosDisponibles?.bancos.toFixed(2) || "0.00"}
                                   </SelectItem>
                                   {tarjetasCredito && tarjetasCredito.length > 0
                                     ? tarjetasCredito.map((tarjeta) => (
                                         <SelectItem key={tarjeta.id} value={`tarjeta_credito_${tarjeta.id}`}>
-                                          {tarjeta.nombre} - Disponible: ${tarjeta.limite_disponible.toFixed(2)}
+                                          {tarjeta.nombre}
+                                          {tarjeta.institucion_financiera ? ` - ${tarjeta.institucion_financiera}` : ""}
+                                          {` - Disponible: $${tarjeta.limite_disponible.toFixed(2)}`}
                                         </SelectItem>
                                       ))
                                     : null}
@@ -1383,6 +1395,7 @@ const RegistroInversionForm = () => {
                       <div className="my-4 space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-left">
                         <p>
                           <strong>Tarjeta:</strong> {tarjeta.nombre}
+                          {tarjeta.institucion_financiera ? ` - ${tarjeta.institucion_financiera}` : ""}
                         </p>
                         <p>
                           <strong>Límite disponible actual:</strong> ${tarjeta.limite_disponible.toFixed(2)}
