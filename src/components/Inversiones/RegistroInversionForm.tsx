@@ -1317,7 +1317,7 @@ const RegistroInversionForm = () => {
             </CardHeader>
 
             <CardContent className="px-4 py-4">
-              <div className="overflow-auto max-h-[calc(100vh-22rem)] pr-1">
+              <div className="pr-1">
                 <Table>
                   <TableHeader>
                     <TableRow>
