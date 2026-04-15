@@ -310,7 +310,7 @@ export default function BalanzaComprobacion() {
         naturaleza: getNaturaleza(codigo),
         debe: Number(raw?.debe_total || 0),
         haber: Number(raw?.haber_total || 0),
-        saldo: Number(raw?.saldo || 0),
+        saldo: Number(raw?.saldo_final ?? raw?.saldo ?? 0),
       };
     };
 

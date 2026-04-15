@@ -429,11 +429,19 @@ export const useAsientosBalanza = (startDate: Date, endDate: Date) => {
           const debeTotal = num(row?.debe_total ?? row?.debe ?? 0, 0);
           const haberTotal = num(row?.haber_total ?? row?.haber ?? 0, 0);
 
-          const meta = resolveCuentaMeta(code, String(row?.cuenta_nombre ?? ""));
+          // Si el backend ya mandó nombre y estado, úsalos directamente
+          const nombreFromBackend = String(row?.cuenta_nombre ?? "").trim();
+          const estadoFromBackend = row?.estado_financiero ?? null;
+
+          // Solo llamamos resolveCuentaMeta si nos faltan datos del backend
+          const meta = (!nombreFromBackend || !estadoFromBackend)
+            ? resolveCuentaMeta(code, nombreFromBackend)
+            : { nombre: nombreFromBackend, estado_financiero: estadoFromBackend };
+
           saldosFast[code] = {
             cuenta_codigo: code,
-            cuenta_nombre: meta.nombre || code,
-            estado_financiero: row?.estado_financiero ?? meta.estado_financiero ?? null,
+            cuenta_nombre: meta.nombre || nombreFromBackend || code,
+            estado_financiero: estadoFromBackend ?? meta.estado_financiero ?? null,
             saldo_inicial: saldoInicial,
             debe_total: debeTotal,
             haber_total: haberTotal,
