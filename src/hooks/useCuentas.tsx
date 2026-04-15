@@ -25,6 +25,58 @@ type UseCuentasResponse = {
 
 const normStr = (v: any) => String(v ?? "").trim();
 
+// ---------------------------------------------------------------------------
+// Inferencia de clasificación contable basada en prefijo del código
+// (Mirror de la lógica en backend/routes/contabilidad.js)
+// ---------------------------------------------------------------------------
+function inferEstadoFinanciero(codigo: string): string {
+  const d = codigo.charAt(0);
+  if (["1", "2", "3"].includes(d)) return "Balance General";
+  if (["4", "5", "6"].includes(d)) return "Estado de Resultados";
+  return "";
+}
+
+function inferGrupo(codigo: string): string {
+  const d = codigo.charAt(0);
+  const map: Record<string, string> = {
+    "1": "Activos",
+    "2": "Pasivos",
+    "3": "Capital",
+    "4": "Ingresos",
+    "5": "Egresos",
+    "6": "Egresos",
+  };
+  return map[d] ?? "";
+}
+
+function inferSubgrupo(codigo: string): string {
+  const p2 = codigo.substring(0, 2);
+  const d = codigo.charAt(0);
+
+  if (d === "1") {
+    if (p2 === "10" || p2 === "11") return "Activo Circulante";
+    if (p2 === "12") return "Activo No Circulante";
+    if (p2 === "13" || p2 === "14") return "Activo Diferido";
+    return "Activo Circulante"; // fallback para otros 1xxx
+  }
+  if (d === "2") {
+    if (p2 === "20") return "Pasivo Circulante";
+    return "Pasivo No Circulante"; // 21xx, 22xx, 23xx → largo plazo
+  }
+  if (d === "3") return "Capital Contable";
+  if (d === "4") {
+    if (p2 === "40") return "Ingresos por Ventas";
+    return "Otros Ingresos"; // 41xx → Productos Financieros, Otros
+  }
+  if (d === "5") {
+    if (p2 === "50") return "Costo de Ventas";
+    if (p2 === "52") return "Otros Gastos"; // Intereses, comisiones, pérdidas
+    return "Gastos de Operación"; // 51xx → Gastos de venta/admin
+  }
+  if (d === "6") return "Impuestos";
+  return "";
+}
+
 const normalizeCuenta = (raw: any): Cuenta => {
   const codigo = normStr(
     raw?.codigo ??
@@ -55,9 +107,9 @@ const normalizeCuenta = (raw: any): Cuenta => {
   return {
     codigo,
     nombre,
-    estado_financiero: estado_financiero || "Sin estado",
-    grupo: grupo || "Sin grupo",
-    subgrupo: subgrupo || "Sin subgrupo",
+    estado_financiero: estado_financiero || inferEstadoFinanciero(codigo) || "Sin estado",
+    grupo: grupo || inferGrupo(codigo) || "Sin grupo",
+    subgrupo: subgrupo || inferSubgrupo(codigo) || "Sin subgrupo",
   };
 };
 
