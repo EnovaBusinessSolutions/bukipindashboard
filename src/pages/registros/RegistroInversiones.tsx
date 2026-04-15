@@ -11,6 +11,8 @@ import AnalyticaInversiones from "@/components/Inversiones/AnalyticaInversiones"
 
 const RegistroInversiones = () => {
   const { tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
+  const tabPanelClassName =
+    "mt-6 min-h-0 flex-1 overflow-hidden data-[state=active]:flex data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:flex-col";
 
   return (
     <div className="h-full min-h-0 overflow-hidden flex flex-col">
@@ -32,7 +34,7 @@ const RegistroInversiones = () => {
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden p-6">
-        <Tabs defaultValue="registro" className="flex h-full min-h-0 flex-col">
+        <Tabs defaultValue="registro" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           <TabsList className="grid w-full shrink-0 grid-cols-5">
             <TabsTrigger value="registro">Registro</TabsTrigger>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
@@ -41,24 +43,34 @@ const RegistroInversiones = () => {
             <TabsTrigger value="analitica">Analítica</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="registro" className="mt-6 flex-1 min-h-0 overflow-y-auto pr-1">
-            <RegistroInversionForm />
+          <TabsContent value="registro" className={tabPanelClassName}>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <RegistroInversionForm />
+            </div>
           </TabsContent>
 
-          <TabsContent value="resumen" className="mt-6 flex-1 min-h-0 overflow-y-auto pr-1">
-            <ResumenInversiones />
+          <TabsContent value="resumen" className={tabPanelClassName}>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <ResumenInversiones />
+            </div>
           </TabsContent>
 
-          <TabsContent value="depreciaciones" className="mt-6 flex-1 min-h-0 overflow-y-auto pr-1">
-            <ResumenDepreciaciones />
+          <TabsContent value="depreciaciones" className={tabPanelClassName}>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <ResumenDepreciaciones />
+            </div>
           </TabsContent>
 
-          <TabsContent value="baja" className="mt-6 flex-1 min-h-0 overflow-y-auto pr-1">
-            <BajaActivos />
+          <TabsContent value="baja" className={tabPanelClassName}>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <BajaActivos />
+            </div>
           </TabsContent>
 
-          <TabsContent value="analitica" className="mt-6 flex-1 min-h-0 overflow-y-auto pr-1">
-            <AnalyticaInversiones />
+          <TabsContent value="analitica" className={tabPanelClassName}>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <AnalyticaInversiones />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
