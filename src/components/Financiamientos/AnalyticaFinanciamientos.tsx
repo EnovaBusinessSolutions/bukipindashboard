@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ResponsiveContainer,
   CartesianGrid,
@@ -19,6 +21,7 @@ import {
   Line,
   AreaChart,
   Area,
+  LabelList,
 } from "recharts";
 import {
   Activity,
@@ -30,9 +33,12 @@ import {
   TrendingDown,
   TrendingUp,
   Wallet,
+  Sparkles,
+  Users,
+  ArrowUpRight,
 } from "lucide-react";
 
-import { useFinanciamientos } from "@/hooks/useFinanciamientos";
+import { useFinanciamientos, type DireccionFinanciamiento } from "@/hooks/useFinanciamientos";
 import { useInstitucionesFinancieras } from "@/hooks/useInstitucionesFinancieras";
 
 type PeriodoAmortizacion = "mensual" | "anual";
@@ -204,8 +210,414 @@ const formatMoneyFull = (valor: number): string =>
     maximumFractionDigits: 2,
   })}`;
 
-const AnalyticaFinanciamientos = () => {
-  const { financiamientos, transacciones, resumen, isLoading } = useFinanciamientos();
+const formatCompactCurrencyTick = (valor: number): string => {
+  if (Math.abs(valor) >= 1_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(valor) >= 1_000) return `${(valor / 1_000).toFixed(1)}K`;
+  return Number(valor || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+};
+
+const PremiumKpiCard = ({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  accent = "from-emerald-500/20 via-white to-white",
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: React.ElementType;
+  accent?: string;
+}) => (
+  <Card className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
+    <CardContent className="relative p-0">
+      <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-br ${accent}`} />
+      <div className="relative flex items-start justify-between px-5 pb-5 pt-6">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</p>
+          <p className="text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+          <p className="text-sm text-slate-500">{subtitle}</p>
+        </div>
+        <div className="rounded-2xl border border-white/60 bg-white/90 p-3 shadow-sm backdrop-blur">
+          <Icon className="h-5 w-5 text-slate-700" />
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
+
+const TotalLabel = (props: any) => {
+  const { x = 0, y = 0, width = 0, value } = props;
+  return (
+    <text
+      x={Number(x) + Number(width) + 10}
+      y={Number(y) + 14}
+      fill="#0f172a"
+      fontSize={12}
+      fontWeight={700}
+    >
+      {formatMoneyFull(Number(value || 0))}
+    </text>
+  );
+};
+
+const DebtorTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+      <p className="text-sm font-semibold text-slate-950">{row.name}</p>
+      <div className="mt-3 space-y-1 text-sm">
+        <div className="flex justify-between gap-5">
+          <span className="text-slate-500">Capital</span>
+          <span className="font-semibold text-slate-900">{formatMoneyFull(row.capital)}</span>
+        </div>
+        <div className="flex justify-between gap-5">
+          <span className="text-slate-500">Intereses</span>
+          <span className="font-semibold text-slate-900">{formatMoneyFull(row.interests)}</span>
+        </div>
+        <div className="flex justify-between gap-5 border-t border-slate-100 pt-2">
+          <span className="text-slate-500">Total</span>
+          <span className="font-semibold text-slate-950">{formatMoneyFull(row.total)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RealizadoAnalyticsView = () => {
+  const { financiamientos, transacciones, isLoading } = useFinanciamientos("realizado");
+  const [otrosOpen, setOtrosOpen] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const analytics = useMemo(() => {
+    const activeFinancings = (financiamientos || []).filter(
+      (f: any) => String(f?.estatus || f?.estado || "").toLowerCase() === "activo"
+    );
+
+    const debtorsMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        capital: number;
+        interests: number;
+        total: number;
+        loans: number;
+      }
+    >();
+
+    activeFinancings.forEach((f: any) => {
+      const debtorId = String(f?.deudorId || f?.deudor_id || f?.deudor_nombre || f?.nombre || "");
+      const name = String(f?.deudorNombre || f?.deudor_nombre || f?.nombre || "Sin deudor");
+      const capital = toNum(f?.saldo_capital_actual ?? f?.saldoCapitalActual, 0);
+      const interests = toNum(f?.saldo_intereses_actual ?? f?.saldoInteresesActual, 0);
+      const current = debtorsMap.get(debtorId) || {
+        id: debtorId,
+        name,
+        capital: 0,
+        interests: 0,
+        total: 0,
+        loans: 0,
+      };
+      current.capital += capital;
+      current.interests += interests;
+      current.total += capital + interests;
+      current.loans += 1;
+      debtorsMap.set(debtorId, current);
+    });
+
+    const ranked = Array.from(debtorsMap.values())
+      .filter((row) => row.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    const topTen = ranked.slice(0, 10);
+    const remaining = ranked.slice(10);
+    const othersRow =
+      remaining.length > 0
+        ? {
+            id: "otros",
+            name: "Otros",
+            capital: remaining.reduce((sum, row) => sum + row.capital, 0),
+            interests: remaining.reduce((sum, row) => sum + row.interests, 0),
+            total: remaining.reduce((sum, row) => sum + row.total, 0),
+            loans: remaining.reduce((sum, row) => sum + row.loans, 0),
+          }
+        : null;
+
+    const chartRows = [...topTen, ...(othersRow ? [othersRow] : [])];
+
+    const totalPrestado = (financiamientos || []).reduce(
+      (sum: number, f: any) => sum + toNum(f?.total_dispuesto ?? f?.totalDispuesto, 0),
+      0
+    );
+    const totalCobradoCapital = (financiamientos || []).reduce(
+      (sum: number, f: any) => sum + toNum(f?.total_amortizado_capital ?? f?.totalAmortizadoCapital, 0),
+      0
+    );
+    const interesesGenerados = (financiamientos || []).reduce(
+      (sum: number, f: any) => sum + toNum(f?.total_intereses_cargados ?? f?.totalInteresesCargados, 0),
+      0
+    );
+    const interesesCobrados = (financiamientos || []).reduce(
+      (sum: number, f: any) => sum + toNum(f?.total_intereses_pagados ?? f?.totalInteresesPagados, 0),
+      0
+    );
+    const saldoTotalPorCobrar = (financiamientos || []).reduce(
+      (sum: number, f: any) => sum + toNum(f?.saldo_total_actual ?? f?.saldoTotalActual, 0),
+      0
+    );
+
+    return {
+      ranked,
+      topTen,
+      remaining,
+      chartRows,
+      totalPrestado,
+      totalCobradoCapital,
+      interesesGenerados,
+      interesesCobrados,
+      saldoTotalPorCobrar,
+      deudoresActivos: ranked.length,
+      latestMovements: [...(transacciones || [])]
+        .sort((a: any, b: any) => {
+          const ad = new Date(a?.fecha || a?.createdAt || a?.created_at || 0).getTime();
+          const bd = new Date(b?.fecha || b?.createdAt || b?.created_at || 0).getTime();
+          return bd - ad;
+        })
+        .slice(0, 5),
+    };
+  }, [financiamientos, transacciones]);
+
+  const totalPages = Math.max(1, Math.ceil(analytics.remaining.length / 25));
+  const currentRows = analytics.remaining.slice((page - 1) * 25, page * 25);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-[28px]" />
+        <Skeleton className="h-[420px] w-full rounded-[28px]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="overflow-hidden rounded-[32px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_25%),linear-gradient(135deg,#ffffff_35%,#f8fafc_100%)] shadow-[0_28px_80px_rgba(15,23,42,0.08)]">
+        <CardContent className="px-6 py-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                <Sparkles className="h-3.5 w-3.5" />
+                Analítica Premium
+              </div>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
+                Exposición por deudor en Préstamos Realizados
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Consolida capital e intereses por deudor, identifica concentración de riesgo y profundiza en el tramo largo del portafolio con una vista ejecutiva lista para comité.
+              </p>
+            </div>
+
+            <div className="rounded-[24px] border border-white/70 bg-white/90 px-5 py-4 shadow-sm backdrop-blur">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Top visible
+              </p>
+              <p className="mt-1 text-3xl font-semibold text-slate-950">
+                {Math.min(10, analytics.topTen.length)}
+              </p>
+              <p className="text-sm text-slate-500">
+                {analytics.remaining.length > 0
+                  ? `${analytics.remaining.length} deudores adicionales en "Otros"`
+                  : "Portafolio sin cola adicional"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <PremiumKpiCard title="Total prestado" value={formatMoneyFull(analytics.totalPrestado)} subtitle="Capital entregado acumulado" icon={Landmark} accent="from-emerald-500/20 via-white to-white" />
+        <PremiumKpiCard title="Total cobrado capital" value={formatMoneyFull(analytics.totalCobradoCapital)} subtitle="Cobranza aplicada a principal" icon={BadgeDollarSign} accent="from-sky-500/18 via-white to-white" />
+        <PremiumKpiCard title="Intereses generados" value={formatMoneyFull(analytics.interesesGenerados)} subtitle="Intereses reconocidos en cartera" icon={TrendingUp} accent="from-amber-500/20 via-white to-white" />
+        <PremiumKpiCard title="Intereses cobrados" value={formatMoneyFull(analytics.interesesCobrados)} subtitle="Intereses ya materializados" icon={ArrowUpRight} accent="from-violet-500/18 via-white to-white" />
+        <PremiumKpiCard title="Saldo total por cobrar" value={formatMoneyFull(analytics.saldoTotalPorCobrar)} subtitle="Exposición viva del portafolio" icon={Wallet} accent="from-rose-500/18 via-white to-white" />
+        <PremiumKpiCard title="Deudores activos" value={String(analytics.deudoresActivos)} subtitle="Deudores con saldo vigente" icon={Users} accent="from-cyan-500/18 via-white to-white" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+        <Card className="rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+          <CardHeader className="pb-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
+                  Ranking de deudores
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Barras horizontales por exposición total. Cada barra apila capital e intereses y muestra el total directamente.
+                </CardDescription>
+              </div>
+              {analytics.remaining.length > 0 ? (
+                <Button onClick={() => setOtrosOpen(true)} className="rounded-xl">
+                  Ver restantes
+                </Button>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {analytics.chartRows.length === 0 ? (
+              <EmptyState text="No hay deudores con saldo vigente para mostrar." />
+            ) : (
+              <div className="h-[520px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={analytics.chartRows}
+                    layout="vertical"
+                    margin={{ top: 10, right: 140, left: 10, bottom: 10 }}
+                    barCategoryGap={18}
+                  >
+                    <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+                    <XAxis type="number" tickFormatter={(value) => formatCompactCurrencyTick(Number(value || 0))} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" width={140} axisLine={false} tickLine={false} tick={{ fill: "#334155", fontSize: 12 }} />
+                    <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<DebtorTooltip />} />
+                    <Bar dataKey="capital" stackId="exposure" fill="#0f766e" radius={[0, 0, 0, 0]} name="Capital" />
+                    <Bar dataKey="interests" stackId="exposure" fill="#f59e0b" radius={[0, 8, 8, 0]} name="Intereses">
+                      <LabelList dataKey="total" content={<TotalLabel />} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+          <CardHeader>
+            <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
+              Lectura ejecutiva
+            </CardTitle>
+            <CardDescription>
+              Resumen rápido del perfil de concentración y de la actividad reciente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-[24px] border bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Mayor deudor</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950">
+                {analytics.ranked[0]?.name || "N/D"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {analytics.ranked[0] ? formatMoneyFull(analytics.ranked[0].total) : "Sin exposición activa"}
+              </p>
+            </div>
+
+            <div className="rounded-[24px] border bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Concentración top 3</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950">
+                {analytics.ranked.length
+                  ? `${(
+                      (analytics.ranked.slice(0, 3).reduce((sum, row) => sum + row.total, 0) /
+                        Math.max(analytics.saldoTotalPorCobrar, 1)) *
+                      100
+                    ).toFixed(1)}%`
+                  : "0.0%"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Participación de los 3 deudores con mayor exposición.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Últimos movimientos</p>
+              {analytics.latestMovements.length === 0 ? (
+                <div className="rounded-2xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  No hay movimientos recientes.
+                </div>
+              ) : (
+                analytics.latestMovements.map((tx: any) => (
+                  <div key={tx.id || tx._id} className="rounded-2xl border bg-white px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{tx.descripcion || "Movimiento"}</p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(tx.fecha || tx.createdAt || tx.created_at || Date.now()).toLocaleDateString("es-MX")}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-slate-950">
+                        {formatMoneyFull(Number(tx.monto || 0))}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Dialog open={otrosOpen} onOpenChange={setOtrosOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Deudores fuera del top 10</DialogTitle>
+            <DialogDescription>
+              Listado paginado de los deudores agrupados dentro de “Otros”.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border">
+              <div className="grid grid-cols-[1.5fr_0.6fr_0.6fr_0.7fr] gap-3 border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <span>Deudor</span>
+                <span className="text-right">Capital</span>
+                <span className="text-right">Intereses</span>
+                <span className="text-right">Total</span>
+              </div>
+              <div className="divide-y">
+                {currentRows.map((row) => (
+                  <div key={row.id} className="grid grid-cols-[1.5fr_0.6fr_0.6fr_0.7fr] gap-3 px-4 py-3 text-sm">
+                    <span className="font-medium text-slate-900">{row.name}</span>
+                    <span className="text-right text-slate-600">{formatMoneyFull(row.capital)}</span>
+                    <span className="text-right text-slate-600">{formatMoneyFull(row.interests)}</span>
+                    <span className="text-right font-semibold text-slate-950">{formatMoneyFull(row.total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500">
+                Página {page} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  Anterior
+                </Button>
+                <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+const AnalyticaFinanciamientos = ({
+  direccion = "recibido",
+}: {
+  direccion?: DireccionFinanciamiento;
+}) => {
+  if (direccion === "realizado") {
+    return <RealizadoAnalyticsView />;
+  }
+
+  const { financiamientos, transacciones, resumen, isLoading } = useFinanciamientos(direccion);
   const { instituciones } = useInstitucionesFinancieras();
 
   const [periodoAmortizacion, setPeriodoAmortizacion] = useState<PeriodoAmortizacion>("mensual");

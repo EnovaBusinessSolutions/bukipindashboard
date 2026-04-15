@@ -212,7 +212,6 @@ const RegistroFinanciamientos = () => {
               onClick={() => {
                 setDireccion("realizado");
                 setTipoRegistro("");
-                if (tabActiva === "analitica") setTabActiva("registro");
               }}
               className={`rounded-2xl border p-5 text-left shadow-sm transition-all ${modoRealizado ? "border-emerald-700 bg-emerald-700 text-white" : "bg-white hover:border-emerald-300"}`}
             >
@@ -227,7 +226,7 @@ const RegistroFinanciamientos = () => {
 
           <Tabs value={tabActiva} onValueChange={handleTabChange} className="w-full">
             <div className="rounded-2xl border bg-white p-2 shadow-sm">
-              <TabsList className={`grid h-auto w-full grid-cols-2 gap-2 bg-transparent ${modoRealizado ? "md:grid-cols-5" : "md:grid-cols-6"}`}>
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent md:grid-cols-6">
                 <TabsTrigger value="registro" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
                   <CreditCard className="h-4 w-4" />
                   <span>Registro</span>
@@ -248,12 +247,10 @@ const RegistroFinanciamientos = () => {
                   <BookOpen className="h-4 w-4" />
                   <span>Catálogo</span>
                 </TabsTrigger>
-                {!modoRealizado && (
-                  <TabsTrigger value="analitica" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
-                    <BarChart3 className="h-4 w-4" />
-                    <span>Analítica</span>
-                  </TabsTrigger>
-                )}
+                <TabsTrigger value="analitica" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Analítica</span>
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -327,11 +324,9 @@ const RegistroFinanciamientos = () => {
               {modoRealizado ? <CatalogoDeudores /> : <CatalogoAcreedores />}
             </TabsContent>
 
-            {!modoRealizado && (
-              <TabsContent value="analitica" className="mt-6">
-                <AnalyticaFinanciamientos />
-              </TabsContent>
-            )}
+            <TabsContent value="analitica" className="mt-6">
+              <AnalyticaFinanciamientos direccion={direccion} />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
