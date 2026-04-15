@@ -1,23 +1,8 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useInversiones } from "@/hooks/useInversiones";
 import { useAsientosDepreciacion } from "@/hooks/useAsientosDepreciacion";
-import { useGenerarDepreciaciones } from "@/hooks/useGenerarDepreciaciones";
 import { useDepreciacionesAtrasadas } from "@/hooks/useDepreciacionesAtrasadas";
 import {
   Loader2,
@@ -26,13 +11,10 @@ import {
   DollarSign,
   ChevronDown,
   FileText,
-  Play,
-  AlertTriangle,
   Landmark,
   BarChart3,
   Clock3,
   ShieldAlert,
-  Calculator,
   Layers3,
   ArrowRight,
   Image as ImageIcon,
@@ -152,12 +134,9 @@ const SectionHeader = ({
 const ResumenDepreciaciones = () => {
   const { inversiones, isLoading } = useInversiones();
   const [expandedInversiones, setExpandedInversiones] = useState<string[]>([]);
-  const { mutate: generarDepreciaciones, isPending } = useGenerarDepreciaciones();
   const { depreciacionesAtrasadas, tieneAtrasadas, totalAtrasadas } = useDepreciacionesAtrasadas();
 
   const fechaActual = new Date();
-  const [mesSeleccionado, setMesSeleccionado] = useState<string>((fechaActual.getMonth() + 1).toString());
-  const [anoSeleccionado, setAnoSeleccionado] = useState<string>(fechaActual.getFullYear().toString());
 
   const inversionesActivas = inversiones?.filter((inv) => inv.estado === "activo") || [];
 
@@ -171,35 +150,18 @@ const ResumenDepreciaciones = () => {
   );
   const totalValorActivos = inversionesActivas.reduce((sum, inv) => sum + inv.valor_total, 0);
 
+  // Indicadores de próxima depreciación
+  const finDelMesActual = lastDayOfMonth(fechaActual);
+  const diasParaProxDepreciacion = differenceInDays(finDelMesActual, fechaActual);
+  const depreciacionEsperadaEsteMes = inversionesActivas
+    .filter((inv) => (inv.valor_depreciacion_mensual || 0) > 0)
+    .reduce((sum, inv) => sum + (inv.valor_depreciacion_mensual || 0), 0);
+
   const toggleExpanded = (inversionId: string) => {
     setExpandedInversiones((prev) =>
       prev.includes(inversionId) ? prev.filter((id) => id !== inversionId) : [...prev, inversionId]
     );
   };
-
-  const handleGenerarDepreciaciones = () => {
-    generarDepreciaciones({
-      mes: parseInt(mesSeleccionado),
-      ano: parseInt(anoSeleccionado),
-      origen: "manual",
-    });
-  };
-
-  const mesSeleccionadoNum = parseInt(mesSeleccionado);
-  const anoSeleccionadoNum = parseInt(anoSeleccionado);
-  const fechaSeleccionada = new Date(anoSeleccionadoNum, mesSeleccionadoNum - 1, 1);
-  const primerDiaMesActual = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
-  const esMesPasado = fechaSeleccionada < primerDiaMesActual;
-
-  const meses = Array.from({ length: 12 }, (_, i) => ({
-    value: (i + 1).toString(),
-    label: new Date(2000, i).toLocaleString("es-MX", { month: "long" }),
-  }));
-
-  const anos = Array.from({ length: 3 }, (_, i) => {
-    const ano = fechaActual.getFullYear() + i;
-    return { value: ano.toString(), label: ano.toString() };
-  });
 
   const AsientosDepreciacionSection = ({ inversionId }: { inversionId: string }) => {
     const { data: asientos, isLoading } = useAsientosDepreciacion(inversionId);
@@ -531,192 +493,7 @@ const ResumenDepreciaciones = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(11,58,110,0.08)]">
-        <CardHeader className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.08),rgba(255,255,255,1),rgba(11,58,110,0.03))] px-6 py-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-2">
-              <div
-                className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
-                style={{
-                  borderColor: "rgba(11,58,110,0.12)",
-                  backgroundColor: "rgba(11,58,110,0.06)",
-                  color: BUKIPIN_BLUE,
-                }}
-              >
-                <Calculator className="h-3.5 w-3.5" />
-                Control manual de depreciaciones
-              </div>
-
-              <div>
-                <CardTitle className="text-2xl font-bold tracking-tight text-slate-950">
-                  Generar Depreciaciones Manualmente
-                </CardTitle>
-                <CardDescription className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                  Genera asientos contables de depreciación para el período seleccionado.
-                  Esta herramienta debe utilizarse como apoyo operativo o corrección puntual.
-                </CardDescription>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Activos elegibles
-              </p>
-              <p className="mt-2 text-2xl font-bold text-slate-900">{inversionesActivas.length}</p>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-5 px-6 py-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Mes</label>
-              <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
-                <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white shadow-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {meses.map((mes) => {
-                    const esMesActual =
-                      mes.value === (fechaActual.getMonth() + 1).toString() &&
-                      anoSeleccionado === fechaActual.getFullYear().toString();
-
-                    return (
-                      <SelectItem key={mes.value} value={mes.value}>
-                        <div className="flex items-center gap-2 capitalize">
-                          {mes.label}
-                          {esMesActual && (
-                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-                              Actual
-                            </Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Año</label>
-              <Select value={anoSeleccionado} onValueChange={setAnoSeleccionado}>
-                <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white shadow-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {anos.map((ano) => (
-                    <SelectItem key={ano.value} value={ano.value}>
-                      {ano.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  disabled={isPending || inversionesActivas.length === 0 || esMesPasado}
-                  size="lg"
-                  className="h-12 rounded-2xl px-6 text-white shadow-lg"
-                  style={{ backgroundColor: BUKIPIN_BLUE }}
-                >
-                  <Play className="mr-2 h-4 w-4" />
-                  Generar manualmente
-                </Button>
-              </AlertDialogTrigger>
-
-              <AlertDialogContent className="rounded-[28px] border-slate-200">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-amber-500" />
-                    Generación manual de depreciaciones
-                  </AlertDialogTitle>
-
-                  <AlertDialogDescription className="space-y-3 text-left">
-                    <p className="font-medium text-foreground">
-                      Las depreciaciones se generan automáticamente entre los días 28 y 31 de cada mes.
-                    </p>
-
-                    <p>
-                      <strong>Utiliza esta función solo si:</strong>
-                    </p>
-
-                    <ul className="list-inside list-disc space-y-1 pl-2 text-sm">
-                      <li>Necesitas registrar depreciaciones de meses anteriores</li>
-                      <li>El proceso automático falló por algún motivo</li>
-                      <li>Necesitas proyectar depreciaciones futuras</li>
-                    </ul>
-
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                      <p className="text-sm text-slate-600">
-                        Período seleccionado:{" "}
-                        <strong>
-                          {new Date(
-                            parseInt(anoSeleccionado),
-                            parseInt(mesSeleccionado) - 1
-                          ).toLocaleString("es-MX", { month: "long", year: "numeric" })}
-                        </strong>
-                      </p>
-                      <p className="mt-2 text-sm text-slate-600">
-                        Fecha de registro:{" "}
-                        <strong>
-                          Hoy ({format(new Date(), "d 'de' MMMM, yyyy", { locale: es })})
-                        </strong>
-                      </p>
-                    </div>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleGenerarDepreciaciones}
-                    disabled={isPending}
-                    className="gap-2 rounded-2xl text-white"
-                    style={{ backgroundColor: BUKIPIN_BLUE }}
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Generando...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4" />
-                        Generar ahora
-                      </>
-                    )}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-
-          {esMesPasado && (
-            <PremiumNotice
-              destructive
-              icon={<AlertTriangle className="h-5 w-5" />}
-              title="Período no permitido"
-              description={
-                <>
-                  No puedes generar depreciaciones de meses pasados. Solo puedes generar desde el mes
-                  actual en adelante.
-                </>
-              }
-            />
-          )}
-
-          {inversionesActivas.length === 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 text-sm text-slate-500">
-              No hay activos activos para depreciar.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryMetricCard
           title="Depreciación anual total"
           value={formatCurrency(totalDepreciacionAnual)}
@@ -736,6 +513,20 @@ const ResumenDepreciaciones = () => {
           value={formatCurrency(totalValorActivos)}
           subtitle="Valor original acumulado"
           icon={<DollarSign className="h-5 w-5" />}
+        />
+
+        <SummaryMetricCard
+          title="Días para próxima depreciación"
+          value={diasParaProxDepreciacion === 0 ? "Hoy" : `${diasParaProxDepreciacion} días`}
+          subtitle={`Último día del mes: ${format(finDelMesActual, "dd MMM yyyy", { locale: es })}`}
+          icon={<Clock3 className="h-5 w-5" />}
+        />
+
+        <SummaryMetricCard
+          title="Depreciación esperada este mes"
+          value={formatCurrency(depreciacionEsperadaEsteMes)}
+          subtitle={`${inversionesActivas.filter((i) => (i.valor_depreciacion_mensual || 0) > 0).length} activo(s) elegible(s)`}
+          icon={<BarChart3 className="h-5 w-5" />}
         />
       </div>
 
@@ -775,8 +566,7 @@ const ResumenDepreciaciones = () => {
               )}
 
               <p className="pt-1 text-sm text-slate-600">
-                Usa el botón <strong>"Generar manualmente"</strong> para registrar los períodos
-                pendientes.
+                Las depreciaciones pendientes se registrarán automáticamente al final de cada mes.
               </p>
             </div>
           }
