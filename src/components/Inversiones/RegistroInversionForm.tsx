@@ -456,12 +456,12 @@ const RegistroInversionForm = () => {
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12">
-      <div className="min-w-0 xl:col-span-8 2xl:col-span-9 space-y-6">
-        <Card className="min-w-0 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(11,58,110,0.10)]">
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <div className="xl:col-span-8 2xl:col-span-9 space-y-6">
+        <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(11,58,110,0.10)]">
           <CardHeader className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(11,58,110,0.10),rgba(255,255,255,1),rgba(11,58,110,0.04))] px-6 py-6 md:px-8">
-            <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-3">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-3">
                 <div
                   className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
                   style={{
@@ -485,7 +485,7 @@ const RegistroInversionForm = () => {
                 </div>
               </div>
 
-              <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 lg:w-auto lg:flex-1 lg:max-w-[520px]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-full lg:min-w-[420px] lg:max-w-[520px]">
                 <StatMiniCard
                   label="Cuenta contable"
                   value={formData.cuenta_codigo || "Pendiente"}
@@ -507,8 +507,8 @@ const RegistroInversionForm = () => {
             </div>
           </CardHeader>
 
-          <CardContent className="min-w-0 px-4 py-5 md:px-6 md:py-6 lg:px-8">
-            <form onSubmit={handleSubmit} className="min-w-0 space-y-6">
+          <CardContent className="px-4 py-5 md:px-6 md:py-6 lg:px-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <SectionShell
                 icon={<Package className="h-5 w-5" />}
                 title="Categoría del activo"
@@ -1246,7 +1246,7 @@ const RegistroInversionForm = () => {
         </Card>
       </div>
 
-      <div className="min-w-0 xl:col-span-4 2xl:col-span-3 space-y-6">
+      <div className="xl:col-span-4 2xl:col-span-3 space-y-6">
         <div className="xl:sticky xl:top-6 space-y-6">
           {categoriaActivo && formData.valor_total && formData.tipo_pago ? (
             <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(11,58,110,0.08)]">
