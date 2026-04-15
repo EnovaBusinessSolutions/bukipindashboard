@@ -232,17 +232,18 @@ const PremiumKpiCard = ({
   icon: React.ElementType;
   accent?: string;
 }) => (
-  <Card className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
+  <Card className="group overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_20px_55px_rgba(15,23,42,0.07)] transition-all hover:-translate-y-0.5 hover:shadow-[0_28px_70px_rgba(15,23,42,0.1)]">
     <CardContent className="relative p-0">
-      <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-br ${accent}`} />
+      <div className={`absolute inset-x-0 top-0 h-28 bg-gradient-to-br ${accent}`} />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent opacity-80" />
       <div className="relative flex items-start justify-between px-5 pb-5 pt-6">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</p>
-          <p className="text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
-          <p className="text-sm text-slate-500">{subtitle}</p>
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{title}</p>
+          <p className="text-[2rem] font-semibold tracking-[-0.03em] text-slate-950">{value}</p>
+          <p className="max-w-[20rem] text-sm leading-5 text-slate-500">{subtitle}</p>
         </div>
-        <div className="rounded-2xl border border-white/60 bg-white/90 p-3 shadow-sm backdrop-blur">
-          <Icon className="h-5 w-5 text-slate-700" />
+        <div className="rounded-[20px] border border-white/70 bg-white/95 p-3.5 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+          <Icon className="h-5 w-5 text-slate-700 transition-transform group-hover:scale-105" />
         </div>
       </div>
     </CardContent>
@@ -256,7 +257,7 @@ const TotalLabel = (props: any) => {
       x={Number(x) + Number(width) + 10}
       y={Number(y) + 14}
       fill="#0f172a"
-      fontSize={12}
+      fontSize={11}
       fontWeight={700}
     >
       {formatMoneyFull(Number(value || 0))}
@@ -269,9 +270,9 @@ const DebtorTooltip = ({ active, payload }: any) => {
   const row = payload[0]?.payload;
   if (!row) return null;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+    <div className="rounded-[22px] border border-slate-200 bg-white/98 p-4 shadow-[0_22px_50px_rgba(15,23,42,0.14)] backdrop-blur">
       <p className="text-sm font-semibold text-slate-950">{row.name}</p>
-      <div className="mt-3 space-y-1 text-sm">
+      <div className="mt-3 space-y-1.5 text-sm">
         <div className="flex justify-between gap-5">
           <span className="text-slate-500">Capital</span>
           <span className="font-semibold text-slate-900">{formatMoneyFull(row.capital)}</span>
@@ -280,7 +281,7 @@ const DebtorTooltip = ({ active, payload }: any) => {
           <span className="text-slate-500">Intereses</span>
           <span className="font-semibold text-slate-900">{formatMoneyFull(row.interests)}</span>
         </div>
-        <div className="flex justify-between gap-5 border-t border-slate-100 pt-2">
+        <div className="flex justify-between gap-5 border-t border-slate-100 pt-2.5">
           <span className="text-slate-500">Total</span>
           <span className="font-semibold text-slate-950">{formatMoneyFull(row.total)}</span>
         </div>
@@ -395,6 +396,13 @@ const RealizadoAnalyticsView = () => {
 
   const totalPages = Math.max(1, Math.ceil(analytics.remaining.length / 25));
   const currentRows = analytics.remaining.slice((page - 1) * 25, page * 25);
+  const chartHeight =
+    analytics.chartRows.length <= 1 ? 320 : analytics.chartRows.length <= 3 ? 380 : 520;
+  const topThreeShare = analytics.ranked.length
+    ? ((analytics.ranked.slice(0, 3).reduce((sum, row) => sum + row.total, 0) /
+        Math.max(analytics.saldoTotalPorCobrar, 1)) *
+        100)
+    : 0;
 
   if (isLoading) {
     return (
@@ -407,34 +415,82 @@ const RealizadoAnalyticsView = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden rounded-[32px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_25%),linear-gradient(135deg,#ffffff_35%,#f8fafc_100%)] shadow-[0_28px_80px_rgba(15,23,42,0.08)]">
-        <CardContent className="px-6 py-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <Card className="overflow-hidden rounded-[34px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_24%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.14),transparent_22%),linear-gradient(135deg,#ffffff_20%,#f8fafc_62%,#eef6ff_100%)] shadow-[0_30px_90px_rgba(15,23,42,0.08)]">
+        <CardContent className="relative px-6 py-7 md:px-7 md:py-8">
+          <div className="absolute -right-16 top-0 h-48 w-48 rounded-full bg-emerald-200/20 blur-3xl" />
+          <div className="absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-sky-200/20 blur-3xl" />
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-white/80 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700 shadow-sm backdrop-blur">
                 <Sparkles className="h-3.5 w-3.5" />
                 Analítica Premium
               </div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
+              <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-slate-950 md:text-[2.25rem]">
                 Exposición por deudor en Préstamos Realizados
               </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-[15px]">
                 Consolida capital e intereses por deudor, identifica concentración de riesgo y profundiza en el tramo largo del portafolio con una vista ejecutiva lista para comité.
               </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <div className="rounded-[18px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Exposición viva
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                    {formatMoneyFull(analytics.saldoTotalPorCobrar)}
+                  </p>
+                </div>
+                <div className="rounded-[18px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Concentración top 3
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                    {topThreeShare.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/70 bg-white/90 px-5 py-4 shadow-sm backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Top visible
-              </p>
-              <p className="mt-1 text-3xl font-semibold text-slate-950">
-                {Math.min(10, analytics.topTen.length)}
-              </p>
-              <p className="text-sm text-slate-500">
-                {analytics.remaining.length > 0
-                  ? `${analytics.remaining.length} deudores adicionales en "Otros"`
-                  : "Portafolio sin cola adicional"}
-              </p>
+            <div className="grid gap-3 sm:min-w-[310px]">
+              <div className="rounded-[26px] border border-white/75 bg-white/88 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Top visible
+                </p>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-4xl font-semibold tracking-[-0.05em] text-slate-950">
+                      {Math.min(10, analytics.topTen.length)}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {analytics.remaining.length > 0
+                        ? `${analytics.remaining.length} deudores adicionales en "Otros"`
+                        : "Portafolio sin cola adicional"}
+                    </p>
+                  </div>
+                  <div className="rounded-[18px] bg-emerald-50 px-3 py-2 text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                      Cartera viva
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-emerald-950">
+                      {formatCompactCurrencyTick(analytics.saldoTotalPorCobrar)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[26px] border border-slate-900/90 bg-slate-950 px-5 py-4 text-white shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+                  Lectura rápida
+                </p>
+                <p className="mt-3 text-lg font-semibold tracking-[-0.03em] text-white">
+                  {analytics.ranked[0]?.name || "Sin deudores con saldo vigente"}
+                </p>
+                <p className="mt-1 text-sm text-slate-300">
+                  {analytics.ranked[0]
+                    ? `${formatMoneyFull(analytics.ranked[0].total)} en exposición total`
+                    : "Aún no hay exposición activa para destacar"}
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -450,8 +506,9 @@ const RealizadoAnalyticsView = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-        <Card className="rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
-          <CardHeader className="pb-2">
+        <Card className="overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.09)]">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,rgba(15,118,110,0.85),rgba(245,158,11,0.85))]" />
+          <CardHeader className="space-y-4 pb-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
@@ -467,36 +524,85 @@ const RealizadoAnalyticsView = () => {
                 </Button>
               ) : null}
             </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Deudores visibles
+                </p>
+                <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                  {analytics.chartRows.length}
+                </p>
+              </div>
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Saldo del ranking
+                </p>
+                <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                  {formatCompactCurrencyTick(
+                    analytics.chartRows.reduce((sum, row) => sum + row.total, 0)
+                  )}
+                </p>
+              </div>
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Deudor lÃ­der
+                </p>
+                <p className="mt-1 truncate text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                  {analytics.ranked[0]?.name || "N/D"}
+                </p>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {analytics.chartRows.length === 0 ? (
               <EmptyState text="No hay deudores con saldo vigente para mostrar." />
             ) : (
-              <div className="h-[520px]">
+              <div className="rounded-[26px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 shadow-inner sm:p-5">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-slate-900 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
+                    Capital + Intereses
+                  </span>
+                  {analytics.chartRows.length <= 3 ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+                      Vista ampliada para baja densidad
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ height: chartHeight }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={analytics.chartRows}
                     layout="vertical"
-                    margin={{ top: 10, right: 140, left: 10, bottom: 10 }}
-                    barCategoryGap={18}
+                    margin={{
+                      top: analytics.chartRows.length <= 3 ? 22 : 12,
+                      right: analytics.chartRows.length <= 3 ? 170 : 140,
+                      left: analytics.chartRows.length <= 3 ? 24 : 10,
+                      bottom: analytics.chartRows.length <= 3 ? 18 : 10,
+                    }}
+                    barCategoryGap={analytics.chartRows.length <= 3 ? 28 : 18}
                   >
                     <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="3 3" />
                     <XAxis type="number" tickFormatter={(value) => formatCompactCurrencyTick(Number(value || 0))} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={140} axisLine={false} tickLine={false} tick={{ fill: "#334155", fontSize: 12 }} />
+                    <YAxis type="category" dataKey="name" width={analytics.chartRows.length <= 3 ? 170 : 140} axisLine={false} tickLine={false} tick={{ fill: "#334155", fontSize: analytics.chartRows.length <= 3 ? 13 : 12 }} />
                     <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<DebtorTooltip />} />
-                    <Bar dataKey="capital" stackId="exposure" fill="#0f766e" radius={[0, 0, 0, 0]} name="Capital" />
-                    <Bar dataKey="interests" stackId="exposure" fill="#f59e0b" radius={[0, 8, 8, 0]} name="Intereses">
+                    <Bar dataKey="capital" stackId="exposure" fill="#0f766e" radius={[0, 0, 0, 0]} name="Capital" maxBarSize={analytics.chartRows.length <= 3 ? 44 : 26} />
+                    <Bar dataKey="interests" stackId="exposure" fill="#f59e0b" radius={[0, 8, 8, 0]} name="Intereses" maxBarSize={analytics.chartRows.length <= 3 ? 44 : 26}>
                       <LabelList dataKey="total" content={<TotalLabel />} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
-          <CardHeader>
+        <Card className="overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.09)]">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,rgba(15,23,42,0.95),rgba(15,118,110,0.85))]" />
+          <CardHeader className="space-y-3">
+            <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+              Insight ejecutivo
+            </div>
             <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
               Lectura ejecutiva
             </CardTitle>
@@ -504,8 +610,8 @@ const RealizadoAnalyticsView = () => {
               Resumen rápido del perfil de concentración y de la actividad reciente.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-[24px] border bg-slate-50 p-4">
+          <CardContent className="space-y-4 pt-0">
+            <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Mayor deudor</p>
               <p className="mt-2 text-xl font-semibold text-slate-950">
                 {analytics.ranked[0]?.name || "N/D"}
@@ -515,16 +621,10 @@ const RealizadoAnalyticsView = () => {
               </p>
             </div>
 
-            <div className="rounded-[24px] border bg-slate-50 p-4">
+            <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Concentración top 3</p>
               <p className="mt-2 text-xl font-semibold text-slate-950">
-                {analytics.ranked.length
-                  ? `${(
-                      (analytics.ranked.slice(0, 3).reduce((sum, row) => sum + row.total, 0) /
-                        Math.max(analytics.saldoTotalPorCobrar, 1)) *
-                      100
-                    ).toFixed(1)}%`
-                  : "0.0%"}
+                {analytics.ranked.length ? `${topThreeShare.toFixed(1)}%` : "0.0%"}
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Participación de los 3 deudores con mayor exposición.
@@ -534,12 +634,12 @@ const RealizadoAnalyticsView = () => {
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Últimos movimientos</p>
               {analytics.latestMovements.length === 0 ? (
-                <div className="rounded-2xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   No hay movimientos recientes.
                 </div>
               ) : (
                 analytics.latestMovements.map((tx: any) => (
-                  <div key={tx.id || tx._id} className="rounded-2xl border bg-white px-4 py-3">
+                  <div key={tx.id || tx._id} className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] px-4 py-3 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-slate-900">{tx.descripcion || "Movimiento"}</p>
@@ -560,7 +660,7 @@ const RealizadoAnalyticsView = () => {
       </div>
 
       <Dialog open={otrosOpen} onOpenChange={setOtrosOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl rounded-[30px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.12)]">
           <DialogHeader>
             <DialogTitle>Deudores fuera del top 10</DialogTitle>
             <DialogDescription>
