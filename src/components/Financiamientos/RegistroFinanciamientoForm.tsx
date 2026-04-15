@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useFinanciamientos, type DireccionFinanciamiento } from "@/hooks/useFinanciamientos";
+import { useDeudoresFinancieros } from "@/hooks/useDeudoresFinancieros";
 
 const RegistroFinanciamientoForm = ({
   direccion = "recibido",
@@ -14,7 +15,9 @@ const RegistroFinanciamientoForm = ({
   direccion?: DireccionFinanciamiento;
 }) => {
   const { crearFinanciamiento } = useFinanciamientos(direccion);
+  const { deudores } = useDeudoresFinancieros("", true);
   const esRealizado = direccion === "realizado";
+  const [modoDeudor, setModoDeudor] = useState<"catalogo" | "manual">("catalogo");
   const [errorLocal, setErrorLocal] = useState("");
   const [form, setForm] = useState({
     nombre: "",
@@ -26,6 +29,7 @@ const RegistroFinanciamientoForm = ({
     institucion: "",
     numeroCuenta: "",
     tipoCredito: "simple",
+    deudorId: "",
     deudorNombre: "",
     deudorRfc: "",
     deudorTipo: "persona",
@@ -46,12 +50,14 @@ const RegistroFinanciamientoForm = ({
       institucion: "",
       numeroCuenta: "",
       tipoCredito: "simple",
+      deudorId: "",
       deudorNombre: "",
       deudorRfc: "",
       deudorTipo: "persona",
       deudorContacto: "",
       metodoPago: "bancos",
     });
+    setModoDeudor("catalogo");
     setErrorLocal("");
   };
 
@@ -62,17 +68,18 @@ const RegistroFinanciamientoForm = ({
     const monto = Number(form.monto);
     const tasa = Number(form.tasa || 0);
 
-    if (!Number.isFinite(monto) || monto <= 0) {
-      setErrorLocal("El monto debe ser mayor a 0.");
-      return;
-    }
-    if (!form.fecha) {
-      setErrorLocal("La fecha es obligatoria.");
-      return;
-    }
-    if (!form.fechaVencimiento) {
-      setErrorLocal("La fecha de vencimiento es obligatoria.");
-      return;
+    if (!Number.isFinite(monto) || monto <= 0) return setErrorLocal("El monto debe ser mayor a 0.");
+    if (!form.fecha) return setErrorLocal("La fecha es obligatoria.");
+    if (!form.fechaVencimiento) return setErrorLocal("La fecha de vencimiento es obligatoria.");
+
+    if (esRealizado) {
+      if (modoDeudor === "catalogo" && !form.deudorId) {
+        return setErrorLocal("Debes seleccionar un deudor del catálogo o usar captura manual.");
+      }
+      if (!form.deudorNombre.trim()) return setErrorLocal("El nombre del deudor es obligatorio.");
+      if (!form.deudorRfc.trim()) return setErrorLocal("El RFC del deudor es obligatorio.");
+    } else if (!form.institucion.trim()) {
+      return setErrorLocal("La institución financiera es obligatoria.");
     }
 
     const payload = esRealizado
@@ -90,6 +97,7 @@ const RegistroFinanciamientoForm = ({
           tasa_interes_anual: Number.isFinite(tasa) ? tasa : 0,
           monto_original: monto,
           monto_dispuesto_inicial: monto,
+          deudor_id: form.deudorId || undefined,
           deudor_nombre: form.deudorNombre.trim(),
           deudor_rfc: form.deudorRfc.trim(),
           deudor_tipo: form.deudorTipo,
@@ -105,7 +113,12 @@ const RegistroFinanciamientoForm = ({
           descripcion: form.comentarios.trim(),
           notas: form.comentarios.trim(),
           direccion,
-          tipo: form.tipoCredito === "simple" ? "credito_simple" : form.tipoCredito === "revolvente" ? "linea_credito" : "tarjeta_credito",
+          tipo:
+            form.tipoCredito === "simple"
+              ? "credito_simple"
+              : form.tipoCredito === "revolvente"
+                ? "linea_credito"
+                : "tarjeta_credito",
           tipo_credito: form.tipoCredito,
           categoria: "bancario",
           institucion: form.institucion.trim(),
@@ -119,27 +132,10 @@ const RegistroFinanciamientoForm = ({
           linea_credito: form.tipoCredito === "simple" ? 0 : monto,
         };
 
-    if (esRealizado) {
-      if (!form.deudorNombre.trim()) {
-        setErrorLocal("El nombre del deudor es obligatorio.");
-        return;
-      }
-      if (!form.deudorRfc.trim()) {
-        setErrorLocal("El RFC del deudor es obligatorio.");
-        return;
-      }
-    } else if (!form.institucion.trim()) {
-      setErrorLocal("La institución financiera es obligatoria.");
-      return;
-    }
-
     crearFinanciamiento.mutate(payload as any, {
       onSuccess: () => reset(),
-      onError: (error: any) => {
-        setErrorLocal(
-          error?.response?.data?.message || error?.message || "No se pudo registrar."
-        );
-      },
+      onError: (error: any) =>
+        setErrorLocal(error?.response?.data?.message || error?.message || "No se pudo registrar."),
     });
   };
 
@@ -189,6 +185,53 @@ const RegistroFinanciamientoForm = ({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="col-span-2 rounded-xl border bg-slate-50 p-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant={modoDeudor === "catalogo" ? "default" : "outline"} onClick={() => setModoDeudor("catalogo")}>
+                    Seleccionar de catálogo
+                  </Button>
+                  <Button type="button" variant={modoDeudor === "manual" ? "default" : "outline"} onClick={() => {
+                    setModoDeudor("manual");
+                    setForm((prev) => ({ ...prev, deudorId: "" }));
+                  }}>
+                    Captura manual
+                  </Button>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Si eliges un deudor del catálogo, el préstamo guarda `deudor_id` y snapshots históricos.
+                </p>
+              </div>
+
+              {modoDeudor === "catalogo" && (
+                <div className="col-span-2 space-y-2">
+                  <Label>Deudor del catálogo</Label>
+                  <Select
+                    value={form.deudorId}
+                    onValueChange={(value) => {
+                      const selected = deudores.find((d) => d.id === value);
+                      setForm((prev) => ({
+                        ...prev,
+                        deudorId: value,
+                        deudorNombre: selected?.nombre || "",
+                        deudorRfc: selected?.rfc || "",
+                        deudorTipo: selected?.tipo || "persona",
+                        deudorContacto: selected?.contacto || "",
+                      }));
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecciona un deudor" /></SelectTrigger>
+                    <SelectContent>
+                      {deudores.map((debtor) => (
+                        <SelectItem key={debtor.id} value={debtor.id}>
+                          {debtor.nombre} {debtor.rfc ? `- ${debtor.rfc}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <Field label="Nombre del deudor" value={form.deudorNombre} onChange={(value) => setForm((prev) => ({ ...prev, deudorNombre: value }))} />
               <Field label="RFC del deudor" value={form.deudorRfc} onChange={(value) => setForm((prev) => ({ ...prev, deudorRfc: value }))} />
               <div className="space-y-2">

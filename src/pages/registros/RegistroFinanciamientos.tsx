@@ -23,6 +23,7 @@ import ResumenFinanciamientos from "@/components/Financiamientos/ResumenFinancia
 import DetalleCreditosFinanciamientos from "@/components/Financiamientos/DetalleCreditosFinanciamientos";
 import AnalyticaFinanciamientos from "@/components/Financiamientos/AnalyticaFinanciamientos";
 import CatalogoAcreedores from "@/components/Financiamientos/CatalogoAcreedores";
+import CatalogoDeudores from "@/components/Financiamientos/CatalogoDeudores";
 import TransaccionesModuloFinanciamientos from "@/components/Financiamientos/TransaccionesModuloFinanciamientos";
 import type { DireccionFinanciamiento } from "@/hooks/useFinanciamientos";
 
@@ -100,7 +101,7 @@ const getRegistroTitle = (tipoRegistro: TipoRegistro, direccion: DireccionFinanc
 const getRegistroDescription = (tipoRegistro: TipoRegistro, direccion: DireccionFinanciamiento) => {
   if (tipoRegistro === "financiamiento") {
     return direccion === "realizado"
-      ? "Captura los datos del deudor, el monto prestado y el método de entrega."
+      ? "Captura los datos del préstamo y elige al deudor desde catálogo o manualmente."
       : "Captura la información principal del crédito y sus condiciones financieras.";
   }
   if (tipoRegistro === "disposicion") {
@@ -132,10 +133,7 @@ const RegistroFinanciamientos = () => {
   const handleTabChange = (value: string) => {
     const nextTab = value as TabValue;
     setTabActiva(nextTab);
-
-    if (nextTab !== "registro") {
-      setTipoRegistro("");
-    }
+    if (nextTab !== "registro") setTipoRegistro("");
   };
 
   const registroHeader = useMemo(
@@ -162,7 +160,7 @@ const RegistroFinanciamientos = () => {
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                   {modoRealizado
-                    ? "Gestiona préstamos que tú otorgas, sus cobranzas, intereses y trazabilidad contable desde el mismo módulo."
+                    ? "Gestiona préstamos que tú otorgas, su catálogo de deudores, cobranzas, intereses y trazabilidad contable."
                     : "Gestiona créditos, líneas revolventes, tarjetas corporativas y movimientos asociados desde un solo panel."}
                 </p>
               </div>
@@ -182,8 +180,8 @@ const RegistroFinanciamientos = () => {
                 <p className="mt-1 text-sm font-semibold text-slate-900">KPIs y saldos</p>
               </div>
               <div className="rounded-2xl border bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs text-muted-foreground">Transacciones</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">Trazabilidad</p>
+                <p className="text-xs text-muted-foreground">Catálogo</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">Contrapartes</p>
               </div>
             </div>
           </div>
@@ -214,7 +212,7 @@ const RegistroFinanciamientos = () => {
               onClick={() => {
                 setDireccion("realizado");
                 setTipoRegistro("");
-                if (tabActiva === "analitica" || tabActiva === "catalogo") setTabActiva("registro");
+                if (tabActiva === "analitica") setTabActiva("registro");
               }}
               className={`rounded-2xl border p-5 text-left shadow-sm transition-all ${modoRealizado ? "border-emerald-700 bg-emerald-700 text-white" : "bg-white hover:border-emerald-300"}`}
             >
@@ -229,7 +227,7 @@ const RegistroFinanciamientos = () => {
 
           <Tabs value={tabActiva} onValueChange={handleTabChange} className="w-full">
             <div className="rounded-2xl border bg-white p-2 shadow-sm">
-              <TabsList className={`grid h-auto w-full grid-cols-2 gap-2 bg-transparent ${modoRealizado ? "md:grid-cols-4" : "md:grid-cols-6"}`}>
+              <TabsList className={`grid h-auto w-full grid-cols-2 gap-2 bg-transparent ${modoRealizado ? "md:grid-cols-5" : "md:grid-cols-6"}`}>
                 <TabsTrigger value="registro" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
                   <CreditCard className="h-4 w-4" />
                   <span>Registro</span>
@@ -246,16 +244,14 @@ const RegistroFinanciamientos = () => {
                   <ReceiptText className="h-4 w-4" />
                   <span>Transacciones</span>
                 </TabsTrigger>
+                <TabsTrigger value="catalogo" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
+                  <BookOpen className="h-4 w-4" />
+                  <span>Catálogo</span>
+                </TabsTrigger>
                 {!modoRealizado && (
                   <TabsTrigger value="analitica" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
                     <BarChart3 className="h-4 w-4" />
                     <span>Analítica</span>
-                  </TabsTrigger>
-                )}
-                {!modoRealizado && (
-                  <TabsTrigger value="catalogo" className="flex items-center gap-2 rounded-xl px-3 py-3 data-[state=active]:shadow-sm">
-                    <BookOpen className="h-4 w-4" />
-                    <span>Catálogo</span>
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -264,9 +260,7 @@ const RegistroFinanciamientos = () => {
             <TabsContent value="registro" className="mt-6 space-y-6">
               <Card className="rounded-2xl border shadow-sm">
                 <CardHeader className="space-y-2">
-                  <CardTitle className="text-2xl font-semibold tracking-tight">
-                    {registroHeader.title}
-                  </CardTitle>
+                  <CardTitle className="text-2xl font-semibold tracking-tight">{registroHeader.title}</CardTitle>
                   <CardDescription className="text-sm">{registroHeader.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -299,9 +293,7 @@ const RegistroFinanciamientos = () => {
                       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-slate-50 px-4 py-3">
                         <div>
                           <p className="text-sm font-medium text-slate-900">{registroHeader.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Completa el formulario para registrar la operación.
-                          </p>
+                          <p className="text-xs text-muted-foreground">Completa el formulario para registrar la operación.</p>
                         </div>
                         <Button type="button" variant="outline" onClick={() => setTipoRegistro("")} className="gap-2">
                           <ArrowLeft className="h-4 w-4" />
@@ -331,15 +323,13 @@ const RegistroFinanciamientos = () => {
               <TransaccionesModuloFinanciamientos direccion={direccion} />
             </TabsContent>
 
+            <TabsContent value="catalogo" className="mt-6">
+              {modoRealizado ? <CatalogoDeudores /> : <CatalogoAcreedores />}
+            </TabsContent>
+
             {!modoRealizado && (
               <TabsContent value="analitica" className="mt-6">
                 <AnalyticaFinanciamientos />
-              </TabsContent>
-            )}
-
-            {!modoRealizado && (
-              <TabsContent value="catalogo" className="mt-6">
-                <CatalogoAcreedores />
               </TabsContent>
             )}
           </Tabs>

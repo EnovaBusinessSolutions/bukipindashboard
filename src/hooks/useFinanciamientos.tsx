@@ -40,6 +40,8 @@ export interface Financiamiento {
   numeroContrato?: string;
 
   referencia?: string;
+  deudor_id?: string;
+  deudorId?: string;
   deudor_nombre?: string;
   deudorNombre?: string;
   deudor_rfc?: string;
@@ -528,6 +530,8 @@ const normalizeFinanciamiento = (raw: any): Financiamiento => {
     numeroContrato: asTrim(raw?.numero_contrato || raw?.numeroContrato),
 
     referencia: asTrim(raw?.referencia),
+    deudor_id: asTrim(raw?.deudor_id || raw?.deudorId),
+    deudorId: asTrim(raw?.deudor_id || raw?.deudorId),
     deudor_nombre: asTrim(raw?.deudor_nombre || raw?.deudorNombre),
     deudorNombre: asTrim(raw?.deudor_nombre || raw?.deudorNombre),
     deudor_rfc: asTrim(raw?.deudor_rfc || raw?.deudorRfc),
