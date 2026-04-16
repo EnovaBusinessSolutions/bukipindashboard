@@ -42,6 +42,7 @@ import {
   Landmark,
   BriefcaseBusiness,
   Info,
+  Scale,
 } from "lucide-react";
 
 import { useCuentasPorPagarAgrupadas, FacturaCxP } from "@/hooks/useCuentasPorPagarAgrupadas";
@@ -114,7 +115,7 @@ type PagoHistorial = {
   es_pago_inicial?: boolean;
 };
 
-type TipoMenuProveedores = "inventario" | "capex" | "operativos";
+type TipoMenuProveedores = "inventario" | "capex" | "operativos" | "impuestos";
 type EstadoFiltroLista = "todos" | "conSaldo" | "pagados" | "vencidos";
 type OrdenLista = "monto_desc" | "monto_asc" | "nombre_asc" | "nombre_desc";
 
@@ -196,7 +197,7 @@ const CuentasPorPagar = () => {
       facturaId: string;
       monto: number;
       metodo: string;
-      tipo: "egreso" | "capex";
+      tipo: "egreso" | "capex" | "impuesto";
     }) => {
       return await apiJson<{ ok: true }>("/api/cxp/pagos", {
         method: "POST",
@@ -231,6 +232,7 @@ const CuentasPorPagar = () => {
   const tipoCapex = getTipo("capex");
   const tipoOperativos = getTipo("operativos");
   const tipoAcreedoresDiversos = getTipo("acreedores");
+  const tipoImpuestos = getTipo("impuestos");
 
   const facturasProveedores = useMemo(() => {
     const a = tipoInventario?.proveedores?.flatMap((p) => p.facturas) || [];
@@ -569,6 +571,17 @@ const CuentasPorPagar = () => {
           textSoft: "text-slate-200",
           Icon: BriefcaseBusiness,
         };
+      case "impuestos":
+        return {
+          breadcrumb: "/ Impuestos por Pagar",
+          title: "Impuestos por Pagar",
+          subtitle: "ISR y contribuciones pendientes de pago a autoridades fiscales",
+          amountLabel: "Total pendiente",
+          gradient: "from-amber-950 via-orange-900 to-amber-900",
+          panelBg: "bg-white/10 border-white/10",
+          textSoft: "text-amber-100",
+          Icon: Scale,
+        };
       case "acreedores":
         return {
           breadcrumb: "/ 2003 - Acreedores Diversos",
@@ -812,6 +825,54 @@ const CuentasPorPagar = () => {
                     </div>
                   </CardContent>
                 </Card>
+
+                <Card
+                  className={cn(
+                    "cursor-pointer overflow-hidden border-0",
+                    "bg-gradient-to-br from-amber-950 via-orange-900 to-amber-900 text-white",
+                    "shadow-lg shadow-amber-900/10 hover:shadow-xl hover:shadow-amber-900/20 transition-all"
+                  )}
+                  onClick={() => {
+                    setTipoSeleccionado("impuestos");
+                    setExpandedProveedores(new Set());
+                    setSearchTerm("");
+                    setEstadoFiltroLista("todos");
+                    setOrdenLista("monto_desc");
+                  }}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <CardTitle className="text-xl font-semibold tracking-tight">Impuestos por Pagar</CardTitle>
+                        <CardDescription className="text-amber-100">
+                          ISR y contribuciones pendientes a autoridades fiscales
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-xl bg-white/10 p-2">
+                          <Scale className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-sm text-amber-100">Ver detalle →</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="text-4xl font-bold">{formatCurrency(tipoImpuestos?.totalPendiente || 0)}</div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="rounded-xl bg-white/5 p-3 border border-white/10">
+                        <div className="text-amber-100">Registros pendientes</div>
+                        <div className="text-lg font-semibold">{tipoImpuestos?.totalFacturas || 0}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/5 p-3 border border-white/10">
+                        <div className="text-amber-100">Autoridades</div>
+                        <div className="text-lg font-semibold">{tipoImpuestos?.totalProveedores || 0}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-amber-100">
+                      Haz click para ver el listado y registrar pagos.
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
@@ -990,7 +1051,7 @@ const CuentasPorPagar = () => {
                         <TableRow>
                           <TableHead className="w-[52px]"></TableHead>
                           <TableHead>
-                            {tipoSeleccionado === "acreedores" ? "Acreedor" : "Proveedor"}
+                            {tipoSeleccionado === "acreedores" ? "Acreedor" : tipoSeleccionado === "impuestos" ? "Autoridad Fiscal" : "Proveedor"}
                           </TableHead>
                           <TableHead>Información de Contacto</TableHead>
                           <TableHead className="text-right">Total Pendiente</TableHead>

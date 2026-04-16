@@ -47,6 +47,7 @@ type NewInstitutionForm = {
   contacto_nombre: string;
   contacto_puesto: string;
   notas: string;
+  logo_url: string;
 };
 
 const INITIAL_FORM: NewInstitutionForm = {
@@ -62,6 +63,7 @@ const INITIAL_FORM: NewInstitutionForm = {
   contacto_nombre: "",
   contacto_puesto: "",
   notas: "",
+  logo_url: "",
 };
 
 export default function InstitucionFinancieraSelector({
@@ -71,6 +73,9 @@ export default function InstitucionFinancieraSelector({
   const [open, setOpen] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [formData, setFormData] = useState<NewInstitutionForm>(INITIAL_FORM);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const { instituciones, crearInstitucion } = useInstitucionesFinancieras();
   const { toast } = useToast();
@@ -81,6 +86,9 @@ export default function InstitucionFinancieraSelector({
 
   const resetForm = () => {
     setFormData(INITIAL_FORM);
+    setLogoFile(null);
+    setLogoPreview("");
+    setUploadingLogo(false);
   };
 
   const closeDialog = () => {
@@ -99,6 +107,29 @@ export default function InstitucionFinancieraSelector({
     }
 
     try {
+      // Subir logo si hay archivo seleccionado
+      let logo_url = formData.logo_url;
+      if (logoFile) {
+        setUploadingLogo(true);
+        try {
+          const fd = new FormData();
+          fd.append("file", logoFile);
+          const resp = await fetch("/api/uploads/instituciones-financieras", {
+            method: "POST",
+            credentials: "include",
+            body: fd,
+          });
+          const json = await resp.json();
+          if (json?.ok && json?.data?.logo_url) {
+            logo_url = json.data.logo_url;
+          }
+        } catch (uploadErr) {
+          console.warn("No se pudo subir el logo, se continuará sin imagen:", uploadErr);
+        } finally {
+          setUploadingLogo(false);
+        }
+      }
+
       const nuevaInstitucion = await crearInstitucion.mutateAsync({
         nombre: formData.nombre.trim(),
         alias: formData.alias.trim(),
@@ -112,6 +143,7 @@ export default function InstitucionFinancieraSelector({
         contacto_nombre: formData.contacto_nombre.trim(),
         contacto_puesto: formData.contacto_puesto.trim(),
         notas: formData.notas.trim(),
+        logo_url,
       });
 
       onChange(nuevaInstitucion.id, nuevaInstitucion.nombre);
@@ -245,6 +277,45 @@ export default function InstitucionFinancieraSelector({
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Logo de la institución */}
+            <div className="space-y-2">
+              <Label htmlFor="logo_file">Logo de la Institución</Label>
+              <div className="flex items-center gap-3">
+                {logoPreview ? (
+                  <Avatar className="h-12 w-12 shrink-0">
+                    <AvatarImage src={logoPreview} />
+                    <AvatarFallback className="text-sm">
+                      {formData.nombre?.[0] || "I"}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <Avatar className="h-12 w-12 shrink-0">
+                    <AvatarFallback className="text-sm">
+                      {formData.nombre?.[0] || "I"}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
+                <Input
+                  id="logo_file"
+                  type="file"
+                  accept="image/*"
+                  className="cursor-pointer"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setLogoFile(file);
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setLogoPreview(ev.target?.result as string ?? "");
+                      reader.readAsDataURL(file);
+                    } else {
+                      setLogoPreview("");
+                    }
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Imagen PNG, JPG o SVG. Máx 5 MB.</p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre de la Institución *</Label>
@@ -405,8 +476,8 @@ export default function InstitucionFinancieraSelector({
                 Cancelar
               </Button>
 
-              <Button onClick={handleCreate} disabled={crearInstitucion.isPending}>
-                {crearInstitucion.isPending ? "Creando..." : "Crear Institución"}
+              <Button onClick={handleCreate} disabled={crearInstitucion.isPending || uploadingLogo}>
+                {uploadingLogo ? "Subiendo logo..." : crearInstitucion.isPending ? "Creando..." : "Crear Institución"}
               </Button>
             </div>
           </div>

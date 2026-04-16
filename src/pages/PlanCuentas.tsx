@@ -258,6 +258,22 @@ const PlanCuentas = () => {
     return buildEstadosFinancierosFromFlat(todasLasCuentas);
   }, [cuentasData, todasLasCuentas]);
 
+  // Solo Ingresos y Egresos pueden tener subcuentas
+  const estadosFinancierosParaSubcuentas = useMemo(() => {
+    const GRUPOS_PERMITIDOS = ["Ingresos", "Egresos"];
+    const filtered: Record<string, Record<string, Record<string, any[]>>> = {};
+
+    for (const [estado, grupos] of Object.entries(estadosFinancieros)) {
+      for (const [grupo, subgrupos] of Object.entries(grupos as any)) {
+        if (!GRUPOS_PERMITIDOS.includes(grupo)) continue;
+        if (!filtered[estado]) filtered[estado] = {};
+        filtered[estado][grupo] = subgrupos as any;
+      }
+    }
+
+    return filtered;
+  }, [estadosFinancieros]);
+
   // Diccionario code -> nombre (para mostrar "4001 - Ventas")
   const cuentaNombreByCodigo = useMemo(() => {
     const map = new Map<string, string>();
@@ -298,9 +314,18 @@ const PlanCuentas = () => {
 
     if (!name || !parentCode) return;
 
+    // Validar que la cuenta madre sea ingreso o gasto
+    const inheritedTypeRaw = String((cuentaMadreObj as any)?.type ?? "").trim().toLowerCase();
+    const inferredType = inferTypeByCodigo(parentCode).toLowerCase();
+    const tipo = inheritedTypeRaw || inferredType;
+
+    if (tipo !== "ingreso" && tipo !== "gasto") {
+      alert("Solo se pueden crear subcuentas en cuentas de tipo Ingreso o Gasto (Egreso).");
+      return;
+    }
+
     // type: herencia o inferencia
-    const inheritedTypeRaw = String((cuentaMadreObj as any)?.type ?? "").trim();
-    const type = inheritedTypeRaw || inferTypeByCodigo(parentCode);
+    const type = tipo;
 
     // code: autogenerado
     const code = nextSubcuentaCode(parentCode, subcuentas);
@@ -427,7 +452,11 @@ const PlanCuentas = () => {
                                             const codigoCuenta = String(cuenta?.codigo ?? cuenta?.code ?? "").trim();
                                             if (!codigoCuenta) return null;
 
-                                            const subcuentasDeLaCuenta = subcuentas.filter((s) => s.parentCode === codigoCuenta);
+                                            const tipoCuenta = (getType(cuenta) || inferTypeByCodigo(codigoCuenta)).toLowerCase();
+                                            const permiteSubcuentas = tipoCuenta === "ingreso" || tipoCuenta === "gasto";
+                                            const subcuentasDeLaCuenta = permiteSubcuentas
+                                              ? subcuentas.filter((s) => s.parentCode === codigoCuenta)
+                                              : [];
                                             const tieneSubcuentas = subcuentasDeLaCuenta.length > 0;
                                             const estaExpandida = cuentasExpandidas.has(codigoCuenta);
 
@@ -538,7 +567,7 @@ const PlanCuentas = () => {
                   <FriendlyAccountSelector
                     value={cuentaMadreSeleccionada}
                     onValueChange={(codigo) => setCuentaMadreSeleccionada(codigo)}
-                    estadosFinancieros={estadosFinancieros}
+                    estadosFinancieros={estadosFinancierosParaSubcuentas}
                   />
                 </div>
 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { Package, Building2, Receipt, Users } from "lucide-react";
+import { Package, Building2, Receipt, Users, Scale } from "lucide-react";
 
 export interface FacturaCxP {
   id: string;
@@ -13,7 +13,7 @@ export interface FacturaCxP {
   tipo_pago: string;
   metodo_pago: string | null;
   estado: string;
-  tipo_transaccion: "egreso" | "capex";
+  tipo_transaccion: "egreso" | "capex" | "impuesto";
 
   // Info del proveedor
   proveedor_nombre: string | null;
@@ -38,7 +38,7 @@ export interface ProveedorAgrupado {
 }
 
 export interface TipoCxP {
-  id: "inventario" | "capex" | "operativos" | "acreedores";
+  id: "inventario" | "capex" | "operativos" | "acreedores" | "impuestos";
   nombre: string;
   descripcion: string;
   icon: any;
@@ -176,6 +176,7 @@ export const useCuentasPorPagarAgrupadas = () => {
 
       const egresosRaw = await safeGetArray("/api/transacciones/egresos?estado=activo&pendiente_gt=0");
       const inversionesRaw = await safeGetArray("/api/inversiones/capex?pendiente_gt=0");
+      const impuestosRaw = await safeGetArray("/api/impuestos/isr/pendientes");
 
       // Clasificar egresos por tipo
       const egresosInventario: FacturaCxP[] = [];
@@ -248,6 +249,27 @@ export const useCuentasPorPagarAgrupadas = () => {
           proveedor_rfc: inv?.proveedor_rfc ?? inv?.proveedorRfc ?? null,
         };
       });
+
+      // Convertir impuestos pendientes a formato de factura
+      const impuestosPendientes: FacturaCxP[] = (impuestosRaw || []).map((imp) => {
+        return {
+          id: safeStr(imp.id || imp._id || ""),
+          descripcion: safeStr(imp.descripcion || "ISR Pendiente"),
+          monto_total: toNum(imp.monto_total, 0),
+          monto_pagado: toNum(imp.monto_pagado, 0),
+          monto_pendiente: toNum(imp.monto_pendiente ?? imp.saldo_pendiente, 0),
+          fecha_vencimiento: safeStr(imp.fecha_vencimiento || "", "") || null,
+          created_at: safeStr(imp.created_at || new Date().toISOString()),
+          tipo_pago: safeStr(imp.tipo_pago || "credito"),
+          metodo_pago: null,
+          estado: safeStr(imp.estado || "pendiente"),
+          tipo_transaccion: "impuesto" as const,
+          proveedor_nombre: safeStr(imp.autoridad_nombre || "Autoridad Fiscal"),
+          proveedor_email: null,
+          proveedor_telefono: null,
+          proveedor_rfc: null,
+        };
+      }).filter((f) => f.monto_pendiente > 0);
 
       // Agrupar facturas por proveedor
       const agruparPorProveedor = (facturas: FacturaCxP[]): ProveedorAgrupado[] => {
@@ -327,6 +349,17 @@ export const useCuentasPorPagarAgrupadas = () => {
           totalFacturas: egresosAcreedores.length,
           totalProveedores: countUniqueProviders(egresosAcreedores),
           proveedores: agruparPorProveedor(egresosAcreedores),
+        },
+        {
+          id: "impuestos",
+          nombre: "Impuestos por Pagar",
+          descripcion: "ISR y contribuciones pendientes de pago a autoridades fiscales",
+          icon: Scale,
+          color: "hsl(var(--chart-5))",
+          totalPendiente: impuestosPendientes.reduce((sum, f) => sum + toNum(f.monto_pendiente, 0), 0),
+          totalFacturas: impuestosPendientes.length,
+          totalProveedores: new Set(impuestosPendientes.map((f) => f.proveedor_nombre || "Autoridad")).size,
+          proveedores: agruparPorProveedor(impuestosPendientes),
         },
       ];
 
