@@ -19,6 +19,7 @@ import RegistroInversiones from "./pages/registros/RegistroInversiones";
 import RegistroFinanciamientos from "./pages/registros/RegistroFinanciamientos";
 import RegistroCapital from "./pages/registros/RegistroCapital";
 import RegistroImpuestos from "./pages/registros/RegistroImpuestos";
+import RegistroDepositosGarantia from "./pages/registros/RegistroDepositosGarantia";
 import CuentasPorCobrar from "./pages/cobros-pagos/CuentasPorCobrar";
 import CuentasPorPagar from "./pages/cobros-pagos/CuentasPorPagar";
 import Clientes from "./pages/Clientes";
@@ -99,6 +100,10 @@ const App = () => {
                 <Route
                   path="/registros/impuestos"
                   element={<RegistroImpuestos />}
+                />
+                <Route
+                  path="/registros/depositos-garantia"
+                  element={<RegistroDepositosGarantia />}
                 />
                 <Route
                   path="/cobros-pagos/cuentas-por-cobrar"

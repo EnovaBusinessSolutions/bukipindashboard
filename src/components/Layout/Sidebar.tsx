@@ -160,6 +160,11 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       path: "/registros/impuestos",
       active: location.pathname === "/registros/impuestos",
     },
+    {
+      name: "Depósitos en Garantía",
+      path: "/registros/depositos-garantia",
+      active: location.pathname === "/registros/depositos-garantia",
+    },
   ];
 
   const cobrosPagosItems = [
