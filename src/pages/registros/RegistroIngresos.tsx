@@ -830,10 +830,19 @@ const subcuentasVentas = useMemo(() => {
     const subtotalSinDescuento = selectedProduct.precio * cantidad;
     
     // Calcular descuento según el tipo
-    const descuento = productDiscountType === "porcentaje" 
+    const descuento = productDiscountType === "porcentaje"
       ? subtotalSinDescuento * (discountValue / 100)
       : discountValue;
-    
+
+    if (productDiscountType === "monto" && discountValue > 0 && discountValue >= subtotalSinDescuento) {
+      toast({
+        title: "⚠️ Descuento inválido",
+        description: `El descuento ($${discountValue}) no puede ser igual o mayor al precio del producto ($${subtotalSinDescuento}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const subtotal = Math.max(0, subtotalSinDescuento - descuento);
 
     // Verificar si el producto ya está en la lista
@@ -885,10 +894,19 @@ const subcuentasVentas = useMemo(() => {
     const subtotalSinDescuento = precioUnitario * cantidad;
     
     // Calcular descuento según el tipo
-    const descuento = inventoryDiscountType === "porcentaje" 
+    const descuento = inventoryDiscountType === "porcentaje"
       ? subtotalSinDescuento * (discountValue / 100)
       : discountValue;
-    
+
+    if (inventoryDiscountType === "monto" && discountValue > 0 && discountValue >= subtotalSinDescuento) {
+      toast({
+        title: "⚠️ Descuento inválido",
+        description: `El descuento ($${discountValue}) no puede ser igual o mayor al precio del producto ($${subtotalSinDescuento}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const subtotal = Math.max(0, subtotalSinDescuento - descuento);
 
     // Verificar si el producto ya está en la lista
@@ -996,6 +1014,14 @@ const subcuentasVentas = useMemo(() => {
       if (!descripcion.trim()) errors.push('Descripción');
     }
     if (selectedIncomeType !== 'precargados' && selectedIncomeType !== 'inventariados' && (!montoTotal || parseFloat(montoTotal) <= 0)) errors.push('Monto Total');
+
+    if (discountAmount && montoTotal) {
+      const descuentoNum = parseFloat(discountAmount) || 0;
+      const totalNum = parseFloat(montoTotal) || 0;
+      if (descuentoNum > 0 && descuentoNum >= totalNum) {
+        errors.push('El descuento no puede ser igual o mayor al monto total');
+      }
+    }
 
     // Validación de datos del cliente para cuentas pendientes (crédito o parcial)
     if (paymentStatus === 'credito' || paymentStatus === 'parcial') {
